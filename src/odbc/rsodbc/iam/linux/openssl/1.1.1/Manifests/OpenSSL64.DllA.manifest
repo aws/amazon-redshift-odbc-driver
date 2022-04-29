@@ -1,0 +1,5 @@
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+    <assemblyIdentity name="OpenSSL64.DllA" processorArchitecture="AMD64" version="1.1.1.0" type="win32" />
+    <file name = "libcrypto-1_1-x64.dll" />
+    <file name = "libssl-1_1-x64.dll" />
+</assembly>

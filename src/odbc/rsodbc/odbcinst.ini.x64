@@ -1,0 +1,17 @@
+[ODBC Drivers]
+Amazon Redshift ODBC Driver (x64)=Installed
+
+[ODBC]
+#This section must contain values for DSN-less connections
+#if no odbc.ini file exists. If an odbc.ini file exists,
+#the values from that [ODBC] section are used.
+
+[Amazon Redshift ODBC Driver (x64)]
+Driver=/opt/amazon/redshiftodbcx64/librsodbc64.so
+Setup=/opt/amazon/redshiftodbcx64/librsodbc64.so
+APILevel=0
+ConnectFunctions=YYY
+DriverODBCVer=3.52
+FileUsage=0
+HelpRootDirectory=
+SQLLevel=0

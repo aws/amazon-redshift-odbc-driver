@@ -1,0 +1,327 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{4247D970-1E8A-4059-849B-79F0BA06C252}</ProjectGuid>
+    <RootNamespace>rsodbc</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>16.0.30804.86</_ProjectFileVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+    <LinkIncremental>true</LinkIncremental>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+    <LinkIncremental>true</LinkIncremental>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;ODBCVER=0x0352;SQL_NOUNICODEMAP;_CRT_SECURE_NO_WARNINGS;USE_SSL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PrecompiledHeader />
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>libpqd.lib;wsock32.lib;secur32.lib;ws2_32.lib;wldap32.lib;libpgportd.lib;libeay32.lib;ssleay32.lib;gssapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>C:\Program Files (x86)\Redshift Analytic Platform ODBC\Drivers\$(ProjectName).dll</OutputFile>
+      <AdditionalLibraryDirectories>..\..\pgclient\Debug32\libpq; ..\..\pgclient\Debug32\libpgport;..\..\openssl\libs\Windows\Win32;..\..\pgclient\kfw-3-2-2-final\lib\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ModuleDefinitionFile>rsodbc.def</ModuleDefinitionFile>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Midl>
+      <TargetEnvironment>X64</TargetEnvironment>
+    </Midl>
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;ODBCVER=0x0352;SQL_NOUNICODEMAP;_WIN64; _CRT_SECURE_NO_WARNINGS;USE_SSL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PrecompiledHeader />
+      <BrowseInformation>true</BrowseInformation>
+      <BrowseInformationFile>$(IntDir)</BrowseInformationFile>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>libpqd.lib;wsock32.lib;secur32.lib;ws2_32.lib;wldap32.lib;libpgportd.lib;libeay32.lib;ssleay32.lib;gssapi64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>C:\Program Files\Redshift Analytic Platform ODBC\Drivers\$(ProjectName).dll</OutputFile>
+      <AdditionalLibraryDirectories>..\..\pgclient\Debug\libpq; ..\..\pgclient\Debug\libpgport;..\..\openssl\libs\Windows\x64;..\..\pgclient\kfw-3-2-2-final\lib\Win64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ModuleDefinitionFile>rsodbc.def</ModuleDefinitionFile>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <ImportLibrary>$(TargetDir)$(TargetName).lib</ImportLibrary>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;ODBCVER=0x0352;SQL_NOUNICODEMAP; _CRT_SECURE_NO_WARNINGS;USE_SSL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader />
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>libpq.lib;wsock32.lib;secur32.lib;ws2_32.lib;wldap32.lib;libpgport.lib;libeay32.lib;ssleay32.lib;gssapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\..\pgclient\Release32\libpq; ..\..\pgclient\Release32\libpgport;..\..\openssl\libs\Windows\Win32;..\..\pgclient\kfw-3-2-2-final\lib\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ModuleDefinitionFile>rsodbc.def</ModuleDefinitionFile>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Midl>
+      <TargetEnvironment>X64</TargetEnvironment>
+    </Midl>
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>./;./iam/http;./iam/plugins;./iam/windows/aws-cpp-sdk/1.9.136/include;./iam/core;./iam;..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;.\iam\windows\openssl\1.1.1\w2012r2\vs2015\release64mt\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;ODBCVER=0x0352;SQL_NOUNICODEMAP;_WIN64; _CRT_SECURE_NO_WARNINGS;USE_SSL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader />
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>CompileAsCpp</CompileAs>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>shell32.lib;odbccp32.lib;libcrypto.lib;libssl.lib;ws2_32.lib;comdlg32.lib;wldap32.lib;Ncrypt.lib;User32.lib;UserEnv.lib;bcrypt.lib;RpcRT4.Lib;winhttp.lib;WinInet.Lib;Version.Lib;aws-cpp-sdk-core.lib;aws-cpp-sdk-redshift.lib;aws-cpp-sdk-sts.lib;aws-cpp-sdk-redshiftarcadiacoral.lib;aws-c-auth.lib;aws-c-cal.lib;aws-c-common.lib;aws-c-compression.lib;aws-c-event-stream.lib;aws-checksums.lib;aws-c-http.lib;aws-c-io.lib;aws-c-mqtt.lib;aws-crt-cpp.lib;aws-c-s3.lib;legacy_stdio_definitions.lib;libpq.lib;wsock32.lib;secur32.lib;libpgport.lib;gssapi64.lib;crypt32.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>.\iam\windows\aws-cpp-sdk\1.9.136\w2012r2\vs2015\release64mt\lib;..\..\pgclient\Release\libpq;..\..\pgclient\Release\libpgport;.\iam\windows\openssl\1.1.1\w2012r2\vs2015\release64mt\lib;..\..\openssl\libs\Windows\x64;..\..\pgclient\kfw-3-2-2-final\lib\Win64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ModuleDefinitionFile>rsodbc.def</ModuleDefinitionFile>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="dllmain.c">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+      </PrecompiledHeader>
+      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</CompileAsManaged>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </PrecompiledHeader>
+      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</CompileAsManaged>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+      </PrecompiledHeader>
+      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</CompileAsManaged>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </PrecompiledHeader>
+      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</CompileAsManaged>
+    </ClCompile>
+    <ClCompile Include="iam\core\IAMConfiguration.cpp" />
+    <ClCompile Include="iam\core\IAMCredentials.cpp" />
+    <ClCompile Include="iam\core\IAMCredentialsProvider.cpp" />
+    <ClCompile Include="iam\core\IAMFactory.cpp" />
+    <ClCompile Include="iam\core\IAMProfileConfigLoader.cpp" />
+    <ClCompile Include="iam\core\IAMProfileCredentialsProvider.cpp" />
+    <ClCompile Include="iam\core\IAMUtils.cpp" />
+    <ClCompile Include="iam\http\AddrInformation.cpp" />
+    <ClCompile Include="iam\http\IAMCurlHttpClient.cpp" />
+    <ClCompile Include="iam\http\IAMHttpClient.cpp" />
+    <ClCompile Include="iam\http\IAMWinHttpClient.cpp" />
+    <ClCompile Include="iam\http\IAMWinHttpClientDelegate.cpp" />
+    <ClCompile Include="iam\http\Parser.cpp" />
+    <ClCompile Include="iam\http\Selector.cpp" />
+    <ClCompile Include="iam\http\Socket.cpp" />
+    <ClCompile Include="iam\http\WEBServer.cpp" />
+    <ClCompile Include="iam\plugins\IAMAdfsCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\IAMAzureCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\IAMBrowserAzureCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\IAMBrowserSamlCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\IAMExternalCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\IAMJwtBasicCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\IAMJwtPluginCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\IAMOktaCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\IAMPingCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\IAMPluginCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\IAMPluginFactory.cpp" />
+    <ClCompile Include="iam\plugins\IAMSamlPluginCredentialsProvider.cpp" />
+    <ClCompile Include="iam\RsCredentials.cpp" />
+    <ClCompile Include="iam\RsErrorException.cpp" />
+    <ClCompile Include="iam\RsIamClient.cpp" />
+    <ClCompile Include="iam\RsIamEntry.cpp" />
+    <ClCompile Include="iam\RsIamHelper.cpp" />
+    <ClCompile Include="iam\RsLogger.cpp" />
+    <ClCompile Include="iam\rs_string.cpp" />
+    <ClCompile Include="rscatalog.cpp" />
+    <ClCompile Include="rsconnect.cpp" />
+    <ClCompile Include="rsdesc.cpp" />
+    <ClCompile Include="rsdrvinfo.cpp" />
+    <ClCompile Include="rserror.cpp" />
+    <ClCompile Include="rsexecute.cpp" />
+    <ClCompile Include="rslibpq.c" />
+    <ClCompile Include="rsoptions.cpp" />
+    <ClCompile Include="rsparameter.cpp" />
+    <ClCompile Include="rsprepare.cpp" />
+    <ClCompile Include="rsresult.cpp" />
+    <ClCompile Include="rstrace.c" />
+    <ClCompile Include="rstransaction.cpp" />
+    <ClCompile Include="rsunicode.c" />
+    <ClCompile Include="rsutil.c" />
+    <ClCompile Include="win_port.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="iam\core\IAMConfiguration.h" />
+    <ClInclude Include="iam\core\IAMCredentials.h" />
+    <ClInclude Include="iam\core\IAMCredentialsProvider.h" />
+    <ClInclude Include="iam\core\IAMFactory.h" />
+    <ClInclude Include="iam\core\IAMProfileConfigLoader.h" />
+    <ClInclude Include="iam\core\IAMProfileCredentialsProvider.h" />
+    <ClInclude Include="iam\core\IAMUtils.h" />
+    <ClInclude Include="iam\http\AddrInformation.h" />
+    <ClInclude Include="iam\http\HtmlResponse.h" />
+    <ClInclude Include="iam\http\IAMCurlHttpClient.h" />
+    <ClInclude Include="iam\http\IAMHttpClient.h" />
+    <ClInclude Include="iam\http\IAMWinHttpClient.h" />
+    <ClInclude Include="iam\http\IAMWinHttpClientDelegate.h" />
+    <ClInclude Include="iam\http\Parser.h" />
+    <ClInclude Include="iam\http\Selector.h" />
+    <ClInclude Include="iam\http\Socket.h" />
+    <ClInclude Include="iam\http\SocketStream.h" />
+    <ClInclude Include="iam\http\SocketSupport.h" />
+    <ClInclude Include="iam\http\WEBServer.h" />
+    <ClInclude Include="iam\plugins\IAMAdfsCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\IAMAzureCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\IAMBrowserAzureCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\IAMBrowserSamlCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\IAMExternalCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\IAMJwtBasicCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\IAMJwtPluginCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\IAMOktaCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\IAMPingCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\IAMPluginCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\IAMPluginFactory.h" />
+    <ClInclude Include="iam\plugins\IAMSamlPluginCredentialsProvider.h" />
+    <ClInclude Include="iam\RsCredentials.h" />
+    <ClInclude Include="iam\RsErrorException.h" />
+    <ClInclude Include="iam\RsHttpProxyProperties.h" />
+    <ClInclude Include="iam\RsHttpProxySettings.h" />
+    <ClInclude Include="iam\RsIamClient.h" />
+    <ClInclude Include="iam\RsIamEntry.h" />
+    <ClInclude Include="iam\RsIamHelper.h" />
+    <ClInclude Include="iam\RsLogger.h" />
+    <ClInclude Include="iam\RsSettings.h" />
+    <ClInclude Include="iam\RsUidPwdProperties.h" />
+    <ClInclude Include="iam\RsUidPwdSettings.h" />
+    <ClInclude Include="iam\rs_iam_support.h" />
+    <ClInclude Include="iam\rs_string.h" />
+    <ClInclude Include="iam\rs_wstring.h" />
+    <ClInclude Include="linux_port.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="rsodbc.h" />
+    <ClInclude Include="rstrace.h" />
+    <ClInclude Include="rsunicode.h" />
+    <ClInclude Include="rsutil.h" />
+    <ClInclude Include="rsversion.h" />
+    <ClInclude Include="targetver.h" />
+    <ClInclude Include="win_port.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="rsodbc.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="redshift.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="ReadMe.txt" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

@@ -1,0 +1,14 @@
+if [ "$LD_LIBRARY_PATH" = "" ]; then
+	LD_LIBRARY_PATH=/opt/amazon/redshiftodbcx64
+else
+	LD_LIBRARY_PATH=/opt/amazon/redshiftodbcx64:$LD_LIBRARY_PATH
+fi
+export LD_LIBRARY_PATH
+ODBCINI=/opt/amazon/redshiftodbcx64/odbc.ini
+export ODBCINI
+ODBCINST=/opt/amazon/redshiftodbcx64/odbcinst.ini
+export ODBCINST
+ODBCSYSINI=/opt/amazon/redshiftodbcx64
+export ODBCSYSINI
+
+

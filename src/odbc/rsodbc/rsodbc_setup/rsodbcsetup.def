@@ -1,0 +1,4 @@
+LIBRARY rsodbcsetup
+EXPORTS
+DllMain @201
+ConfigDSN @202

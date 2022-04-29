@@ -1,0 +1,44 @@
+[ODBC Data Sources]
+test=Amazon Redshift ODBC Driver (x64)
+
+[ODBC]
+IANAAppCodePage=4
+InstallDir=/opt/amazon/redshiftodbcx64
+Trace=0
+LogLevel=0
+LogPath=
+
+[test]
+Driver=/opt/amazon/redshiftodbcx64/librsodbc64.so
+Description=Amazon Redshift ODBC Data Source
+Database=<database name>
+HostName=<Hostname or IP address>
+PortNumber=5439
+LogonID=<login id>
+Password=<password>
+SSLMode=verify-ca
+StreamingCursorRows=100
+#LoginTimeout=15
+#ConnectionRetryCount=0
+#ConnectionRetryDelay=3
+#InitializationString=
+#FetchRefCursor=1
+#QueryTimeout=0
+#TransactionErrorBehavior=1
+#CscEnable=0
+#CscThreshold=1
+#CscMaxFileSize=4096
+#CscPath=
+#EncryptionMethod=1
+#TrustStore=
+#MultiInsertCmdConvertEnable=1
+#ReadOnly=
+#DatabaseMetadataCurrentDbOnly=
+
+
+
+
+
+
+
+

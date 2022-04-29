@@ -1,0 +1,35 @@
+This directory contains the Redshift ODBC Driver installer scripts for Windows. 
+To build the installer, you will need a copy of WiX installed somewhere in your system
+path. The installer has been tested with WiX version 3.0.5419
+WiX may be downloaded from:
+
+  http://sourceforge.net/projects/wix/.
+
+
+A. 64 bit package:
+
+1. Run VS 2008 64 bit command prompt
+2. From this directory run:
+
+package64 <version>
+
+The version number will default to a value set in the Make.bat batch file if
+not specified on the command line. Several files will be created, but the actually installers
+are:
+
+install\RSODBC-win64-<version>.msi - 64 bit Windows Installer package
+
+B. Note: These installers now support upgrade capability (ie, overwrite any
+existing prior installation)
+
+To workaround the overlap text and image issue in Windows installer, use Orca to edit the MSI as follows:
+
+1. Open the MSI using Orca.
+2. Go to "Control" table, sort by Dialog column.
+3. Go to row, DiskCostDlg    (in Dialog column) and Descriptions (in Control column). Change Width to 200 and Height to 30.
+4. Go to row, VerifyReadyDlg (in Dialog column) and InstallTitle (in Control column). Change Width to 200 and Height to 30.
+5. Go to row, VerifyReadyDlg (in Dialog column) and RemoveTitle  (in Control column). Change Width to 200 and Height to 30.
+6. Go to row, VerifyReadyDlg (in Dialog column) and ChangeTitle  (in Control column). Change Width to 200 and Height to 30.
+7. Go to row, VerifyReadyDlg (in Dialog column) and RepairTitle  (in Control column). Change Width to 200 and Height to 30.
+8. Go to row, VerifyReadyDlg (in Dialog column) and UpdateTitle  (in Control column). Change Width to 200 and Height to 30.
+

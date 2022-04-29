@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<?define  UpgradeCode="384ACDAA-EBC3-49FA-BF62-82B4E612F8B1"?>
+
+<!-- Product details -->
+
+  <Product
+    Manufacturer="Amazon Web Services, Inc."
+    Id="*"
+    UpgradeCode="$(var.UpgradeCode)"
+    Name="Amazon Redshift ODBC Driver 64-bit"
+    Version="$(var.VERSION)"
+    Language="1033">
+
+<!-- Package details -->
+
+    <Package
+	  Id='*' 
+      Keywords="Redshift, ODBC"
+      Comments="Amazon Redshift ODBC Driver x64"
+      Manufacturer="Amazon Web Services, Inc."
+      InstallerVersion="200"
+      Languages="1033"
+      Compressed="yes"
+      SummaryCodepage="1252"
+      Platform="x64" />
+
+	<Upgrade Id="$(var.UpgradeCode)">
+	  <UpgradeVersion
+	      Minimum="1.0.0.0" Maximum="99.0.0.0"
+	      Property="PREVIOUSVERSIONSINSTALLED"
+	      IncludeMinimum="yes" IncludeMaximum="no" />
+	</Upgrade>
+
+	<InstallExecuteSequence>
+	    <RemoveExistingProducts Before="InstallInitialize" />
+	</InstallExecuteSequence>
+
+<!-- Directories -->
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+
+       <!-- Shared assembly runtime for VS 2008. Need same for VS 2015. -->
+<!--       <Merge Id="msvcr90dll" Language="0" DiskId="1" SourceFile="$(var.MERGECRT)"/>
+       <Merge Id="msvcr90policy" Language="0" DiskId="1" SourceFile="$(var.MERGEPOLICY)"/>
+-->       
+
+      <Directory Id="ProgramFiles64Folder" Name="PFiles">
+        <Directory Id="BASEDIR" Name="Amazon Redshift ODBC Driver x64">
+            <Directory Id="BINDIR" Name="Drivers">
+              <Merge Id="rsodbcm" DiskId="1" Language="1033" SourceFile="rsodbc_x64.msm" />
+            </Directory>
+<!--             <Directory Id="HELPDIR" Name="help">
+              <Merge Id="rsodbchelpm" DiskId="1" Language="1033" SourceFile="rsodbchelp_x64.msm" />
+           </Directory>
+-->            
+           <Directory Id="SAMPLESDIR" Name="samples">
+           	<Directory Id="CONNECTDIR" Name="connect">
+           	</Directory>
+           </Directory>
+        </Directory>
+      </Directory>
+    </Directory>
+    
+     <!-- Add files to your installer package -->
+     <DirectoryRef Id="BASEDIR">
+        <Component Id="rsodbcsql.exe" Guid="BC8A809A-59CA-41f6-A657-06553364049A" Win64="yes">
+          <File Id="rsodbcsql.exe" Name="rsodbcsql.exe" Source="../rsodbcsql/x64/Release/rsodbcsql.exe" />
+	</Component>
+     </DirectoryRef>
+     <DirectoryRef Id="BINDIR">
+        <Component Id="rs_ini_file" Guid="636F970E-445F-431F-85CE-4F5DF61B345B" Win64="yes">
+          <File Id="amazon.redshiftodbc.ini" Name="amazon.redshiftodbc.ini" Source="../amazon.redshiftodbc.ini" />
+	</Component>
+     </DirectoryRef>
+     <DirectoryRef Id="CONNECTDIR">
+        <Component Id="rsodbc_samples.files" Guid="E7E557CF-0531-4ec5-9C4E-7431722B1338" Win64="yes">
+          <File Id="connect.c" Name="connect.c" Source="../samples/connect/connect.c" />
+          <File Id="connect.rc" Name="connect.rc" Source="../samples/connect/connect.rc" />
+          <File Id="resource.h" Name="resource.h" Source="../samples/connect/resource.h" />
+          <File Id="redshift.ico" Name="resdhfit.ico" Source="../samples/connect/redshift.ico" />
+          <File Id="connect.sln" Name="connect.sln" Source="../samples/connect/connect.sln" />
+          <File Id="connect.vcproj" Name="connect.vcproj" Source="../samples/connect/connect.vcproj" />
+          <File Id="connect.exe" Name="connect.exe" Source="../samples/connect/x64/Release/connect.exe" />
+	</Component>
+     </DirectoryRef>
+    
+
+<!-- Features -->
+
+    <Feature Id="RSODBC" Title="Amazon Redshift ODBC Driver x64" Level="1" Description="Amazon Redshift ODBC Driver (64 bit)" ConfigurableDirectory="BASEDIR" Display="expand">
+      <Feature Id="binaries" Title="ODBC Driver" Level="1" Description="The ODBC driver and supporting libraries.">
+        <MergeRef Id="rsodbcm" />
+<!--        <MergeRef Id="msvcr90dll" />
+        <MergeRef Id="msvcr90policy" />
+        <MergeRef Id="rsodbchelpm" />
+-->        
+        
+	<ComponentRef Id="rsodbcsql.exe" />
+	<ComponentRef Id="rs_ini_file" />
+	<ComponentRef Id="rsodbc_samples.files" />
+      </Feature>
+
+    </Feature>
+    <Media Id="1" EmbedCab="yes" Cabinet="rsodbc.cab"/>
+
+<!-- Properties -->
+
+    <Property Id="ALLUSERS">2</Property>
+    <Property Id="WIXUI_INSTALLDIR" Value="BASEDIR" />
+
+<!-- UI -->
+
+     <UIRef Id="WixUI_FeatureTree" />
+     <WixVariable Id="WixUILicenseRtf" Value="Amazon_Redshift_EULA.rtf" />
+     <WixVariable Id="WixUIDialogBmp" Value="background.png" />
+     <WixVariable Id="WixUIBannerBmp" Value="banner.bmp" />
+     <Icon Id="redshift.ico" SourceFile="../redshift.ico"/>
+     <Property Id="ARPPRODUCTICON" Value="redshift.ico" />
+     
+     
+  </Product>
+  
+  
+</Wix>

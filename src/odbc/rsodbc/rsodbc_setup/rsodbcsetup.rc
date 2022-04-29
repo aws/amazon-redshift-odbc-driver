@@ -1,0 +1,484 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+#include "version.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// Japanese (Japan) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_JPN)
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+#pragma code_page(932)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "#include ""version.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+#endif    // Japanese (Japan) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+DLG_CONFIG DIALOGEX 65, 43, 262, 285
+STYLE DS_SETFONT | DS_MODALFRAME | DS_3DLOOK | DS_CENTER | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
+CAPTION "Redshift ODBC Driver Setup"
+FONT 8, "MS Sans Serif", 0, 0, 0x0
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,91,264,44,15,WS_GROUP
+    PUSHBUTTON      "Cancel",IDCANCEL,145,264,44,15
+    PUSHBUTTON      "Test",IDC_TEST,198,264,44,15
+END
+
+DLG_PASSWORD DIALOGEX 0, 0, 121, 35
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_SYSMENU
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    EDITTEXT        IDC_PASSWORD_EDIT,42,1,75,12,ES_PASSWORD | ES_AUTOHSCROLL | ES_NOHIDESEL
+    DEFPUSHBUTTON   "OK",IDOK,29,19,41,14
+    PUSHBUTTON      "Cancel",IDCANCEL,76,19,41,14
+    LTEXT           "Password:",IDC_PASSWORD,1,1,39,8,0,WS_EX_RIGHT
+END
+
+DLG_CONNECTION DIALOGEX 15, 20, 305, 401
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_BORDER
+EXSTYLE WS_EX_TRANSPARENT
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    RTEXT           "Data Source Name:",IDC_DSNAME_STATIC,7,15,67,9
+    EDITTEXT        IDC_DSNAME,78,15,113,12,ES_AUTOHSCROLL
+    RTEXT           "Description:",IDC_DESC_STATIC,14,31,60,9
+    EDITTEXT        IDC_DESC,78,31,113,12,ES_AUTOHSCROLL
+    RTEXT           "Server:",IDC_SERVER_STATIC,15,46,59,9
+    EDITTEXT        IDC_SERVER,78,46,113,12,ES_AUTOHSCROLL
+    RTEXT           "Port:",IDC_PORT_STATIC,16,62,58,9
+    EDITTEXT        IDC_PORT_EDIT,78,62,57,12,ES_AUTOHSCROLL | ES_NUMBER
+    RTEXT           "Database:",IDC_DBASE_STATIC,15,78,59,9
+    EDITTEXT        IDC_DATABASE,78,78,113,12,ES_AUTOHSCROLL
+    RTEXT           "User Name:",IDC_USER_STATIC,24,133,50,9
+    EDITTEXT        IDC_USER,78,133,113,12,ES_AUTOHSCROLL
+    PUSHBUTTON      "Help",IDC_CONN_HELP,238,372,50,14,NOT WS_VISIBLE | WS_DISABLED
+    GROUPBOX        "Authentication",IDC_STATIC,19,102,268,265
+    RTEXT           "Password:",IDC_PWD_STATIC,24,150,50,9
+    EDITTEXT        IDC_PWD,78,150,113,12,ES_PASSWORD | ES_AUTOHSCROLL
+    RTEXT           "Auth Type:",IDC_AUTH_TYPE_STATIC,24,114,50,9
+    COMBOBOX        IDC_COMBO_AUTH_TYPE,79,113,123,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    RTEXT           "Cluster ID:",IDC_CID_STATIC,23,187,37,9
+    EDITTEXT        IDC_CID,62,187,100,12,ES_AUTOHSCROLL
+    RTEXT           "Region:",IDC_REGION_STATIC,167,187,25,9
+    EDITTEXT        IDC_REGION,197,187,82,12,ES_AUTOHSCROLL
+    RTEXT           "DB User:",IDC_DBUSER_STATIC,23,205,37,9
+    EDITTEXT        IDC_DBUSER,62,205,100,12,ES_AUTOHSCROLL
+    CONTROL         "User Auto Create",IDC_AUTO_CREATE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,167,205,72,10
+    RTEXT           "DB Groups:",IDC_DBGROUPS_STATIC,22,219,37,9
+    EDITTEXT        IDC_DBGROUPS,62,219,100,12,ES_AUTOHSCROLL
+    CONTROL         "Force Lower Case",IDC_FLC,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,166,219,75,10
+    RTEXT           "Access Key ID:",IDC_AKI_STATIC,23,289,61,9
+    EDITTEXT        IDC_AKI,89,286,113,12,ES_AUTOHSCROLL
+    RTEXT           "Secret Access Key:",IDC_SAK_STATIC,22,300,64,9
+    EDITTEXT        IDC_SAK,89,300,113,12,ES_PASSWORD | ES_AUTOHSCROLL
+    RTEXT           "Session Token:",IDC_ST_STATIC,23,316,63,9,SS_CENTERIMAGE
+    EDITTEXT        IDC_ST,87,314,113,12,ES_AUTOHSCROLL
+    RTEXT           "Profile Name:",IDC_PN_STATIC,26,286,57,9,NOT WS_GROUP
+    EDITTEXT        IDC_PN,86,284,113,12,ES_AUTOHSCROLL
+    CONTROL         "Use Instance Profile",IDC_UIP,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,88,301,76,10
+    RTEXT           "Idp Host:",IDC_IDP_HOST_STATIC,23,288,61,9
+    EDITTEXT        IDC_IDP_HOST,87,286,113,12,ES_AUTOHSCROLL
+    RTEXT           "Idp Port:",IDC_IDP_PORT_STATIC,25,298,61,9
+    EDITTEXT        IDC_IDP_PORT,89,301,113,12,ES_AUTOHSCROLL
+    RTEXT           "Preferred Role:",IDC_PR_STATIC,22,316,61,9
+    EDITTEXT        IDC_PR,86,313,113,12,ES_AUTOHSCROLL
+    RTEXT           "Login To RP:",IDC_LTRP_STATIC,25,326,61,9
+    EDITTEXT        IDC_LTRP,87,330,113,12,ES_AUTOHSCROLL
+    CONTROL         "SSL Insecure",IDC_SSL_INSECURE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,86,345,76,10
+    RTEXT           "DB Groups Filter:",IDC_DGF_STATIC,23,287,61,9
+    EDITTEXT        IDC_DGF,87,285,113,12,ES_AUTOHSCROLL
+    RTEXT           "Idp Tenant:",IDC_IDP_TENANT_STATIC,22,297,64,9
+    EDITTEXT        IDC_IDP_TENANT,86,298,113,12,ES_AUTOHSCROLL
+    RTEXT           "Azure Client ID:",IDC_AZURE_CI_STATIC,25,331,61,9
+    EDITTEXT        IDC_AZURE_CI,87,330,113,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_AZURE_CS,88,344,113,12,ES_PASSWORD | ES_AUTOHSCROLL
+    RTEXT           "Azure Client Secret:",IDC_AZURE_CS_STATIC,21,347,67,9
+    RTEXT           "Timeout (sec):",IDC_TO_STATIC,26,345,61,9
+    EDITTEXT        IDC_TO,87,344,113,12,ES_AUTOHSCROLL
+    RTEXT           "Login URL:",IDC_LOGIN_URL_STATIC,21,299,64,9
+    EDITTEXT        IDC_LOGIN_URL,87,299,113,12,ES_AUTOHSCROLL
+    RTEXT           "Listen Port:",IDC_LP_STATIC,25,333,61,9
+    EDITTEXT        IDC_LP,87,329,113,12,ES_AUTOHSCROLL
+    RTEXT           "Web Identity Token:",IDC_WIT_STATIC,24,269,58,19
+    EDITTEXT        IDC_WIT,87,269,113,12,ES_AUTOHSCROLL
+    RTEXT           "Role ARN:",IDC_ROLE_STATIC,21,301,64,9
+    EDITTEXT        IDC_ROLE,87,298,113,12,ES_AUTOHSCROLL
+    RTEXT           "Duration:",IDC_DURATION_STATIC,23,315,63,9,SS_CENTERIMAGE
+    EDITTEXT        IDC_DURATION,88,313,113,12,ES_AUTOHSCROLL
+    RTEXT           "Role Session Name:",IDC_RSN_STATIC,25,326,61,15
+    EDITTEXT        IDC_RSN,86,329,113,12,ES_AUTOHSCROLL
+    RTEXT           "Okta App ID:",IDC_APP_ID_STATIC,22,300,64,9
+    EDITTEXT        IDC_APP_ID,87,298,113,12,ES_AUTOHSCROLL
+    RTEXT           "Okta App Name:",IDC_APP_NAME_STATIC,27,331,61,9
+    EDITTEXT        IDC_APP_NAME,89,330,113,12,ES_AUTOHSCROLL
+    RTEXT           "Partner SPID:",IDC_SPID_STATIC,24,328,61,9
+    EDITTEXT        IDC_SPID,89,329,113,12,ES_AUTOHSCROLL
+    RTEXT           "Provider Name:",IDC_PROVIDER_NAME_STATIC,23,299,64,9
+    EDITTEXT        IDC_PROVIDER_NAME,87,298,113,12,ES_AUTOHSCROLL
+    RTEXT           "STS Endpoint URL:",IDC_STS_EPU_STATIC,25,251,65,9
+    EDITTEXT        IDC_STS_EPU,93,250,150,12,ES_AUTOHSCROLL
+    RTEXT           "Endpoint URL:",IDC_EPU_STATIC,25,237,65,9
+    EDITTEXT        IDC_EPU,93,236,150,12,ES_AUTOHSCROLL
+    RTEXT           "Auth Profile:",IDC_EPU_STATIC2,24,169,51,9
+    EDITTEXT        IDC_AUTH_PROFILE,78,168,116,12,ES_AUTOHSCROLL
+END
+
+DLG_ADVANCED DIALOGEX 15, 20, 222, 247
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_BORDER
+EXSTYLE WS_EX_TRANSPARENT
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "Autofetch Refcursors",IDC_FETCH_REFCURSOR,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,25,10,104,10
+    CONTROL         "Rollback on Error",IDC_ROLLBACK_ERR,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,25,26,98,10
+    RTEXT           "Connection Retries:",IDC_RETRY_STATIC,24,85,67,9
+    EDITTEXT        IDC_RETRY_EDIT,93,85,56,12,ES_AUTOHSCROLL | ES_NUMBER
+    RTEXT           "Retry Delay:",IDC_DELAY_STATIC,24,100,67,9
+    EDITTEXT        IDC_DELAY_EDIT,93,100,56,12,ES_AUTOHSCROLL | ES_NUMBER
+    RTEXT           "Login Timeout:",IDC_LOGIN_TO_STATIC,32,116,59,9
+    EDITTEXT        IDC_LOGIN_TO_EDIT,93,116,56,12,ES_AUTOHSCROLL | ES_NUMBER
+    RTEXT           "Query Timeout:",IDC_QRY_TO_STATIC,28,131,63,8
+    EDITTEXT        IDC_QRY_TO_EDIT,93,130,56,12,ES_AUTOHSCROLL | ES_NUMBER
+    EDITTEXT        IDC_INI_SQL_EDIT,19,204,170,27,ES_MULTILINE | ES_AUTOHSCROLL | ES_WANTRETURN
+    LTEXT           "On Connect, Execute:",IDC_INI_SQL_STATIC,18,194,106,9
+    CONTROL         "Database Metadata Current Database Only",IDC_CURRENT_DB_ONLY,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,25,58,135,10
+    CONTROL         "Read Only",IDC_READ_ONLY,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,25,42,67,10
+    RTEXT           "Log Level:",IDC_LOGLEVEL_STATIC,21,155,67,9
+    COMBOBOX        IDC_LOG_LEVEL_COMBO,90,154,80,30,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP
+    RTEXT           "Log Path:",IDC_LOGPATH_STATIC,21,174,67,9
+    EDITTEXT        IDC_LOG_PATH_EDIT,90,172,82,12,ES_AUTOHSCROLL
+END
+
+DLG_FAILOVER DIALOGEX 15, 20, 222, 210
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_BORDER
+EXSTYLE WS_EX_TRANSPARENT
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "Load Balancing",IDC_LOAD_BALANCE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,7,84,10
+    LTEXT           "Alternate Servers:",IDC_ALT_SRV_STATIC,15,21,91,10
+    EDITTEXT        IDC_ALT_SRV_EDIT,14,32,155,35,ES_AUTOHSCROLL | ES_WANTRETURN
+    GROUPBOX        "Failover Mode",IDC_FAIL_MODE_GRP,33,71,115,47
+    CONTROL         "Connection",IDC_FM_CONN,"Button",BS_AUTORADIOBUTTON | WS_GROUP,47,80,83,12
+    CONTROL         "Extended Connection",IDC_FM_EXT_CONN,"Button",BS_AUTORADIOBUTTON,47,92,96,10
+    CONTROL         "Select",IDC_FM_SELECT,"Button",BS_AUTORADIOBUTTON,47,103,71,10
+    GROUPBOX        "Failover Granularity",IDC_STATIC,34,123,114,54
+    CONTROL         "Non-Atomic",IDC_FG_NON_ATOMIC,"Button",BS_AUTORADIOBUTTON | WS_GROUP,47,133,76,10
+    CONTROL         "Atomic",IDC_FG_ATOMIC,"Button",BS_AUTORADIOBUTTON,47,143,78,10
+    CONTROL         "Atomic Repositioned",IDC_FG_REPOS,"Button",BS_AUTORADIOBUTTON,47,153,96,10
+    CONTROL         "No Integrity Check",IDC_FG_NO_INT_CHECK,"Button",BS_AUTORADIOBUTTON,47,163,93,10
+    CONTROL         "Failover Preconnect",IDC_FAIL_PRECONN,"Button",BS_AUTOCHECKBOX | WS_DISABLED | WS_TABSTOP,17,186,94,10
+    PUSHBUTTON      "Help",IDC_FAIL_HELP,118,186,50,14
+END
+
+DLG_POOLING DIALOGEX 15, 20, 222, 210
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_BORDER
+EXSTYLE WS_EX_TRANSPARENT
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "Enable Connection Pooling",IDC_POOL_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,17,15,112,10
+    CONTROL         "Reset When Allocated",IDC_POOL_RESET,"Button",BS_AUTOCHECKBOX | WS_DISABLED | WS_TABSTOP,17,31,111,10
+    RTEXT           "Max Pool Size:",IDC_POOL_MAX_STATIC,27,50,68,8,WS_DISABLED
+    EDITTEXT        IDC_POOL_MAX_EDIT,97,50,53,12,ES_AUTOHSCROLL | ES_NUMBER | WS_DISABLED
+    RTEXT           "Min Pool Size:",IDC_POOL_MIN_STATIC2,27,65,68,8,WS_DISABLED
+    EDITTEXT        IDC_POOL_MIN_EDIT,97,65,53,12,ES_AUTOHSCROLL | ES_NUMBER | WS_DISABLED
+    RTEXT           "Idle Connection Timeout:",IDC_POOL_IDLE_STATIC,7,80,89,8,WS_DISABLED
+    EDITTEXT        IDC_POOL_TO_EDIT,97,79,53,12,ES_AUTOHSCROLL | ES_NUMBER | WS_DISABLED
+    PUSHBUTTON      "Help",IDC_POOL_HELP,99,100,50,14
+END
+
+IDD_PROPPAGE_LARGE DIALOGEX 0, 0, 295, 259
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_DISABLED | WS_CAPTION
+CAPTION "Redshift ODBC Driver Setup"
+FONT 8, "MS Shell Dlg", 400, 0, 0x0
+BEGIN
+    LTEXT           "TODO: layout property page",IDC_STATIC,73,74,90,8
+END
+
+DLG_CSC DIALOGEX 15, 20, 222, 210
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_BORDER
+EXSTYLE WS_EX_TRANSPARENT
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    PUSHBUTTON      "Help",IDC_CSC_HELP,152,164,50,14,NOT WS_VISIBLE | WS_DISABLED
+    LTEXT           "Enable:",IDC_STATIC,63,28,28,9,0,WS_EX_RIGHT
+    CONTROL         "",IDC_CSC_ENABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,97,30,15,8
+    LTEXT           "Threshold (in MB):",IDC_STATIC,22,47,69,9,0,WS_EX_RIGHT
+    LTEXT           "Path:",IDC_STATIC,54,66,37,9,0,WS_EX_RIGHT
+    LTEXT           "Max File Size (in MB):",IDC_STATIC,21,85,70,9,0,WS_EX_RIGHT
+    EDITTEXT        IDC_EDIT_CSC_THRESHOLD,95,44,98,12,ES_AUTOHSCROLL | ES_NUMBER
+    EDITTEXT        IDC_EDIT_CSC_PATH,95,64,98,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT_CSC_MAX_FILE_SIZE,95,84,98,12,ES_AUTOHSCROLL | ES_NUMBER
+    GROUPBOX        "Client Side Cursor",IDC_STATIC,15,14,190,92
+    GROUPBOX        "Streaming Cursor",IDC_STATIC,15,111,190,36
+    LTEXT           "Number of Rows:",IDC_STATIC,27,125,64,9,0,WS_EX_RIGHT
+    EDITTEXT        IDC_EDIT_SC_ROWS,95,124,98,12,ES_AUTOHSCROLL | ES_NUMBER
+END
+
+DLG_SECURITY DIALOGEX 15, 20, 222, 210
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_BORDER
+EXSTYLE WS_EX_TRANSPARENT
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    PUSHBUTTON      "Help",IDC_SSL_HELP,151,143,50,14,NOT WS_VISIBLE | WS_DISABLED
+    LTEXT           "SSL Mode:",IDC_STATIC,14,27,85,9,0,WS_EX_RIGHT
+    COMBOBOX        IDC_COMBO_EM,105,25,98,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Trust Store:",IDC_STATIC,15,43,84,9,0,WS_EX_RIGHT
+    EDITTEXT        IDC_EDIT_TS,106,42,99,12,ES_AUTOHSCROLL
+END
+
+DLG_PROXY DIALOGEX 15, 20, 246, 210
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CONTROL | WS_CHILD | WS_BORDER
+EXSTYLE WS_EX_TRANSPARENT
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "Proxy for HTTPS Federeated Access",IDC_PROXY_STS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,25,96,139,10
+    CONTROL         "Proxy for IDP Authentication",IDC_PROXY_IDP,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,33,175,105,10
+    CONTROL         "Proxy for Redshift Connection",IDC_PROXY_REDSHIFT_CONNECTION,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,25,10,128,10
+    RTEXT           "Proxy Server:",IDC_PROXY_SERVER_STATIC,31,24,59,9
+    EDITTEXT        IDC_PROXY_REDSHIFT_SERVER_EDIT,93,23,104,12,ES_AUTOHSCROLL
+    RTEXT           "Proxy Port:",IDC_PROXY_PORT_STATIC,31,40,59,9
+    EDITTEXT        IDC_PROXY_REDSHIFT_PORT_EDIT,93,39,104,12,ES_AUTOHSCROLL | ES_NUMBER
+    RTEXT           "Proxy User Name:",IDC_PROXY_UID_STATIC,31,55,59,9
+    EDITTEXT        IDC_PROXY_REDSHIFT_UID_EDIT,93,55,104,12,ES_AUTOHSCROLL
+    RTEXT           "Proxy Password:",IDC_PROXY_REDSHIFT_PWD_STATIC,31,71,59,9
+    EDITTEXT        IDC_PROXY_REDSHIFT_PWD_EDIT,93,71,104,12,ES_PASSWORD | ES_AUTOHSCROLL
+    RTEXT           "HTTPS Proxy Server:",IDC_PROXY_SERVER_STATIC2,27,108,82,9
+    EDITTEXT        IDC_PROXY_HTTPS_SERVER_EDIT,117,107,104,12,ES_AUTOHSCROLL
+    RTEXT           "HTTPS Proxy Port:",IDC_PROXY_PORT_STATIC2,27,124,82,9
+    EDITTEXT        IDC_PROXY_HTTPS_PORT_EDIT,117,123,104,12,ES_AUTOHSCROLL | ES_NUMBER
+    RTEXT           "HTTPS Proxy User Name:",IDC_PROXY_UID_STATIC2,27,139,82,9
+    EDITTEXT        IDC_PROXY_HTTPS_UID_EDIT,117,139,104,12,ES_AUTOHSCROLL
+    RTEXT           "HTTPS Proxy Password:",IDC_PROXY_REDSHIFT_PWD_STATIC2,27,154,82,9
+    EDITTEXT        IDC_PROXY_HTTPS_PWD_EDIT,117,155,104,12,ES_PASSWORD | ES_AUTOHSCROLL
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    DLG_CONFIG, DIALOG
+    BEGIN
+        RIGHTMARGIN, 249
+        BOTTOMMARGIN, 279
+    END
+
+    DLG_PASSWORD, DIALOG
+    BEGIN
+        LEFTMARGIN, 1
+        RIGHTMARGIN, 120
+        TOPMARGIN, 1
+        BOTTOMMARGIN, 34
+    END
+
+    DLG_CONNECTION, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 298
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 394
+    END
+
+    DLG_ADVANCED, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 215
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 240
+    END
+
+    DLG_FAILOVER, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 215
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 203
+    END
+
+    DLG_POOLING, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 215
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 203
+    END
+
+    IDD_PROPPAGE_LARGE, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 288
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 252
+    END
+
+    DLG_CSC, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 215
+        TOPMARGIN, 6
+        BOTTOMMARGIN, 203
+    END
+
+    DLG_SECURITY, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 215
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 203
+    END
+
+    DLG_PROXY, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 239
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 203
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 2,0,0,0
+ PRODUCTVERSION 2,0,0,0
+ FILEFLAGSMASK 0x17L
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x2L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "Amazon Inc."
+            VALUE "FileDescription", "rsodbcsetup Dynamic Link Library"
+            VALUE "FileVersion", "2.0.0.0"
+            VALUE "InternalName", "rsodbcsetup"
+            VALUE "LegalCopyright", "Copyright (C) 2021 Amazon Inc."
+            VALUE "OriginalFilename", "rsodbcsetup.dll"
+            VALUE "ProductName", "Redshift ODBC Driver Setup  Dynamic Link Library"
+            VALUE "ProductVersion", "2.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+DLG_CONFIG AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+DLG_CONNECTION AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+DLG_PROXY AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+DLG_ADVANCED AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_BADDSN              "Invalid DSN entry, please recheck."
+    IDS_MSGTITLE            "Invalid DSN"
+END
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
