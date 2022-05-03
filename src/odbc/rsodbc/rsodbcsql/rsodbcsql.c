@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 	if(argc == 1)
 	{
 		// Usage
-		printf("Usage: rsodbcsql \"DSN=<dsn name>\" | \"DRIVER={driver name};HOST=host_name;PORT=port_number;UID=user_name;Database=db_name[;PWD=password][;KerberosServiceName=my_kerberos_service_name]\" [file.sql|query] \n");
+		printf("Usage: rsodbcsql \"DSN=<dsn name>\" | \"DRIVER={driver name};HOST=host_name;PORT=port_number;UID=user_name;Database=db_name[;PWD=password]\" [file.sql|query] \n");
 		printf("\n");
 		printf("DRIVER	- Name of the driver: Amazon Redshift ODBC Driver (x64)'. Enter name without quotes.\n");
 		printf("DSN	- Name for the connection. \n");
@@ -43,7 +43,6 @@ int main(int argc, char **argv)
 		printf("UID	- User name to use when connecting to the database. \n");
 		printf("Database - Name of the database for the connection. \n");
 		printf("PWD	- Password to use when connecting to the database. \n");
-		printf("KerberosServiceName	- Specifies the name of the Kerberos string to use when authenticating with Kerberos. If left blank, the default is redshift. \n");
 		exit(1);
 	}
 

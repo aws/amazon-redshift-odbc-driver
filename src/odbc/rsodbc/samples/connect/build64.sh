@@ -9,7 +9,7 @@ function checkExitCode {
   fi
 }
 
-echo Building 64 bit Linux Amazon Redshift Analytic Platform ODBC Driver connect Sample
+echo Building 64 bit Linux Amazon Redshift ODBC Driver connect Sample
 
 rm ./connect64
 make -f connect.mak clean
@@ -18,6 +18,6 @@ checkExitCode $?
 mv ./connect ./connect64
 checkExitCode $?
 
-echo Done building 64 bit Linux Amazon Redshift Analytic Platform ODBC Driver connect Sample
+echo Done building 64 bit Linux Amazon Redshift ODBC Driver connect Sample
 
 exit $?
