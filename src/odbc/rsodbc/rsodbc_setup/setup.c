@@ -1286,6 +1286,8 @@ ConfigDSN(
 	const char *dsn;
 	int len;
 	HKEY helpKey;
+	char original_dsn_name[MAXDSNAME];	/* Original data source name */
+
 
 //	MessageBox(hwnd, "Debug", NULL, MB_ICONEXCLAMATION | MB_OK);
 
@@ -1448,6 +1450,8 @@ If the data source name was changed
 	endif
 endif
 ***************/
+			strncpy(original_dsn_name, dsn, sizeof(original_dsn_name));
+
 		/* read the existing values from the registry */
 			if (!rs_dsn_read_attrs(rs_dsn_setup_ctxt))
 				result = FALSE;
@@ -1462,6 +1466,15 @@ endif
 					hwnd ? rs_dsn_setup_prop_sheet(hwnd, rs_dsn_setup_ctxt) :
 					dsn[0] ? rs_dsn_write_attrs(hwnd, rs_dsn_setup_ctxt) :
 					FALSE;
+
+				if (result)
+				{
+					if (stricmp(original_dsn_name, rs_dsn_setup_ctxt->dsn_name))
+					{
+						// If user rename the DSN, DELETE the original one.
+						result = original_dsn_name[0] ? SQLRemoveDSNFromIni(original_dsn_name) : FALSE;
+					}
+				}
 			}
 	}
 
