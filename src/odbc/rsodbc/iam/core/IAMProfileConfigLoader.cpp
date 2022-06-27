@@ -21,6 +21,7 @@ namespace
     static const char* const SECRET_KEY_KEY = "aws_secret_access_key";
     static const char* const SESSION_TOKEN_KEY = "aws_session_token";
     static const char* const ROLE_ARN_KEY = "role_arn";
+	static const char* const ROLE_SESSION_NAME_KEY = "role_session_name";
     static const char* const SOURCE_PROFILE_KEY = "source_profile";
     static const char* const PROFILE_PREFIX = "profile ";
     static const char EQ = '=';
@@ -135,6 +136,12 @@ namespace
                 {
                     profile.SetRoleArn(assumeRoleArnIter->second);
                 }
+
+				auto roleSessionNameIter = m_profileKeyValuePairs.find(ROLE_SESSION_NAME_KEY);
+				if (roleSessionNameIter != m_profileKeyValuePairs.end())
+				{
+					profile.SetRoleSessionName(roleSessionNameIter->second);
+				}
 
                 auto sourceProfileIter = m_profileKeyValuePairs.find(SOURCE_PROFILE_KEY);
                 if (sourceProfileIter != m_profileKeyValuePairs.end())
@@ -254,6 +261,11 @@ bool IAMConfigFileProfileConfigLoader::PersistInternal(const Aws::Map<Aws::Strin
             {
                 outputFile << ROLE_ARN_KEY << EQ << profile.second.GetRoleArn() << std::endl;
             }
+
+			if (!profile.second.GetRoleSessionName().empty())
+			{
+				outputFile << ROLE_SESSION_NAME_KEY << EQ << profile.second.GetRoleSessionName() << std::endl;
+			}
 
             if (!profile.second.GetSourceProfile().empty())
             {

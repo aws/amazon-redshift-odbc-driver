@@ -57,6 +57,16 @@ namespace IamSupport
             m_roleArn = value; 
         }
 
+		inline const Aws::String& GetRoleSessionName() const
+		{
+			return m_roleSessionName;
+		}
+
+		inline void SetRoleSessionName(const Aws::String& value)
+		{
+			m_roleSessionName = value;
+		}
+
         inline const Aws::String& GetSourceProfile() const
         { 
             return m_sourceProfile; 
@@ -112,6 +122,7 @@ namespace IamSupport
         Aws::String m_region;
         Aws::Auth::AWSCredentials m_credentials;
         Aws::String m_roleArn;
+		Aws::String m_roleSessionName;
         Aws::String m_sourceProfile;
 
         /* Profile attributes map that contains additional information such as plugin_name, dbUser */

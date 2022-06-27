@@ -26,7 +26,11 @@ std::auto_ptr<IAMPluginCredentialsProvider> IAMPluginFactory::CreatePlugin(
     {
         credProvider = CreateBrowserAzurePlugin(in_log, in_config, in_argsMap);
     }
-    else if (IAMUtils::isEqual(in_pluginName, IAMUtils::convertCharStringToWstring(IAM_PLUGIN_BROWSER_SAML), false))
+	else if (IAMUtils::isEqual(in_pluginName, IAMUtils::convertCharStringToWstring(IAM_PLUGIN_BROWSER_AZURE_OAUTH2), false))
+	{
+		credProvider = CreateBrowserAzureOAuth2Plugin(in_log, in_config, in_argsMap);
+	}
+	else if (IAMUtils::isEqual(in_pluginName, IAMUtils::convertCharStringToWstring(IAM_PLUGIN_BROWSER_SAML), false))
     {
         credProvider = CreateBrowserSamlPlugin(in_log, in_config, in_argsMap);
     }
@@ -84,6 +88,18 @@ std::auto_ptr<IAMBrowserAzureCredentialsProvider> IAMPluginFactory::CreateBrowse
 
     return std::auto_ptr<IAMBrowserAzureCredentialsProvider>(
         new IAMBrowserAzureCredentialsProvider(in_log, in_config, in_argsMap));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+std::auto_ptr<IAMBrowserAzureOAuth2CredentialsProvider> IAMPluginFactory::CreateBrowserAzureOAuth2Plugin(
+	RsLogger* in_log,
+	const IAMConfiguration& in_config,
+	const std::map<rs_string, rs_string>& in_argsMap)
+{
+	RS_LOG(in_log)("IAMPluginFactory::CreateBrowserAzureOAuth2Plugin");
+
+	return std::auto_ptr<IAMBrowserAzureOAuth2CredentialsProvider>(
+		new IAMBrowserAzureOAuth2CredentialsProvider(in_log, in_config, in_argsMap));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

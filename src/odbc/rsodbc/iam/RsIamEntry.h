@@ -16,6 +16,12 @@ public:
                                     RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
                                     RsSettings& settings, RsLogger *logger);
 
+	// Entry point function from ODBC connection call for Native Auth
+	static void NativePluginAuthentication(bool isIAMAuth,
+		RS_IAM_CONN_PROPS_INFO *pIamProps,
+		RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
+		RsSettings& settings, RsLogger *logger);
+
 	static char *ReadAuthProfile(
 		bool isIAMAuth,
 		RS_IAM_CONN_PROPS_INFO *pIamProps,

@@ -84,7 +84,8 @@ rs_string IAMAdfsCredentialsProvider::WindowsIntegratedAuthentication()
             shouldVerifySSL,
             useProxyForIdP ? rs_wstring(IAMUtils::convertFromUTF8(m_config.GetHTTPSProxyUser())) : rs_wstring(),
             useProxyForIdP ? rs_wstring(IAMUtils::convertFromUTF8(m_config.GetHTTPSProxyPassword())) : rs_wstring(),
-            IAMUtils::convertFromUTF8(m_argsMap[IAM_KEY_LOGINTORP]));
+            IAMUtils::convertFromUTF8(m_argsMap[IAM_KEY_LOGINTORP]),
+			to_int(m_argsMap[IAM_KEY_STS_CONNECTION_TIMEOUT]));
 
     return ExtractSamlAssertion(response.GetResponseBody(), IAM_PLUGIN_SAML_PATTERN);
 
@@ -107,6 +108,13 @@ rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
     HttpClientConfig config;
     config.m_verifySSL = shouldVerifySSL;
     config.m_caFile = m_config.GetCaFile();
+	config.m_timeout = m_config.GetStsConnectionTimeout();
+
+	RS_LOG(m_log)("IAMAdfsCredentialsProvider::FormBasedAuthentication ",
+		"HttpClientConfig.m_timeout: %ld",
+		config.m_timeout);
+
+
     if (m_config.GetUsingHTTPSProxy() && m_config.GetUseProxyIdpAuth())
     {
         config.m_httpsProxyHost = m_config.GetHTTPSProxyHost();
@@ -124,6 +132,9 @@ rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
         "IAMAdfsCredentialsProvider::FormBasedAuthentication ",
         + "Using URI: %s",
         uri.c_str());
+
+	// Enforce URL validation
+	ValidateURL(uri);
 
     /* Test the availability of the server by sending a simple GET request */
     Redshift::IamSupport::HttpResponse response = client->MakeHttpRequest(uri);
@@ -150,6 +161,9 @@ rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
     if (!action.empty() && '/' == action[0])
     {
         uri = "https://" + m_argsMap[IAM_KEY_IDP_HOST] + ":" + m_argsMap[IAM_KEY_IDP_PORT] + action;
+
+		// Enforce URL validation
+		ValidateURL(uri);
     }
 
     const rs_string requestBody = IAMHttpClient::CreateHttpFormRequestBody(paramMap);

@@ -212,6 +212,10 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
             }
           }
 
+		  if (driverPath)
+			  free(driverPath);
+
+
           if(pConnectProps->szTrustStore[0] != '\0')
               rs_strncpy(szSslRootCert, pConnectProps->szTrustStore,sizeof(szSslRootCert));
         }

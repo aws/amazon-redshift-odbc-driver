@@ -500,7 +500,7 @@ pqParseInput2(PGconn *conn)
 						if (!conn->result)
 							return;
 					}
-					strncpy(conn->result->cmdStatus, conn->workBuffer.data,
+					StrNCpy(conn->result->cmdStatus, conn->workBuffer.data,
 							CMDSTATUS_LEN);
 					checkXactStatus(conn, conn->workBuffer.data);
 					conn->asyncStatus = PGASYNC_READY;
@@ -1018,7 +1018,7 @@ getNotify(PGconn *conn)
 	if (newNotify)
 	{
 		newNotify->relname = (char *) newNotify + sizeof(PGnotify);
-		strncpy(newNotify->relname, conn->workBuffer.data, nmlen + 1);
+		StrNCpy(newNotify->relname, conn->workBuffer.data, nmlen + 1);
 		/* fake up an empty-string extra field */
 		newNotify->extra = newNotify->relname + nmlen;
 		newNotify->be_pid = be_pid;
@@ -1496,12 +1496,12 @@ pqBuildStartupPacket2(PGconn *conn, int *packetlen,
 
 	startpacket->protoVersion = htonl(conn->pversion);
 
-	strncpy(startpacket->user, conn->pguser, SM_USER);
-	strncpy(startpacket->database, conn->dbName, SM_DATABASE);
-	strncpy(startpacket->tty, conn->pgtty, SM_TTY);
+	StrNCpy(startpacket->user, conn->pguser, SM_USER);
+	StrNCpy(startpacket->database, conn->dbName, SM_DATABASE);
+	StrNCpy(startpacket->tty, conn->pgtty, SM_TTY);
 
 	if (conn->pgoptions)
-		strncpy(startpacket->options, conn->pgoptions, SM_OPTIONS);
+		StrNCpy(startpacket->options, conn->pgoptions, SM_OPTIONS);
 
 	return (char *) startpacket;
 }

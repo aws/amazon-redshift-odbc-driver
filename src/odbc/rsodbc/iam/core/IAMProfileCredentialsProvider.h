@@ -64,6 +64,7 @@ namespace IamSupport
         /// @exception ErrorException if AssumeRoleOutcome indicates failure.
         Aws::Auth::AWSCredentials AssumeRole(
             const rs_string& in_roleArn,
+			const rs_string& in_roleSessionName,
             const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& in_credentialsProvider);
 
         /// @brief  Save AWSCredentials and related settings to m_credentialsHoder. 

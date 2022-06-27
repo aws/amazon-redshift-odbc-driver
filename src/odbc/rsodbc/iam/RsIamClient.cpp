@@ -71,6 +71,7 @@ m_log(in_logger)
 void RsIamClient::Connect()
 {
     RS_LOG(m_log)("RsIamClient::Connect");
+	bool isNativeAuth = false;
 
     ValidateConnectionAttributes();
     const rs_string authType = InferCredentialsProvider();
@@ -86,8 +87,14 @@ void RsIamClient::Connect()
         credentialsProvider = IAMFactory::CreatePluginCredentialsProvider(m_log, config);
         if (credentialsProvider)
         {
-            static_cast<IAMPluginCredentialsProvider&>(*credentialsProvider)
-                .GetConnectionSettings(m_credentials);
+			if (IAMUtils::isEqual(IAMUtils::convertStringToWstring(config.GetPluginName()), IAMUtils::convertCharStringToWstring(IAM_PLUGIN_BROWSER_AZURE_OAUTH2), false))
+				isNativeAuth = true;
+
+			if (!isNativeAuth)
+			{
+				static_cast<IAMPluginCredentialsProvider&>(*credentialsProvider)
+					.GetConnectionSettings(m_credentials);
+			}
         }
     }
     else if (authType == IAM_AUTH_TYPE_PROFILE)
@@ -113,17 +120,28 @@ void RsIamClient::Connect()
         credentialsProvider = IAMFactory::CreateDefaultCredentialsProvider();
     }
 
-	// Support serverless Redshift end point
-	std::vector<rs_string> hostnameTokens = IAMUtils::TokenizeSetting(m_settings.m_host, ".");
-	if ((hostnameTokens.size() >= 5) && (hostnameTokens[2].find("serverless") != rs_string::npos))
+	if (!isNativeAuth)
 	{
-		// serverless connection
-		GetServerlessCredentials(credentialsProvider);
+		// Support serverless Redshift end point
+		std::vector<rs_string> hostnameTokens = IAMUtils::TokenizeSetting(m_settings.m_host, ".");
+		if ((hostnameTokens.size() >= 5) && (hostnameTokens[2].find("serverless") != rs_string::npos))
+		{
+			// serverless connection
+			GetServerlessCredentials(credentialsProvider);
+		}
+		else
+		{
+			/* Get the cluster credentials from the Redshift server */
+			GetClusterCredentials(credentialsProvider);
+		}
 	}
 	else
 	{
-		/* Get the cluster credentials from the Redshift server */
-		GetClusterCredentials(credentialsProvider);
+		/* Validate that all required arguments for plugin are provided */
+		static_cast<IAMJwtPluginCredentialsProvider&>(*credentialsProvider).ValidateArgumentsMap();
+		rs_string idp_token = static_cast<IAMJwtPluginCredentialsProvider&>(*credentialsProvider).GetJwtAssertion();
+		m_credentials.SetIdpToken(idp_token);
+		m_credentials.SetFixExpirationTime();
 	}
 }
 
@@ -248,6 +266,21 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
     config.region = m_settings.m_awsRegion.empty() ? inferredAwsRegion : m_settings.m_awsRegion;
     config.endpointOverride = IAMUtils::convertToUTF8(m_settings.m_endpointUrl);
 
+	if (m_settings.m_stsConnectionTimeout > 0)
+	{
+		config.httpRequestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+		config.connectTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+		config.requestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+	}
+
+	RS_LOG(m_log)(
+		"RsIamClient::SendClusterCredentialRequest",
+		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
+		config.httpRequestTimeoutMs,
+		config.connectTimeoutMs,
+		config.requestTimeoutMs);
+
+
 #ifndef _WIN32
     // Added CA file to the config for verifying STS server certificate
     if (!m_settings.m_caFile.empty())
@@ -366,6 +399,21 @@ Aws::RedshiftArcadiaCoralService::Model::GetCredentialsOutcome RsIamClient::Send
 
 	config.region = m_settings.m_awsRegion.empty() ? inferredAwsRegion : m_settings.m_awsRegion;
 	config.endpointOverride = IAMUtils::convertToUTF8(m_settings.m_endpointUrl);
+
+	if (m_settings.m_stsConnectionTimeout > 0)
+	{
+		config.httpRequestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+		config.connectTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+		config.requestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+	}
+
+	RS_LOG(m_log)(
+		"RsIamClient::SendCredentialRequest",
+		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
+		config.httpRequestTimeoutMs,
+		config.connectTimeoutMs,
+		config.requestTimeoutMs);
+
 
 #ifndef _WIN32
 	// Added CA file to the config for verifying STS server certificate
@@ -588,7 +636,7 @@ IAMConfiguration RsIamClient::CreateIAMConfiguration(const rs_string& in_authTyp
 	config.SetStsEndpointUrl(IAMUtils::convertToUTF8(m_settings.m_stsEndpointUrl));
 	config.SetEndpointUrl(IAMUtils::convertToUTF8(m_settings.m_endpointUrl));
 	config.SetAuthProfile(m_settings.m_authProfile);
-
+	config.SetStsConnectionTimeout(m_settings.m_stsConnectionTimeout * 1000);
 
     /* Username and password for Profile and Plugin */
     config.SetUser(m_settings.m_username);
@@ -610,7 +658,8 @@ IAMConfiguration RsIamClient::CreateIAMConfiguration(const rs_string& in_authTyp
         config.SetIdpTenant(m_settings.m_idpTenant);
         config.SetClientSecret(m_settings.m_clientSecret);
         config.SetClientId(m_settings.m_clientId);
-        config.SetIdpResponseTimeout(m_settings.m_idp_response_timeout);
+		config.SetScope(m_settings.m_scope);
+		config.SetIdpResponseTimeout(m_settings.m_idp_response_timeout);
         config.SetLoginURL(m_settings.m_login_url);
         config.SetListenPort(m_settings.m_listen_port);
         config.SetAppId(IAMUtils::convertToUTF8(m_settings.m_appId));

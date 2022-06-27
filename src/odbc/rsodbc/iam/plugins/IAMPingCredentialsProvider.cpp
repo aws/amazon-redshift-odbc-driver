@@ -59,6 +59,12 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
 
     config.m_verifySSL = shouldVerifySSL;
     config.m_caFile = m_config.GetCaFile();
+	config.m_timeout = m_config.GetStsConnectionTimeout();
+
+	RS_LOG(m_log)("IAMPingCredentialsProvider::GetSamlAssertion",
+		"HttpClientConfig.m_timeout: %ld",
+		config.m_timeout);
+
     if (m_config.GetUsingHTTPSProxy() && m_config.GetUseProxyIdpAuth())
     {
         config.m_httpsProxyHost = m_config.GetHTTPSProxyHost();
@@ -77,6 +83,9 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
     RS_LOG(m_log)("IAMPingCredentialsProvider::GetSamlAssertion "
          "Using URI: %s",
         uri.c_str());
+
+	// Enforce URL validation
+	ValidateURL(uri);
 
     Redshift::IamSupport::HttpResponse response = client->MakeHttpRequest(uri);
 

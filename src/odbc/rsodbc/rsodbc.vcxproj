@@ -223,6 +223,7 @@
     <ClCompile Include="iam\plugins\IAMAdfsCredentialsProvider.cpp" />
     <ClCompile Include="iam\plugins\IAMAzureCredentialsProvider.cpp" />
     <ClCompile Include="iam\plugins\IAMBrowserAzureCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\IAMBrowserAzureOAuth2CredentialsProvider.cpp" />
     <ClCompile Include="iam\plugins\IAMBrowserSamlCredentialsProvider.cpp" />
     <ClCompile Include="iam\plugins\IAMExternalCredentialsProvider.cpp" />
     <ClCompile Include="iam\plugins\IAMJwtBasicCredentialsProvider.cpp" />
@@ -279,6 +280,7 @@
     <ClInclude Include="iam\plugins\IAMAdfsCredentialsProvider.h" />
     <ClInclude Include="iam\plugins\IAMAzureCredentialsProvider.h" />
     <ClInclude Include="iam\plugins\IAMBrowserAzureCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\IAMBrowserAzureOAuth2CredentialsProvider.h" />
     <ClInclude Include="iam\plugins\IAMBrowserSamlCredentialsProvider.h" />
     <ClInclude Include="iam\plugins\IAMExternalCredentialsProvider.h" />
     <ClInclude Include="iam\plugins\IAMJwtBasicCredentialsProvider.h" />

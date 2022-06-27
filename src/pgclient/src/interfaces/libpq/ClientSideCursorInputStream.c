@@ -78,7 +78,7 @@ int closeCscInputStream(ClientSideCursorInputStream *pCscInputStream)
 //
 short readShortCscInputStream(ClientSideCursorInputStream *pCscInputStream) 
 {
-    short v;
+    short v = 0;
 
     freadCsc(pCscInputStream,&v,sizeof(short),1,pCscInputStream->m_dataInputStream);
 
@@ -92,7 +92,7 @@ short readShortCscInputStream(ClientSideCursorInputStream *pCscInputStream)
 //
 short readShortCscInputStreamForNumberOfCols(ClientSideCursorInputStream *pCscInputStream) 
 {
-    short v;
+    short v = 0;
 
     freadCsc(pCscInputStream,&v,sizeof(short),1,pCscInputStream->m_dataInputStream);
 
@@ -109,7 +109,7 @@ short readShortCscInputStreamForNumberOfCols(ClientSideCursorInputStream *pCscIn
 //
 int readIntCscInputStream(ClientSideCursorInputStream *pCscInputStream)
 {
-    int v;
+    int v = 0;
 
     freadCsc(pCscInputStream,&v,sizeof(int),1,pCscInputStream->m_dataInputStream);
 
@@ -123,7 +123,7 @@ int readIntCscInputStream(ClientSideCursorInputStream *pCscInputStream)
 //
 long long readLongLongCscInputStream(ClientSideCursorInputStream *pCscInputStream) 
 {
-    long long v;
+    long long v = 0;
 
     freadCsc(pCscInputStream,&v,sizeof(long long),1,pCscInputStream->m_dataInputStream);
 
@@ -176,19 +176,19 @@ size_t freadCsc(ClientSideCursorInputStream *pCscInputStream, void * _DstBuf, si
 
         if(rc == 0)
         {
-            // Check one more time EOF
-            if(feof(pCscInputStream->m_dataInputStream))
-            {
-                pCscInputStream->m_eof = TRUE;
-            }
-            else
-                setIOErrorCsc(&(pCscInputStream->m_error),TRUE);
-            }
-        }
-        else
-        {
-        rc = 0;
-        pCscInputStream->m_eof = TRUE;
+			// Check one more time EOF
+			if(feof(pCscInputStream->m_dataInputStream))
+			{
+				pCscInputStream->m_eof = TRUE;
+			}
+			else
+				setIOErrorCsc(&(pCscInputStream->m_error),TRUE);
+		}
+    }
+    else
+    {
+		rc = 0;
+		pCscInputStream->m_eof = TRUE;
     }
 
     return rc;

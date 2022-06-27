@@ -101,6 +101,12 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
     HttpClientConfig config;
     config.m_verifySSL = shouldVerifySSL;
     config.m_caFile = m_config.GetCaFile();
+	config.m_timeout = m_config.GetStsConnectionTimeout();
+
+	RS_LOG(m_log)("IAMAzureCredentialsProvider::AzureOauthBasedAuthentication ",
+		"HttpClientConfig.m_timeout: %ld",
+		config.m_timeout);
+
     if (m_config.GetUsingHTTPSProxy() && m_config.GetUseProxyIdpAuth())
     {
         config.m_httpsProxyHost = m_config.GetHTTPSProxyHost();
@@ -122,6 +128,10 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
        "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication ",
         + "Using URI: %s",
         uri.c_str());
+
+	// Enforce URL validation
+	ValidateURL(uri);
+
 
     /* Setting the headers. */
     const std::map<rs_string, rs_string> requestHeader =

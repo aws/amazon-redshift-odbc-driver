@@ -39,6 +39,12 @@ namespace RedshiftODBC
         explicit RsCredentials(
             const Aws::Auth::AWSCredentials& in_credentials);
 
+		/// @brief Constructor
+		///
+		/// @param idp_token          The native IDP tokens
+		explicit RsCredentials(
+			const rs_string& idp_token);
+
         /// @brief Returns the settings of the credentials holder
         ///
         /// @return the connection settings of the credentials holder.
@@ -94,6 +100,22 @@ namespace RedshiftODBC
         /// @return The Redshift cluster host port expiration time of the credentials holder.
         short GetPort() const;
 
+		/// @brief Sets the idp token of the credentials holder
+		///
+		/// @param in_dbPassword           The Redshift cluster database password
+		void SetIdpToken(const rs_string& in_idpToken);
+
+		/// @brief Returns the idp token of the native credentials holder
+		///
+		/// @return the idp token of the credentials holder.
+		rs_string GetIdpToken() const;
+
+
+		/// @brief Sets fix 15 min timeout for native auth
+		///
+		/// 
+		void SetFixExpirationTime();
+
         /// @brief Destructor.
         ~RsCredentials();
 
@@ -110,6 +132,9 @@ namespace RedshiftODBC
         /* Host and port retrieved from DescribeCluster call */
         rs_string m_host;
         short m_port;
+
+		/* native IDP token */
+		rs_string m_idpToken;
     };
 }
 

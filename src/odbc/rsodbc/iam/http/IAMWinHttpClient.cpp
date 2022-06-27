@@ -462,7 +462,8 @@ rs_string IAMWinHttpClient::SendHttpRequestWithWIA(
     bool in_verifySSL,
     const rs_wstring& in_proxyUsername,
     const rs_wstring& in_proxyPassword,
-    const rs_wstring& in_loginToRp
+    const rs_wstring& in_loginToRp,
+	int in_stsConnectionTimeout
     )
 {
     // Reference: https://msdn.microsoft.com/en-us/library/windows/desktop/aa383880(v=vs.85).aspx
@@ -511,7 +512,11 @@ rs_string IAMWinHttpClient::SendHttpRequestWithWIA(
     }
 
     // Set timeouts
-    WinHttpSetTimeouts(sessionHandle, DEFAULT_TIMEOUT, DEFAULT_TIMEOUT, DEFAULT_TIMEOUT, DEFAULT_TIMEOUT);
+    WinHttpSetTimeouts(sessionHandle, 
+		in_stsConnectionTimeout,
+		in_stsConnectionTimeout,
+		in_stsConnectionTimeout,
+		in_stsConnectionTimeout);
 
     connectHandle = WinHttpConnect(
         sessionHandle,

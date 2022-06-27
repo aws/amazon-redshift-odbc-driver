@@ -2534,7 +2534,12 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
                     {
                       rs_strncpy(pIamProps->szClientId,pval,sizeof(pIamProps->szClientId));
                     }
-                    else
+					else
+					if (_stricmp(pname, RS_SCOPE) == 0)
+					{
+						rs_strncpy(pIamProps->szScope, pval, sizeof(pIamProps->szScope));
+					}
+					else
                     if(_stricmp(pname, RS_CLIENT_SECRET) == 0)
                     {
                       rs_strncpy(pIamProps->szClientSecret,pval,sizeof(pIamProps->szClientSecret));
@@ -2632,6 +2637,11 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
                     {
                       rs_strncpy(pIamProps->szAuthProfile,pval,sizeof(pIamProps->szAuthProfile));
                     }
+					else
+					if (_stricmp(pname, RS_IAM_STS_CONNECTION_TIMEOUT) == 0)
+					{
+						sscanf(pval, "%d", &(pIamProps->iStsConnectionTimeout));
+					}
 					else
 					if (_stricmp(pname, RS_STRING_TYPE) == 0)
 					{
@@ -3267,7 +3277,7 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_APPLICATION_NAME, "", pConnAttr->szApplicationName, sizeof(pConnAttr->szApplicationName), ODBC_INI);
 
 	  // Read Keep alive values
-	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_KEEP_ALIVE, "", pConnectProps->szKeepAlive, MAX_NUMBER_BUF_LEN, ODBC_INI);
+	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_KEEP_ALIVE, "1", pConnectProps->szKeepAlive, MAX_NUMBER_BUF_LEN, ODBC_INI);
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_KEEP_ALIVE_COUNT, "", pConnectProps->szKeepAliveCount, MAX_NUMBER_BUF_LEN, ODBC_INI);
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_KEEP_ALIVE_IDLE, "", pConnectProps->szKeepAliveIdle, MAX_NUMBER_BUF_LEN, ODBC_INI);
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_KEEP_ALIVE_INTERVAL, "", pConnectProps->szKeepAliveInterval, MAX_NUMBER_BUF_LEN, ODBC_INI);
@@ -3380,11 +3390,15 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
           RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_WEB_IDENTITY_TOKEN, "", pIamProps->pszJwt, MAX_IAM_JWT_LEN, ODBC_INI);
         }
 
+		RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_SCOPE, "", pIamProps->szScope, MAX_IAM_BUF_VAL, ODBC_INI);
+
+
 		RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_NATIVE_KEY_PROVIDER_NAME, "", pConnectProps->szProviderName, MAX_IDEN_LEN, ODBC_INI);
 
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_ROLE_ARN, "", pIamProps->szRoleArn, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_CONN_INFO::readLongValFromDsn(pConnectProps->szDSN, RS_DURATION, &(pIamProps->lDuration));
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_ROLE_SESSION_NAME, "", pIamProps->szRoleSessionName, MAX_IAM_BUF_VAL, ODBC_INI);
+		RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_IAM_STS_CONNECTION_TIMEOUT, &(pIamProps->iStsConnectionTimeout));
 
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IAM_CA_PATH, "", pIamProps->szCaPath, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IAM_CA_FILE, "", pIamProps->szCaFile, MAX_IAM_BUF_VAL, ODBC_INI);
@@ -3397,6 +3411,8 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
         {
           snprintf(pIamProps->szCaFile,sizeof(pIamProps->szCaFile),"%s%c%s",driverPath, PATH_SEPARATOR_CHAR, REDSHIFT_ROOT_CERT_FILE);
         }
+		if (driverPath)
+			free(driverPath);
 #endif
 
       }
@@ -3492,6 +3508,7 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
 
   SQLRETURN rc = SQL_SUCCESS;
   RS_CONNECT_PROPS_INFO *pConnectProps = pConn->pConnectProps;
+  bool isNativeAuth = false;
 
   // Check for IAM connection
   if(pConnectProps->isIAMAuth) {
@@ -3503,6 +3520,7 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
 		&& _stricmp(pIamProps->szPluginName, IAM_PLUGIN_JWT) == 0)
 	{
 		rs_strncpy(pConnectProps->szIdpType, "AzureAD", MAX_IDEN_LEN);
+		isNativeAuth = true;
 	} // Redshift native auth
 	else
 	{
@@ -3518,11 +3536,27 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
 		try
 		{
 			pConn->iamLogger.traceEnable = IS_TRACE_ON();
-			RsIamEntry::IamAuthentication(pConn->pConnectProps->isIAMAuth,
-				pConn->pConnectProps->pIamProps,
-				pConn->pConnectProps->pHttpsProps,
-				pConn->iamSettings,
-				&(pConn->iamLogger));
+
+			if (pIamProps->szPluginName[0] != '\0'
+				&& _stricmp(pIamProps->szPluginName, IAM_PLUGIN_BROWSER_AZURE_OAUTH2) == 0)
+			{
+				isNativeAuth = true;
+				RsIamEntry::NativePluginAuthentication(pConn->pConnectProps->isIAMAuth,
+					pConn->pConnectProps->pIamProps,
+					pConn->pConnectProps->pHttpsProps,
+					pConn->iamSettings,
+					&(pConn->iamLogger));
+
+				rs_strncpy(pConnectProps->szIdpType, "AzureAD", MAX_IDEN_LEN);
+			} // Redshift native auth
+			else
+			{
+				RsIamEntry::IamAuthentication(pConn->pConnectProps->isIAMAuth,
+					pConn->pConnectProps->pIamProps,
+					pConn->pConnectProps->pHttpsProps,
+					pConn->iamSettings,
+					&(pConn->iamLogger));
+			}
 		}
 		catch (RsErrorException& ex)
 		{
@@ -3538,16 +3572,28 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
 			return rc;
 		}
 
-		// Copy user name, password, host, and port from IAM
-		rs_strncpy(pConnectProps->szUser, pConn->iamSettings.m_username.c_str(),sizeof(pConnectProps->szUser));
-		rs_strncpy(pConnectProps->szPassword, pConn->iamSettings.m_password.c_str(), sizeof(pConnectProps->szPassword));
+		if (!isNativeAuth)
+		{
+			// Copy user name, password, host, and port from IAM
+			rs_strncpy(pConnectProps->szUser, pConn->iamSettings.m_username.c_str(), sizeof(pConnectProps->szUser));
+			rs_strncpy(pConnectProps->szPassword, pConn->iamSettings.m_password.c_str(), sizeof(pConnectProps->szPassword));
 
-		if (!(pConn->iamSettings.m_host.empty())) {
-			rs_strncpy(pConnectProps->szHost, pConn->iamSettings.m_host.c_str(),sizeof(pConnectProps->szHost));
+			if (!(pConn->iamSettings.m_host.empty())) {
+				rs_strncpy(pConnectProps->szHost, pConn->iamSettings.m_host.c_str(), sizeof(pConnectProps->szHost));
+			}
+
+			if (pConn->iamSettings.m_port != 0)
+				snprintf(pConnectProps->szPort, sizeof(pConnectProps->szPort), "%d", pConn->iamSettings.m_port);
 		}
+		else
+		{
+			// Copy IDP token
+			const char *pval = pConn->iamSettings.m_web_identity_token.c_str();
+			int len = strlen(pval) + 1;
+			pIamProps->pszJwt = (char *)rs_calloc(sizeof(char), len);
 
-		if (pConn->iamSettings.m_port != 0)
-			snprintf(pConnectProps->szPort, sizeof(pConnectProps->szPort), "%d", pConn->iamSettings.m_port);
+			rs_strncpy(pIamProps->pszJwt, pval, len);
+		}
 	} // Non Redshift Native Auth
 
   } // IAM

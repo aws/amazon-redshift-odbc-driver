@@ -19,20 +19,6 @@ Password=<password>
 SSLMode=verify-ca
 StreamingCursorRows=100
 #LoginTimeout=15
-#ConnectionRetryCount=0
-#ConnectionRetryDelay=3
-#InitializationString=
-#FetchRefCursor=1
-#QueryTimeout=0
-#TransactionErrorBehavior=1
-#CscEnable=0
-#CscThreshold=1
-#CscMaxFileSize=4096
-#CscPath=
-#EncryptionMethod=1
-#TrustStore=
-#MultiInsertCmdConvertEnable=1
-#ReadOnly=
 #DatabaseMetadataCurrentDbOnly=
 
 

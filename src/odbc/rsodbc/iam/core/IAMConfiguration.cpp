@@ -292,6 +292,18 @@ void IAMConfiguration::SetClientId(const rs_string& in_clientId)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+rs_string IAMConfiguration::GetScope() const
+{
+	return GetSetting(IAM_KEY_SCOPE);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+void IAMConfiguration::SetScope(const rs_string& in_scope)
+{
+	SetSetting(IAM_KEY_SCOPE, in_scope);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 short IAMConfiguration::GetIdpResponseTimeout() const
 {
     try
@@ -576,6 +588,32 @@ void IAMConfiguration::RemoveSetting(const rs_string& in_key)
 {
     m_settings.erase(in_key);
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+int IAMConfiguration::GetStsConnectionTimeout() const
+{
+	try
+	{
+		return to_int(GetSetting(IAM_KEY_STS_CONNECTION_TIMEOUT));
+	}
+	catch (...)
+	{
+		return (int)DEFAULT_TIMEOUT;
+	}
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+void IAMConfiguration::SetStsConnectionTimeout(int in_stsConnectionTimeout)
+{
+	if (0 < in_stsConnectionTimeout)
+	{
+		SetSetting(IAM_KEY_STS_CONNECTION_TIMEOUT, to_rs_string(in_stsConnectionTimeout));
+	}
+	else
+	{
+		SetSetting(IAM_KEY_STS_CONNECTION_TIMEOUT, to_rs_string((int)DEFAULT_TIMEOUT));
+	}
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMConfiguration::~IAMConfiguration()

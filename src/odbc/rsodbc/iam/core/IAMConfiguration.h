@@ -192,6 +192,16 @@ namespace IamSupport
         /// @param in_clientId      ClientId of the IAMConfiguration
         void SetClientId(const rs_string& in_clientId);
 
+		/// @brief Returns the Scope of the IAMConfiguration
+		///
+		/// @return scope of the IAMConfiguration
+		rs_string GetScope() const;
+
+		/// @brief Sets the Scope of the IAMConfiguration
+		///
+		/// @param in_scope      Scope of the IAMConfiguration
+		void SetScope(const rs_string& in_scope);
+
         /// @brief Returns the IDP Response Timeout (in seconds) of the IAMConfiguration
         ///
         /// @return Timeout of the IAMConfiguration
@@ -405,6 +415,14 @@ namespace IamSupport
 		///
 		/// @param in_stsEndpointUrl     URL of the AWS STS Endpoint
 		void SetStsEndpointUrl(const rs_string& in_stsEndpointUrl);
+
+		/// @brief Returns the STS connection timeout (in seconds)
+		int GetStsConnectionTimeout() const;
+
+		/// @brief Sets the STS connection timeout (in seconds)
+		///
+		/// @param in_stsConnectionTimeout     The STS connection timeout (in seconds)
+		void SetStsConnectionTimeout(int in_stsConnectionTimeout);
 
 		/// @brief Returns the AuthProfile used for common settings
 		rs_string GetAuthProfile() const;

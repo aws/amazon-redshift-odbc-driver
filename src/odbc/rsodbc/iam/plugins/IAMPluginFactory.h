@@ -11,6 +11,7 @@
 #include "IAMPingCredentialsProvider.h"
 #include "IAMExternalCredentialsProvider.h"
 #include "IAMJwtBasicCredentialsProvider.h"
+#include "IAMBrowserAzureOAuth2CredentialsProvider.h"
 
 #include <map>
 
@@ -77,6 +78,19 @@ namespace IamSupport
             const IAMConfiguration& in_config = IAMConfiguration(),
             const std::map<rs_string, rs_string>& in_argsMap
             = std::map<rs_string, rs_string>());
+
+		/// @brief Constructor           Construct credentials provider using argument map
+		///
+		/// @param in_log                The logger. (NOT OWN)
+		/// @param in_config             The IAM Connection Configuration
+		/// @param in_argsMap            Optional arguments map passed to the credentials provider
+		///
+		/// @return A credentials provider wrapped using smart pointer
+		static std::auto_ptr<IAMBrowserAzureOAuth2CredentialsProvider> CreateBrowserAzureOAuth2Plugin(
+			RsLogger* in_log,
+			const IAMConfiguration& in_config = IAMConfiguration(),
+			const std::map<rs_string, rs_string>& in_argsMap
+			= std::map<rs_string, rs_string>());
 
         /// @brief Constructor           Construct credentials provider using argument map
         ///

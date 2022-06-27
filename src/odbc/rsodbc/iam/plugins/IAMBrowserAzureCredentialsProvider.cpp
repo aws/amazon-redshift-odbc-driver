@@ -14,6 +14,13 @@
 #include <random>
 #include <sstream>
 
+#if (defined(_WIN32) || defined(_WIN64))
+#include <shellapi.h>
+#elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
+#include <CoreFoundation/CFBundle.h>
+#include <ApplicationServices/ApplicationServices.h>
+#endif
+
 using namespace Redshift::IamSupport;
 using namespace Aws::Auth;
 using namespace Aws::Client;
@@ -119,11 +126,39 @@ void IAMBrowserAzureCredentialsProvider::LaunchBrowser(const rs_string& uri)
 {
     RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::LaunchBrowser");
 
+	//  Avoid system calls where possible for LOGIN_URL to help avoid possible remote code execution
+#if (defined(_WIN32) || defined(_WIN64))
+	if (static_cast<int>(
+		reinterpret_cast<intptr_t>(
+			ShellExecute(
+				NULL,
+				NULL,
+				uri.c_str(),
+				NULL,
+				NULL,
+				SW_SHOWNORMAL))) <= 32)
+#elif (defined(LINUX) || defined(__linux__))
+
     rs_string open_uri = command_ + uri + subcommand_;
 
     if (system(open_uri.c_str()) == -1)
+#elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
+	CFURLRef url = CFURLCreateWithBytes(
+		NULL,                        // allocator
+		(UInt8*)uri.c_str(),         // URLBytes
+		uri.length(),                // length
+		kCFStringEncodingASCII,      // encoding
+		NULL                         // baseURL
+	);
+	if (url)
+	{
+		LSOpenCFURLRef(url, 0);
+		CFRelease(url);
+	}
+	else
+#endif
     {
-        IAMUtils::ThrowConnectionExceptionWithInfo("Couldn't open a browser.");
+        IAMUtils::ThrowConnectionExceptionWithInfo("Couldn't open a URI or some error occurred.");
     }
 }
 
@@ -162,25 +197,37 @@ rs_string IAMBrowserAzureCredentialsProvider::RequestAuthorizationCode()
     /* Launch WEB Server to wait the response with the authorization code from /oauth2/authorize/. */
     srv.LaunchServer();
     
-    WaitForServer(srv);
-    
-    /* Save the listen port from the server to know where to redirect the response. */
-    int port = srv.GetListenPort();
-    m_argsMap[IAM_KEY_LISTEN_PORT] = std::to_string(port);
+	try
+	{
+		WaitForServer(srv);
 
-    /* Generate URI to request an authorization code.  */
-    const rs_string uri = "https://login.microsoftonline.com/" +
-        m_argsMap[IAM_KEY_IDP_TENANT] +
-        "/oauth2/authorize?client_id=" +
-        m_argsMap[IAM_KEY_CLIENT_ID] +
-        "&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A" +
-        m_argsMap[IAM_KEY_LISTEN_PORT] +
-        "%2Fredshift%2F" +
-        "&response_mode=form_post&scope=openid" +
-        "&state=" +
-        state;
-    
-    LaunchBrowser(uri);
+		/* Save the listen port from the server to know where to redirect the response. */
+		int port = srv.GetListenPort();
+		m_argsMap[IAM_KEY_LISTEN_PORT] = std::to_string(port);
+
+		/* Generate URI to request an authorization code.  */
+		const rs_string uri = "https://login.microsoftonline.com/" +
+			m_argsMap[IAM_KEY_IDP_TENANT] +
+			"/oauth2/authorize?client_id=" +
+			m_argsMap[IAM_KEY_CLIENT_ID] +
+			"&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A" +
+			m_argsMap[IAM_KEY_LISTEN_PORT] +
+			"%2Fredshift%2F" +
+			"&response_mode=form_post&scope=openid" +
+			"&state=" +
+			state;
+
+		// Enforce URL validation
+		ValidateURL(uri);
+
+		LaunchBrowser(uri);
+	}
+	catch (RsErrorException & e)
+	{
+		srv.Join();
+		throw e;
+	}
+
     
     srv.Join();
     
@@ -221,7 +268,12 @@ rs_string IAMBrowserAzureCredentialsProvider::RequestAccessToken(const rs_string
     HttpClientConfig config;
     config.m_verifySSL = shouldVerifySSL;
     config.m_caFile = m_config.GetCaFile();
-    
+	config.m_timeout = m_config.GetStsConnectionTimeout();
+
+	RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::RequestAccessToken ",
+		"HttpClientConfig.m_timeout: %ld",
+		config.m_timeout);
+
     if (m_config.GetUsingHTTPSProxy() && m_config.GetUseProxyIdpAuth())
     {
         config.m_httpsProxyHost = m_config.GetHTTPSProxyHost();
@@ -237,6 +289,9 @@ rs_string IAMBrowserAzureCredentialsProvider::RequestAccessToken(const rs_string
         m_argsMap[IAM_KEY_IDP_TENANT] +
         "/oauth2/token";
     
+	// Enforce URL regex in LOGIN_URL to avoid possible remote code execution
+	ValidateURL(reduri);
+
     const rs_string requestBody = IAMHttpClient::CreateHttpFormRequestBody(paramMap);
     
     Redshift::IamSupport::HttpResponse response = client->MakeHttpRequest(

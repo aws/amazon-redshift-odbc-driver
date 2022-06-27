@@ -30,7 +30,8 @@ Redshift::IamSupport::HttpResponse IAMWinHttpClientDelegate::MakeHttpRequestWith
     bool in_verifySSL,
     const rs_wstring& in_proxyUsername,
     const rs_wstring& in_proxyPassword,
-    const rs_wstring& in_loginToRp)
+    const rs_wstring& in_loginToRp,
+	int in_stsConnectionTimeout)
 {
     Redshift::IamSupport::HttpResponse response;
     response.SetResponseBody(
@@ -40,7 +41,8 @@ Redshift::IamSupport::HttpResponse IAMWinHttpClientDelegate::MakeHttpRequestWith
             in_verifySSL,
             in_proxyUsername,
             in_proxyPassword,
-            in_loginToRp));
+            in_loginToRp,
+			in_stsConnectionTimeout));
     return response;
 }
 

@@ -65,6 +65,7 @@
 #define IDC_LTRP2                       1029
 #define IDC_SPID                        1029
 #define IDC_PROVIDER_NAME               1030
+#define IDC_SCOPE                       1031
 #define IDC_DESCTEXT                    1039
 #define DRV_MSG_LABEL                   1040
 #define DLG_PASSWORD                    1048
@@ -177,6 +178,7 @@
 #define IDC_POOL_MAX_STATIC             1177
 #define IDC_EPU_STATIC2                 1177
 #define IDC_POOL_MAX_EDIT               1178
+#define IDC_SCOPE_STATIC                1178
 #define IDC_POOL_MIN_STATIC2            1179
 #define IDC_POOL_MIN_EDIT               1180
 #define IDC_POOL_IDLE_STATIC            1181

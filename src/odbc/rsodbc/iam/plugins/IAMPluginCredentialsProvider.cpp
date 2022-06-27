@@ -77,6 +77,8 @@ void IAMPluginCredentialsProvider::InitArgumentsMap()
     short duration = m_config.GetDuration();
     const rs_string web_identity_token = m_config.GetWebIdentityToken();
     const rs_string role_session_name = m_config.GetRoleSessionName();
+	const rs_string scope = m_config.GetScope();
+
     
     /* Get regular expression to filter received dbGroups from SAML response */
     m_dbGroupsFilter = m_config.GetDbGroupsFilter();
@@ -145,6 +147,12 @@ void IAMPluginCredentialsProvider::InitArgumentsMap()
     {
         m_argsMap[IAM_KEY_LISTEN_PORT] = std::to_string(listen_port);
     }
+
+	if (!scope.empty())
+	{
+		m_argsMap[IAM_KEY_SCOPE] = scope;
+	}
+
 
     if (!login_url.empty())
     {

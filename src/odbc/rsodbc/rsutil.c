@@ -10436,7 +10436,6 @@ int readTraceOptionsFromIniFile(char  *pszTraceLevel,int iTraceLevelBufLen, char
 
     iniFileName[0] = '\0';
 
-
 	 driverPath = getDriverPath();
 	 if (driverPath != NULL && *driverPath != '\0')
 	 {
@@ -10468,6 +10467,10 @@ int readTraceOptionsFromIniFile(char  *pszTraceLevel,int iTraceLevelBufLen, char
 				 readOptions = TRUE;
 		 }
 	 }
+
+	 if (driverPath)
+		 free(driverPath);
+
 
      return readOptions;
 }
@@ -10504,6 +10507,9 @@ int readDriverOptionFromIniFile(char  *pszOptionName,char *pszOptionValBuf, int 
 
 		}
 	}
+
+	if (driverPath)
+		free(driverPath);
 
      return readOptions;
 }

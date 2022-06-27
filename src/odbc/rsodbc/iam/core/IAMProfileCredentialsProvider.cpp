@@ -87,6 +87,7 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
 
     IAMProfile profile = LoadProfile(in_profile);
     const rs_string& roleArn = profile.GetRoleArn();
+	const rs_string& roleSessionName = profile.GetRoleSessionName();
     rs_string temp = profile.GetProfileAttribute(IAM_KEY_PLUGIN_NAME);
 	rs_wstring pluginName = IAMUtils::convertStringToWstring(temp);
 	rs_wstring credential_process = IAMUtils::convertStringToWstring(profile.GetProfileAttribute("credential_process"));
@@ -122,7 +123,7 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
         const rs_string sourceProfile = profile.GetSourceProfile();
         AWSCredentials credentials = GetAWSCredentials(sourceProfile);
         auto simpleProvider = Aws::MakeShared<SimpleAWSCredentialsProvider>(PROFILE_LOG_TAG, credentials);
-        return AssumeRole(roleArn, simpleProvider);
+        return AssumeRole(roleArn, roleSessionName, simpleProvider);
     }
 	else if (!IAMUtils::isEmpty(credential_process))
 	{
@@ -196,6 +197,7 @@ IAMProfile IAMProfileCredentialsProvider::LoadProfile(const rs_string& in_profil
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 AWSCredentials IAMProfileCredentialsProvider::AssumeRole(
     const rs_string& in_roleArn,
+	const rs_string& in_roleSessionName,
     const std::shared_ptr<AWSCredentialsProvider>& in_credentialsProvider)
 {
     m_log->log("Redshift::IamSupport::%s::%s()", "IAMProfileCredentialsProvider", "AssumeRole");
@@ -224,13 +226,32 @@ AWSCredentials IAMProfileCredentialsProvider::AssumeRole(
     }
 
 	config.endpointOverride = m_config.GetStsEndpointUrl();
+	config.httpRequestTimeoutMs = m_config.GetStsConnectionTimeout();
+	config.connectTimeoutMs = m_config.GetStsConnectionTimeout();
+	config.requestTimeoutMs = m_config.GetStsConnectionTimeout();
+
+	m_log->log("Redshift::IamSupport::%s::%s(): httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld", "IAMProfileCredentialsProvider", "AssumeRole",
+				config.httpRequestTimeoutMs, config.connectTimeoutMs, config.requestTimeoutMs);
+
 
     STSClient client(in_credentialsProvider, config);
     Model::AssumeRoleRequest request = Model::AssumeRoleRequest();
     request.SetRoleArn(in_roleArn);
 
-    const rs_string roleSessionName = "odbc-" + std::to_string(DateTime::Now().Millis());
-    request.SetRoleSessionName(roleSessionName);
+	// Support role_session_name in the AWS Profile
+	if (!in_roleSessionName.empty())
+	{
+		request.SetRoleSessionName(in_roleSessionName);
+	}
+	else
+	{
+		const rs_string roleSessionName = "odbc-" + std::to_string(DateTime::Now().Millis());
+		request.SetRoleSessionName(roleSessionName);
+	}
+
+	m_log->log("IAMProfileCredentialsProvider::AssumeRole: Calling client.AssumeRole with role_arn: %s and role_session_name: %s",
+		request.GetRoleArn().c_str(),
+		request.GetRoleSessionName().c_str());
 
     Model::AssumeRoleOutcome outcome = client.AssumeRole(request);
 

@@ -34,6 +34,7 @@ struct RS_IAM_CONN_PROPS_INFO {
   char szDbGroupsFilter[MAX_IAM_DBGROUPS_LEN]; // dbgroups_filter
   char szClientSecret[MAX_IAM_BUF_VAL]; // client_secret
   char szClientId[MAX_IAM_BUF_VAL]; // client_id
+  char szScope[MAX_IAM_BUF_VAL]; // scope
   long lDuration; // duration
   char szPreferredRole[MAX_IAM_BUF_VAL]; // preferred_role
   bool isSslInsecure; // ssl_insecure
@@ -54,6 +55,7 @@ struct RS_IAM_CONN_PROPS_INFO {
   char szDatabase[MAX_IDEN_LEN];
   char szAuthProfile[MAX_IAM_BUF_VAL];
   bool isDisableCache; 
+  int iStsConnectionTimeout; 
 };
 
 struct RS_PROXY_CONN_PROPS_INFO {

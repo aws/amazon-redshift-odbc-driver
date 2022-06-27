@@ -9,9 +9,3 @@ Amazon Redshift ODBC Driver (x64)=Installed
 [Amazon Redshift ODBC Driver (x64)]
 Driver=/opt/amazon/redshiftodbcx64/librsodbc64.so
 Setup=/opt/amazon/redshiftodbcx64/librsodbc64.so
-APILevel=0
-ConnectFunctions=YYY
-DriverODBCVer=3.52
-FileUsage=0
-HelpRootDirectory=
-SQLLevel=0

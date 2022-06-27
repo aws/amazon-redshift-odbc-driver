@@ -95,6 +95,9 @@ namespace IamSupport
 	#define IAM_KEY_ENDPOINT_URL		"EndpointUrl"
 //	#define IAM_KEY_PROVIDER_NAME       "provider_name"
 	#define IAM_KEY_AUTH_PROFILE        "AuthProfile"
+	#define IAM_KEY_STS_CONNECTION_TIMEOUT  "StsConnectionTimeout"
+	#define IAM_KEY_SCOPE					"scope" // "api://" + client_id + "/User.Read"
+
 
 
     /* SAML pattern used to extract SAML assertion from the HTML response page */
@@ -109,6 +112,7 @@ namespace IamSupport
     #define IAM_PLUGIN_OKTA             "Okta"
     #define IAM_PLUGIN_EXTERNAL         "External"
     #define IAM_PLUGIN_JWT              "JWT"
+	#define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"
 
     /**
     * The CA path used to look up CA files
@@ -134,6 +138,11 @@ namespace IamSupport
 
     // The default duration
     #define IAM_DEFAULT_DURATION 0
+
+	// Enforce URL regex in LOGIN_URL to avoid possible remote code execution
+	// REGEX pattern used to verify legal URL strings
+	#define IAM_URL_PATTERN "^(https)://[-a-zA-Z0-9+&@#/%?=~_!:,.']*[-a-zA-Z0-9+&@#/%=~_']"
+
 
     // The default timeout in milliseconds.
     static const long DEFAULT_TIMEOUT = 60000;
@@ -201,6 +210,9 @@ namespace IamSupport
 
         /// The Client ID.
         rs_string m_clientId;
+
+		/// The Scope.
+		rs_string m_scope;
 
         /// The application ID.
         rs_string m_appId;

@@ -110,14 +110,15 @@ struct RsSettings
     short m_listen_port;
     rs_string m_clientSecret;
     rs_string m_clientId;
-    rs_wstring m_appId;
+	rs_string m_scope;
+	rs_wstring m_appId;
     rs_wstring m_preferredRole;
     rs_string m_role_arn;
     rs_string m_web_identity_token;
     rs_string m_role_session_name;
     short m_duration;
 	rs_string m_authProfile;
-
+	int   m_stsConnectionTimeout;
 
     bool          m_iamAuth;
     bool          m_forceLowercase;
@@ -141,7 +142,9 @@ struct RsSettings
 //        m_hasNewSchemaView(false),
 //        m_enforceSingleStatement(false),
         m_sslMode(""),
-        m_host("")
+        m_host(""),
+		m_scope(""),
+		m_stsConnectionTimeout(0)
     {
         /* Do nothing */
     }

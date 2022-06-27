@@ -219,6 +219,13 @@ AWSCredentials IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest(
     }
 
 	config.endpointOverride = m_config.GetStsEndpointUrl();
+	config.httpRequestTimeoutMs = m_config.GetStsConnectionTimeout();
+	config.connectTimeoutMs = m_config.GetStsConnectionTimeout();
+	config.requestTimeoutMs = m_config.GetStsConnectionTimeout();
+
+	RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest",
+		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
+		config.httpRequestTimeoutMs, config.connectTimeoutMs, config.requestTimeoutMs);
 
     STSClient client(Aws::MakeShared<AnonymousAWSCredentialsProvider>(LOG_TAG), config);
 

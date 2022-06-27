@@ -78,13 +78,19 @@ bool IAMUtils::ConvertStringToBool(const rs_string& in_str)
 rs_wstring IAMUtils::GetDirectoryPath()
 {
   char *driverPath = getDriverPath();
+  rs_wstring rc;
   if (driverPath != NULL && *driverPath != '\0')
   {
     rs_string str = driverPath;
-    return convertFromUTF8(str);
+    rc =  convertFromUTF8(str);
   }
   else
-    return L"";
+    rc =  L"";
+
+  if (driverPath != NULL)
+	  free(driverPath);
+
+  return rc;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

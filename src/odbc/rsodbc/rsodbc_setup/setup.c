@@ -82,6 +82,7 @@
 #define RS_SSL_MODE				  "SSLMode"
 #define RS_IAM_STS_ENDPOINT_URL    "StsEndpointUrl"
 #define RS_IAM_AUTH_PROFILE        "AuthProfile"
+#define RS_SCOPE					"scope"
 
 
  // Connection options value
@@ -97,6 +98,8 @@
 #define IAM_PLUGIN_PING             "Ping"
 #define IAM_PLUGIN_OKTA             "Okta"
 #define IAM_PLUGIN_JWT              "JWT"
+#define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"
+
 
 #define MAX_JWT					(16 * 1024)
 
@@ -214,6 +217,7 @@
 #define DFLT_ENDPOINT_URL ""
 #define DFLT_STS_ENDPOINT_URL ""
 #define DFLT_AUTH_PROFILE ""
+#define DFLT_SCOPE ""
 
 #define DFLT_DATABASE_METADATA_CURRENT_DB_ONLY "1"
 #define DFLT_READ_ONLY "0"
@@ -239,11 +243,11 @@
 #define MAXDSNAME		(32+1)	/* Max data source name length */
 
 /* 8 -> 4 for CSC + 1 for MICC + 1 for KSN + 1 for KSA  + 1 for SCR */
-/* 38 IAM/IDP */
+/* 39 IAM/IDP */
 /* 2 Advanced */ 
 /* 9 Proxy */
 
-#define DD_DSN_ATTR_COUNT (41 + 8 + 38 +  2 + 9) 
+#define DD_DSN_ATTR_COUNT (41 + 8 + 39 +  2 + 9) 
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -432,6 +436,7 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_END_POINT_URL , DFLT_ENDPOINT_URL },
 { RS_IAM_STS_ENDPOINT_URL , DFLT_STS_ENDPOINT_URL },
 { RS_IAM_AUTH_PROFILE , DFLT_AUTH_PROFILE },
+{ RS_SCOPE , DFLT_SCOPE },
 { "", "" }
 };
 
@@ -547,6 +552,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { RS_END_POINT_URL , RS_END_POINT_URL },
 { RS_IAM_STS_ENDPOINT_URL , RS_IAM_STS_ENDPOINT_URL },
 { RS_IAM_AUTH_PROFILE , RS_IAM_AUTH_PROFILE },
+{ RS_SCOPE , RS_SCOPE },
 { "", "" }
 };
 
@@ -594,6 +600,7 @@ static int rs_pooling_items[5] = {
 #define AUTH_JWT			7
 #define AUTH_OKTA			8
 #define AUTH_PING_FEDERATE	9
+#define AUTH_BROWSER_AZURE_OAUTH2	10
 
 static char *szAuthTypes[] = {
 	"Standard",
@@ -606,6 +613,7 @@ static char *szAuthTypes[] = {
 	"Identity Provider: JWT",
 	"Identity Provider: Okta",
 	"Identity Provider: PingFederate",
+	"Identity Provider: Browser Azure AD OAUTH2",
 	""
 };
 
@@ -625,7 +633,7 @@ static char *szLogLevels[] = {
 #define SSL_MODE_VERIFY_CA "verify-ca"
 #define SSL_MODE_VERIFY_FULL "verify-full"
 
-#define MAX_IDP_CONTROLS 50
+#define MAX_IDP_CONTROLS 51
 
 // Total controls of all IDP/IAM
 static int rs_idp_controls[] =
@@ -692,6 +700,8 @@ static int rs_idp_controls[] =
 	IDC_STS_EPU,
 	IDC_EPU_STATIC,
 	IDC_EPU,
+	IDC_SCOPE_STATIC,
+	IDC_SCOPE,
 	0
 };
 
@@ -907,6 +917,7 @@ static int rs_azure_browser_controls[] =
 	0
 };
 
+
 static rs_dialog_controls rs_azure_browser_val_controls[] =
 {
 	{ IDC_CID, RS_TEXT_CONTROL,RS_CLUSTER_ID },
@@ -922,6 +933,40 @@ static rs_dialog_controls rs_azure_browser_val_controls[] =
 	{ IDC_TO, RS_TEXT_CONTROL, RS_IDP_RESPONSE_TIMEOUT},
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
 	{ IDC_STS_EPU,  RS_TEXT_CONTROL, RS_IAM_STS_ENDPOINT_URL },
+	{ 0,  RS_NONE_CONTROL,"" }
+};
+
+static int rs_azure_browser_oauth2_controls[] =
+{
+	IDC_CID_STATIC,
+	IDC_CID,
+	IDC_REGION_STATIC,
+	IDC_REGION,
+	IDC_IDP_TENANT_STATIC,
+	IDC_IDP_TENANT,
+	IDC_AZURE_CI_STATIC,
+	IDC_AZURE_CI,
+	IDC_TO_STATIC,
+	IDC_TO,
+	IDC_EPU_STATIC,
+	IDC_EPU,
+	IDC_PROVIDER_NAME_STATIC,
+	IDC_PROVIDER_NAME,
+	IDC_SCOPE_STATIC,
+	IDC_SCOPE,
+	0
+};
+
+static rs_dialog_controls rs_azure_browser_oauth2_val_controls[] =
+{
+	{ IDC_CID, RS_TEXT_CONTROL,RS_CLUSTER_ID },
+	{ IDC_REGION, RS_TEXT_CONTROL, RS_REGION },
+	{ IDC_IDP_TENANT, RS_TEXT_CONTROL, RS_IDP_TENANT },
+	{ IDC_AZURE_CI, RS_TEXT_CONTROL, RS_CLIENT_ID },
+	{ IDC_TO, RS_TEXT_CONTROL, RS_IDP_RESPONSE_TIMEOUT },
+	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
+	{ IDC_PROVIDER_NAME, RS_TEXT_CONTROL, RS_PROVIDER_NAME },
+	{ IDC_SCOPE, RS_TEXT_CONTROL, RS_SCOPE },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -2322,6 +2367,11 @@ static void rs_hide_show_authtype_controls(HWND hwndDlg, char *curAuthType)
 		// Ping Federated. 
 		rs_show_controls(hwndDlg, rs_ping_federated_controls);
 	}
+	else
+	if (strcmp(curAuthType, szAuthTypes[AUTH_BROWSER_AZURE_OAUTH2]) == 0) {
+		// Azure Browser. 
+		rs_show_controls(hwndDlg, rs_azure_browser_oauth2_controls);
+	}
 }
 
 static void rs_hide_controls(HWND hwndDlg, int controlId[])
@@ -2436,6 +2486,9 @@ static int get_auth_type_for_control(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 				else
 				if (strcmp(plugin, IAM_PLUGIN_PING) == 0)
 					rc = AUTH_PING_FEDERATE;
+				else
+				if (strcmp(plugin, IAM_PLUGIN_BROWSER_AZURE_OAUTH2) == 0)
+					rc = AUTH_BROWSER_AZURE_OAUTH2;
 			}
 		}
 	}
@@ -2511,6 +2564,11 @@ static void set_dlg_items_based_on_auth_type(int curAuthType, HWND hwndDlg, rs_d
 	{
 		set_idp_dlg_items(rs_ping_federated_val_controls, hwndDlg, rs_dsn_setup_ctxt);
 	}
+	else
+	if (curAuthType == AUTH_BROWSER_AZURE_OAUTH2)
+	{
+		set_idp_dlg_items(rs_azure_browser_oauth2_val_controls, hwndDlg, rs_dsn_setup_ctxt);
+	}
 }
 
 static void rs_dsn_read_idp_items(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
@@ -2572,6 +2630,13 @@ static void rs_dsn_read_idp_items(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctx
 		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_IAM, "1");
 		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_PLUGIN_NAME, IAM_PLUGIN_JWT);
 		rs_dsn_read_auth_type_items(rs_jwt_val_controls, hdlg, rs_dsn_setup_ctxt);
+	}
+	else
+	if (strcmp(curAuthType, szAuthTypes[AUTH_BROWSER_AZURE_OAUTH2]) == 0) {
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_AUTH_TYPE, RS_AUTH_TYPE_PLUGIN);
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_IAM, "1");
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_PLUGIN_NAME, IAM_PLUGIN_BROWSER_AZURE_OAUTH2);
+		rs_dsn_read_auth_type_items(rs_azure_browser_oauth2_val_controls, hdlg, rs_dsn_setup_ctxt);
 	}
 	else
 	if (strcmp(curAuthType, szAuthTypes[AUTH_OKTA]) == 0) {

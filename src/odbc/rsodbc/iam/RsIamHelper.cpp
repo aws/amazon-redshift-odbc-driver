@@ -42,7 +42,7 @@ void RsIamHelper::IamAuthentication(
     // Set connection props from RS_CONN_INFO to settings
     SetIamSettings(isIAMAuth, pIamProps, pHttpsProps, settings, logger);
 
-    if (!GetIamCachedSettings(credentials, settings, logger))
+    if (!GetIamCachedSettings(credentials, settings, logger, false))
     {
         RsIamClient iamClient(settings, logger);
 
@@ -54,7 +54,42 @@ void RsIamHelper::IamAuthentication(
 
     /* update the corresponding connection attributes using
        the new setting retrieved from IAM authentication */
-    UpdateConnectionSettingsWithCredentials(credentials, settings);
+    UpdateConnectionSettingsWithCredentials(credentials, settings, false);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+void RsIamHelper::NativePluginAuthentication(
+	bool isIAMAuth,
+	RS_IAM_CONN_PROPS_INFO *pIamProps,
+	RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
+	RsSettings& settings,
+	RsLogger *logger)
+{
+	RsCredentials credentials;
+
+	// Set connection props from RS_CONN_INFO to settings
+	SetIamSettings(isIAMAuth, pIamProps, pHttpsProps, settings, logger);
+
+	if (!GetIamCachedSettings(credentials, settings, logger, true))
+	{
+		RsIamClient iamClient(settings, logger);
+
+		RS_LOG(logger)("RsIamHelper::NativePluginAuthentication not from cache\n");
+
+
+		// Connect to retrieve idp token credentials
+		iamClient.Connect();
+		credentials = iamClient.GetCredentials();
+		SetIamCachedSettings(credentials, settings, logger);
+	}
+	else
+	{
+		RS_LOG(logger)("RsIamHelper::NativePluginAuthentication from cache\n");
+	}
+
+	/* update the corresponding connection attributes using
+	the new setting retrieved from IAM authentication */
+	UpdateConnectionSettingsWithCredentials(credentials, settings, true);
 }
 
 
@@ -62,13 +97,14 @@ void RsIamHelper::IamAuthentication(
 bool RsIamHelper::GetIamCachedSettings(
     RsCredentials& out_iamCredentials,
     const RsSettings& in_settings,
-	RsLogger *logger)
+	RsLogger *logger,
+	bool isNativeAuth)
 {
    bool rc;
 
    rsLockMutex(s_iam_helper_criticalSection);
 
-    if (in_settings.m_disableCache || !IsValidIamCachedSettings(in_settings, logger))
+    if (in_settings.m_disableCache || !IsValidIamCachedSettings(in_settings, logger, isNativeAuth))
     {
         rc = false;
     }
@@ -86,7 +122,7 @@ bool RsIamHelper::GetIamCachedSettings(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, RsLogger *logger)
+bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, RsLogger *logger, bool isNativeAuth)
 {
     bool rc;
 
@@ -113,15 +149,32 @@ bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, RsLogg
 		{
 			RsCredentials cachedCredentials = credentialItr->second;
 
-			if (cachedCredentials.GetDbUser().empty() ||
+			if (!isNativeAuth
+				&&
+				(cachedCredentials.GetDbUser().empty() ||
 				cachedCredentials.GetDbPassword().empty() ||
 				cachedCredentials.GetExpirationTime() == 0 ||
-				currentTime > cachedCredentials.GetExpirationTime())
+				currentTime > cachedCredentials.GetExpirationTime()))
 			{
 				// remove invalid cached credentials
 				s_iamCredentialsCache.erase(credentialItr);
 
 				rc =  false;
+			}
+			else
+			if (isNativeAuth
+				&&
+				(cachedCredentials.GetIdpToken().empty() ||
+					cachedCredentials.GetExpirationTime() == 0 ||
+					currentTime > cachedCredentials.GetExpirationTime()))
+			{
+				RS_LOG(logger)("RsIamHelper::IsValidIamCachedSettings not from cache: currentTime:%ld GetExpirationTime():%ld no token:%d", 
+					currentTime, cachedCredentials.GetExpirationTime(), cachedCredentials.GetIdpToken().empty());
+
+				// remove invalid cached credentials
+				s_iamCredentialsCache.erase(credentialItr);
+
+				rc = false;
 			}
 			else
 			{
@@ -147,6 +200,7 @@ bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, RsLogg
 					s_rsSettings.m_endpointUrl == in_settings.m_endpointUrl &&
 					s_rsSettings.m_stsEndpointUrl == in_settings.m_stsEndpointUrl &&
 					s_rsSettings.m_authProfile == in_settings.m_authProfile &&
+					s_rsSettings.m_stsConnectionTimeout == in_settings.m_stsConnectionTimeout &&
 
 					s_rsSettings.m_accessDuration == in_settings.m_accessDuration &&
 					s_rsSettings.m_pluginName == in_settings.m_pluginName &&
@@ -155,6 +209,7 @@ bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, RsLogg
 					s_rsSettings.m_idpTenant == in_settings.m_idpTenant &&
 					s_rsSettings.m_clientSecret == in_settings.m_clientSecret &&
 					s_rsSettings.m_clientId == in_settings.m_clientId &&
+					s_rsSettings.m_scope == in_settings.m_scope &&
 					s_rsSettings.m_idp_response_timeout == in_settings.m_idp_response_timeout &&
 					s_rsSettings.m_login_url == in_settings.m_login_url &&
 					s_rsSettings.m_role_arn == in_settings.m_role_arn &&
@@ -197,23 +252,31 @@ void RsIamHelper::SetIamCachedSettings(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void RsIamHelper::UpdateConnectionSettingsWithCredentials(
     const RsCredentials& in_credentials,
-    RsSettings& settings)
+    RsSettings& settings,
+	bool isNativeAuth)
 {
-    settings.m_username = in_credentials.GetDbUser();
-    settings.m_password = in_credentials.GetDbPassword();
+	if (!isNativeAuth)
+	{
+		settings.m_username = in_credentials.GetDbUser();
+		settings.m_password = in_credentials.GetDbPassword();
 
-    const rs_string& host = in_credentials.GetHost();
-    short port = in_credentials.GetPort();
+		const rs_string& host = in_credentials.GetHost();
+		short port = in_credentials.GetPort();
 
-    if (!host.empty())
-    {
-        settings.m_host = host;
-    }
+		if (!host.empty())
+		{
+			settings.m_host = host;
+		}
 
-    if (port != 0)
-    {
-        settings.m_port = port;
-    }
+		if (port != 0)
+		{
+			settings.m_port = port;
+		}
+	}
+	else
+	{
+		settings.m_web_identity_token = in_credentials.GetIdpToken();
+	}
 }
 
 
@@ -225,7 +288,7 @@ void RsIamHelper::SetIamSettings(
           RsSettings& settings,
           RsLogger *logger)
 {
-  RS_LOG(logger)("PGOConnection::SetIamSettings");
+  RS_LOG(logger)("RsIamHelper::SetIamSettings");
   rs_string temp;
 
   settings.m_iamAuth = isIAMAuth;
@@ -282,8 +345,9 @@ void RsIamHelper::SetIamSettings(
   settings.m_idpTenant = pIamProps->szIdpTenant;
   settings.m_clientSecret = pIamProps->szClientSecret;
   settings.m_clientId = pIamProps->szClientId;
+  settings.m_scope = pIamProps->szScope;
   settings.m_idp_response_timeout = pIamProps->lIdpResponseTimeout;
-  settings.m_login_url = pIamProps->szSessionToken;
+  settings.m_login_url = pIamProps->szLoginUrl;
   settings.m_role_arn = pIamProps->szRoleArn;
 
   if (pIamProps->pszJwt)
@@ -302,6 +366,7 @@ void RsIamHelper::SetIamSettings(
   settings.m_useInstanceProfile = pIamProps->isInstanceProfile;
   settings.m_authProfile = pIamProps->szAuthProfile;
   settings.m_disableCache = pIamProps->isDisableCache;
+  settings.m_stsConnectionTimeout = pIamProps->iStsConnectionTimeout;
 
   if(pHttpsProps) {
     settings.m_httpsProxyHost = pHttpsProps->szHttpsHost;

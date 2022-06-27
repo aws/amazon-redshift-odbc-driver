@@ -16,6 +16,13 @@
 #include <sstream>
 #include <unordered_map>
 
+#if (defined(_WIN32) || defined(_WIN64))
+#include <shellapi.h>
+#elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
+#include <CoreFoundation/CFBundle.h>
+#include <ApplicationServices/ApplicationServices.h>
+#endif
+
 using namespace Redshift::IamSupport;
 using namespace Aws::Auth;
 using namespace Aws::Client;
@@ -60,6 +67,12 @@ void IAMBrowserSamlCredentialsProvider::ValidateArgumentsMap()
     {
         IAMUtils::ThrowConnectionExceptionWithInfo("Authentication failed, please verify that LOGIN_URL is provided.");
     }
+	else
+	{
+		// Enforce URL regex in LOGIN_URL to avoid possible remote code execution
+		ValidateURL(m_argsMap[IAM_KEY_LOGIN_URL]);
+	}
+
 
     /* Use default timeout parameter if user didn't provide timeout in configuration field. */
     if (!m_argsMap.count(IAM_KEY_IDP_RESPONSE_TIMEOUT))
@@ -120,9 +133,37 @@ void IAMBrowserSamlCredentialsProvider::LaunchBrowser(const rs_string& uri)
 {
     RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::LaunchBrowser");
 
+	// Avoid system calls where possible for LOGIN_URL to help avoid possible remote code execution
+#if (defined(_WIN32) || defined(_WIN64))
+	if (static_cast<int>(
+		reinterpret_cast<intptr_t>(
+			ShellExecute(
+				NULL,
+				NULL,
+				uri.c_str(),
+				NULL,
+				NULL,
+				SW_SHOWNORMAL))) <= 32)
+#elif (defined(LINUX) || defined(__linux__))
+
     rs_string open_uri = command_ + uri + subcommand_;
 
     if (system(open_uri.c_str()) == -1)
+#elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
+	CFURLRef url = CFURLCreateWithBytes(
+		NULL,                        // allocator
+		(UInt8*)uri.c_str(),         // URLBytes
+		uri.length(),                // length
+		kCFStringEncodingASCII,      // encoding
+		NULL                         // baseURL
+	);
+	if (url)
+	{
+		LSOpenCFURLRef(url, 0);
+		CFRelease(url);
+	}
+	else
+#endif
     {
         IAMUtils::ThrowConnectionExceptionWithInfo("Couldn't open a URI or some error occurred.");
     }
@@ -176,9 +217,18 @@ rs_string IAMBrowserSamlCredentialsProvider::RequestSamlAssertion()
     /* Launch WEB Server to wait for the SAML response. */
     srv.LaunchServer();
     
-    WaitForServer(srv);
+	try
+	{
+		WaitForServer(srv);
 
-    LaunchBrowser(m_argsMap[IAM_KEY_LOGIN_URL]);
+		LaunchBrowser(m_argsMap[IAM_KEY_LOGIN_URL]);
+	}
+	catch (RsErrorException & e)
+	{
+		srv.Join();
+		throw e;
+	}
+
     
     srv.Join();
     

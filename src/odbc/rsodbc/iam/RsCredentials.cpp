@@ -32,6 +32,17 @@ RsCredentials::RsCredentials(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 RsCredentials::RsCredentials(
+	const rs_string& idp_token
+	) :
+	IAMCredentials(),
+	m_idpToken(idp_token)
+{
+	/* Do nothing */
+	SetFixExpirationTime();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+RsCredentials::RsCredentials(
     const AWSCredentials& in_credentials) :
     IAMCredentials(in_credentials),
     m_expirationTime(0),
@@ -65,6 +76,18 @@ rs_string RsCredentials::GetDbPassword() const
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+rs_string RsCredentials::GetIdpToken() const
+{
+	return m_idpToken;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+void RsCredentials::SetIdpToken(const rs_string& in_idpToken)
+{
+	m_idpToken = in_idpToken;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 void RsCredentials::SetDbPassword(const rs_string& in_dbPassword)
 {
     m_dbPassword = in_dbPassword;
@@ -74,6 +97,14 @@ void RsCredentials::SetDbPassword(const rs_string& in_dbPassword)
 long RsCredentials::GetExpirationTime() const
 {
     return m_expirationTime;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+void RsCredentials::SetFixExpirationTime()
+{
+	long currentTime = Aws::Utils::DateTime::Now().Millis();
+
+	m_expirationTime = currentTime + (15 * 60 * 1000);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -910,6 +910,9 @@ public:
 //	#define IAM_KEY_PROVIDER_NAME       "provider_name"
 #define RS_IAM_AUTH_PROFILE        "AuthProfile"
 #define RS_DISABLE_CACHE           "DisableCache"
+// #define RS_IAM_STS_ENDPOINT_URL    "StsEndpointUrl"
+#define RS_IAM_STS_CONNECTION_TIMEOUT  "StsConnectionTimeout"
+#define RS_SCOPE						"scope"
 
 
 
@@ -931,6 +934,8 @@ public:
 #define IAM_PLUGIN_PING             "Ping"
 #define IAM_PLUGIN_OKTA             "Okta"
 #define IAM_PLUGIN_JWT              "JWT"
+#define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"
+
 
 
 struct RS_TCP_PROXY_CONN_PROPS_INFO {

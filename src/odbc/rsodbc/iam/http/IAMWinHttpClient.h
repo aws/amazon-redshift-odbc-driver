@@ -45,7 +45,8 @@ namespace IamSupport
             bool in_verifySSL = true,
             const rs_wstring& in_proxyUsername = L"",
             const rs_wstring& in_proxyPassword = L"",
-            const rs_wstring& in_loginToRp = L""
+            const rs_wstring& in_loginToRp = L"",
+			int in_stsConnectionTimeout = (int)DEFAULT_TIMEOUT
         );
 
     private:

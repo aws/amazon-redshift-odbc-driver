@@ -55,7 +55,8 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> IAMFactory::CreateCredentials
         config.SetIdpTenant(in_settings.m_idpTenant);
         config.SetClientSecret(in_settings.m_clientSecret);
         config.SetClientId(in_settings.m_clientId);
-        config.SetIdpResponseTimeout(in_settings.m_idp_response_timeout);
+		config.SetScope(in_settings.m_scope);
+		config.SetIdpResponseTimeout(in_settings.m_idp_response_timeout);
         config.SetLoginURL(in_settings.m_login_url);
         config.SetListenPort(in_settings.m_listen_port);
         config.SetAppId(in_settings.m_appId);

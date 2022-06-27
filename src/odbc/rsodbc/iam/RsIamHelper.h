@@ -70,6 +70,12 @@ public:
                                     RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
                                     RsSettings& settings, RsLogger *logger);
 
+	// Entry point function from ODBC connection call for Native Auth
+	static void NativePluginAuthentication(bool isIAMAuth,
+		RS_IAM_CONN_PROPS_INFO *pIamProps,
+		RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
+		RsSettings& settings, RsLogger *logger);
+
 	static char *  ReadAuthProfile(
 		bool isIAMAuth,
 		RS_IAM_CONN_PROPS_INFO *pIamProps,
@@ -82,7 +88,7 @@ private:
     /// @param in_settings   Connection Settings
     ///
     /// @return  true if the cached IAM credentials are valid, else false
-    static bool IsValidIamCachedSettings(const RsSettings& in_settings, RsLogger *logger);
+    static bool IsValidIamCachedSettings(const RsSettings& in_settings, RsLogger *logger, bool isNativeAuth);
 
     /// @brief Get cached IAM credentials (if valid) and store it.
     ///
@@ -93,7 +99,8 @@ private:
     static bool GetIamCachedSettings(
         RsCredentials& out_iamCredentials,
         const RsSettings& in_settings,
-		RsLogger *logger);
+		RsLogger *logger,
+		bool isNativeAuth);
 
     /// @brief Set cached IAM credentials (if valid) and store it.
     ///
@@ -109,7 +116,8 @@ private:
     /// @param in_credentials   credentials retrieved from Iam authentication
     static void UpdateConnectionSettingsWithCredentials(
                   const RsCredentials& in_credentials,
-                  RsSettings& settings);
+                  RsSettings& settings,
+				  bool isNativeAuth);
 
     /// @brief Set the connection's IAM related settings on PGOSettings
     ///

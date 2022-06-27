@@ -4,4 +4,7 @@
     <LocalDebuggerCommand>C:\source\redshift_odbc_driver\RedshiftODBCDriver\manual_tests\TestOutParam.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
+  <PropertyGroup>
+    <ShowAllFiles>false</ShowAllFiles>
+  </PropertyGroup>
 </Project>
