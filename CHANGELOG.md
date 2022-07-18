@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v2.0.0.0 (2022-07-01)
+v2.0.0.1 (2022-07-18)
 ---------------------
 - Fixes from security review. [ilesh Garish]
 - Update README.md. [iggarish]
