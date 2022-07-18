@@ -47,8 +47,8 @@ See [Amazon Redshift ODBC Driver Installation and Configuration Guide](https://d
 
 Here are download links for the latest release:
 
-* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.0/AmazonRedshiftODBC64-2.0.0.0.msi (For Windows)
-* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.0/AmazonRedshiftODBC-64-bit-2.0.0.0.x86_64.rpm (For Linux)
+* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.1/AmazonRedshiftODBC64-2.0.0.1.msi (For Windows)
+* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.1/AmazonRedshiftODBC-64-bit-2.0.0.1.x86_64.rpm (For Linux)
 
 ## Report Bugs
 
