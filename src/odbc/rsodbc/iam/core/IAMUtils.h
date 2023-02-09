@@ -68,6 +68,13 @@ namespace IamSupport
 
         static std::wstring trim(std::wstring& str);
 
+        /// @brief trimming functions
+        /// @param s 
+        /// @return trimmed rs_string
+        static rs_string ltrim(const rs_string &s);
+        static rs_string rtrim(const rs_string &s);
+        static rs_string rs_trim(const rs_string &s);
+
         static rs_string ReplaceAll(
             rs_string& io_string,
             const char* in_toReplace,

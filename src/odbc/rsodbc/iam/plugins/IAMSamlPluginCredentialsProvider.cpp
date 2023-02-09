@@ -171,6 +171,10 @@ AWSCredentials IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml(
         principalArn = roles.begin()->second;
     }
 
+    roleArn = IAMUtils::rs_trim(roleArn);
+    principalArn = IAMUtils::rs_trim(principalArn);
+
+
     RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml "
            "Using RoleArn: %s, PrincipalArn: %s",
           roleArn.c_str(), principalArn.c_str());

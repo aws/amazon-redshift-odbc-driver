@@ -11,6 +11,7 @@
 #include <sqlext.h>
 #include <string.h>
 #include <sstream>
+#include <regex>
 
 using namespace Redshift::IamSupport;
 
@@ -134,6 +135,22 @@ std::wstring IAMUtils::trim(std::wstring& wstr)
     wstr.erase(wstr.find_last_not_of(' ')+1);         //surfixing spaces
     return wstr;
 }
+
+//trim from the left of rs_string
+rs_string IAMUtils::ltrim(const rs_string &s){
+    return std::regex_replace(s, std::regex("^\\s+"), rs_string(""));
+}
+
+//trim from the right of the rs_string
+rs_string IAMUtils::rtrim(const rs_string &s){
+   return std::regex_replace(s, std::regex("\\s+$"), std::string(""));
+}
+
+//trim from the left/begining and the right/end of the rs_string
+rs_string IAMUtils::rs_trim(const rs_string &s){
+    return ltrim(rtrim(s));
+}
+
 
 rs_string IAMUtils::ReplaceAll(
     rs_string& io_string,
