@@ -9,6 +9,12 @@
 #include "rsunicode.h"
 #include "rsutil.h"
 
+#include <iostream>
+#include <string>
+#include <locale>
+#include <codecvt>
+#include <vector>
+
 #if defined LINUX 
 
 char g_utf8_len_data[128] =
@@ -28,8 +34,8 @@ unsigned int  g_utf8_minval_data[6] =  { 0x0, 0x80, 0x800, 0x10000, 0x200000, 0x
 
 int unix_wchar_to_utf8_len(WCHAR *pwStr, int cchLen);
 int unix_wchar_to_utf8(WCHAR *wszStr, int cchLen, char *szStr, int cbLen);
-int unix_utf8_to_wchar_len(char *szStr, int cbLen);
-int unix_utf8_to_wchar(char *szStr, int cbLen, WCHAR *wszStr, int cchLen);
+int unix_utf8_to_wchar_len(const char *szStr, int cbLen);
+int unix_utf8_to_wchar(const char *szStr, int cbLen, WCHAR *wszStr, int cchLen);
 
 #endif // LINUX 
 
@@ -39,6 +45,89 @@ int unix_utf8_to_wchar(char *szStr, int cbLen, WCHAR *wszStr, int cchLen);
 //---------------------------------------------------------------------------------------------------------igarish
 // Convert WCHAR to UTF-8.
 //
+#ifdef __cplusplus
+size_t wchar16_to_utf8_str(const WCHAR *wszStr, const int cchLen, std::string& szStr) {
+    std::u16string u16 = (cchLen == SQL_NTS) ?
+                                std::u16string((char16_t*)wszStr) :
+                                std::u16string((char16_t*)wszStr, cchLen);
+    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> convert;
+    szStr = convert.to_bytes(u16);
+    return szStr.size();
+}
+
+size_t char_utf8_to_wchar16(const char* szStr, const int cchLen, std::u16string& utf16)  {
+    std::string utf8 = (cchLen == SQL_NTS) ? std::string(szStr) : std::string(szStr, cchLen);
+    std::vector<unsigned long> unicode;
+    size_t i = 0;
+    while (i < utf8.size())
+    {
+        unsigned long uni;
+        size_t todo;
+        bool error = false;
+        unsigned char ch = utf8[i++];
+        if (ch <= 0x7F)
+        {
+            uni = ch;
+            todo = 0;
+        }
+        else if (ch <= 0xBF)
+        {
+            throw std::logic_error("not a UTF-8 string");
+        }
+        else if (ch <= 0xDF)
+        {
+            uni = ch&0x1F;
+            todo = 1;
+        }
+        else if (ch <= 0xEF)
+        {
+            uni = ch&0x0F;
+            todo = 2;
+        }
+        else if (ch <= 0xF7)
+        {
+            uni = ch&0x07;
+            todo = 3;
+        }
+        else
+        {
+            throw std::logic_error("not a UTF-8 string");
+        }
+        for (size_t j = 0; j < todo; ++j)
+        {
+            if (i == utf8.size())
+                throw std::logic_error("not a UTF-8 string");
+            unsigned char ch = utf8[i++];
+            if (ch < 0x80 || ch > 0xBF)
+                throw std::logic_error("not a UTF-8 string");
+            uni <<= 6;
+            uni += ch & 0x3F;
+        }
+        if (uni >= 0xD800 && uni <= 0xDFFF)
+            throw std::logic_error("not a UTF-8 string");
+        if (uni > 0x10FFFF)
+            throw std::logic_error("not a UTF-8 string");
+        unicode.push_back(uni);
+    }
+    // std::wstring utf16;
+    for (size_t i = 0; i < unicode.size(); ++i)
+    {
+        unsigned long uni = unicode[i];
+        if (uni <= 0xFFFF)
+        {
+            utf16 += (char16_t)uni;
+        }
+        else
+        {
+            uni -= 0x10000;
+            utf16 += (char16_t)((uni >> 10) + 0xD800);
+            utf16 += (char16_t)((uni & 0x3FF) + 0xDC00);
+        }
+    }
+    return utf16.size();
+}
+#endif // __cplusplus
+
 size_t wchar_to_utf8(WCHAR *wszStr,size_t cchLen,char *szStr,size_t cbLen)
 {
     size_t len = 0;

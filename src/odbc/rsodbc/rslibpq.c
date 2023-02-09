@@ -1061,14 +1061,26 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                             }
                             else
                                 pqRc = PGRES_FATAL_ERROR;
-                        }
-                        else
-                        {
-                            pgResult = (!executePrepared) ? ( (iNumBindParams) ? pqexecParams(pConn->pgConn, pszCmd,nParams,paramTypes,(const char *const * )ppBindParamVals,NULL, piParamFormats, RS_TEXT_FORMAT,
-                                                                                                pStmt->pCscStatementContext)
-                                                                               : pqExec(pConn->pgConn, pszCmd, pStmt->pCscStatementContext)) 
-                                                          : pqExecPrepared(pConn->pgConn, pStmt->szCursorName, nParams, (const char *const * )ppBindParamVals, NULL, piParamFormats, RS_TEXT_FORMAT, pStmt->pCscStatementContext);
-                            pqRc = PQresultStatus(pgResult);
+                        } else {
+                          if (!executePrepared) {
+                            if (iNumBindParams) {
+                              pgResult = pqexecParams(
+                                  pConn->pgConn, pszCmd, nParams, paramTypes,
+                                  (const char *const *)ppBindParamVals, NULL,
+                                  piParamFormats, RS_TEXT_FORMAT,
+                                  pStmt->pCscStatementContext);
+                            } else {
+                              pgResult = pqExec(pConn->pgConn, pszCmd,
+                                                pStmt->pCscStatementContext);
+                            }
+                          } else {
+                            pgResult = pqExecPrepared(
+                                pConn->pgConn, pStmt->szCursorName, nParams,
+                                (const char *const *)ppBindParamVals, NULL,
+                                piParamFormats, RS_TEXT_FORMAT,
+                                pStmt->pCscStatementContext);
+                          }
+                          pqRc = PQresultStatus(pgResult);
                         }
 
                         // Multi result loop

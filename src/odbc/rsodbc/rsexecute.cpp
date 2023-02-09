@@ -49,10 +49,22 @@ SQLRETURN SQL_API SQLExecDirectW(SQLHSTMT   phstmt,
         addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
         goto error; 
     }
-
-    len = calculate_utf8_len(pwCmd, cchLen);
+    {
+      /*
+        Note:
+        Based on the current value of SQL_WCHART_CONVERT macro,
+        SQLWCHAR is typedefed to unsigned short(16 bytes in all
+        platforms). This is a hotfix. It is recommended to move
+        wchar16_to_utf8_str() to wchar_to_utf8() in the future to
+        a) adjust its behavior for supporting a situation when
+        SQL_WCHART_CONVERT is typedefed to wchar_t. b) Let all unicode
+        conversions use the same bugfixed method.
+       */
+      std::string utf8;
+      len = wchar16_to_utf8_str(pwCmd, cchLen, utf8);
     szCmd = (char *)checkLenAndAllocatePaStrBuf(len, pStmt->pCmdBuf);
-    wchar_to_utf8(pwCmd, cchLen, szCmd, len);
+      memcpy(szCmd, utf8.c_str(), len);  // szCmd is already null terminated
+    }
 
     if(szCmd)
     {

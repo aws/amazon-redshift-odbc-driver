@@ -1305,7 +1305,7 @@ unsigned char *checkLenAndAllocatePaStrBuf(size_t cbLen, RS_STR_BUF *pPaStrBuf)
         else
         {
             pPaStrBuf->pBuf = pPaStrBuf->buf;
-            szData = (unsigned char *)(pPaStrBuf->pBuf);
+            szData = (unsigned char *) (pPaStrBuf->pBuf);
             pPaStrBuf->iAllocDataLen = 0;
         }
 
@@ -1975,13 +1975,29 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData, int iColDat
 
 				case SQL_VARCHAR:
 				{
-					if ((IS_TEXT_FORMAT(format)) 
-						|| (hRsSpecialType != TIMETZOID
-							&& hRsSpecialType != TIMESTAMPTZOID))
-						rc = copyWStrDataBigLen(rsVal.pcVal, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
-					else
-					{
-						// Binary TIMETZOID or TIMESTAMPTZOID
+                    if ((IS_TEXT_FORMAT(format)) ||
+                        (hRsSpecialType != TIMETZOID &&
+                        hRsSpecialType != TIMESTAMPTZOID)) 
+                    {
+                        std::u16string wchar16;
+                        int len = char_utf8_to_wchar16(rsVal.pcVal, iColDataLen, wchar16);
+                        *pcbLenInd = wchar16.size() * sizeof(WCHAR);
+                        memcpy(pBuf, 
+                               wchar16.c_str(),
+                               //Do not cross limit
+                               std::min<SQLLEN>(*pcbLenInd, cbLen - sizeof(WCHAR)));
+                        /*
+                        Normally the following should also work:
+                        ((WCHAR *)pBuf)[*pcbLenInd] = L'\0';
+                        But iteration by SQLWCHAR (normally 2 bytes) pointer might
+                        not always result into "\0\0".
+                        Therefore 'memset'ing ! 
+                        */
+                       if ((*pcbLenInd) + sizeof(WCHAR) < cbLen) { //Do not cross limit
+                           memset((char*)pBuf + (*pcbLenInd), '\0', sizeof(WCHAR));
+                       }
+                    } else {
+                                    // Binary TIMETZOID or TIMESTAMPTZOID
 #ifdef WIN32
 						if (iColDataLen > 0)
 						{
@@ -2025,9 +2041,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData, int iColDat
 						}
 
 #endif
-					}
+                                  }
 
-					break;
+                                        break;
 
 				}
 
