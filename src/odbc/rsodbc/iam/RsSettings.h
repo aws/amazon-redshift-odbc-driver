@@ -125,6 +125,7 @@ struct RsSettings
     bool          m_userAutoCreate;
     bool          m_sslInsecure;
     bool          m_useInstanceProfile;
+	bool		  m_groupFederation;
 
     RsSettings() :
         m_port(0),
@@ -144,7 +145,8 @@ struct RsSettings
         m_sslMode(""),
         m_host(""),
 		m_scope(""),
-		m_stsConnectionTimeout(0)
+		m_stsConnectionTimeout(0),
+		m_groupFederation(false)
     {
         /* Do nothing */
     }

@@ -2345,6 +2345,10 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
         else
         if(hType == SQL_TIME)
             hType = SQL_TYPE_TIME;
+		else
+		if (hType == SQL_TINYINT)
+			hType = SQL_BIT;
+
 
         for(i = 0; i < MAX_TYPES;i++)
         {

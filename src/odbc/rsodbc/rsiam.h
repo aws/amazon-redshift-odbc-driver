@@ -56,6 +56,7 @@ struct RS_IAM_CONN_PROPS_INFO {
   char szAuthProfile[MAX_IAM_BUF_VAL];
   bool isDisableCache; 
   int iStsConnectionTimeout; 
+  bool isGroupFederation;
 };
 
 struct RS_PROXY_CONN_PROPS_INFO {

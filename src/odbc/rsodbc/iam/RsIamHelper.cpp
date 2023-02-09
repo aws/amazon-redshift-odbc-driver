@@ -223,7 +223,8 @@ bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, RsLogg
 					s_rsSettings.m_partnerSpid == in_settings.m_partnerSpid &&
 					s_rsSettings.m_loginToRp == in_settings.m_loginToRp &&
 					s_rsSettings.m_preferredRole == in_settings.m_preferredRole &&
-					s_rsSettings.m_sslInsecure == in_settings.m_sslInsecure;
+					s_rsSettings.m_sslInsecure == in_settings.m_sslInsecure &&
+					s_rsSettings.m_groupFederation == in_settings.m_groupFederation;
 			}
 		}
 	}
@@ -375,6 +376,8 @@ void RsIamHelper::SetIamSettings(
     settings.m_httpsProxyPassword = pHttpsProps->szHttpsPassword;
     settings.m_useProxyForIdpAuth = pHttpsProps->isUseProxyForIdp;
   }
+
+  settings.m_groupFederation = pIamProps->isGroupFederation;
 
 }
 

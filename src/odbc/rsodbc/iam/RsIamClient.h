@@ -12,7 +12,7 @@
 #include <aws/redshift/RedshiftClient.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 
-#include <aws/redshiftarcadiacoral/RedshiftArcadiaCoralServiceClient.h>
+#include <aws/redshift-serverless/RedshiftServerlessClient.h>
 
 namespace RedshiftODBC
 {
@@ -75,8 +75,9 @@ namespace RedshiftODBC
 		/// @return The endpoint of the configuration (domain and port)
 		/// 
 		/// @exception ErrorException if cannot describe configuration.
-		Aws::RedshiftArcadiaCoralService::Model::Endpoint DescribeConfiguration(
+/*		Aws::RedshiftArcadiaCoralService::Model::Endpoint DescribeConfiguration(
 			const Aws::RedshiftArcadiaCoralService::RedshiftArcadiaCoralServiceClient& in_client);
+*/
 
         /// @brief Send cluster credentials request 
         ///
@@ -86,12 +87,21 @@ namespace RedshiftODBC
         Aws::Redshift::Model::GetClusterCredentialsOutcome SendClusterCredentialsRequest(
             const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& in_credentialsProvider);
 
+
+		/// @brief Send cluster credentials request with IAM
+		///
+		/// @param in_credentialsProvider   
+		/// 
+		/// @return The GetClusterCredentialsOutcome upon no exception occurs.
+		Aws::Redshift::Model::GetClusterCredentialsWithIAMOutcome SendClusterCredentialsWithIAMRequest(
+			const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& in_credentialsProvider);
+
 		/// @brief Send serverless credentials request 
 		///
 		/// @param in_credentialsProvider   
 		/// 
 		/// @return The GetCredentialsOutcome upon no exception occurs.
-		Aws::RedshiftArcadiaCoralService::Model::GetCredentialsOutcome SendCredentialsRequest(
+		Aws::RedshiftServerless::Model::GetCredentialsOutcome SendCredentialsRequest(
 			const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& in_credentialsProvider);
 
         /// @brief Process the cluster credentials request outcome
@@ -102,13 +112,21 @@ namespace RedshiftODBC
         void ProcessClusterCredentialsOutcome(
             const Aws::Redshift::Model::GetClusterCredentialsOutcome& in_outcome);
 
+		/// @brief Process the cluster credentials request with IAM outcome
+		///
+		/// @param in_outcome
+		/// 
+		/// @exception ErrorException when GetClusterCredentialsWithIAMOutcome indicates failure.
+		void ProcessClusterCredentialsWithIAMOutcome(
+			const Aws::Redshift::Model::GetClusterCredentialsWithIAMOutcome& in_outcome);
+
 		/// @brief Process the serverless credentials request outcome
 		///
 		/// @param in_outcome
 		/// 
 		/// @exception ErrorException when GetCredentialsOutcome indicates failure.
 		void ProcessServerlessCredentialsOutcome(
-			const Aws::RedshiftArcadiaCoralService::Model::GetCredentialsOutcome& in_outcome);
+			const Aws::RedshiftServerless::Model::GetCredentialsOutcome& in_outcome);
 
         /// @brief Get cluster credentials request 
         ///
@@ -117,6 +135,14 @@ namespace RedshiftODBC
         /// @exception ErrorException when GetClusterCredentialsOutcome indicates failure.
         void GetClusterCredentials(
             const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& in_credentialsProvider);
+
+		/// @brief Get cluster credentials request with IAM
+		///
+		/// @param in_credentialsProvider   
+		///
+		/// @exception ErrorException when GetClusterCredentialsWithIAMOutcome indicates failure.
+		void GetClusterCredentialsWithIAM(
+			const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& in_credentialsProvider);
 
 		/// @brief Get serverless credentials request 
 		///

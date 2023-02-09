@@ -7,11 +7,12 @@
 #include "IAMUtils.h"
 
 #include <aws/redshift/model/GetClusterCredentialsRequest.h>
+#include <aws/redshift/model/GetClusterCredentialsWithIAMRequest.h>
 #include <aws/redshift/model/DescribeClustersRequest.h>
 #include <aws/redshift/model/Cluster.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
-#include <aws/redshiftarcadiacoral/model/GetCredentialsRequest.h>
-#include <aws/redshiftarcadiacoral/model/DescribeConfigurationRequest.h>
+#include <aws/redshift-serverless/model/GetCredentialsRequest.h>
+//#include <aws/RedshiftServerless/model/DescribeConfigurationRequest.h>
 #include <aws/redshift/model/DescribeAuthenticationProfilesRequest.h>
 #include <aws/redshift/model/AuthenticationProfile.h>
 
@@ -124,10 +125,18 @@ void RsIamClient::Connect()
 	{
 		// Support serverless Redshift end point
 		std::vector<rs_string> hostnameTokens = IAMUtils::TokenizeSetting(m_settings.m_host, ".");
-		if ((hostnameTokens.size() >= 5) && (hostnameTokens[2].find("serverless") != rs_string::npos))
+		if ((hostnameTokens.size() >= 6) && (hostnameTokens[3].find("serverless") != rs_string::npos))
 		{
 			// serverless connection
 			GetServerlessCredentials(credentialsProvider);
+		}
+		else if (
+			(m_settings.m_groupFederation) &&
+			((authType == IAM_AUTH_TYPE_PROFILE) ||
+			(authType == IAM_AUTH_TYPE_INSTANCE_PROFILE) ||
+				(authType == IAM_AUTH_TYPE_STATIC)))
+		{
+			GetClusterCredentialsWithIAM(credentialsProvider);
 		}
 		else
 		{
@@ -213,7 +222,7 @@ Model::Endpoint RsIamClient::DescribeCluster(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-Aws::RedshiftArcadiaCoralService::Model::Endpoint RsIamClient::DescribeConfiguration(
+/* Aws::RedshiftArcadiaCoralService::Model::Endpoint RsIamClient::DescribeConfiguration(
 	const Aws::RedshiftArcadiaCoralService::RedshiftArcadiaCoralServiceClient& in_client)
 {
 	Aws::RedshiftArcadiaCoralService::Model::DescribeConfigurationRequest request;
@@ -238,6 +247,7 @@ Aws::RedshiftArcadiaCoralService::Model::Endpoint RsIamClient::DescribeConfigura
 
 	return endpoint;
 }
+*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
@@ -378,7 +388,106 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-Aws::RedshiftArcadiaCoralService::Model::GetCredentialsOutcome RsIamClient::SendCredentialsRequest(
+Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWithIAMRequest(
+	const std::shared_ptr<AWSCredentialsProvider>& in_credentialsProvider)
+{
+	RS_LOG(m_log)("RsIamClient::SendClusterCredentialsWithIAMRequest");
+
+	ClientConfiguration config;
+
+
+	/* infer awsRegion and ClusterId from host name if not provided in the connection string
+	e.g., redshiftj-iam-test.c2mf5zd3u3sv.us-west-2.redshift.amazonaws.com,
+	should be tokenized to at least 6 elements
+	*/
+	std::vector<rs_string> hostnameTokens = IAMUtils::TokenizeSetting(m_settings.m_host, ".");
+	rs_string inferredClusterId, inferredAwsRegion;
+	if (hostnameTokens.size() >= 6)
+	{
+		/* e.g., redshiftj-iam-test.c2mf5zd3u3sv.us-west-2.redshift.amazonaws.com
+		e.g., redshiftj-iam-test.c2mf5zd3u3sv.us-west-2.redshift.amazonaws.com.cn
+		*/
+		inferredClusterId = hostnameTokens[0];
+		inferredAwsRegion = hostnameTokens[2];
+	}
+
+	config.region = m_settings.m_awsRegion.empty() ? inferredAwsRegion : m_settings.m_awsRegion;
+	config.endpointOverride = IAMUtils::convertToUTF8(m_settings.m_endpointUrl);
+
+	if (m_settings.m_stsConnectionTimeout > 0)
+	{
+		config.httpRequestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+		config.connectTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+		config.requestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+	}
+
+	RS_LOG(m_log)(
+		"RsIamClient::SendClusterCredentialsWithIAMRequest",
+		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
+		config.httpRequestTimeoutMs,
+		config.connectTimeoutMs,
+		config.requestTimeoutMs);
+
+
+#ifndef _WIN32
+	// Added CA file to the config for verifying STS server certificate
+	if (!m_settings.m_caFile.empty())
+	{
+		config.caFile = m_settings.m_caFile;
+	}
+	else
+	{
+		config.caFile = IAMUtils::convertToUTF8(IAMUtils::GetDefaultCaFile()); // .GetAsPlatformString()
+	}
+#endif
+
+	if (!m_settings.m_httpsProxyHost.empty())
+	{
+		config.proxyHost = m_settings.m_httpsProxyHost;
+		config.proxyPort = m_settings.m_httpsProxyPort;
+		config.proxyUserName = m_settings.m_httpsProxyUsername;
+		config.proxyPassword = m_settings.m_httpsProxyPassword;
+	}
+
+	RedshiftClient client(in_credentialsProvider, config);
+
+	// Compose the ClusterCredentialRequest object
+	Model::GetClusterCredentialsWithIAMRequest request;
+
+	request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ?
+		inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str());
+
+	request.SetDbName(m_settings.m_database);
+	request.SetDurationSeconds(m_settings.m_duration);
+
+	/* if host is empty describe cluster using cluster id */
+	if (m_settings.m_host.empty())
+	{
+		if (m_settings.m_clusterIdentifer.empty() || m_settings.m_awsRegion.empty())
+		{
+			RS_LOG(m_log)("RsIamClient::SendClusterCredentialsWithIAMRequest: Can not describe cluster: missing clusterId or region.");
+
+			IAMUtils::ThrowConnectionExceptionWithInfo(
+				"Can not describe cluster: missing clusterId or region.");
+		}
+
+		Model::Endpoint endpoint = DescribeCluster(client, m_settings.m_clusterIdentifer);
+		m_credentials.SetHost(endpoint.GetAddress());
+		m_credentials.SetPort(static_cast<short>(endpoint.GetPort()));
+	}
+
+	RS_LOG(m_log)("RsIamClient::SendClusterCredentialsWithIAMRequest: Before GetClusterCredentialsWithIAM()");
+
+	// Send the request using RedshiftClient
+	Model::GetClusterCredentialsWithIAMOutcome outcome = client.GetClusterCredentialsWithIAM(request);
+
+	RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest: After GetClusterCredentialsWithIAM()");
+
+	return outcome;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentialsRequest(
 	const std::shared_ptr<AWSCredentialsProvider>& in_credentialsProvider)
 {
 	RS_LOG(m_log)("RsIamClient::SendCredentialsRequest");
@@ -386,15 +495,18 @@ Aws::RedshiftArcadiaCoralService::Model::GetCredentialsOutcome RsIamClient::Send
 	ClientConfiguration config;
 
 	/* infer awsRegion from host name if not provided in the connection string
-	e.g., 412074911972.us-east-1-dev.redshift-serverless-dev.amazonaws.com,
-	should be tokenized to at least 5 elements
+	e.g., default.518627716765.us-east-1.redshift-serverless.amazonaws.com,
+	should be tokenized to at least 6 elements
 	*/
 	std::vector<rs_string> hostnameTokens = IAMUtils::TokenizeSetting(m_settings.m_host, ".");
 	rs_string inferredAwsRegion;
-	if (hostnameTokens.size() >= 5)
+	rs_string inferredWorkgroup;
+
+	if (hostnameTokens.size() >= 6)
 	{
-		// e.g., 412074911972.us-east-1-dev.redshift-serverless-dev.amazonaws.com
-		inferredAwsRegion = hostnameTokens[1];
+		// e.g., default.518627716765.us-east-1.redshift-serverless.amazonaws.com
+		inferredWorkgroup = hostnameTokens[0];
+		inferredAwsRegion = hostnameTokens[2];
 	}
 
 	config.region = m_settings.m_awsRegion.empty() ? inferredAwsRegion : m_settings.m_awsRegion;
@@ -435,12 +547,14 @@ Aws::RedshiftArcadiaCoralService::Model::GetCredentialsOutcome RsIamClient::Send
 		config.proxyPassword = m_settings.m_httpsProxyPassword;
 	}
 
-	Aws::RedshiftArcadiaCoralService::RedshiftArcadiaCoralServiceClient client(in_credentialsProvider, config);
+	Aws::RedshiftServerless::RedshiftServerlessClient client(in_credentialsProvider, config);
 
 	// Compose the ClusterCredentialRequest object
-	Aws::RedshiftArcadiaCoralService::Model::GetCredentialsRequest request;
+	Aws::RedshiftServerless::Model::GetCredentialsRequest request;
 
 	request.SetDbName(m_settings.m_database);
+	request.SetWorkgroupName(inferredWorkgroup);
+
 
 	/* if port is 0 describe configuration to get host and port*/
 	if (m_settings.m_port == 0)
@@ -451,13 +565,14 @@ Aws::RedshiftArcadiaCoralService::Model::GetCredentialsOutcome RsIamClient::Send
 				"Can not describe cluster: missing region.");
 		}
 
-		Aws::RedshiftArcadiaCoralService::Model::Endpoint endpoint = DescribeConfiguration(client);
+/*		Aws::RedshiftArcadiaCoralService::Model::Endpoint endpoint = DescribeConfiguration(client);
 		m_credentials.SetHost(endpoint.GetAddress());
 		m_credentials.SetPort(static_cast<short>(endpoint.GetPort()));
+*/
 	}
 
 	// Send the request using RedshiftClient
-	Aws::RedshiftArcadiaCoralService::Model::GetCredentialsOutcome outcome =
+	Aws::RedshiftServerless::Model::GetCredentialsOutcome outcome =
 		client.GetCredentials(request);
 
 	return outcome;
@@ -488,15 +603,39 @@ void RsIamClient::ProcessClusterCredentialsOutcome(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+void RsIamClient::ProcessClusterCredentialsWithIAMOutcome(
+	const Model::GetClusterCredentialsWithIAMOutcome& in_outcome)
+{
+	RS_LOG(m_log)("RsIamClient::ProcessClusterCredentialsWithIAMOutcome");
+
+	if (in_outcome.IsSuccess())
+	{
+		/* save the database credentials to the credentials holder */
+		const Model::GetClusterCredentialsWithIAMResult& result = in_outcome.GetResult();
+		m_credentials.SetDbUser(result.GetDbUser());
+		m_credentials.SetDbPassword(result.GetDbPassword());
+		m_credentials.SetExpirationTime(result.GetExpiration().Millis());
+
+		long currentTime = Aws::Utils::DateTime::Now().Millis();
+
+		RS_LOG(m_log)("RsIamClient::ProcessClusterCredentialsWithIAMOutcome Expiration time (in milli):%d", (result.GetExpiration().Millis() - currentTime));
+	}
+	else
+	{
+		ThrowExceptionWithError(in_outcome.GetError());
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 void RsIamClient::ProcessServerlessCredentialsOutcome(
-	const Aws::RedshiftArcadiaCoralService::Model::GetCredentialsOutcome& in_outcome)
+	const Aws::RedshiftServerless::Model::GetCredentialsOutcome& in_outcome)
 {
 	RS_LOG(m_log)("RsIamClient::ProcessServerlessCredentialsOutcome");
 
 	if (in_outcome.IsSuccess())
 	{
 		/* save the database credentials to the credentials holder */
-		const Aws::RedshiftArcadiaCoralService::Model::GetCredentialsResult& result =
+		const Aws::RedshiftServerless::Model::GetCredentialsResult& result =
 			in_outcome.GetResult();
 		m_credentials.SetDbUser(result.GetDbUser());
 		m_credentials.SetDbPassword(result.GetDbPassword());
@@ -521,6 +660,20 @@ void RsIamClient::GetClusterCredentials(
     }
     ProcessClusterCredentialsOutcome(SendClusterCredentialsRequest(in_credentialsProvider));
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+void RsIamClient::GetClusterCredentialsWithIAM(
+	const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& in_credentialsProvider)
+{
+	RS_LOG(m_log)("RsIamClient::GetClusterCredentialsWithIAM");
+	if (!in_credentialsProvider)
+	{
+		IAMUtils::ThrowConnectionExceptionWithInfo(
+			"Failed to get cluster credentials due to AWSCredentialsProvider being NULL.");
+	}
+	ProcessClusterCredentialsWithIAMOutcome(SendClusterCredentialsWithIAMRequest(in_credentialsProvider));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void RsIamClient::GetServerlessCredentials(
