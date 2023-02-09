@@ -104,8 +104,19 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
     };
 
     const rs_string requestBody = IAMHttpClient::CreateHttpFormRequestBody(paramMap);
+ // In plugin "Identity Provider: PingFederate", we need to add another
+  // parameter(skip.simultaneous.authn.req.check=true) with the URL when driver
+  // does a POST request.
+  //  This is to avoid PingFederate speed bump template.
+  const rs_string uri_post = uri + "&skip.simultaneous.authn.req.check=true";
 
-    response = client->MakeHttpRequest(uri, HttpMethod::HTTP_POST, requestHeader, requestBody);
+  response = client->MakeHttpRequest(uri_post, HttpMethod::HTTP_POST,
+                                     requestHeader, requestBody);
+
+  RS_LOG(m_log)
+  ("IAMPingCredentialsProvider::PostSamlAssertion "
+   "Using URI: %s",
+   uri_post.c_str());
     IAMHttpClient::CheckHttpResponseStatus(response,
         "Authentication failed on the Ping server. Please check the user and password.");
     return ExtractSamlAssertion(response.GetResponseBody(), IAM_PLUGIN_SAML_PATTERN);
