@@ -14,6 +14,7 @@
 #include "IAMBrowserAzureOAuth2CredentialsProvider.h"
 
 #include <map>
+#include <memory>
 
 #include "../rs_iam_support.h"
 
@@ -32,7 +33,7 @@ namespace IamSupport
         /// @param in_argsMap            Optional arguments map passed to the credentials provider
         /// 
         /// @return A credentials provider wrapped using smart pointer
-        static std::auto_ptr<IAMPluginCredentialsProvider> CreatePlugin(
+        static std::unique_ptr<IAMPluginCredentialsProvider> CreatePlugin(
             const rs_wstring& in_pluginName,
             RsLogger* in_log,
             const IAMConfiguration& in_config = IAMConfiguration(),
@@ -47,7 +48,7 @@ namespace IamSupport
         /// @param in_argsMap            Optional arguments map passed to the credentials provider
         /// 
         /// @return A credentials provider wrapped using smart pointer
-        static std::auto_ptr<IAMAdfsCredentialsProvider> CreateAdfsPlugin(
+        static std::unique_ptr<IAMAdfsCredentialsProvider> CreateAdfsPlugin(
             RsLogger* in_log,
             const IAMConfiguration& in_config = IAMConfiguration(),
             const std::map<rs_string, rs_string>& in_argsMap
@@ -60,7 +61,7 @@ namespace IamSupport
         /// @param in_argsMap            Optional arguments map passed to the credentials provider
         ///
         /// @return A credentials provider wrapped using smart pointer
-        static std::auto_ptr<IAMAzureCredentialsProvider> CreateAzurePlugin(
+        static std::unique_ptr<IAMAzureCredentialsProvider> CreateAzurePlugin(
             RsLogger* in_log,
             const IAMConfiguration& in_config = IAMConfiguration(),
             const std::map<rs_string, rs_string>& in_argsMap
@@ -73,7 +74,7 @@ namespace IamSupport
         /// @param in_argsMap            Optional arguments map passed to the credentials provider
         ///
         /// @return A credentials provider wrapped using smart pointer
-        static std::auto_ptr<IAMBrowserAzureCredentialsProvider> CreateBrowserAzurePlugin(
+        static std::unique_ptr<IAMBrowserAzureCredentialsProvider> CreateBrowserAzurePlugin(
             RsLogger* in_log,
             const IAMConfiguration& in_config = IAMConfiguration(),
             const std::map<rs_string, rs_string>& in_argsMap
@@ -86,7 +87,7 @@ namespace IamSupport
 		/// @param in_argsMap            Optional arguments map passed to the credentials provider
 		///
 		/// @return A credentials provider wrapped using smart pointer
-		static std::auto_ptr<IAMBrowserAzureOAuth2CredentialsProvider> CreateBrowserAzureOAuth2Plugin(
+		static std::unique_ptr<IAMBrowserAzureOAuth2CredentialsProvider> CreateBrowserAzureOAuth2Plugin(
 			RsLogger* in_log,
 			const IAMConfiguration& in_config = IAMConfiguration(),
 			const std::map<rs_string, rs_string>& in_argsMap
@@ -99,7 +100,7 @@ namespace IamSupport
         /// @param in_argsMap            Optional arguments map passed to the credentials provider
         ///
         /// @return A credentials provider wrapped using smart pointer
-        static std::auto_ptr<IAMBrowserSamlCredentialsProvider> CreateBrowserSamlPlugin(
+        static std::unique_ptr<IAMBrowserSamlCredentialsProvider> CreateBrowserSamlPlugin(
             RsLogger* in_log,
             const IAMConfiguration& in_config = IAMConfiguration(),
             const std::map<rs_string, rs_string>& in_argsMap
@@ -112,7 +113,7 @@ namespace IamSupport
         /// @param in_argsMap            Optional arguments map passed to the credentials provider
         /// 
         /// @return A credentials provider wrapped using smart pointer
-        static std::auto_ptr<IAMPingCredentialsProvider> CreatePingPlugin(
+        static std::unique_ptr<IAMPingCredentialsProvider> CreatePingPlugin(
             RsLogger* in_log,
             const IAMConfiguration& in_config = IAMConfiguration(),
             const std::map<rs_string, rs_string>& in_argsMap
@@ -125,7 +126,7 @@ namespace IamSupport
         /// @param in_argsMap            Optional arguments map passed to the credentials provider
         /// 
         /// @return A credentials provider wrapped using smart pointer
-        static std::auto_ptr<IAMOktaCredentialsProvider> CreateOktaPlugin(
+        static std::unique_ptr<IAMOktaCredentialsProvider> CreateOktaPlugin(
             RsLogger* in_log,
             const IAMConfiguration& in_config = IAMConfiguration(),
             const std::map<rs_string, rs_string>& in_argsMap
@@ -138,7 +139,7 @@ namespace IamSupport
         /// @param in_argsMap            Optional arguments map passed to the credentials provider
         /// 
         /// @return A credentials provider wrapped using smart pointer
-        static std::auto_ptr<IAMJwtBasicCredentialsProvider> CreateJwtPlugin(
+        static std::unique_ptr<IAMJwtBasicCredentialsProvider> CreateJwtPlugin(
             RsLogger* in_log,
             const IAMConfiguration& in_config = IAMConfiguration(),
             const std::map<rs_string, rs_string>& in_argsMap
@@ -151,7 +152,7 @@ namespace IamSupport
         /// @param in_argsMap            Optional arguments map passed to the credentials provider
         /// 
         /// @return A credentials provider wrapped using smart pointer
-        static std::auto_ptr<IAMExternalCredentialsProvider> CreateExternalPlugin(
+        static std::unique_ptr<IAMExternalCredentialsProvider> CreateExternalPlugin(
             RsLogger* in_log,
             const IAMConfiguration& in_config = IAMConfiguration(),
             const std::map<rs_string, rs_string>& in_argsMap

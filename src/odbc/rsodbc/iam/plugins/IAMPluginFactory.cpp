@@ -4,7 +4,7 @@
 using namespace Redshift::IamSupport;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-std::auto_ptr<IAMPluginCredentialsProvider> IAMPluginFactory::CreatePlugin(
+std::unique_ptr<IAMPluginCredentialsProvider> IAMPluginFactory::CreatePlugin(
     const rs_wstring& in_pluginName,
     RsLogger* in_log,
     const IAMConfiguration& in_config,
@@ -12,7 +12,7 @@ std::auto_ptr<IAMPluginCredentialsProvider> IAMPluginFactory::CreatePlugin(
 {
     RS_LOG(in_log)("IAMPluginFactory::CreatePlugin");
 
-    std::auto_ptr<IAMPluginCredentialsProvider> credProvider;
+    std::unique_ptr<IAMPluginCredentialsProvider> credProvider;
 
     if (IAMUtils::isEqual(in_pluginName, IAMUtils::convertCharStringToWstring(IAM_PLUGIN_ADFS), false))
     {
@@ -55,109 +55,109 @@ std::auto_ptr<IAMPluginCredentialsProvider> IAMPluginFactory::CreatePlugin(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-std::auto_ptr<IAMAdfsCredentialsProvider> IAMPluginFactory::CreateAdfsPlugin(
+std::unique_ptr<IAMAdfsCredentialsProvider> IAMPluginFactory::CreateAdfsPlugin(
     RsLogger* in_log,
     const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap)
 {
     RS_LOG(in_log)("IAMPluginFactory::CreateAdfsPlugin");
 
-    return std::auto_ptr<IAMAdfsCredentialsProvider>(
+    return std::unique_ptr<IAMAdfsCredentialsProvider>(
         new IAMAdfsCredentialsProvider(in_log, in_config, in_argsMap));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-std::auto_ptr<IAMAzureCredentialsProvider> IAMPluginFactory::CreateAzurePlugin(
+std::unique_ptr<IAMAzureCredentialsProvider> IAMPluginFactory::CreateAzurePlugin(
     RsLogger* in_log,
     const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap)
 {
     RS_LOG(in_log)("IAMPluginFactory::CreateAzurePlugin");
 
-    return std::auto_ptr<IAMAzureCredentialsProvider>(
+    return std::unique_ptr<IAMAzureCredentialsProvider>(
         new IAMAzureCredentialsProvider(in_log, in_config, in_argsMap));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-std::auto_ptr<IAMBrowserAzureCredentialsProvider> IAMPluginFactory::CreateBrowserAzurePlugin(
+std::unique_ptr<IAMBrowserAzureCredentialsProvider> IAMPluginFactory::CreateBrowserAzurePlugin(
     RsLogger* in_log,
     const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap)
 {
     RS_LOG(in_log)("IAMPluginFactory::CreateBrowserAzurePlugin");
 
-    return std::auto_ptr<IAMBrowserAzureCredentialsProvider>(
+    return std::unique_ptr<IAMBrowserAzureCredentialsProvider>(
         new IAMBrowserAzureCredentialsProvider(in_log, in_config, in_argsMap));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-std::auto_ptr<IAMBrowserAzureOAuth2CredentialsProvider> IAMPluginFactory::CreateBrowserAzureOAuth2Plugin(
+std::unique_ptr<IAMBrowserAzureOAuth2CredentialsProvider> IAMPluginFactory::CreateBrowserAzureOAuth2Plugin(
 	RsLogger* in_log,
 	const IAMConfiguration& in_config,
 	const std::map<rs_string, rs_string>& in_argsMap)
 {
 	RS_LOG(in_log)("IAMPluginFactory::CreateBrowserAzureOAuth2Plugin");
 
-	return std::auto_ptr<IAMBrowserAzureOAuth2CredentialsProvider>(
+	return std::unique_ptr<IAMBrowserAzureOAuth2CredentialsProvider>(
 		new IAMBrowserAzureOAuth2CredentialsProvider(in_log, in_config, in_argsMap));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-std::auto_ptr<IAMBrowserSamlCredentialsProvider> IAMPluginFactory::CreateBrowserSamlPlugin(
+std::unique_ptr<IAMBrowserSamlCredentialsProvider> IAMPluginFactory::CreateBrowserSamlPlugin(
     RsLogger* in_log,
     const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap)
 {
     RS_LOG(in_log)("IAMPluginFactory::CreateBrowserSamlPlugin");
 
-    return std::auto_ptr<IAMBrowserSamlCredentialsProvider>(
+    return std::unique_ptr<IAMBrowserSamlCredentialsProvider>(
         new IAMBrowserSamlCredentialsProvider(in_log, in_config, in_argsMap));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-std::auto_ptr<IAMPingCredentialsProvider> IAMPluginFactory::CreatePingPlugin(
+std::unique_ptr<IAMPingCredentialsProvider> IAMPluginFactory::CreatePingPlugin(
     RsLogger* in_log,
     const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap)
 {
     RS_LOG(in_log)("IAMPluginFactory::CreatePingPlugin");
 
-    return std::auto_ptr<IAMPingCredentialsProvider>(
+    return std::unique_ptr<IAMPingCredentialsProvider>(
         new IAMPingCredentialsProvider(in_log, in_config, in_argsMap));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-std::auto_ptr<IAMOktaCredentialsProvider> IAMPluginFactory::CreateOktaPlugin(
+std::unique_ptr<IAMOktaCredentialsProvider> IAMPluginFactory::CreateOktaPlugin(
     RsLogger* in_log,
     const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap)
 {
     RS_LOG(in_log)("IAMPluginFactory::CreateOktaPlugin");
 
-    return std::auto_ptr<IAMOktaCredentialsProvider>(
+    return std::unique_ptr<IAMOktaCredentialsProvider>(
         new IAMOktaCredentialsProvider(in_log, in_config, in_argsMap));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-std::auto_ptr<IAMJwtBasicCredentialsProvider> IAMPluginFactory::CreateJwtPlugin(
+std::unique_ptr<IAMJwtBasicCredentialsProvider> IAMPluginFactory::CreateJwtPlugin(
     RsLogger* in_log,
     const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap)
 {
     RS_LOG(in_log)("IAMPluginFactory::CreateJwtPlugin");
 
-    return std::auto_ptr<IAMJwtBasicCredentialsProvider>(
+    return std::unique_ptr<IAMJwtBasicCredentialsProvider>(
         new IAMJwtBasicCredentialsProvider(in_log, in_config, in_argsMap));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-std::auto_ptr<IAMExternalCredentialsProvider> IAMPluginFactory::CreateExternalPlugin(
+std::unique_ptr<IAMExternalCredentialsProvider> IAMPluginFactory::CreateExternalPlugin(
     RsLogger* in_log,
     const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap)
 {
     RS_LOG(in_log)("IAMPluginFactory::CreateExternalPlugin");
 
-    return std::auto_ptr<IAMExternalCredentialsProvider>(
+    return std::unique_ptr<IAMExternalCredentialsProvider>(
         new IAMExternalCredentialsProvider(in_log, in_config, in_argsMap));
 }

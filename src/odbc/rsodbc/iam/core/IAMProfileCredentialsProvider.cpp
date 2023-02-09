@@ -98,7 +98,7 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
             "IAMProfileCredentialsProvider.GetAWSCredentials() Using plugin based profile: %s",
             pluginName.c_str());
 
-        std::auto_ptr<IAMPluginCredentialsProvider> plugin = IAMPluginFactory::CreatePlugin(
+        std::unique_ptr<IAMPluginCredentialsProvider> plugin = IAMPluginFactory::CreatePlugin(
             IAMUtils::trim(pluginName),
             m_log, 
             m_config,
