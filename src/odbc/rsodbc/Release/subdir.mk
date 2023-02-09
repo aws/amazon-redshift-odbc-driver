@@ -53,6 +53,7 @@ CPP_SRCS += \
 ../iam/plugins/IAMPingCredentialsProvider.cpp \
 ../iam/plugins/IAMBrowserSamlCredentialsProvider.cpp \
 ../iam/plugins/IAMBrowserAzureCredentialsProvider.cpp \
+../iam/IAMBrowserAzureOAuth2CredentialsProvider.cpp \
 ../iam/plugins/IAMJwtPluginCredentialsProvider.cpp \
 ../iam/plugins/IAMJwtBasicCredentialsProvider.cpp \
 ../iam/plugins/IAMExternalCredentialsProvider.cpp \
@@ -106,6 +107,7 @@ OBJS += \
 ./IAMPingCredentialsProvider.o \
 ./IAMBrowserSamlCredentialsProvider.o \
 ./IAMBrowserAzureCredentialsProvider.o \
+./IAMBrowserAzureOAuth2CredentialsProvider.o \
 ./IAMJwtPluginCredentialsProvider.o \
 ./IAMJwtBasicCredentialsProvider.o \
 ./IAMExternalCredentialsProvider.o \
@@ -162,6 +164,7 @@ C_DEPS += \
   ./IAMPingCredentialsProvider.d \
   ./IAMBrowserSamlCredentialsProvider.d \
   ./IAMBrowserAzureCredentialsProvider.d \
+  ./IAMBrowserAzureOAuth2CredentialsProvider.d \
   ./IAMJwtPluginCredentialsProvider.d \
   ./IAMJwtBasicCredentialsProvider.d \
   ./IAMExternalCredentialsProvider.d \
@@ -173,21 +176,21 @@ C_DEPS += \
 %.o: ../%.c 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I../iam -I../iam/core  -I../iam/linux/aws-cpp-sdk/1.9.136/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I../iam -I../iam/core  -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../%.cpp
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I../iam -I../iam/core -I../iam/linux/aws-cpp-sdk/1.9.136/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I../iam -I../iam/core -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../iam/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++11 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.136/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
@@ -195,20 +198,20 @@ C_DEPS += \
 %.o : ../iam/http/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++11 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.136/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -I../iam/linux/libcURL/7.78.0_ssl1.1.1_zlib1.2.11_threaded_resolver/centos7/gcc5_5/release64/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -I../iam/linux/libcURL/7.78.0_ssl1.1.1_zlib1.2.11_threaded_resolver/centos7/gcc5_5/release64/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../iam/core/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++11 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.136/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -I../iam/linux/libcURL/7.78.0_ssl1.1.1_zlib1.2.11_threaded_resolver/centos7/gcc5_5/release64/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -I../iam/linux/libcURL/7.78.0_ssl1.1.1_zlib1.2.11_threaded_resolver/centos7/gcc5_5/release64/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../iam/plugins/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++11 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.136/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -I../iam/linux/libcURL/7.78.0_ssl1.1.1_zlib1.2.11_threaded_resolver/centos7/gcc5_5/release64/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -I../iam/linux/libcURL/7.78.0_ssl1.1.1_zlib1.2.11_threaded_resolver/centos7/gcc5_5/release64/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
