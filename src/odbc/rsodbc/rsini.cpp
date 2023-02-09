@@ -87,7 +87,7 @@ int RsIni::getPrivateProfileInt(char *pSectionName, char *pKey, int iDflt, char 
 
 /*====================================================================================================================================================*/
 
-int RsIni::getPrivateProfileString(char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFile)
+int RsIni::getPrivateProfileString(const char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFile)
 {
    char pFullFilePath[MAX_PATH + 1];
 
@@ -104,7 +104,7 @@ int RsIni::getPrivateProfileString(char *pSectionName, char *pKey, char *pDflt, 
 
 /*====================================================================================================================================================*/
 
-int RsIni::getPrivateProfileStringWithFullPath(char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFullFilePath)
+int RsIni::getPrivateProfileStringWithFullPath(const char *pSectionName, const char *pKey, const char *pDflt, char *pReturn, int iSize, char *pFullFilePath)
 {
 	FILE *fp;
 	char buffer[INI_BUFFER_SIZE];

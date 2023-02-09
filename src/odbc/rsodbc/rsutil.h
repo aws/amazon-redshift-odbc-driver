@@ -129,29 +129,29 @@ typedef struct _RS_BIND_PARAM_STR_BUF
 // ODBC2 behavior
 typedef struct _RS_MAP_SQL_STATE
 {
-    char *pszOdbc3State;
-    char *pszOdbc2State;
+    const std::string pszOdbc3State;
+    const std::string pszOdbc2State;
 }RS_MAP_SQL_STATE;
 
 // Map ODBC function name to PADB function name
 typedef struct _RS_MAP_FUNC_NAME
 {
-    char *pszOdbcFuncName;
-    char *pszPadbFuncName;
+    std::string pszOdbcFuncName;
+    std::string pszPadbFuncName;
 }RS_MAP_FUNC_NAME;
 
 // Map ODBC interval name to PADB DatePart name
 typedef struct _RS_MAP_INTERVAL_NAME
 {
-    char *pszOdbcIntervalName;
-    char *pszPadbDatePartName;
+    const char *pszOdbcIntervalName;
+    const char *pszPadbDatePartName;
 }RS_MAP_INTERVAL_NAME;
 
 // Map ODBC SQL Type name to PADB SQL Type name
 typedef struct _RS_MAP_SQL_TYPE_NAME
 {
-    char *pszOdbcSQLTypeName;
-    char *pszPadbSQLTypeName;
+    const char *pszOdbcSQLTypeName;
+    const char *pszPadbSQLTypeName;
 }RS_MAP_SQL_TYPE_NAME;
 
 // Copied from pgtime.h of the server code
@@ -204,7 +204,7 @@ extern "C"
 {
 #endif /* C++ */
 
-char *rs_strdup(char *src, size_t cbLen);
+char *rs_strdup(const char *src, size_t cbLen);
 
 unsigned char *makeNullTerminatedStr(char *pData, size_t cbLen, RS_STR_BUF *pPaStrBuf);
 
@@ -250,17 +250,17 @@ char *trim_whitespaces(char *str);
 char *appendStr(char *pStrOut, size_t *pcbStrOut,char *szStrIn);
 char *stristr(char *str, char *subStr);
 
-SQLRETURN copyStrDataSmallLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLSMALLINT cbLen, SQLSMALLINT *pcbLen);
-SQLRETURN copyStrDataLargeLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLINTEGER cbLen, SQLINTEGER *pcbLen);
-SQLRETURN copyStrDataBigLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
+SQLRETURN copyStrDataSmallLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLSMALLINT cbLen, SQLSMALLINT *pcbLen);
+SQLRETURN copyStrDataLargeLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLINTEGER cbLen, SQLINTEGER *pcbLen);
+SQLRETURN copyStrDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
 
-SQLRETURN copyWStrDataBigLen(char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
+SQLRETURN copyWStrDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
 
-SQLRETURN copyBinaryDataBigLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
-SQLRETURN copyWBinaryDataBigLen(char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
-SQLRETURN copyHexToBinaryDataBigLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
-SQLRETURN copyBinaryToHexDataBigLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
-SQLRETURN copyWBinaryToHexDataBigLen(char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
+SQLRETURN copyBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
+SQLRETURN copyWBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
+SQLRETURN copyHexToBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
+SQLRETURN copyBinaryToHexDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
+SQLRETURN copyWBinaryToHexDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
 
 
 void resetPaStrBuf(RS_STR_BUF *pPaStrBuf);
@@ -388,12 +388,12 @@ int isODBC2Behavior(RS_STMT_INFO *pStmt);
 void mapToODBC2SqlState(RS_ENV_INFO *pEnv,char *pszSqlState);
 
 char *getNextTokenForODBCEscapeClause(char **ppSrc, size_t cbLen, int *pi, char *fnNameDelimiterList);
-char *mapODBCFuncNameToPadbFuncName(char *pODBCFuncName, int iTokenLen);
-char *mapODBCIntervalNameToPadbDatePartName(char *pODBCIntervalName, int iTokenLen);
-int checkDelimiterForODBCEscapeClauseToken(char *pSrc, char *fnNameDelimiterList);
+const std::string *mapODBCFuncNameToPadbFuncName(char *pODBCFuncName, int iTokenLen);
+const char *mapODBCIntervalNameToPadbDatePartName(char *pODBCIntervalName, int iTokenLen);
+int checkDelimiterForODBCEscapeClauseToken(const char *pSrc, char *fnNameDelimiterList);
 int skipFunctionBracketsForODBCEscapeClauseToken(char **ppSrc, size_t cbLen, int i, int iBoth);
 int replaceODBCConvertFunc(RS_STMT_INFO *pStmt, char **ppDest, char *pDestStart, int iDestBufLen, char **ppSrc, size_t cbLen, int i, int numOfParamMarkers, int  *piParamNumber);
-char *mapODBCSQLTypeToPadbSQLTypeName(char *pODBCSQLTypeName, int iTokenLen);
+const char *mapODBCSQLTypeToPadbSQLTypeName(char *pODBCSQLTypeName, int iTokenLen);
 
 void resetCatalogQueryFlag(RS_STMT_INFO *pStmt);
 
@@ -408,9 +408,9 @@ SQLRETURN getGucVariableVal(RS_CONN_INFO *pConn, char *pVarName, char *pVarVal, 
 void convertNumericStringToScaledInteger(char *pNumData, SQL_NUMERIC_STRUCT *pnVal);
 void convertScaledIntegerToNumericString(SQL_NUMERIC_STRUCT *pnVal,char *pNumData, int num_data_len);
 
-int fileExists(char * pFileName);
+int fileExists(const char * pFileName);
 int readTraceOptionsFromIniFile(char  *pszTraceLevel,int iTraceLevelBufLen, char *pszTraceFile, int iTraceFileBufLen);
-int readDriverOptionFromIniFile(char  *pszOptionName,char *pszOptionValBuf, int iOptionValBufLen);
+int readDriverOptionFromIniFile(const char  *pszOptionName,char *pszOptionValBuf, int iOptionValBufLen);
 void readCscOptionsForDsnlessConnection(RS_CONNECT_PROPS_INFO *pConnectProps);
 
 #if defined LINUX 

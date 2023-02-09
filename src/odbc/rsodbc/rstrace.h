@@ -63,48 +63,48 @@ void closeTraceFile();
 FILE *getTraceFileHandle();
 char *getTraceFileName();
 
-void traceError(char *fmt,...);
-void traceAPICall(char *fmt,...);
-void traceInfo(char *fmt,...);
-void traceDebug(char *fmt,...);
-void traceArg(char *fmt,...);
-void traceArgVal(char *fmt,...);
-void traceDebugWithArgList(char *fmt, va_list args);
+void traceError(const char *fmt,...);
+void traceAPICall(const char *fmt,...);
+void traceInfo(const char *fmt,...);
+void traceDebug(const char *fmt,...);
+void traceArg(const char *fmt,...);
+void traceArgVal(const char *fmt,...);
+void traceDebugWithArgList(const char *fmt, va_list args);
 
-void traceHandle(char *pArgName, SQLHANDLE handle);
+void traceHandle(const char *pArgName, SQLHANDLE handle);
 char *getRcString(SQLRETURN iRc);
 void traceErrorList(SQLHENV phenv,SQLHDBC phdbc,SQLHSTMT phstmt,SQLHDESC phdesc);
 void traceHandleType(SQLSMALLINT hHandleType);
 void traceClosingBracket();
-void traceStrValWithSmallLen(char *pArgName, char *pVal, SQLSMALLINT cbLen);
-void traceStrValWithLargeLen(char *pArgName, char *pVal, SQLINTEGER cbLen);
-void traceWStrValWithSmallLen(char *pArgName, SQLWCHAR *pwVal, SQLSMALLINT cchLen);
-void traceWStrValWithLargeLen(char *pArgName, SQLWCHAR *pwVal, SQLINTEGER cchLen);
-void traceStrSmallLen(char *pArgName, SQLSMALLINT cbLen);
-void traceStrLargeLen(char *pArgName, SQLINTEGER cbLen);
-void tracePointer(char *var, void *ptr);
-void traceStrOutSmallLen(char *pArgName, SQLSMALLINT *pcbLen);
-void traceStrOutLargeLen(char *pArgName, SQLINTEGER *pcbLen);
+void traceStrValWithSmallLen(const char *pArgName, const char *pVal, SQLSMALLINT cbLen);
+void traceStrValWithLargeLen(const char *pArgName, const char *pVal, SQLINTEGER cbLen);
+void traceWStrValWithSmallLen(const char *pArgName, SQLWCHAR *pwVal, SQLSMALLINT cchLen);
+void traceWStrValWithLargeLen(const char *pArgName, SQLWCHAR *pwVal, SQLINTEGER cchLen);
+void traceStrSmallLen(const char *pArgName, SQLSMALLINT cbLen);
+void traceStrLargeLen(const char *pArgName, SQLINTEGER cbLen);
+void tracePointer(const char *var, void *ptr);
+void traceStrOutSmallLen(const char *pArgName, SQLSMALLINT *pcbLen);
+void traceStrOutLargeLen(const char *pArgName, SQLINTEGER *pcbLen);
 
-void traceIntPtrVal(char *pArgName, int *piVal);
-void traceLongPtrVal(char *pArgName, long *plVal);
-void traceShortPtrVal(char *pArgName, short *phVal);
-void traceLongLongPtrVal(char *pArgName, long long*pllVal);
-void traceFloatPtrVal(char *pArgName, float *pfVal);
-void traceDoublePtrVal(char *pArgName, double *pdVal);
-void traceBitPtrVal(char *pArgName, char *pbVal);
+void traceIntPtrVal(const char *pArgName, int *piVal);
+void traceLongPtrVal(const char *pArgName, long *plVal);
+void traceShortPtrVal(const char *pArgName, short *phVal);
+void traceLongLongPtrVal(const char *pArgName, long long*pllVal);
+void traceFloatPtrVal(const char *pArgName, float *pfVal);
+void traceDoublePtrVal(const char *pArgName, double *pdVal);
+void traceBitPtrVal(const char *pArgName, char *pbVal);
 
-void traceIntVal(char *pArgName,int iVal);
-void traceLongVal(char *pArgName,long lVal);
-void traceShortVal(char *pArgName,short hVal);
-void traceFloatVal(char *pArgName,float fVal);
-void traceDoubleVal(char *pArgName,double dVal);
-void traceLongLongVal(char *pArgName,long long llVal);
-void traceBitVal(char *pArgName,char bVal);
-void traceDatePtrVal(char *pArgName, DATE_STRUCT *pdtVal);
-void traceTimeStampPtrVal(char *pArgName, TIMESTAMP_STRUCT *ptsVal);
-void traceTimePtrVal(char *pArgName, TIME_STRUCT *ptVal);
-void traceNumericPtrVal(char *pArgName, SQL_NUMERIC_STRUCT *pnVal);
+void traceIntVal(const char *pArgName,int iVal);
+void traceLongVal(const char *pArgName,long lVal);
+void traceShortVal(const char *pArgName,short hVal);
+void traceFloatVal(const char *pArgName,float fVal);
+void traceDoubleVal(const char *pArgName,double dVal);
+void traceLongLongVal(const char *pArgName,long long llVal);
+void traceBitVal(const char *pArgName,char bVal);
+void traceDatePtrVal(const char *pArgName, DATE_STRUCT *pdtVal);
+void traceTimeStampPtrVal(const char *pArgName, TIMESTAMP_STRUCT *ptsVal);
+void traceTimePtrVal(const char *pArgName, TIME_STRUCT *ptVal);
+void traceNumericPtrVal(const char *pArgName, SQL_NUMERIC_STRUCT *pnVal);
 
 void traceDiagIdentifier(SQLSMALLINT hDiagIdentifier);
 void traceDiagIdentifierOutput(SQLSMALLINT hDiagIdentifier,
@@ -119,26 +119,26 @@ void traceGetInfoOutput(SQLUSMALLINT hInfoType,
                         int iUnicode);
 void traceBulkOperationOption(SQLSMALLINT hOperation);
 
-void traceCType(char *pArgName, SQLSMALLINT hCType);
-void traceSQLType(char *pArgName,SQLSMALLINT hSQLType);
-void traceNullableOutput(char *pArgName,SQLSMALLINT *pNullable);
+void traceCType(const char *pArgName, SQLSMALLINT hCType);
+void traceSQLType(const char *pArgName,SQLSMALLINT hSQLType);
+void traceNullableOutput(const char *pArgName,SQLSMALLINT *pNullable);
 
-void traceFieldIdentifier(char *pArgName, SQLUSMALLINT hFieldIdentifier);
+void traceFieldIdentifier(const char *pArgName, SQLUSMALLINT hFieldIdentifier);
 
-void traceEnvAttr(char *pArgName, SQLINTEGER iAttribute);
-void traceEnvAttrVal(char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen);
-void traceConnectAttr(char *pArgName, SQLINTEGER iAttribute);
-void traceConnectAttrVal(char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal);
-void traceStmtAttr(char *pArgName, SQLINTEGER iAttribute);
-void traceStmtAttrVal(char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal);
+void traceEnvAttr(const char *pArgName, SQLINTEGER iAttribute);
+void traceEnvAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen);
+void traceConnectAttr(const char *pArgName, SQLINTEGER iAttribute);
+void traceConnectAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal);
+void traceStmtAttr(const char *pArgName, SQLINTEGER iAttribute);
+void traceStmtAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal);
 
-void traceDriverCompletion(char *pArgName, SQLUSMALLINT hDriverCompletion);
-void traceIdenTypeSpecialColumns(char *pArgName, SQLUSMALLINT   hIdenType);
-void traceScopeSpecialColumns(char *pArgName, SQLUSMALLINT   hScope);
-void traceUniqueStatistics(char *pArgName, SQLUSMALLINT hUnique);
-void traceReservedStatistics(char *pArgName, SQLUSMALLINT hReserved);
+void traceDriverCompletion(const char *pArgName, SQLUSMALLINT hDriverCompletion);
+void traceIdenTypeSpecialColumns(const char *pArgName, SQLUSMALLINT   hIdenType);
+void traceScopeSpecialColumns(const char *pArgName, SQLUSMALLINT   hScope);
+void traceUniqueStatistics(const char *pArgName, SQLUSMALLINT hUnique);
+void traceReservedStatistics(const char *pArgName, SQLUSMALLINT hReserved);
 
-void traceData(char *pArgName, SQLSMALLINT hType, SQLPOINTER pValue, SQLLEN cbLen);
+void traceData(const char *pArgName, SQLSMALLINT hType, SQLPOINTER pValue, SQLLEN cbLen);
 
 void tracePasswordConnectString(char *var,char *szConnStr, SQLSMALLINT  cbConnStr);
 void tracePasswordConnectStringW(char *var,SQLWCHAR *wszConnStr, SQLSMALLINT  cchConnStr);

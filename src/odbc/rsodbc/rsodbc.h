@@ -312,7 +312,7 @@ public:
    void resetConnectProps();
    void setConnectStr(char *szInitStr);
    void appendConnectStr(char *szInitStr);
-   void appendConnectAttribueStr(char *szName, char *szVal);
+   void appendConnectAttribueStr(const char *szName, const char *szVal);
    char *getConnectStr();
    void readMoreConnectPropsFromRegistry(int readUser);
    void readIamConnectPropsFromRegistry();
@@ -329,7 +329,7 @@ public:
    static void readLongValFromDsn(char *szDSN, char *pKey, long *plVal);
    static void readLongLongValFromDsn(char *szDSN, char *pKey, long long *pllVal);
    static void readBoolValFromDsn(char *szDSN, char *pKey, bool *pbVal);
-   static bool convertToBoolVal(char *pVal);
+   static bool convertToBoolVal(const char *pVal);
 
    static SQLRETURN doConnection(RS_CONN_INFO *pConn);
 
@@ -891,6 +891,7 @@ public:
 #define RS_IDP_HOST               "idp_host"
 #define RS_IDP_PORT               "idp_port"
 #define RS_SSL_INSECURE           "ssl_insecure"
+#define RS_GROUP_FEDERATION       "group_federation"
 #define RS_LOGIN_TO_RP            "loginToRp"
 #define RS_IDP_TENANT             "idp_tenant"
 #define RS_CLIENT_ID              "client_id"
@@ -1573,8 +1574,8 @@ SQLRETURN  SQL_API RS_SQLAllocHandle(SQLSMALLINT hHandleType,
 SQLRETURN  SQL_API RS_SQLFreeHandle(SQLSMALLINT hHandleType, 
                                     SQLHANDLE pHandle);
 
-int  RS_SQLGetPrivateProfileString(char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFile);
-int RS_GetPrivateProfileString(char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFile);
+int  RS_SQLGetPrivateProfileString(const char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFile);
+int RS_GetPrivateProfileString(const char *pSectionName, const char *pKey, const char *pDflt, char *pReturn, int iSize, char *pFile);
 
 #ifdef __cplusplus
 }

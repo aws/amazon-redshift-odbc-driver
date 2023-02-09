@@ -26,10 +26,10 @@ class RsIni {
     static int isSection(char *pBuffer);
 
     static int getPrivateProfileInt(char *pSectionName, char *pKey, int iDflt, char *pFile);
-    static int getPrivateProfileString(char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFile);
+    static int getPrivateProfileString(const char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFile);
     static int writePrivateProfileString(char *pSectionName, char *pKey, char *pData, char *pFile);
     static void getFullOdbcIniPath(char *pFullFilePath, int iMaxsize, char *pFile);
-	static int getPrivateProfileStringWithFullPath(char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFullFilePath);
+	  static int getPrivateProfileStringWithFullPath(const char *pSectionName, const char *pKey, const char *pDflt, char *pReturn, int iSize, char *pFullFilePath);
 
 };
 

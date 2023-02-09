@@ -89,7 +89,7 @@ static const RS_MAP_SQL_STATE   gMapToODBC2SqlState[] =
     { "HY111", "S1111"},
     { "HYC00", "S1C00"},
     { "HYT00", "S1T00"},
-    {NULL,NULL}
+    {"",""}
 };
 
 static  const RS_MAP_FUNC_NAME gMapToPadbFuncName[] = 
@@ -120,7 +120,7 @@ static  const RS_MAP_FUNC_NAME gMapToPadbFuncName[] =
     { "YEAR", "DATE_PART(y,"},
     { "TIMESTAMPADD", "DATEADD"},
     { "TIMESTAMPDIFF", "DATEDIFF"},
-    {NULL,NULL}
+    {"",""}
 };
 
 static  const RS_MAP_INTERVAL_NAME gMapToPadbDatePartName[] = 
@@ -186,7 +186,7 @@ unsigned char hex_to_binary(char in_hex);
 //---------------------------------------------------------------------------------------------------------igarish
 // Duplicate the string.
 //
-char *rs_strdup(char *src, size_t cbLen)
+char *rs_strdup(const char *src, size_t cbLen)
 {
     char *dest;
 
@@ -659,7 +659,7 @@ char *stristr(char *str, char *subStr)
 //---------------------------------------------------------------------------------------------------------igarish
 // Copy small string data.
 //
-SQLRETURN copyStrDataSmallLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLSMALLINT cbLen, SQLSMALLINT *pcbLen)
+SQLRETURN copyStrDataSmallLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLSMALLINT cbLen, SQLSMALLINT *pcbLen)
 {
     SQLRETURN rc = SQL_SUCCESS;
     int len = (pSrc && (iSrcLen != SQL_NULL_DATA)) 
@@ -709,7 +709,7 @@ SQLRETURN copyStrDataSmallLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLSM
 //---------------------------------------------------------------------------------------------------------igarish
 // Copy large string data.
 //
-SQLRETURN copyStrDataLargeLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLINTEGER cbLen, SQLINTEGER *pcbLen)
+SQLRETURN copyStrDataLargeLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLINTEGER cbLen, SQLINTEGER *pcbLen)
 {
     SQLRETURN rc = SQL_SUCCESS;
     int len = (pSrc && (iSrcLen != SQL_NULL_DATA)) 
@@ -759,7 +759,7 @@ SQLRETURN copyStrDataLargeLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLIN
 //---------------------------------------------------------------------------------------------------------igarish
 // Copy big string data.
 //
-SQLRETURN copyStrDataBigLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
+SQLRETURN copyStrDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
 {
     SQLRETURN rc = SQL_SUCCESS;
     int len = (pSrc && (iSrcLen != SQL_NULL_DATA)) 
@@ -809,7 +809,7 @@ SQLRETURN copyStrDataBigLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN 
 //---------------------------------------------------------------------------------------------------------igarish
 // Copy big binary data.
 //
-SQLRETURN copyBinaryDataBigLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
+SQLRETURN copyBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
 {
 	SQLRETURN rc = SQL_SUCCESS;
 	int len = (pSrc && (iSrcLen != SQL_NULL_DATA))
@@ -877,7 +877,7 @@ unsigned char hex_to_binary(char in_hex)
 
 /*====================================================================================================================================================*/
 
-SQLRETURN copyHexToBinaryDataBigLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
+SQLRETURN copyHexToBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
 {
 	SQLRETURN rc = SQL_SUCCESS;
 	int len = (pSrc && (iSrcLen != SQL_NULL_DATA))
@@ -938,7 +938,7 @@ SQLRETURN copyHexToBinaryDataBigLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest,
 
 /*====================================================================================================================================================*/
 
-SQLRETURN copyBinaryToHexDataBigLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
+SQLRETURN copyBinaryToHexDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
 {
 	SQLRETURN rc = SQL_SUCCESS;
 	int len = (pSrc && (iSrcLen != SQL_NULL_DATA))
@@ -1000,7 +1000,7 @@ SQLRETURN copyBinaryToHexDataBigLen(char *pSrc, SQLINTEGER iSrcLen, char *pDest,
 // Copy big WCHAR string data.
 //
 // cbLen and pcbLen are in bytes
-SQLRETURN copyWStrDataBigLen(char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
+SQLRETURN copyWStrDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
 {
     SQLRETURN rc = SQL_SUCCESS;
     int len = (pSrc && (iSrcLen != SQL_NULL_DATA)) 
@@ -1050,7 +1050,7 @@ SQLRETURN copyWStrDataBigLen(char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLE
 // Copy big WCHAR string data from LONGVARBINARY in HEX format (VARBYTE, GEOMETRY, GEOGRAPHY  etc.
 //
 // cbLen and pcbLen are in bytes
-SQLRETURN copyWBinaryDataBigLen(char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
+SQLRETURN copyWBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
 {
 	SQLRETURN rc = SQL_SUCCESS;
 	int len = (pSrc && (iSrcLen != SQL_NULL_DATA))
@@ -1112,7 +1112,7 @@ SQLRETURN copyWBinaryDataBigLen(char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQ
 
 /*====================================================================================================================================================*/
 
-SQLRETURN copyWBinaryToHexDataBigLen(char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
+SQLRETURN copyWBinaryToHexDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
 {
 	SQLRETURN rc = SQL_SUCCESS;
 	int len = (pSrc && (iSrcLen != SQL_NULL_DATA))
@@ -8652,7 +8652,7 @@ int replaceODBCEscapeClause(RS_STMT_INFO *pStmt, char **ppDest, char *pDestStart
                if(pToken != pSrc)
                {
                  // Map function name.
-                 char *pPadbFuncName;
+                 const std::string* pPadbFuncName = NULL;
 
                  iTokenLen = (int)(pSrc - pToken);
 
@@ -8660,28 +8660,28 @@ int replaceODBCEscapeClause(RS_STMT_INFO *pStmt, char **ppDest, char *pDestStart
 
                  if(pPadbFuncName)
                  {
-                     iTemp = snprintf(pDest, iDestBufLen - occupied, "%s", pPadbFuncName);
+                     iTemp = snprintf(pDest, iDestBufLen - occupied, "%s", pPadbFuncName->c_str());
                      pDest += iTemp;
 
-                     if(_stricmp(pPadbFuncName,"USER") == 0
-                         || _stricmp(pPadbFuncName,"LOCALTIME") == 0)
+                     if(_stricmp(pPadbFuncName->c_str(),"USER") == 0
+                         || _stricmp(pPadbFuncName->c_str(),"LOCALTIME") == 0)
                      {
                          i = skipFunctionBracketsForODBCEscapeClauseToken(&pSrc, cbLen, i, TRUE); 
                      }
                      else
-                     if(_stricmp(pPadbFuncName,"CAST") == 0) // CONVERT
+                     if(_stricmp(pPadbFuncName->c_str(),"CAST") == 0) // CONVERT
                      {
                          i = replaceODBCConvertFunc(pStmt, &pDest, pDestStart, iDestBufLen, &pSrc, cbLen, i, numOfParamMarkers, piParamNumber);
                      }
                      else
-                     if(_strnicmp(pPadbFuncName,"DATE_PART(",strlen("DATE_PART(")) == 0)
+                     if(_strnicmp(pPadbFuncName->c_str(),"DATE_PART(",strlen("DATE_PART(")) == 0)
                      {
                          // Skip ( because we already put ( when we replace the function name.
                          i = skipFunctionBracketsForODBCEscapeClauseToken(&pSrc, cbLen, i, FALSE); 
                      }
                      else
-                     if(_stricmp(pPadbFuncName,"DATEADD") == 0
-                         || _stricmp(pPadbFuncName,"DATEDIFF") == 0)
+                     if(_stricmp(pPadbFuncName->c_str(),"DATEADD") == 0
+                         || _stricmp(pPadbFuncName->c_str(),"DATEDIFF") == 0)
                      {
                         // Get the first argument
                          if(*pSrc != '(')
@@ -8703,7 +8703,7 @@ int replaceODBCEscapeClause(RS_STMT_INFO *pStmt, char **ppDest, char *pDestStart
                              if(pToken != pSrc)
                              {
                                  // Map INTERVAL argument.
-                                 char *pPadbDatePartName;
+                                 const char *pPadbDatePartName;
 
                                  iTokenLen = (int)(pSrc - pToken);
 
@@ -9496,11 +9496,11 @@ void mapToODBC2SqlState(RS_ENV_INFO *pEnv,char *pszSqlState)
        {
             int i = 0;
 
-            while(gMapToODBC2SqlState[i].pszOdbc3State)
+            while(gMapToODBC2SqlState[i].pszOdbc3State.length())
             {
-                if(strcmp(gMapToODBC2SqlState[i].pszOdbc3State,pszSqlState) == 0)
+                if(strcmp(gMapToODBC2SqlState[i].pszOdbc3State.c_str(),pszSqlState) == 0)
                 {
-                    rs_strncpy(pszSqlState,gMapToODBC2SqlState[i].pszOdbc2State,6);
+                    rs_strncpy(pszSqlState,gMapToODBC2SqlState[i].pszOdbc2State.c_str(),6);
                     break;
                 }
 
@@ -9556,17 +9556,17 @@ char *getNextTokenForODBCEscapeClause(char **ppSrc, size_t cbLen, int *pi, char 
 //---------------------------------------------------------------------------------------------------------igarish
 // Map the function name
 //
-char *mapODBCFuncNameToPadbFuncName(char *pODBCFuncName, int iTokenLen)
+const std::string* mapODBCFuncNameToPadbFuncName(char *pODBCFuncName, int iTokenLen)
 {
-    char *pPadbFuncName = NULL;
+    std::string* pPadbFuncName = NULL;
     int i = 0;
 
-    while(gMapToPadbFuncName[i].pszOdbcFuncName)
+    while(gMapToPadbFuncName[i].pszOdbcFuncName.size())
     {
-        if(iTokenLen == strlen(gMapToPadbFuncName[i].pszOdbcFuncName)
-            && _strnicmp(pODBCFuncName, gMapToPadbFuncName[i].pszOdbcFuncName, iTokenLen) == 0)
+        if(pODBCFuncName && iTokenLen == gMapToPadbFuncName[i].pszOdbcFuncName.size()
+            && _strnicmp(pODBCFuncName, gMapToPadbFuncName[i].pszOdbcFuncName.c_str(), iTokenLen) == 0)
         {
-            pPadbFuncName = gMapToPadbFuncName[i].pszPadbFuncName;
+            return &(gMapToPadbFuncName[i].pszPadbFuncName);
             break;
         }
 
@@ -9581,9 +9581,9 @@ char *mapODBCFuncNameToPadbFuncName(char *pODBCFuncName, int iTokenLen)
 //---------------------------------------------------------------------------------------------------------igarish
 // Map the interval name
 //
-char *mapODBCIntervalNameToPadbDatePartName(char *pODBCIntervalName, int iTokenLen)
+const char *mapODBCIntervalNameToPadbDatePartName(char *pODBCIntervalName, int iTokenLen)
 {
-    char *pPadbDatePartName = NULL;
+    const char *pPadbDatePartName = NULL;
     int i = 0;
 
     while(gMapToPadbDatePartName[i].pszOdbcIntervalName)
@@ -9591,7 +9591,7 @@ char *mapODBCIntervalNameToPadbDatePartName(char *pODBCIntervalName, int iTokenL
         if(iTokenLen == strlen(gMapToPadbDatePartName[i].pszOdbcIntervalName)
             && _strnicmp(pODBCIntervalName, gMapToPadbDatePartName[i].pszOdbcIntervalName, iTokenLen) == 0)
         {
-            pPadbDatePartName = gMapToPadbDatePartName[i].pszPadbDatePartName;
+            return gMapToPadbDatePartName[i].pszPadbDatePartName;
             break;
         }
 
@@ -9606,7 +9606,7 @@ char *mapODBCIntervalNameToPadbDatePartName(char *pODBCIntervalName, int iTokenL
 //---------------------------------------------------------------------------------------------------------igarish
 // Check delimiter for ODBC Escape Clause token
 //
-int checkDelimiterForODBCEscapeClauseToken(char *pSrc, char *fnNameDelimiterList)
+int checkDelimiterForODBCEscapeClauseToken(const char *pSrc, char *fnNameDelimiterList)
 {
     int iDelimiterFound = FALSE;
 
@@ -9808,11 +9808,9 @@ int replaceODBCConvertFunc(RS_STMT_INFO *pStmt, char **ppDest, char *pDestStart,
              if(pToken != pSrc)
              {
                  // Map ODBC SQL Type to PADB type.
-                 char *pPadbSQLTypeName;
-
                  iTokenLen = (int)(pSrc - pToken);
 
-                 pPadbSQLTypeName = mapODBCSQLTypeToPadbSQLTypeName(pToken, iTokenLen);
+                 const char *pPadbSQLTypeName = mapODBCSQLTypeToPadbSQLTypeName(pToken, iTokenLen);
 
                  if(pPadbSQLTypeName)
                  {
@@ -9848,9 +9846,9 @@ int replaceODBCConvertFunc(RS_STMT_INFO *pStmt, char **ppDest, char *pDestStart,
 //---------------------------------------------------------------------------------------------------------igarish
 // Map the function name
 //
-char *mapODBCSQLTypeToPadbSQLTypeName(char *pODBCSQLTypeName, int iTokenLen)
+const char *mapODBCSQLTypeToPadbSQLTypeName(char *pODBCSQLTypeName, int iTokenLen)
 {
-    char *pPadbSQLTypeName = NULL;
+    const char *pPadbSQLTypeName = NULL;
     int i = 0;
 
     while(gMapToPadbSQLTypeName[i].pszOdbcSQLTypeName)
@@ -9858,7 +9856,7 @@ char *mapODBCSQLTypeToPadbSQLTypeName(char *pODBCSQLTypeName, int iTokenLen)
         if(iTokenLen == strlen(gMapToPadbSQLTypeName[i].pszOdbcSQLTypeName)
             && _strnicmp(pODBCSQLTypeName, gMapToPadbSQLTypeName[i].pszOdbcSQLTypeName, iTokenLen) == 0)
         {
-            pPadbSQLTypeName = gMapToPadbSQLTypeName[i].pszPadbSQLTypeName;
+            return gMapToPadbSQLTypeName[i].pszPadbSQLTypeName;
             break;
         }
 
@@ -10519,7 +10517,7 @@ int readTraceOptionsFromIniFile(char  *pszTraceLevel,int iTraceLevelBufLen, char
 // Read DSN-less connection info from amazon.redshiftodbc.ini file in the driver directory.
 // Return 1 on successful read otherwise 0.
 //
-int readDriverOptionFromIniFile(char  *pszOptionName,char *pszOptionValBuf, int iOptionValBufLen)
+int readDriverOptionFromIniFile(const char  *pszOptionName,char *pszOptionValBuf, int iOptionValBufLen)
 {
     char iniFileName[MAX_PATH + _MAX_FNAME];
     int  readOptions = FALSE;

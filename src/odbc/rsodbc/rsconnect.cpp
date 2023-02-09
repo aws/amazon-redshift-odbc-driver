@@ -2494,7 +2494,7 @@ void RS_CONN_INFO::appendConnectStr(char *szInitStr)
 //---------------------------------------------------------------------------------------------------------igarish
 // Append given attribute and value in the connection string.
 //
-void RS_CONN_INFO::appendConnectAttribueStr(char *szName, char *szVal)
+void RS_CONN_INFO::appendConnectAttribueStr(const char *szName, const char *szVal)
 {
     RS_CONN_INFO *pConn = this;
 
@@ -3032,7 +3032,8 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IDP_HOST, "", pIamProps->szIdpHost, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_IDP_PORT, &(pIamProps->iIdpPort));
         RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_SSL_INSECURE, &(pIamProps->isSslInsecure));
-        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_LOGIN_TO_RP, "", pIamProps->szLoginToRp, MAX_IAM_BUF_VAL, ODBC_INI);
+		RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_GROUP_FEDERATION, &(pIamProps->isGroupFederation));
+		RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_LOGIN_TO_RP, "", pIamProps->szLoginToRp, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IDP_TENANT, "", pIamProps->szIdpTenant, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_CLIENT_ID, "", pIamProps->szClientId, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_CLIENT_SECRET, "", pIamProps->szClientSecret, MAX_IAM_BUF_VAL, ODBC_INI);
@@ -3154,7 +3155,7 @@ void RS_CONN_INFO::readBoolValFromDsn(char *szDSN, char *pKey, bool *pbVal)
 
 /*====================================================================================================================================================*/
 
-bool RS_CONN_INFO::convertToBoolVal(char *pVal)
+bool RS_CONN_INFO::convertToBoolVal(const char *pVal)
 {
   return (_stricmp(pVal,"TRUE") == 0
             || _stricmp(pVal,"1") == 0);
@@ -3270,7 +3271,7 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
 //---------------------------------------------------------------------------------------------------------igarish
 // Read registry or odbc.ini using given section name and key name.
 //
-int RS_SQLGetPrivateProfileString(char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFile)
+int RS_SQLGetPrivateProfileString(const char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFile)
 {
 #ifdef WIN32
     return SQLGetPrivateProfileString(pSectionName, pKey, pDflt, pReturn, iSize, pFile);
@@ -3285,7 +3286,7 @@ int RS_SQLGetPrivateProfileString(char *pSectionName, char *pKey, char *pDflt, c
 //---------------------------------------------------------------------------------------------------------igarish
 // Read Redshift ini file using given section name and key name.
 //
-int RS_GetPrivateProfileString(char *pSectionName, char *pKey, char *pDflt, char *pReturn, int iSize, char *pFile)
+int RS_GetPrivateProfileString(const char *pSectionName, const char *pKey, const char *pDflt, char *pReturn, int iSize, char *pFile)
 {
 #ifdef WIN32
 	return GetPrivateProfileString(pSectionName, pKey, pDflt, pReturn, iSize, pFile);

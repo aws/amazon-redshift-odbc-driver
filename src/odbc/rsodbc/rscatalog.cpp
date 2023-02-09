@@ -324,7 +324,7 @@
 
 
 // Function prototypes
-static void addLikeOrEqualFilterCondition(RS_STMT_INFO *pStmt, char *szCatalogQuery, char *pFilterColumn, char *pVal, SQLSMALLINT cbLen);
+static void addLikeOrEqualFilterCondition(RS_STMT_INFO *pStmt, char *szCatalogQuery, const char *pFilterColumn, const char *pVal, SQLSMALLINT cbLen);
 static void addTableTypeFilterCondition(char *filterClause, char *pVal, SQLSMALLINT cbLen, int schemaPatternType);
 static void addOrderByClause(char *szCatalogQuery, char *pOrderByCols);
 static void addTypeRow(char *szCatalogQuery, RS_TYPE_INFO *pTypeInfo);
@@ -354,7 +354,7 @@ static void getCatalogFilterCondition(char *catalogFilter,
 										short cbCatalogName,
 										bool apiSupportedOnlyForConnectedDatabase,
 										char * databaseColName);
-static char *escapedFilterCondition(char *pName, short cbName);
+static char *escapedFilterCondition(const char *pName, short cbName);
 
 
 static void buildLocalSchemaTablesQuery(char *pszCatalogQuery,
@@ -2259,7 +2259,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
           "smallint", SQL_SMALLINT, 5, "", "", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "smallint", 
           0, 0, SQL_SMALLINT, SQL_NULL_DATA, 10, SQL_NULL_DATA
         },
-        {
+		{
           "real", SQL_REAL, 24, "", "", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "real", 
           SQL_NULL_DATA, SQL_NULL_DATA, SQL_REAL, SQL_NULL_DATA, 2, SQL_NULL_DATA
         },
@@ -2672,7 +2672,7 @@ SQLRETURN SQL_API SQLTablePrivilegesW(SQLHSTMT       phstmt,
 //---------------------------------------------------------------------------------------------------------igarish
 // Add = or LIKE WHERE clause for catalog query.
 //
-static void addLikeOrEqualFilterCondition(RS_STMT_INFO *pStmt, char *filterClause, char *pFilterColumn, char *pVal, SQLSMALLINT cbLen)
+static void addLikeOrEqualFilterCondition(RS_STMT_INFO *pStmt, char *filterClause, const char *pFilterColumn, const char *pVal, SQLSMALLINT cbLen)
 {
     if(pVal && *pVal != '\0')
     {
@@ -2859,94 +2859,122 @@ static void addTypeRow(char *szCatalogQuery, RS_TYPE_INFO *pTypeInfo)
     snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %d AS COLUMN_SIZE, ", pTypeInfo->iColumnSize);
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->szLiteralPrefix[0] != '\0')
+    if(pTypeInfo->szLiteralPrefix[0] != '\0') {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS LITERAL_PREFIX, ", pTypeInfo->szLiteralPrefix);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS LITERAL_PREFIX, ");
+	}
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->szLiteralSuffix[0] != '\0')
+    if(pTypeInfo->szLiteralSuffix[0] != '\0') {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS LITERAL_SUFFIX, ", pTypeInfo->szLiteralSuffix);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS LITERAL_SUFFIX, ");
+	}
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->szCreateParams[0] != '\0')
+    if(pTypeInfo->szCreateParams[0] != '\0') {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS CREATE_PARAMS, ", pTypeInfo->szCreateParams);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS CREATE_PARAMS, ");
+	}
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->hNullable != SQL_NULL_DATA)
+    if(pTypeInfo->hNullable != SQL_NULL_DATA) {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %hd AS NULLABLE, ", pTypeInfo->hNullable);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS NULLABLE, ");
+	}
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->iCaseSensitive != SQL_NULL_DATA)
+    if(pTypeInfo->iCaseSensitive != SQL_NULL_DATA) {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %d AS CASE_SENSITIVE, ", pTypeInfo->iCaseSensitive);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS CASE_SENSITIVE, ");
+	}
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->iSearchable != SQL_NULL_DATA)
+    if(pTypeInfo->iSearchable != SQL_NULL_DATA) {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %d AS SEARCHABLE, ", pTypeInfo->iSearchable);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS SEARCHABLE, ");
+	}
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->iUnsigned != SQL_NULL_DATA)
+    if(pTypeInfo->iUnsigned != SQL_NULL_DATA) {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %d AS UNSIGNED_ATTRIBUTE, ", pTypeInfo->iUnsigned);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS UNSIGNED_ATTRIBUTE, ");
+	}
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->iFixedPrecScale != SQL_NULL_DATA)
+    if(pTypeInfo->iFixedPrecScale != SQL_NULL_DATA) {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %d AS FIXED_PREC_SCALE, ", pTypeInfo->iFixedPrecScale);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS FIXED_PREC_SCALE, ");
+	}
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->iAutoInc != SQL_NULL_DATA)
+    if(pTypeInfo->iAutoInc != SQL_NULL_DATA) {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %d AS AUTO_UNIQUE, ", pTypeInfo->iAutoInc);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS AUTO_UNIQUE, ");
+	}
 
 	len = strlen(szCatalogQuery);
     snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS LOCAL_TYPE_NAME, ", pTypeInfo->szLocalTypeName);
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->hMinScale != SQL_NULL_DATA)
+    if(pTypeInfo->hMinScale != SQL_NULL_DATA) {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %hd AS MINIMUM_SCALE, ", pTypeInfo->hMinScale);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS MINIMUM_SCALE, ");
+	}
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->hMaxScale != SQL_NULL_DATA)
+    if(pTypeInfo->hMaxScale != SQL_NULL_DATA) {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %hd AS MAXIMUM_SCALE, ", pTypeInfo->hMaxScale);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS MAXIMUM_SCALE, ");
+	}
 
 	len = strlen(szCatalogQuery);
     snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %hd AS SQL_DATA_TYPE, ", pTypeInfo->hSqlDataType);
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->hSqlDateTimeSub != SQL_NULL_DATA)
+    if(pTypeInfo->hSqlDateTimeSub != SQL_NULL_DATA) {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %hd AS SQL_DATETIME_SUB, ", pTypeInfo->hSqlDateTimeSub);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS SQL_DATETIME_SUB, ");
+	}
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->iNumPrexRadix != SQL_NULL_DATA)
+    if(pTypeInfo->iNumPrexRadix != SQL_NULL_DATA) {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %d AS NUM_PREC_RADIX, ", pTypeInfo->iNumPrexRadix);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS NUM_PREC_RADIX, ");
+	}
 
 	len = strlen(szCatalogQuery);
-    if(pTypeInfo->iIntervalPrecision != SQL_NULL_DATA)
+    if(pTypeInfo->iIntervalPrecision != SQL_NULL_DATA) {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %d AS INTERVAL_PRECISION ", pTypeInfo->iIntervalPrecision);
-    else
+	}
+    else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS INTERVAL_PRECISION ");
+	}
 }
 
 /*====================================================================================================================================================*/
@@ -4650,10 +4678,10 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 
 /*====================================================================================================================================================*/
 
-char *escapedFilterCondition(char *pName, short cbName)
+char *escapedFilterCondition(const char *pName, short cbName)
 {
 	char *pEscapedName = (char *)rs_calloc(cbName * 2, sizeof(char));
-	char *pSrc = pName;
+	const char *pSrc = pName;
 	char *pDest = pEscapedName;
 
 	while (*pSrc)

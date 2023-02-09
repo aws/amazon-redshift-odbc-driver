@@ -139,7 +139,7 @@ void closeTraceFile()
 
 /*====================================================================================================================================================*/
 
-void traceError(char *fmt,...)
+void traceError(const char *fmt,...)
 {
     if(IS_TRACE_LEVEL_ERROR())
     {
@@ -149,7 +149,7 @@ void traceError(char *fmt,...)
 
 /*====================================================================================================================================================*/
 
-void traceAPICall(char *fmt,...)
+void traceAPICall(const char *fmt,...)
 {
     if(IS_TRACE_LEVEL_API_CALL())
     {
@@ -172,7 +172,7 @@ void traceAPICall(char *fmt,...)
 
 /*====================================================================================================================================================*/
 
-void traceArg(char *fmt,...)
+void traceArg(const char *fmt,...)
 {
     if(IS_TRACE_LEVEL_API_CALL())
     {
@@ -182,7 +182,7 @@ void traceArg(char *fmt,...)
 
 /*====================================================================================================================================================*/
 
-void traceArgVal(char *fmt,...)
+void traceArgVal(const char *fmt,...)
 {
     if(IS_TRACE_LEVEL_API_CALL())
     {
@@ -192,7 +192,7 @@ void traceArgVal(char *fmt,...)
 
 /*====================================================================================================================================================*/
 
-void traceInfo(char *fmt,...)
+void traceInfo(const char *fmt,...)
 {
     if(IS_TRACE_LEVEL_INFO())
     {
@@ -202,7 +202,7 @@ void traceInfo(char *fmt,...)
 
 /*====================================================================================================================================================*/
 
-void traceDebug(char *fmt,...)
+void traceDebug(const char *fmt,...)
 {
     if(IS_TRACE_LEVEL_DEBUG())
     {
@@ -212,7 +212,7 @@ void traceDebug(char *fmt,...)
 
 /*====================================================================================================================================================*/
 
-void traceDebugWithArgList(char *fmt, va_list args)
+void traceDebugWithArgList(const char *fmt, va_list args)
 {
     if(IS_TRACE_LEVEL_DEBUG())
     {
@@ -222,7 +222,7 @@ void traceDebugWithArgList(char *fmt, va_list args)
 
 /*====================================================================================================================================================*/
 
-void traceHandle(char *pArgName, SQLHANDLE handle)
+void traceHandle(const char *pArgName, SQLHANDLE handle)
 {
     if (handle == NULL)    
         traceArg("\t%s=NULL",pArgName);
@@ -239,7 +239,7 @@ void traceHandle(char *pArgName, SQLHANDLE handle)
 
 /*====================================================================================================================================================*/
 
-void tracePointer(char *var, void *ptr)
+void tracePointer(const char *var, void *ptr)
 {
     if (ptr == NULL)    
         traceArg("\t%s=NULL",var);
@@ -331,7 +331,7 @@ void traceClosingBracket()
 
 /*====================================================================================================================================================*/
 
-void traceStrValWithSmallLen(char *pArgName, char *pVal, SQLSMALLINT cbLen)
+void traceStrValWithSmallLen(const char *pArgName, const char *pVal, SQLSMALLINT cbLen)
 {
     if(pVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -353,7 +353,7 @@ void traceStrValWithSmallLen(char *pArgName, char *pVal, SQLSMALLINT cbLen)
 
 /*====================================================================================================================================================*/
 
-void traceStrValWithLargeLen(char *pArgName, char *pVal, SQLINTEGER cbLen)
+void traceStrValWithLargeLen(const char *pArgName, const char *pVal, SQLINTEGER cbLen)
 {
     if(pVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -375,7 +375,7 @@ void traceStrValWithLargeLen(char *pArgName, char *pVal, SQLINTEGER cbLen)
 
 /*====================================================================================================================================================*/
 
-void traceLongLongPtrVal(char *pArgName, long long*pllVal)
+void traceLongLongPtrVal(const char *pArgName, long long*pllVal)
 {
     if(pllVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -385,7 +385,7 @@ void traceLongLongPtrVal(char *pArgName, long long*pllVal)
 
 /*====================================================================================================================================================*/
 
-void traceIntPtrVal(char *pArgName, int *piVal)
+void traceIntPtrVal(const char *pArgName, int *piVal)
 {
     if(piVal == NULL)
         traceArg("\t%s=NULL",pArgName);
@@ -395,7 +395,7 @@ void traceIntPtrVal(char *pArgName, int *piVal)
 
 /*====================================================================================================================================================*/
 
-void traceLongPtrVal(char *pArgName, long *plVal)
+void traceLongPtrVal(const char *pArgName, long *plVal)
 {
     if(plVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -405,7 +405,7 @@ void traceLongPtrVal(char *pArgName, long *plVal)
 
 /*====================================================================================================================================================*/
 
-void traceShortPtrVal(char *pArgName, short *phVal)
+void traceShortPtrVal(const char *pArgName, short *phVal)
 {
     if(phVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -415,7 +415,7 @@ void traceShortPtrVal(char *pArgName, short *phVal)
 
 /*====================================================================================================================================================*/
 
-void traceFloatPtrVal(char *pArgName, float *pfVal)
+void traceFloatPtrVal(const char *pArgName, float *pfVal)
 {
     if(pfVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -425,7 +425,7 @@ void traceFloatPtrVal(char *pArgName, float *pfVal)
 
 /*====================================================================================================================================================*/
 
-void traceDoublePtrVal(char *pArgName, double *pdVal)
+void traceDoublePtrVal(const char *pArgName, double *pdVal)
 {
     if(pdVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -435,7 +435,7 @@ void traceDoublePtrVal(char *pArgName, double *pdVal)
 
 /*====================================================================================================================================================*/
 
-void traceBitPtrVal(char *pArgName, char *pbVal)
+void traceBitPtrVal(const char *pArgName, char *pbVal)
 {
     if(pbVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -445,7 +445,7 @@ void traceBitPtrVal(char *pArgName, char *pbVal)
 
 /*====================================================================================================================================================*/
 
-void traceDatePtrVal(char *pArgName, DATE_STRUCT *pdtVal)
+void traceDatePtrVal(const char *pArgName, DATE_STRUCT *pdtVal)
 {
     if(pdtVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -457,7 +457,7 @@ void traceDatePtrVal(char *pArgName, DATE_STRUCT *pdtVal)
 
 /*====================================================================================================================================================*/
 
-void traceTimeStampPtrVal(char *pArgName, TIMESTAMP_STRUCT *ptsVal)
+void traceTimeStampPtrVal(const char *pArgName, TIMESTAMP_STRUCT *ptsVal)
 {
     if(ptsVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -471,7 +471,7 @@ void traceTimeStampPtrVal(char *pArgName, TIMESTAMP_STRUCT *ptsVal)
 
 /*====================================================================================================================================================*/
 
-void traceTimePtrVal(char *pArgName, TIME_STRUCT *ptVal)
+void traceTimePtrVal(const char *pArgName, TIME_STRUCT *ptVal)
 {
     if(ptVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -483,7 +483,7 @@ void traceTimePtrVal(char *pArgName, TIME_STRUCT *ptVal)
 
 /*====================================================================================================================================================*/
 
-void traceNumericPtrVal(char *pArgName, SQL_NUMERIC_STRUCT *pnVal)
+void traceNumericPtrVal(const char *pArgName, SQL_NUMERIC_STRUCT *pnVal)
 {
     if(pnVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -500,7 +500,7 @@ void traceNumericPtrVal(char *pArgName, SQL_NUMERIC_STRUCT *pnVal)
 
 /*====================================================================================================================================================*/
 
-void traceStrSmallLen(char *pArgName, SQLSMALLINT cbLen)
+void traceStrSmallLen(const char *pArgName, SQLSMALLINT cbLen)
 {
     if (cbLen == SQL_NULL_DATA) 
         traceArg("\t%s=%s",pArgName,"SQL_NULL_DATA");
@@ -513,7 +513,7 @@ void traceStrSmallLen(char *pArgName, SQLSMALLINT cbLen)
 
 /*====================================================================================================================================================*/
 
-void traceStrLargeLen(char *pArgName, SQLINTEGER cbLen)
+void traceStrLargeLen(const char *pArgName, SQLINTEGER cbLen)
 {
     if (cbLen == SQL_NULL_DATA) 
         traceArg("\t%s=%s",pArgName,"SQL_NULL_DATA");
@@ -526,7 +526,7 @@ void traceStrLargeLen(char *pArgName, SQLINTEGER cbLen)
 
 /*====================================================================================================================================================*/
 
-void traceStrOutSmallLen(char *pArgName, SQLSMALLINT *pcbLen)
+void traceStrOutSmallLen(const char *pArgName, SQLSMALLINT *pcbLen)
 {
     if(pcbLen)
     {
@@ -544,7 +544,7 @@ void traceStrOutSmallLen(char *pArgName, SQLSMALLINT *pcbLen)
 
 /*====================================================================================================================================================*/
 
-void traceStrOutLargeLen(char *pArgName, SQLINTEGER *pcbLen)
+void traceStrOutLargeLen(const char *pArgName, SQLINTEGER *pcbLen)
 {
     if(pcbLen)
     {
@@ -1932,7 +1932,7 @@ void traceBulkOperationOption(SQLSMALLINT hOperation)
 
 /*====================================================================================================================================================*/
 
-void traceCType(char *pArgName, SQLSMALLINT hCType)
+void traceCType(const char *pArgName, SQLSMALLINT hCType)
 {
     switch(hCType) 
     {
@@ -2016,7 +2016,7 @@ void traceCType(char *pArgName, SQLSMALLINT hCType)
 
 /*====================================================================================================================================================*/
 
-void traceSQLType(char *pArgName,SQLSMALLINT hSQLType)
+void traceSQLType(const char *pArgName,SQLSMALLINT hSQLType)
 {
     switch(hSQLType) 
     {
@@ -2088,7 +2088,7 @@ void traceSQLType(char *pArgName,SQLSMALLINT hSQLType)
 
 /*====================================================================================================================================================*/
 
-void traceNullableOutput(char *pArgName,SQLSMALLINT *pNullable)
+void traceNullableOutput(const char *pArgName,SQLSMALLINT *pNullable)
 {
     if(pNullable) 
     {
@@ -2114,56 +2114,56 @@ void traceNullableOutput(char *pArgName,SQLSMALLINT *pNullable)
 
 /*====================================================================================================================================================*/
 
-void traceLongLongVal(char *pArgName,long long llVal)
+void traceLongLongVal(const char *pArgName,long long llVal)
 {
     traceArg("\t%s=0x%llx",pArgName,llVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceLongVal(char *pArgName,long lVal)
+void traceLongVal(const char *pArgName,long lVal)
 {
     traceArg("\t%s=0x%lx",pArgName,lVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceIntVal(char *pArgName,int iVal)
+void traceIntVal(const char *pArgName,int iVal)
 {
     traceArg("\t%s=0x%x",pArgName,iVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceShortVal(char *pArgName,short hVal)
+void traceShortVal(const char *pArgName,short hVal)
 {
     traceArg("\t%s=%hd",pArgName,hVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceFloatVal(char *pArgName,float fVal)
+void traceFloatVal(const char *pArgName,float fVal)
 {
     traceArg("\t%s=%f",pArgName,fVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceDoubleVal(char *pArgName,double dVal)
+void traceDoubleVal(const char *pArgName,double dVal)
 {
     traceArg("\t%s=%g",pArgName,dVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceBitVal(char *pArgName,char bVal)
+void traceBitVal(const char *pArgName,char bVal)
 {
     traceArg("\t%s=%d",pArgName,(int)bVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceFieldIdentifier(char *pArgName, SQLUSMALLINT hFieldIdentifier)
+void traceFieldIdentifier(const char *pArgName, SQLUSMALLINT hFieldIdentifier)
 {
     switch(hFieldIdentifier)
     {
@@ -2222,7 +2222,7 @@ void traceFieldIdentifier(char *pArgName, SQLUSMALLINT hFieldIdentifier)
 
 /*====================================================================================================================================================*/
 
-void traceEnvAttr(char *pArgName, SQLINTEGER iAttribute)
+void traceEnvAttr(const char *pArgName, SQLINTEGER iAttribute)
 {
     switch(iAttribute)
     {
@@ -2236,14 +2236,14 @@ void traceEnvAttr(char *pArgName, SQLINTEGER iAttribute)
 
 /*====================================================================================================================================================*/
 
-void traceEnvAttrVal(char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen)
+void traceEnvAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen)
 {
     traceLongVal(pArgName, (long)pVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceConnectAttr(char *pArgName, SQLINTEGER iAttribute)
+void traceConnectAttr(const char *pArgName, SQLINTEGER iAttribute)
 {
     switch(iAttribute)
     {
@@ -2270,7 +2270,7 @@ void traceConnectAttr(char *pArgName, SQLINTEGER iAttribute)
 
 /*====================================================================================================================================================*/
 
-void traceConnectAttrVal(char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal)
+void traceConnectAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal)
 {
     if(iAttribute == SQL_ATTR_CURRENT_CATALOG
         || iAttribute == SQL_ATTR_TRACEFILE
@@ -2292,7 +2292,7 @@ void traceConnectAttrVal(char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, 
 
 /*====================================================================================================================================================*/
 
-void traceStmtAttr(char *pArgName, SQLINTEGER iAttribute)
+void traceStmtAttr(const char *pArgName, SQLINTEGER iAttribute)
 {
     switch(iAttribute)
     {
@@ -2352,7 +2352,7 @@ void traceStmtAttr(char *pArgName, SQLINTEGER iAttribute)
 
 /*====================================================================================================================================================*/
 
-void traceStmtAttrVal(char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal)
+void traceStmtAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal)
 {
     if(iAttribute == SQL_ATTR_CURRENT_CATALOG
         || iAttribute == SQL_ATTR_TRACEFILE
@@ -2374,7 +2374,7 @@ void traceStmtAttrVal(char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQL
 
 /*====================================================================================================================================================*/
 
-void traceWStrValWithSmallLen(char *pArgName, SQLWCHAR *pwVal, SQLSMALLINT cchLen)
+void traceWStrValWithSmallLen(const char *pArgName, SQLWCHAR *pwVal, SQLSMALLINT cchLen)
 {
     if(pwVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -2417,7 +2417,7 @@ void traceWStrValWithSmallLen(char *pArgName, SQLWCHAR *pwVal, SQLSMALLINT cchLe
 
 /*====================================================================================================================================================*/
 
-void traceWStrValWithLargeLen(char *pArgName, SQLWCHAR *pwVal, SQLINTEGER cchLen)
+void traceWStrValWithLargeLen(const char *pArgName, SQLWCHAR *pwVal, SQLINTEGER cchLen)
 {
     if(pwVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -2461,7 +2461,7 @@ void traceWStrValWithLargeLen(char *pArgName, SQLWCHAR *pwVal, SQLINTEGER cchLen
 
 /*====================================================================================================================================================*/
 
-void traceDriverCompletion(char *pArgName, SQLUSMALLINT hDriverCompletion)
+void traceDriverCompletion(const char *pArgName, SQLUSMALLINT hDriverCompletion)
 {
     switch (hDriverCompletion) 
     {
@@ -2485,7 +2485,7 @@ void traceDriverCompletion(char *pArgName, SQLUSMALLINT hDriverCompletion)
 
 /*====================================================================================================================================================*/
 
-void traceIdenTypeSpecialColumns(char *pArgName, SQLUSMALLINT   hIdenType)
+void traceIdenTypeSpecialColumns(const char *pArgName, SQLUSMALLINT   hIdenType)
 {
     switch (hIdenType)
     {
@@ -2503,7 +2503,7 @@ void traceIdenTypeSpecialColumns(char *pArgName, SQLUSMALLINT   hIdenType)
 
 /*====================================================================================================================================================*/
 
-void traceScopeSpecialColumns(char *pArgName, SQLUSMALLINT   hScope)
+void traceScopeSpecialColumns(const char *pArgName, SQLUSMALLINT   hScope)
 {
     switch (hScope)
     {
@@ -2524,7 +2524,7 @@ void traceScopeSpecialColumns(char *pArgName, SQLUSMALLINT   hScope)
 
 /*====================================================================================================================================================*/
 
-void traceUniqueStatistics(char *pArgName, SQLUSMALLINT hUnique)
+void traceUniqueStatistics(const char *pArgName, SQLUSMALLINT hUnique)
 {
     switch(hUnique)
     {
@@ -2542,7 +2542,7 @@ void traceUniqueStatistics(char *pArgName, SQLUSMALLINT hUnique)
 
 /*====================================================================================================================================================*/
 
-void traceReservedStatistics(char *pArgName, SQLUSMALLINT hReserved)
+void traceReservedStatistics(const char *pArgName, SQLUSMALLINT hReserved)
 {
     switch(hReserved)
     {
@@ -2560,7 +2560,7 @@ void traceReservedStatistics(char *pArgName, SQLUSMALLINT hReserved)
 
 /*====================================================================================================================================================*/
 
-void traceData(char *pArgName, SQLSMALLINT hType, SQLPOINTER pValue, SQLLEN cbLen)
+void traceData(const char *pArgName, SQLSMALLINT hType, SQLPOINTER pValue, SQLLEN cbLen)
 {
     switch(hType)
     {
@@ -7230,7 +7230,7 @@ void tracePasswordConnectString(char *var,char *szConnStr, SQLSMALLINT  cbConnSt
 {
     if (!szConnStr || cbConnStr < 0) {
         return;
-                    }
+    }
     std::string pStr;
     std::string szKeywords[] = { "Password", "PWD"};
     for (auto& kv : parseConnectionString(std::string(szConnStr, cbConnStr)))
@@ -7240,7 +7240,7 @@ void tracePasswordConnectString(char *var,char *szConnStr, SQLSMALLINT  cbConnSt
         for (auto& pwd : szKeywords) {
             if (isStrNoCaseEequal(key, pwd)) {
                 value = std::string(value.size(), '*');
-                }
+            }
         }
         pStr += key + "=" + value + ";";
     }

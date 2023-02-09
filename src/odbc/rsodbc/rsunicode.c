@@ -160,7 +160,7 @@ size_t wchar_to_utf8(WCHAR *wszStr,size_t cchLen,char *szStr,size_t cbLen)
 //---------------------------------------------------------------------------------------------------------igarish
 // Convert UTF-8 to WCHAR.
 //
-size_t utf8_to_wchar(char *szStr,size_t cbLen,WCHAR *wszStr,size_t cchLen)
+size_t utf8_to_wchar(const char *szStr,size_t cbLen,WCHAR *wszStr,size_t cchLen)
 {
     size_t len =  0;
     
@@ -272,7 +272,7 @@ size_t calculate_utf8_len(WCHAR* wszStr, size_t cchLen)
 //---------------------------------------------------------------------------------------------------------igarish
 // Calculate WCHAR len.
 //
-size_t calculate_wchar_len(char* szStr, size_t cbLen, size_t *pcchLen)
+size_t calculate_wchar_len(const char* szStr, size_t cbLen, size_t *pcchLen)
 {
     size_t len;
 
@@ -392,10 +392,10 @@ int unix_wchar_to_utf8(WCHAR *wszStr, int cchLen, char *szStr, int cbLen)
 //---------------------------------------------------------------------------------------------------------igarish
 // Calculate WCHAR len on Linux.
 //
-int unix_utf8_to_wchar_len(char *szStr, int cbLen)
+int unix_utf8_to_wchar_len(const char *szStr, int cbLen)
 {
     int iLen;
-    char *pEnd = szStr + cbLen;
+    const char *pEnd = szStr + cbLen;
 
     for (iLen = 0; szStr < pEnd; iLen++)
     {
@@ -471,11 +471,11 @@ int unix_utf8_to_wchar_len(char *szStr, int cbLen)
 //---------------------------------------------------------------------------------------------------------igarish
 // Convert UTF-8 to WCHAR on Linux.
 //
-int unix_utf8_to_wchar(char *szStr, int cbLen, WCHAR *wszStr, int cchLen)
+int unix_utf8_to_wchar(const char *szStr, int cbLen, WCHAR *wszStr, int cchLen)
 {
     int iLen, iCount;
     int wch;
-    char *pEnd = szStr + cbLen;
+    const char *pEnd = szStr + cbLen;
 
     if (!cchLen)
         return unix_utf8_to_wchar_len(szStr, cbLen);
@@ -568,4 +568,4 @@ end:
     return cchLen - iCount;
 }
 
-#endif // LINUX 
+#endif // LINUX

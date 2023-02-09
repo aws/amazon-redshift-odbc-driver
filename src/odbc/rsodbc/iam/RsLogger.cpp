@@ -1,7 +1,9 @@
 #include "RsLogger.h"
+#include <rstrace.h>
 #include <stdarg.h>
 
-void traceDebugWithArgList(char *fmt, va_list args);
+// Deprecated
+// void traceDebugWithArgList(char *fmt, va_list args);
 
 void RsLogger::log(char *fmt,...)
 {
