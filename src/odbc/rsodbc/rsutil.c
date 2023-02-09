@@ -14,6 +14,8 @@
 #include "rsini.h"
 #include "rsexecute.h"
 #include "rsmin.h"
+#include <algorithm>
+#include <vector>
 
 #ifdef WIN32
 #include <winsock.h>
@@ -534,6 +536,28 @@ void releaseGlobals()
 //---------------------------------------------------------------------------------------------------------igarish
 // Trim leading and trailing white spaces.
 //
+const char* WHITE_SPACES = " \t\n\r\f\v";
+
+// trim from end of string (right)
+std::string& rtrim(std::string& s)
+{
+    s.erase(s.find_last_not_of(WHITE_SPACES) + 1);
+    return s;
+}
+
+// trim from beginning of string (left)
+std::string& ltrim(std::string& s)
+{
+    s.erase(0, s.find_first_not_of(WHITE_SPACES));
+    return s;
+}
+
+// trim from both ends of string (right then left)
+std::string& trim(std::string& s)
+{
+    return ltrim(rtrim(s));
+}
+
 char *trim_whitespaces(char *str) 
 { 
   char *end;
@@ -12229,6 +12253,175 @@ long long getInt64FromBinary(char *pColData, int idx)
 		+ ((long long)(pColData[idx + 5] & 255) << 16)
 		+ ((long long)(pColData[idx + 6] & 255) << 8)
 		+ (pColData[idx + 7] & 255);
+}
+
+StringMap createCaseInsensitiveMap() {
+  static auto comp = [](std::string stringA, std::string stringB) {
+    transform(stringA.begin(), stringA.end(), stringA.begin(), toupper);
+    transform(stringB.begin(), stringB.end(), stringB.begin(), toupper);
+    return stringA < stringB;
+  };
+  return StringMap(comp);
+}
+
+StringMap parseConnectionString(const std::string &connStr) {
+  static std::map<std::string, StringMap> cache;
+  if (auto it = cache.find(connStr); it != cache.end()) {
+     return it->second;
+  }
+  StringMap res = createCaseInsensitiveMap();
+  auto IsWstrWhitespace = [](const char in_char) -> bool {
+    switch (in_char) {
+      case ' ':
+      case '\v':
+      case '\n':
+      case '\t':
+      case '\r':
+      case '\f': {
+        return true;
+      }
+    }
+    return false;
+  };  // end of IsWstrWhitespace function
+
+  auto SkipWhitespace = [&IsWstrWhitespace](const char *&p) -> void {
+    while (IsWstrWhitespace(*p)) {
+      ++p;
+    }
+  };  // end of SkipWhitespace function
+
+  const std::string DRIVER_STR("DRIVER");
+  const std::string DSN_STR("DSN");
+  const char *currentPos = connStr.c_str();
+  const char *keyIndex = NULL;
+  uint16_t keyLength = 0;
+  const char *usrInputValueIndex = NULL;
+  uint16_t usrInputValueLength = 0;
+  bool driverOrDSNFound = false;
+  bool isDriverFirst = false;
+
+  std::vector<char> valueBuff;  // kept for odbc1.x compatibility
+  valueBuff.reserve(connStr.length() + 1);
+
+  // Main while loop
+  // Scan through the string.
+  while ('\0' != *currentPos) {
+    // Skip leading white space.
+    SkipWhitespace(currentPos);
+
+    if (';' == *currentPos) {
+      // Empty key/value pair, skip it.
+      ++currentPos;
+      continue;
+    }
+
+    // Initialize key information.
+    keyIndex = currentPos;
+    keyLength = 0;
+
+    // Measure key.
+    while (('\0' != *currentPos) && ('=' != *currentPos)) {
+      keyLength++;
+      currentPos++;
+    }
+
+    // Check for an error.
+    if (('\0' == *currentPos) || (0 == keyLength)) {
+      printf(
+          "Error parsing Connectionstring: Key parsing finished too "
+          "early\n");
+      return StringMap();
+    }
+
+    // Skip = sign.
+    currentPos++;
+
+    // Skip white space before value
+    SkipWhitespace(currentPos);
+
+    // Copy the key and value and convert to upper case.
+    std::string keyStr(keyIndex, keyLength);
+    trim(keyStr);
+
+    if (!driverOrDSNFound) {
+      if (keyStr == DRIVER_STR) {
+        driverOrDSNFound = true;
+        isDriverFirst = true;
+      } else if (keyStr == DSN_STR) {
+        driverOrDSNFound = true;
+        isDriverFirst = false;
+      }
+    }
+
+    // Initialize value information.
+    usrInputValueIndex = currentPos;
+
+    char charToLook = ';';
+    usrInputValueLength = 0;
+    valueBuff.clear();
+
+    if ('{' == (*currentPos)) {
+      charToLook = '}';
+      ++usrInputValueLength;
+      ++currentPos;
+    }
+
+    // Measure value.
+    // There may be embedded blanks, allow them here, and
+    // count them as part of the value length.
+    while ('\0' != *currentPos) {
+      if (('}' == charToLook) && ('}' == *currentPos) &&
+          ('}' == *(currentPos + 1))) {
+        valueBuff.push_back('}');
+        currentPos += 2;
+        usrInputValueLength += 2;
+      } else if (charToLook == *currentPos) {
+        break;
+      } else {
+        valueBuff.push_back(*currentPos);
+        ++currentPos;
+        ++usrInputValueLength;
+      }
+    }
+
+    if ('}' == charToLook) {
+      if ('\0' == *currentPos) {
+        printf(
+            "Error parsing Connectionstring: Braced value parsing "
+            "finished too early\n");
+        return StringMap();
+      }
+      ++usrInputValueLength;
+      ++currentPos;
+    }
+    valueBuff.push_back('\0');
+
+    // Save the key/value pair.
+    /*
+    To comply with Windows Driver Manager's behavior,
+    the last repetition counts as the final value of an attribute.
+    if (res.count(keyStr) == 0)
+    */
+    {
+      std::string valueVariant(valueBuff.data(),
+                               valueBuff.size() - 1);  // processed version
+      res[keyStr] = trim(valueVariant);
+      // std::cout << keyStr << " -> " << valueVariant << std::endl;
+    }
+
+    // Skip whitespace.
+    SkipWhitespace(currentPos);
+
+    // Skip a semi-colon.
+    if (';' == *currentPos) {
+      currentPos++;
+    }
+
+    // Skip whitespace for early detection of EOL
+    SkipWhitespace(currentPos);
+  }  // mail while loop
+  cache[connStr] = res;
+  return res;
 }
 
 /*====================================================================================================================================================*/

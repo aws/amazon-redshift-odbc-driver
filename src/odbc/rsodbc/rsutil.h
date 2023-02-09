@@ -15,6 +15,9 @@
 #include <sql.h>
 #include <sqlext.h>
 #include <stdlib.h>
+#include <map>
+#include <functional>
+#include <algorithm>
 
 //#include <strsafe.h>
 
@@ -237,6 +240,11 @@ void releaseGlobals();
 void initODBC(HMODULE hModule);
 void uninitODBC();
 
+std::string& rtrim(std::string& s);
+// trim from beginning of string (left)
+std::string& ltrim(std::string& s);
+// trim from both ends of string (right then left)
+std::string& trim(std::string& s);
 char *trim_whitespaces(char *str);
 
 char *appendStr(char *pStrOut, size_t *pcbStrOut,char *szStrIn);
@@ -464,7 +472,26 @@ int time2tm(long long time, struct pg_tm* tm, long long* fsec);
 
 int getInt32FromBinary(char *pColData, int idx);
 long long getInt64FromBinary(char *pColData, int idx);
-
 #ifdef __cplusplus
+}
+
+
+typedef std::map<std::string, std::string,
+                 std::function<bool(const std::string &, const std::string &)>>
+    StringMap;
+StringMap createCaseInsensitiveMap();
+StringMap parseConnectionString(const std::string &connStr);
+
+/*
+Case insensitive string comparison.
+Note: Not unicode compatible
+*/
+inline bool isStrNoCaseEequal(const std::string& a, const std::string& b)
+{
+    return std::equal(a.begin(), a.end(),
+                      b.begin(), b.end(),
+                      [](char a, char b) {
+                          return tolower(a) == tolower(b);
+                      });
 }
 #endif /* C++ */

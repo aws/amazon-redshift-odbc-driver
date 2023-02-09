@@ -15,7 +15,12 @@
 
 #include "RsIamEntry.h"
 #include "RsErrorException.h"
+#include <aws/core/utils/StringUtils.h>
+#include<algorithm>
 
+#include <cstdio>
+#include <iostream>
+#include <map>
 #ifdef WIN32
 #include "resource.h"
 #endif
@@ -1970,716 +1975,371 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
       pHttpsProps = pConnectProps->pHttpsProps;
     }
 	if (!pConnectProps->pTcpProxyProps) {
-		pConnectProps->pTcpProxyProps = (RS_TCP_PROXY_CONN_PROPS_INFO *)rs_calloc(1, sizeof(RS_TCP_PROXY_CONN_PROPS_INFO));
+      pConnectProps->pTcpProxyProps = (RS_TCP_PROXY_CONN_PROPS_INFO *)rs_calloc(
+          1, sizeof(RS_TCP_PROXY_CONN_PROPS_INFO));
 		pTcpProxyProps = pConnectProps->pTcpProxyProps;
 	}
+    const std::string DRIVER_STR("DRIVER");
+    const std::string DSN_STR("DSN");
 
-
-    if(szConnStrIn)
-    {
-        int len = (int)((INT_LEN(cbConnStrIn) == SQL_NTS) ? strlen(szConnStrIn) : cbConnStrIn);
-        char *buf = (char *)rs_malloc(len + 1);
-
-        if(buf)
-        {
-            char       *pname;
-            char       *pval;
-            char       *cp;
-            int           equalFound;
-
-            memcpy(buf, szConnStrIn, len);
-            buf[len] = '\0';
-
-            cp = buf;
-
-            while (*cp)
-            {
-                equalFound = FALSE;
-
-                /* Skip blanks before the parameter name */
-                if (isspace((unsigned char) *cp))
-                {
-                    cp++;
-                    continue;
-                }
-
-                /* Get the parameter name */
-                pname = cp;
-                while (*cp)
-                {
-                    if( *cp == ';')
-                    {
-                        *cp++ = '\0';
-                        break;
-                    }
-
-                    if (*cp == '=')
-                    {
-                        *cp++ = '\0';
-                        equalFound = TRUE;
-                        break;
-                    }
-                    cp++;
-                }
-
-                // If there are ;; and no = in between skip it.
-                if(!equalFound)
-                    continue;
-
-                /* Skip blanks after the '=' */
-                while (*cp)
-                {
-                    if (!isspace((unsigned char) *cp))
-                        break;
-                    cp++;
-                }
-
-                /* Get the parameter value */
-                pval = cp;
-
-                while (*cp)
-                {
-                    if (*cp == ';')
-                    {
-                        *cp++ = '\0';
-                        break;
-                    }
-                    cp++;
-                }
-
-                trim_whitespaces(pname);
-                trim_whitespaces(pval);
-
-                if(onlyDSN)
-                {
-                    // We are looking for only DSN first.
-                    if(_stricmp(pname, RS_DSN) == 0)
-                    {
-                        if(pConnectProps->szDSN[0] == '\0')
-                        {
+    // Internal lambda function applied to each extracted key-value
+    auto processKeyVal = [&](const char *pname, const char *pval) {
+      if (onlyDSN) {
+        // We are looking for only DSN first.
+        if (_stricmp(pname, RS_DSN) == 0) {
+          if (pConnectProps->szDSN[0] == '\0') {
                             strncpy(pConnectProps->szDSN, pval, MAX_IDEN_LEN - 1);
                             pConnectProps->szDSN[MAX_IDEN_LEN - 1] = '\0';
-                        }
-
-                        break;
-                    }
-                }
-                else
-                {
-                    /*
-                     * Store the value, if same param is not repeated.
-                     */
-                    if(_stricmp(pname, RS_HOST_NAME) == 0
-                        || _stricmp(pname, RS_HOST) == 0
-                        || _stricmp(pname, RS_SERVER) == 0
-                        )
-                    {
-                        pConnectProps->iHostNameKeyWordType = (_stricmp(pname, RS_HOST_NAME) == 0) ? LONG_NAME_KEYWORD : SHORT_NAME_KEYWORD;
-                        if(pConnectProps->szHost[0] == '\0')
-                        {
+          }
+        }
+      } else {
+        /*
+        * Store the value, if same param is not repeated.
+        */
+        if (_stricmp(pname, RS_HOST_NAME) == 0 ||
+            _stricmp(pname, RS_HOST) == 0 || _stricmp(pname, RS_SERVER) == 0) {
+          pConnectProps->iHostNameKeyWordType =
+              (_stricmp(pname, RS_HOST_NAME) == 0) ? LONG_NAME_KEYWORD
+                                                   : SHORT_NAME_KEYWORD;
+          if (pConnectProps->szHost[0] == '\0') {
                             strncpy(pConnectProps->szHost, pval, MAX_IDEN_LEN - 1);
                             pConnectProps->szHost[MAX_IDEN_LEN - 1] = '\0';
                         }
-                    }
-                    else
-                    if(_stricmp(pname, RS_PORT_NUMBER) == 0
-                        || _stricmp(pname, RS_PORT) == 0)
-                    {
-                        pConnectProps->iPortKeyWordType = (_stricmp(pname, RS_PORT_NUMBER) == 0) ? LONG_NAME_KEYWORD : SHORT_NAME_KEYWORD;
-                        if(pConnectProps->szPort[0] == '\0')
-                        {
+        } else if (_stricmp(pname, RS_PORT_NUMBER) == 0 ||
+                   _stricmp(pname, RS_PORT) == 0) {
+          pConnectProps->iPortKeyWordType =
+              (_stricmp(pname, RS_PORT_NUMBER) == 0) ? LONG_NAME_KEYWORD
+                                                     : SHORT_NAME_KEYWORD;
+          if (pConnectProps->szPort[0] == '\0') {
                             strncpy(pConnectProps->szPort, pval, MAX_IDEN_LEN - 1);
                             pConnectProps->szPort[MAX_IDEN_LEN - 1] = '\0';
                         }
-                    }
-                    else
-                    if(_stricmp(pname, RS_DATABASE) == 0
-                         || _stricmp(pname, RS_DB) == 0)
-                    {
-                        pConnectProps->iDatabaseKeyWordType = (_stricmp(pname, RS_DATABASE) == 0) ? LONG_NAME_KEYWORD : SHORT_NAME_KEYWORD;
-                        if(pConnectProps->szDatabase[0] == '\0')
-                        {
+        } else if (_stricmp(pname, RS_DATABASE) == 0 ||
+                   _stricmp(pname, RS_DB) == 0) {
+          pConnectProps->iDatabaseKeyWordType =
+              (_stricmp(pname, RS_DATABASE) == 0) ? LONG_NAME_KEYWORD
+                                                  : SHORT_NAME_KEYWORD;
+          if (pConnectProps->szDatabase[0] == '\0') {
                             strncpy(pConnectProps->szDatabase, pval, MAX_IDEN_LEN - 1);
                             pConnectProps->szDatabase[MAX_IDEN_LEN - 1] = '\0';
                         }
-                    }
-                    else
-                    if(_stricmp(pname, RS_LOGON_ID) == 0
-                        || _stricmp(pname, RS_UID) == 0)
-                    {
-                        pConnectProps->iUserKeyWordType = (_stricmp(pname, RS_LOGON_ID) == 0) ? LONG_NAME_KEYWORD : SHORT_NAME_KEYWORD;
-                        if(pConnectProps->szUser[0] == '\0')
-                        {
+        } else if (_stricmp(pname, RS_LOGON_ID) == 0 ||
+                   _stricmp(pname, RS_UID) == 0) {
+          pConnectProps->iUserKeyWordType = (_stricmp(pname, RS_LOGON_ID) == 0)
+                                                ? LONG_NAME_KEYWORD
+                                                : SHORT_NAME_KEYWORD;
+          if (pConnectProps->szUser[0] == '\0') {
                             strncpy(pConnectProps->szUser, pval, MAX_IDEN_LEN - 1);
                             pConnectProps->szUser[MAX_IDEN_LEN - 1] = '\0';
                         }
-                    }
-                    else
-                    if(_stricmp(pname, RS_PASSWORD) == 0
-                        || _stricmp(pname,RS_PWD) == 0)
-                    {
-                        pConnectProps->iPasswordKeyWordType = (_stricmp(pname, RS_PASSWORD) == 0) ? LONG_NAME_KEYWORD : SHORT_NAME_KEYWORD;
-                        if(pConnectProps->szPassword[0] == '\0')
-                        {
+        } else if (_stricmp(pname, RS_PASSWORD) == 0 ||
+                   _stricmp(pname, RS_PWD) == 0) {
+          pConnectProps->iPasswordKeyWordType =
+              (_stricmp(pname, RS_PASSWORD) == 0) ? LONG_NAME_KEYWORD
+                                                  : SHORT_NAME_KEYWORD;
+          if (pConnectProps->szPassword[0] == '\0') {
                             strncpy(pConnectProps->szPassword, pval, MAX_IDEN_LEN - 1);
                             pConnectProps->szPassword[MAX_IDEN_LEN - 1] = '\0';
                         }
-                    }
-                    else
-                    if(_stricmp(pname, RS_DSN) == 0)
-                    {
-                        if(pConnectProps->szDSN[0] == '\0')
-                        {
+        } else if (_stricmp(pname, RS_DSN) == 0) {
+          if (pConnectProps->szDSN[0] == '\0') {
                             strncpy(pConnectProps->szDSN, pval, MAX_IDEN_LEN - 1);
                             pConnectProps->szDSN[MAX_IDEN_LEN - 1] = '\0';
                         }
-                    }
-                    else
-                    if(_stricmp(pname, RS_DRIVER) == 0)
-                    {
-                        if(pConnectProps->szDriver[0] == '\0')
-                        {
+        } else if (_stricmp(pname, RS_DRIVER) == 0) {
+          if (pConnectProps->szDriver[0] == '\0') {
                             strncpy(pConnectProps->szDriver, pval, MAX_IDEN_LEN - 1);
                             pConnectProps->szDriver[MAX_IDEN_LEN - 1] = '\0';
                         }
 
 						// Read DSN-less connection info from amazon.redshiftodbc.ini
 						readCscOptionsForDsnlessConnection(pConnectProps);
-                    }
-                    else
-                    if(_stricmp(pname, RS_LOGIN_TIMEOUT) == 0
-                            || _stricmp(pname, "LT") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnAttr->iLoginTimeout);
-                    }
-/*                    else
-                    if(_stricmp(pname, RS_ENABLE_DESCRIBE_PARAM) == 0
-                            || _stricmp(pname, "EDP") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iEnableDescribeParam);
-                    } 
-                    else
-                    if(_stricmp(pname, RS_EXTENDED_COLUMN_METADATA) == 0
-                            || _stricmp(pname, "ECMD") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iExtendedColumnMetaData);
-                    } */
-                    else
-                    if(_stricmp(pname, RS_APPLICATION_USING_THREADS) == 0
-                            || _stricmp(pname, "AUT") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iApplicationUsingThreads);
-                    }
-                    else
-                    if(_stricmp(pname, RS_FETCH_REF_CURSOR) == 0
-                            || _stricmp(pname, "FRC") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iFetchRefCursor);
-                    }
-                    else
-                    if(_stricmp(pname, RS_TRANSACTION_ERROR_BEHAVIOR) == 0
-                            || _stricmp(pname, "TEB") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iTransactionErrorBehavior);
-                    }
-                    else
-                    if(_stricmp(pname, RS_CONNECTION_RETRY_COUNT) == 0
-                            || _stricmp(pname, "CRC") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iConnectionRetryCount);
-                    }
-                    else
-                    if(_stricmp(pname, RS_CONNECTION_RETRY_DELAY) == 0
-                            || _stricmp(pname, "CRD") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iConnectionRetryDelay);
-                    }
-                    else
-                    if(_stricmp(pname, RS_QUERY_TIMEOUT) == 0
-                            || _stricmp(pname, "QT") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iQueryTimeout);
-                    }
-					else
-					if (_stricmp(pname, RS_CLIENT_PROTOCOL_VERSION) == 0)
-					{
+        } else if (_stricmp(pname, RS_LOGIN_TIMEOUT) == 0 ||
+                   _stricmp(pname, "LT") == 0) {
+          sscanf(pval, "%d", &pConnAttr->iLoginTimeout);
+        } else if (_stricmp(pname, RS_APPLICATION_USING_THREADS) == 0 ||
+                 _stricmp(pname, "AUT") == 0) {
+          sscanf(pval, "%d", &pConnectProps->iApplicationUsingThreads);
+        } else if (_stricmp(pname, RS_FETCH_REF_CURSOR) == 0 ||
+                   _stricmp(pname, "FRC") == 0) {
+          sscanf(pval, "%d", &pConnectProps->iFetchRefCursor);
+        } else if (_stricmp(pname, RS_TRANSACTION_ERROR_BEHAVIOR) == 0 ||
+                   _stricmp(pname, "TEB") == 0) {
+          sscanf(pval, "%d", &pConnectProps->iTransactionErrorBehavior);
+        } else if (_stricmp(pname, RS_CONNECTION_RETRY_COUNT) == 0 ||
+                   _stricmp(pname, "CRC") == 0) {
+          sscanf(pval, "%d", &pConnectProps->iConnectionRetryCount);
+        } else if (_stricmp(pname, RS_CONNECTION_RETRY_DELAY) == 0 ||
+                   _stricmp(pname, "CRD") == 0) {
+          sscanf(pval, "%d", &pConnectProps->iConnectionRetryDelay);
+        } else if (_stricmp(pname, RS_QUERY_TIMEOUT) == 0 ||
+                   _stricmp(pname, "QT") == 0) {
+          sscanf(pval, "%d", &pConnectProps->iQueryTimeout);
+        } else if (_stricmp(pname, RS_CLIENT_PROTOCOL_VERSION) == 0) {
 						sscanf(pval, "%d", &pConnectProps->iClientProtocolVersion);
-					}
-					else
-                    if(_stricmp(pname, RS_INITIALIZATION_STRING) == 0
-                            || _stricmp(pname, "IS") == 0)
-                    {
-                        if(pConnectProps->pInitializationString == NULL)
+        } else if (_stricmp(pname, RS_INITIALIZATION_STRING) == 0 ||
+                   _stricmp(pname, "IS") == 0) {
+          if (pConnectProps->pInitializationString == NULL)
                             pConnectProps->pInitializationString = rs_strdup(pval, SQL_NTS);
-                    }
-                    else
-                    if(_stricmp(pname, RS_TRACE) == 0)
-                    {
-                        sscanf(pval,"%d",&pConnAttr->iTrace);
+        } else if (_stricmp(pname, RS_TRACE) == 0) {
+          sscanf(pval, "%d", &pConnAttr->iTrace);
 
-                        if(pConnAttr->iTrace == SQL_OPT_TRACE_ON)
+          if (pConnAttr->iTrace == SQL_OPT_TRACE_ON)
                             pConnectProps->iTraceLevel = TRACE_DEBUG;
-                        else
-                        if(pConnAttr->iTrace == SQL_OPT_TRACE_OFF)
+          else if (pConnAttr->iTrace == SQL_OPT_TRACE_OFF)
                             pConnectProps->iTraceLevel = TRACE_OFF;
-                    }
-                    else
-                    if(_stricmp(pname, RS_TRACE_FILE) == 0)
-                    {
+        } else if (_stricmp(pname, RS_TRACE_FILE) == 0) {
                         pConnAttr->pTraceFile = (char *)rs_free(pConnAttr->pTraceFile);
-                        pConnAttr->pTraceFile = rs_strdup(pval,SQL_NTS);
-                    }
-                    else
-                    if(_stricmp(pname, RS_TRACE_LEVEL) == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iTraceLevel);
+          pConnAttr->pTraceFile = rs_strdup(pval, SQL_NTS);
+        } else if (_stricmp(pname, RS_TRACE_LEVEL) == 0) {
+          sscanf(pval, "%d", &pConnectProps->iTraceLevel);
 
-                        if(pConnectProps->iTraceLevel == TRACE_DEBUG)
+          if (pConnectProps->iTraceLevel == TRACE_DEBUG)
                             pConnAttr->iTrace = SQL_OPT_TRACE_ON;
-                        else
-                        if(pConnectProps->iTraceLevel == TRACE_OFF)
+          else if (pConnectProps->iTraceLevel == TRACE_OFF)
                             pConnAttr->iTrace = SQL_OPT_TRACE_OFF;
-                    }
-                    else
-                    if(_stricmp(pname, RS_CSC_ENABLE) == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iCscEnable);
-                        if((pConnectProps->iCscEnable) && (pConnectProps->iCscEnable != 1))
+        } else if (_stricmp(pname, RS_CSC_ENABLE) == 0) {
+          sscanf(pval, "%d", &pConnectProps->iCscEnable);
+          if ((pConnectProps->iCscEnable) && (pConnectProps->iCscEnable != 1))
                             pConnectProps->iCscEnable = 0;
-                    }
-                    else
-                    if(_stricmp(pname, RS_CSC_MAX_FILE_SIZE) == 0)
-                    {
-                        sscanf(pval,"%lld",&pConnectProps->llCscMaxFileSize);
-                    }
-                    else
-                    if(_stricmp(pname, RS_CSC_PATH) == 0)
-                    {
-                        if(pval)
-                        {
-                            strncpy(pConnectProps->szCscPath, pval,MAX_PATH - 1);
+        } else if (_stricmp(pname, RS_CSC_MAX_FILE_SIZE) == 0) {
+          sscanf(pval, "%lld", &pConnectProps->llCscMaxFileSize);
+        } else if (_stricmp(pname, RS_CSC_PATH) == 0) {
+          if (pval) {
+            strncpy(pConnectProps->szCscPath, pval, MAX_PATH - 1);
                             pConnectProps->szCscPath[MAX_PATH - 1] = '\0';
                         }
-                    }
-                    else
-                    if(_stricmp(pname, RS_CSC_THRESHOLD) == 0)
-                    {
-                        sscanf(pval,"%lld",&pConnectProps->llCscThreshold);
-                    }
-                    else
-                    if(_stricmp(pname, RS_ENCRYPTION_METHOD) == 0
-                            || _stricmp(pname, "EM") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iEncryptionMethod);
-						if(pConnectProps->iEncryptionMethod == 0)
-							rs_strncpy(pConnectProps->szSslMode,"disable",sizeof(pConnectProps->szSslMode));
-                    }
-                    else
-                    if(_stricmp(pname, RS_SSL_MODE) == 0)
-                    {
-                        if(pval)
-                            strncpy(pConnectProps->szSslMode,pval,MAX_IDEN_LEN);
-                    }
-                    else
-                    if(_stricmp(pname, RS_VALIDATE_SERVER_CERTIFICATE) == 0
-                            || _stricmp(pname, "VSC") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iValidateServerCertificate);
-                    }
-                    else
-/*                    if(_stricmp(pname, RS_HOST_NAME_IN_CERTIFICATE) == 0
-                            || _stricmp(pname, "HNIC") == 0)
-                    {
-                        if(pval)
-                        {
-                            strncpy(pConnectProps->szHostNameInCertificate, pval,MAX_IDEN_LEN - 1);
-                            pConnectProps->szHostNameInCertificate[MAX_IDEN_LEN - 1] = '\0';
-                        }
-                    }
-                    else */
-                    if(_stricmp(pname, RS_TRUST_STORE) == 0
-                            || _stricmp(pname, "TS") == 0)
-                    {
-                        if(pval)
-                        {
-                            strncpy(pConnectProps->szTrustStore, pval,MAX_PATH - 1);
+        } else if (_stricmp(pname, RS_CSC_THRESHOLD) == 0) {
+          sscanf(pval, "%lld", &pConnectProps->llCscThreshold);
+        } else if (_stricmp(pname, RS_ENCRYPTION_METHOD) == 0 ||
+                   _stricmp(pname, "EM") == 0) {
+          sscanf(pval, "%d", &pConnectProps->iEncryptionMethod);
+          if (pConnectProps->iEncryptionMethod == 0)
+            rs_strncpy(pConnectProps->szSslMode, "disable",
+                       sizeof(pConnectProps->szSslMode));
+        } else if (_stricmp(pname, RS_SSL_MODE) == 0) {
+          if (pval) strncpy(pConnectProps->szSslMode, pval, MAX_IDEN_LEN);
+        } else if (_stricmp(pname, RS_VALIDATE_SERVER_CERTIFICATE) == 0 ||
+                   _stricmp(pname, "VSC") == 0) {
+          sscanf(pval, "%d", &pConnectProps->iValidateServerCertificate);
+        } else if (_stricmp(pname, RS_TRUST_STORE) == 0 ||
+                   _stricmp(pname, "TS") == 0) {
+          if (pval) {
+            strncpy(pConnectProps->szTrustStore, pval, MAX_PATH - 1);
                             pConnectProps->szTrustStore[MAX_PATH - 1] = '\0';
                         }
-                    }
-                    else
-                    if(_stricmp(pname, RS_KERBEROS_SERVICE_NAME) == 0
-                            || _stricmp(pname, "KSN") == 0)
-                    {
-                        if(pval)
-                        {
-                            strncpy(pConnectProps->szKerberosServiceName, pval,MAX_IDEN_LEN - 1);
+        } else if (_stricmp(pname, RS_KERBEROS_SERVICE_NAME) == 0 ||
+                   _stricmp(pname, "KSN") == 0) {
+          if (pval) {
+            strncpy(pConnectProps->szKerberosServiceName, pval,
+                    MAX_IDEN_LEN - 1);
                             pConnectProps->szKerberosServiceName[MAX_IDEN_LEN - 1] = '\0';
                         }
-                    }
-                    else
-                    if(_stricmp(pname, RS_STREAMING_CURSOR_ROWS) == 0
-                            || _stricmp(pname, "SCR") == 0)
-                    {
-                        sscanf(pval,"%d",&pConnectProps->iStreamingCursorRows);
-                        if(pConnectProps->iStreamingCursorRows < 0)
+        } else if (_stricmp(pname, RS_STREAMING_CURSOR_ROWS) == 0 ||
+                   _stricmp(pname, "SCR") == 0) {
+          sscanf(pval, "%d", &pConnectProps->iStreamingCursorRows);
+          if (pConnectProps->iStreamingCursorRows < 0)
                           pConnectProps->iStreamingCursorRows = 0;
-                    }
-					else
-					if (_stricmp(pname, RS_DATABASE_METADATA_CURRENT_DB_ONLY) == 0)
-					{
+        } else if (_stricmp(pname, RS_DATABASE_METADATA_CURRENT_DB_ONLY) == 0) {
 						bool bVal = convertToBoolVal(pval);
 						pConnectProps->iDatabaseMetadataCurrentDbOnly = (bVal) ? 1 : 0;
-					}
-					else
-					if (_stricmp(pname, RS_READ_ONLY) == 0)
-					{
+        } else if (_stricmp(pname, RS_READ_ONLY) == 0) {
 						bool bVal = convertToBoolVal(pval);
 						pConnectProps->iReadOnly = (bVal) ? 1 : 0;
-					}
-					else
-					if (_stricmp(pname, RS_KEEP_ALIVE) == 0)
-					{
-						if (pval)
-						{
+        } else if (_stricmp(pname, RS_KEEP_ALIVE) == 0) {
+          if (pval) {
 							strncpy(pConnectProps->szKeepAlive, pval, MAX_NUMBER_BUF_LEN - 1);
 							pConnectProps->szKeepAlive[MAX_NUMBER_BUF_LEN - 1] = '\0';
 						}
+        } else if (_stricmp(pname, RS_APPLICATION_NAME) == 0) {
+          if (pval) {
+            rs_strncpy(pConnAttr->szApplicationName, pval,
+                       sizeof(pConnAttr->szApplicationName));
 					}
-					else
-					if (_stricmp(pname, RS_APPLICATION_NAME) == 0)
-					{
-						if (pval)
-						{
-							rs_strncpy(pConnAttr->szApplicationName, pval, sizeof(pConnAttr->szApplicationName));
-						}
-					}
-					else
-					if (_stricmp(pname, RS_KEEP_ALIVE_IDLE) == 0)
-					{
-						if (pval)
-						{
-							strncpy(pConnectProps->szKeepAliveIdle, pval, MAX_NUMBER_BUF_LEN - 1);
+        } else if (_stricmp(pname, RS_KEEP_ALIVE_IDLE) == 0) {
+          if (pval) {
+            strncpy(pConnectProps->szKeepAliveIdle, pval,
+                    MAX_NUMBER_BUF_LEN - 1);
 							pConnectProps->szKeepAliveIdle[MAX_NUMBER_BUF_LEN - 1] = '\0';
 						}
-					}
-					else
-					if (_stricmp(pname, RS_KEEP_ALIVE_COUNT) == 0)
-					{
-						if (pval)
-						{
-							strncpy(pConnectProps->szKeepAliveCount, pval, MAX_NUMBER_BUF_LEN - 1);
+        } else if (_stricmp(pname, RS_KEEP_ALIVE_COUNT) == 0) {
+          if (pval) {
+            strncpy(pConnectProps->szKeepAliveCount, pval,
+                    MAX_NUMBER_BUF_LEN - 1);
 							pConnectProps->szKeepAliveCount[MAX_NUMBER_BUF_LEN - 1] = '\0';
 						}
-					}
-					else
-					if (_stricmp(pname, RS_KEEP_ALIVE_INTERVAL) == 0)
-					{
-						if (pval)
-						{
-							strncpy(pConnectProps->szKeepAliveInterval, pval, MAX_NUMBER_BUF_LEN - 1);
+        } else if (_stricmp(pname, RS_KEEP_ALIVE_INTERVAL) == 0) {
+          if (pval) {
+            strncpy(pConnectProps->szKeepAliveInterval, pval,
+                    MAX_NUMBER_BUF_LEN - 1);
 							pConnectProps->szKeepAliveInterval[MAX_NUMBER_BUF_LEN - 1] = '\0';
 						}
-					}
-					else
-					if (_stricmp(pname, RS_MIN_TLS) == 0)
-					{
-						if (pval)
-						{
+        } else if (_stricmp(pname, RS_MIN_TLS) == 0) {
+          if (pval) {
 							strncpy(pConnectProps->szMinTLS, pval, MAX_NUMBER_BUF_LEN - 1);
 							pConnectProps->szMinTLS[MAX_NUMBER_BUF_LEN - 1] = '\0';
 						}
-					}
-					else
-                    if(_stricmp(pname, RS_IAM) == 0)
-                    {
+        } else if (_stricmp(pname, RS_IAM) == 0) {
                         pConnectProps->isIAMAuth = convertToBoolVal(pval);
-                    }
-                    else
-                    if(_stricmp(pname, RS_HTTPS_PROXY_HOST) == 0)
-                    {
-                      rs_strncpy(pHttpsProps->szHttpsHost,pval,sizeof(pHttpsProps->szHttpsHost));
-                    }
-                    else
-                    if(_stricmp(pname, RS_HTTPS_PROXY_PORT) == 0)
-                    {
-                      sscanf(pval,"%d",&(pHttpsProps->iHttpsPort));
-                    }
-                    else
-                    if(_stricmp(pname, RS_HTTPS_PROXY_USER_NAME) == 0)
-                    {
-                      rs_strncpy(pHttpsProps->szHttpsUser,pval,sizeof(pHttpsProps->szHttpsUser));
-                    }
-                    else
-                    if(_stricmp(pname, RS_HTTPS_PROXY_PASSWORD) == 0)
-                    {
-                      rs_strncpy(pHttpsProps->szHttpsPassword,pval,sizeof(pHttpsProps->szHttpsPassword));
-                    }
-                    else
-                    if(_stricmp(pname, RS_IDP_USE_HTTPS_PROXY) == 0)
-                    {
+        } else if (_stricmp(pname, RS_HTTPS_PROXY_HOST) == 0) {
+          rs_strncpy(pHttpsProps->szHttpsHost, pval,
+                     sizeof(pHttpsProps->szHttpsHost));
+        } else if (_stricmp(pname, RS_HTTPS_PROXY_PORT) == 0) {
+          sscanf(pval, "%d", &(pHttpsProps->iHttpsPort));
+        } else if (_stricmp(pname, RS_HTTPS_PROXY_USER_NAME) == 0) {
+          rs_strncpy(pHttpsProps->szHttpsUser, pval,
+                     sizeof(pHttpsProps->szHttpsUser));
+        } else if (_stricmp(pname, RS_HTTPS_PROXY_PASSWORD) == 0) {
+          rs_strncpy(pHttpsProps->szHttpsPassword, pval,
+                     sizeof(pHttpsProps->szHttpsPassword));
+        } else if (_stricmp(pname, RS_IDP_USE_HTTPS_PROXY) == 0) {
                       pHttpsProps->isUseProxyForIdp = convertToBoolVal(pval);
-                    }
-                    else
-                    if(_stricmp(pname, RS_AUTH_TYPE) == 0)
-                    {
-                      rs_strncpy(pIamProps->szAuthType,pval,sizeof(pIamProps->szAuthType));
-                    }
-                    else
-                    if(_stricmp(pname, RS_CLUSTER_ID) == 0)
-                    {
-                      rs_strncpy(pIamProps->szClusterId,pval,sizeof(pIamProps->szClusterId));
-                    }
-                    else
-                    if(_stricmp(pname, RS_REGION) == 0)
-                    {
-                      rs_strncpy(pIamProps->szRegion,pval,sizeof(pIamProps->szRegion));
-                    }
-                    else
-                    if(_stricmp(pname, RS_END_POINT_URL) == 0)
-                    {
-                      rs_strncpy(pIamProps->szEndpointUrl,pval,sizeof(pIamProps->szEndpointUrl));
-                    }
-                    else
-                    if(_stricmp(pname, RS_IAM_STS_ENDPOINT_URL) == 0)
-                    {
-                      rs_strncpy(pIamProps->szStsEndpointUrl,pval,sizeof(pIamProps->szStsEndpointUrl));
-                    }
-                    else
-                    if(_stricmp(pname, RS_DB_USER) == 0)
-                    {
-                      rs_strncpy(pIamProps->szDbUser,pval,sizeof(pIamProps->szDbUser));
-                    }
-                    else
-                    if(_stricmp(pname, RS_DB_GROUPS) == 0)
-                    {
-                      rs_strncpy(pIamProps->szDbGroups,pval,sizeof(pIamProps->szDbGroups));
-                    }
-                    else
-                    if(_stricmp(pname, RS_DB_GROUPS_FILTER) == 0)
-                    {
-                      rs_strncpy(pIamProps->szDbGroupsFilter,pval,sizeof(pIamProps->szDbGroupsFilter));
-                    }
-                    else
-                    if(_stricmp(pname, RS_AUTO_CREATE) == 0)
-                    {
+        } else if (_stricmp(pname, RS_AUTH_TYPE) == 0) {
+          rs_strncpy(pIamProps->szAuthType, pval,
+                     sizeof(pIamProps->szAuthType));
+        } else if (_stricmp(pname, RS_CLUSTER_ID) == 0) {
+          rs_strncpy(pIamProps->szClusterId, pval,
+                     sizeof(pIamProps->szClusterId));
+        } else if (_stricmp(pname, RS_REGION) == 0) {
+          rs_strncpy(pIamProps->szRegion, pval, sizeof(pIamProps->szRegion));
+        } else if (_stricmp(pname, RS_END_POINT_URL) == 0) {
+          rs_strncpy(pIamProps->szEndpointUrl, pval,
+                     sizeof(pIamProps->szEndpointUrl));
+        } else if (_stricmp(pname, RS_IAM_STS_ENDPOINT_URL) == 0) {
+          rs_strncpy(pIamProps->szStsEndpointUrl, pval,
+                     sizeof(pIamProps->szStsEndpointUrl));
+        } else if (_stricmp(pname, RS_DB_USER) == 0) {
+          rs_strncpy(pIamProps->szDbUser, pval, sizeof(pIamProps->szDbUser));
+        } else if (_stricmp(pname, RS_DB_GROUPS) == 0) {
+          rs_strncpy(pIamProps->szDbGroups, pval,
+                     sizeof(pIamProps->szDbGroups));
+        } else if (_stricmp(pname, RS_DB_GROUPS_FILTER) == 0) {
+          rs_strncpy(pIamProps->szDbGroupsFilter, pval,
+                     sizeof(pIamProps->szDbGroupsFilter));
+        } else if (_stricmp(pname, RS_AUTO_CREATE) == 0) {
                       pIamProps->isAutoCreate = convertToBoolVal(pval);
-                    }
-                    else
-                    if(_stricmp(pname, RS_FORCE_LOWER_CASE) == 0)
-                    {
+        } else if (_stricmp(pname, RS_FORCE_LOWER_CASE) == 0) {
                       pIamProps->isForceLowercase = convertToBoolVal(pval);
-                    }
-                    else
-                    if(_stricmp(pname, RS_IDP_RESPONSE_TIMEOUT) == 0)
-                    {
-                      sscanf(pval,"%ld",&(pIamProps->lIdpResponseTimeout));
-                    }
-                    else
-                    if(_stricmp(pname, RS_IAM_DURATION) == 0)
-                    {
-                      sscanf(pval,"%ld",&(pIamProps->lIAMDuration));
-                    }
-                    else
-                    if(_stricmp(pname, RS_ACCESS_KEY_ID) == 0)
-                    {
-                      rs_strncpy(pIamProps->szAccessKeyID,pval,sizeof(pIamProps->szAccessKeyID));
-                    }
-                    else
-                    if(_stricmp(pname, RS_SECRET_ACCESS_KEY) == 0)
-                    {
-                      rs_strncpy(pIamProps->szSecretAccessKey,pval,sizeof(pIamProps->szSecretAccessKey));
-                    }
-                    else
-                    if(_stricmp(pname, RS_SESSION_TOKEN) == 0)
-                    {
-                      rs_strncpy(pIamProps->szSessionToken,pval,sizeof(pIamProps->szSessionToken));
-                    }
-                    else
-                    if(_stricmp(pname, RS_PROFILE) == 0)
-                    {
-                      rs_strncpy(pIamProps->szProfile,pval,sizeof(pIamProps->szProfile));
-                    }
-                    else
-                    if(_stricmp(pname, RS_INSTANCE_PROFILE) == 0)
-                    {
+        } else if (_stricmp(pname, RS_IDP_RESPONSE_TIMEOUT) == 0) {
+          sscanf(pval, "%ld", &(pIamProps->lIdpResponseTimeout));
+        } else if (_stricmp(pname, RS_IAM_DURATION) == 0) {
+          sscanf(pval, "%ld", &(pIamProps->lIAMDuration));
+        } else if (_stricmp(pname, RS_ACCESS_KEY_ID) == 0) {
+          rs_strncpy(pIamProps->szAccessKeyID, pval,
+                     sizeof(pIamProps->szAccessKeyID));
+        } else if (_stricmp(pname, RS_SECRET_ACCESS_KEY) == 0) {
+          rs_strncpy(pIamProps->szSecretAccessKey, pval,
+                     sizeof(pIamProps->szSecretAccessKey));
+        } else if (_stricmp(pname, RS_SESSION_TOKEN) == 0) {
+          rs_strncpy(pIamProps->szSessionToken, pval,
+                     sizeof(pIamProps->szSessionToken));
+        } else if (_stricmp(pname, RS_PROFILE) == 0) {
+          rs_strncpy(pIamProps->szProfile, pval, sizeof(pIamProps->szProfile));
+        } else if (_stricmp(pname, RS_INSTANCE_PROFILE) == 0) {
                       pIamProps->isInstanceProfile = convertToBoolVal(pval);
-                    }
-                    else
-                    if(_stricmp(pname, RS_PLUGIN_NAME) == 0)
-                    {
-                      rs_strncpy(pIamProps->szPluginName,pval,sizeof(pIamProps->szPluginName));
-                    }
-                    else
-                    if(_stricmp(pname, RS_PREFERRED_ROLE) == 0)
-                    {
-                      rs_strncpy(pIamProps->szPreferredRole,pval,sizeof(pIamProps->szPreferredRole));
-                    }
-                    else
-                    if(_stricmp(pname, RS_IDP_HOST) == 0)
-                    {
-                      rs_strncpy(pIamProps->szIdpHost,pval,sizeof(pIamProps->szIdpHost));
-                    }
-                    else
-                    if(_stricmp(pname, RS_LOGIN_TO_RP) == 0)
-                    {
-						rs_strncpy(pIamProps->szLoginToRp,pval,sizeof(pIamProps->szLoginToRp));
-                    }
-                    else
-                    if(_stricmp(pname, RS_IDP_TENANT) == 0)
-                    {
-                      rs_strncpy(pIamProps->szIdpTenant,pval,sizeof(pIamProps->szIdpTenant));
-                    }
-                    else
-                    if(_stricmp(pname, RS_CLIENT_ID) == 0)
-                    {
-                      rs_strncpy(pIamProps->szClientId,pval,sizeof(pIamProps->szClientId));
-                    }
-					else
-					if (_stricmp(pname, RS_SCOPE) == 0)
-					{
+        } else if (_stricmp(pname, RS_PLUGIN_NAME) == 0) {
+          rs_strncpy(pIamProps->szPluginName, pval,
+                     sizeof(pIamProps->szPluginName));
+        } else if (_stricmp(pname, RS_PREFERRED_ROLE) == 0) {
+          rs_strncpy(pIamProps->szPreferredRole, pval,
+                     sizeof(pIamProps->szPreferredRole));
+        } else if (_stricmp(pname, RS_IDP_HOST) == 0) {
+          rs_strncpy(pIamProps->szIdpHost, pval, sizeof(pIamProps->szIdpHost));
+        } else if (_stricmp(pname, RS_LOGIN_TO_RP) == 0) {
+          rs_strncpy(pIamProps->szLoginToRp, pval,
+                     sizeof(pIamProps->szLoginToRp));
+        } else if (_stricmp(pname, RS_IDP_TENANT) == 0) {
+          rs_strncpy(pIamProps->szIdpTenant, pval,
+                     sizeof(pIamProps->szIdpTenant));
+        } else if (_stricmp(pname, RS_CLIENT_ID) == 0) {
+          rs_strncpy(pIamProps->szClientId, pval,
+                     sizeof(pIamProps->szClientId));
+        } else if (_stricmp(pname, RS_SCOPE) == 0) {
 						rs_strncpy(pIamProps->szScope, pval, sizeof(pIamProps->szScope));
-					}
-					else
-                    if(_stricmp(pname, RS_CLIENT_SECRET) == 0)
-                    {
-                      rs_strncpy(pIamProps->szClientSecret,pval,sizeof(pIamProps->szClientSecret));
-                    }
-                    else
-                    if(_stricmp(pname, RS_LOGIN_URL) == 0)
-                    {
-                      rs_strncpy(pIamProps->szLoginUrl,pval,sizeof(pIamProps->szLoginUrl));
-                    }
-                    else
-                    if(_stricmp(pname, RS_PARTNER_SPID) == 0)
-                    {
-                      rs_strncpy(pIamProps->szPartnerSpid,pval,sizeof(pIamProps->szPartnerSpid));
-                    }
-                    else
-                    if(_stricmp(pname, RS_APP_ID) == 0)
-                    {
-                      rs_strncpy(pIamProps->szAppId,pval,sizeof(pIamProps->szAppId));
-                    }
-                    else
-                    if(_stricmp(pname, RS_APP_NAME) == 0)
-                    {
-                      rs_strncpy(pIamProps->szAppName,pval,sizeof(pIamProps->szAppName));
-                    }
-                    else
-                    if(_stricmp(pname, RS_WEB_IDENTITY_TOKEN) == 0)
-                    {
+        } else if (_stricmp(pname, RS_CLIENT_SECRET) == 0) {
+          rs_strncpy(pIamProps->szClientSecret, pval,
+                     sizeof(pIamProps->szClientSecret));
+        } else if (_stricmp(pname, RS_LOGIN_URL) == 0) {
+          rs_strncpy(pIamProps->szLoginUrl, pval,
+                     sizeof(pIamProps->szLoginUrl));
+        } else if (_stricmp(pname, RS_PARTNER_SPID) == 0) {
+          rs_strncpy(pIamProps->szPartnerSpid, pval,
+                     sizeof(pIamProps->szPartnerSpid));
+        } else if (_stricmp(pname, RS_APP_ID) == 0) {
+          rs_strncpy(pIamProps->szAppId, pval, sizeof(pIamProps->szAppId));
+        } else if (_stricmp(pname, RS_APP_NAME) == 0) {
+          rs_strncpy(pIamProps->szAppName, pval, sizeof(pIamProps->szAppName));
+        } else if (_stricmp(pname, RS_WEB_IDENTITY_TOKEN) == 0) {
 					  int len = strlen(pval) + 1;
-                      pIamProps->pszJwt = (char *)rs_calloc(sizeof(char),len);
+          pIamProps->pszJwt = (char *)rs_calloc(sizeof(char), len);
 
-                      rs_strncpy(pIamProps->pszJwt,pval,len);
+          rs_strncpy(pIamProps->pszJwt, pval, len);
+        } else if (_stricmp(pname, RS_NATIVE_KEY_PROVIDER_NAME) == 0) {
+          rs_strncpy(pConnectProps->szProviderName, pval, MAX_IDEN_LEN);
+        } else if (_stricmp(pname, RS_ROLE_ARN) == 0) {
+          rs_strncpy(pIamProps->szRoleArn, pval, sizeof(pIamProps->szRoleArn));
+        } else if (_stricmp(pname, RS_ROLE_SESSION_NAME) == 0) {
+          rs_strncpy(pIamProps->szRoleSessionName, pval,
+                     sizeof(pIamProps->szRoleSessionName));
+        } else if (_stricmp(pname, RS_SSL_INSECURE) == 0) {
+          pIamProps->isSslInsecure = convertToBoolVal(pval);
+        } else if (_stricmp(pname, RS_GROUP_FEDERATION) == 0) {
+          pIamProps->isGroupFederation = convertToBoolVal(pval);
+        } else if (_stricmp(pname, RS_DISABLE_CACHE) == 0) {
+          pIamProps->isDisableCache = convertToBoolVal(pval);
+        } else if (_stricmp(pname, RS_IDP_PORT) == 0) {
+          sscanf(pval, "%d", &(pIamProps->iIdpPort));
+        } else if (_stricmp(pname, RS_LISTEN_PORT) == 0) {
+          sscanf(pval, "%ld", &(pIamProps->lListenPort));
+        } else if (_stricmp(pname, RS_DURATION) == 0) {
+          sscanf(pval, "%ld", &(pIamProps->lDuration));
+        } else if (_stricmp(pname, RS_TCP_PROXY_HOST) == 0) {
+          rs_strncpy(pTcpProxyProps->szHost, pval,
+                     sizeof(pTcpProxyProps->szHost));
+        } else if (_stricmp(pname, RS_TCP_PROXY_PORT) == 0) {
+          rs_strncpy(pTcpProxyProps->szPort, pval,
+                     sizeof(pTcpProxyProps->szPort));
+        } else if (_stricmp(pname, RS_TCP_PROXY_USER_NAME) == 0) {
+          rs_strncpy(pTcpProxyProps->szUser, pval,
+                     sizeof(pTcpProxyProps->szUser));
+        } else if (_stricmp(pname, RS_TCP_PROXY_PASSWORD) == 0) {
+          rs_strncpy(pTcpProxyProps->szPassword, pval,
+                     sizeof(pTcpProxyProps->szPassword));
+        } else if (_stricmp(pname, RS_IAM_AUTH_PROFILE) == 0) {
+          rs_strncpy(pIamProps->szAuthProfile, pval,
+                     sizeof(pIamProps->szAuthProfile));
+        } else if (_stricmp(pname, RS_IAM_STS_CONNECTION_TIMEOUT) == 0) {
+          sscanf(pval, "%d", &(pIamProps->iStsConnectionTimeout));
+        } else if (_stricmp(pname, RS_STRING_TYPE) == 0) {
+          if (pval)
+            strncpy(pConnectProps->szStringType, pval,
+                    sizeof(pConnectProps->szStringType));
                     }
-                    else
-                    if(_stricmp(pname, RS_NATIVE_KEY_PROVIDER_NAME) == 0)
-                    {
-                      rs_strncpy(pConnectProps->szProviderName,pval, MAX_IDEN_LEN);
-                    }
-                    else
-                    if(_stricmp(pname, RS_ROLE_ARN) == 0)
-                    {
-                      rs_strncpy(pIamProps->szRoleArn,pval,sizeof(pIamProps->szRoleArn));
-                    }
-                    else
-                    if(_stricmp(pname, RS_ROLE_SESSION_NAME) == 0)
-                    {
-                      rs_strncpy(pIamProps->szRoleSessionName,pval,sizeof(pIamProps->szRoleSessionName));
-                    }
-                    else
-                    if(_stricmp(pname, RS_SSL_INSECURE) == 0)
-                    {
-                      pIamProps->isSslInsecure = convertToBoolVal(pval);
-                    }
-                    else
-                    if(_stricmp(pname, RS_DISABLE_CACHE) == 0)
-                    {
-                      pIamProps->isDisableCache = convertToBoolVal(pval);
-                    }
-                    else
-                    if(_stricmp(pname, RS_IDP_PORT) == 0)
-                    {
-                      sscanf(pval,"%d",&(pIamProps->iIdpPort));
-                    }
-                    else
-                    if(_stricmp(pname, RS_LISTEN_PORT) == 0)
-                    {
-                      sscanf(pval,"%ld",&(pIamProps->lListenPort));
-                    }
-                    else
-                    if(_stricmp(pname, RS_DURATION) == 0)
-                    {
-                      sscanf(pval,"%ld",&(pIamProps->lDuration));
-                    }
-					else
-					if (_stricmp(pname, RS_TCP_PROXY_HOST) == 0)
-					{
-						rs_strncpy(pTcpProxyProps->szHost, pval,sizeof(pTcpProxyProps->szHost));
-					}
-					else
-					if (_stricmp(pname, RS_TCP_PROXY_PORT) == 0)
-					{
-						rs_strncpy(pTcpProxyProps->szPort, pval,sizeof(pTcpProxyProps->szPort));
-					}
-					else
-					if (_stricmp(pname, RS_TCP_PROXY_USER_NAME) == 0)
-					{
-						rs_strncpy(pTcpProxyProps->szUser, pval,sizeof(pTcpProxyProps->szUser));
-					}
-					else
-					if (_stricmp(pname, RS_TCP_PROXY_PASSWORD) == 0)
-					{
-						rs_strncpy(pTcpProxyProps->szPassword, pval, sizeof(pTcpProxyProps->szPassword));
-					}
-                    else
-                    if(_stricmp(pname, RS_IAM_AUTH_PROFILE) == 0)
-                    {
-                      rs_strncpy(pIamProps->szAuthProfile,pval,sizeof(pIamProps->szAuthProfile));
-                    }
-					else
-					if (_stricmp(pname, RS_IAM_STS_CONNECTION_TIMEOUT) == 0)
-					{
-						sscanf(pval, "%d", &(pIamProps->iStsConnectionTimeout));
-					}
-					else
-					if (_stricmp(pname, RS_STRING_TYPE) == 0)
-					{
-						if (pval)
-							strncpy(pConnectProps->szStringType, pval, sizeof(pConnectProps->szStringType));
-					}
 #ifdef WIN32
-                    else
-                    if(_stricmp(pname, RS_KERBEROS_API) == 0
-                            || _stricmp(pname, "KSA") == 0)
-                    {
-                        if(pval)
-                        {
-                            strncpy(pConnectProps->szKerberosAPI, pval,MAX_IDEN_LEN - 1);
-                            pConnectProps->szKerberosAPI[MAX_IDEN_LEN - 1] = '\0';
-                        }
+        else if (_stricmp(pname, RS_KERBEROS_API) == 0 ||
+                 _stricmp(pname, "KSA") == 0) {
+          if (pval) {
+            strncpy(pConnectProps->szKerberosAPI, pval, MAX_IDEN_LEN - 1);
+            pConnectProps->szKerberosAPI[MAX_IDEN_LEN - 1] = '\0';
+                    }
                     }
 #endif
-                    else
-                    {
-                        if(append)
-                        {
-                            // Add into connect string pointer
-                          pConn->appendConnectAttribueStr(pname, pval);
-                        }
+        else {
+          if (append) {
+            // Add into connect string pointer
+            pConn->appendConnectAttribueStr(pname, pval);
+					}
                     }
-                } // !onlyDSN
+                    }
+    };  // end of processKeyVal function
 
-            } // Loop
-
-			if(pConnectProps->iCscEnable)
-				pConnectProps->iStreamingCursorRows = 0;
-
-
-            buf = (char *)rs_free(buf);
-        }
-        else
-            valid = FALSE;
+    std::string connStr = cbConnStrIn == SQL_NTS
+                              ? std::string(szConnStrIn)
+                              : std::string(szConnStrIn, cbConnStrIn);
+    auto connectionSettingsMap = parseConnectionString(connStr);
+    for (auto &kv : connectionSettingsMap) {
+      // std::cout << kv.first.c_str() << " -> " << kv.second.c_str() << std::endl;
+      processKeyVal(kv.first.c_str(), kv.second.c_str());
     }
 
     return valid;

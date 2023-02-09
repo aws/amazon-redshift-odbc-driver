@@ -7228,47 +7228,26 @@ void TraceSQLTablesW(int iCallOrRet,
 //
 void tracePasswordConnectString(char *var,char *szConnStr, SQLSMALLINT  cbConnStr)
 {
-    char *pStr = NULL;
-    char *szKeywords[] = { "Password",
-                           "PWD",
-                           NULL
-                         };
-
-    if(szConnStr && cbConnStr != 0)
-    {
-        pStr = rs_strdup(szConnStr, cbConnStr);
-
-        if(pStr)
-        {
-            int i;
-            char *pTemp;
-
-            for(i=0;szKeywords[i];i++)
-            {
-                pTemp = stristr(pStr,szKeywords[i]);
-
-                if(pTemp)
-                {
-                    char *pTemp1 = strchr(pTemp,'=');
-
-                    if(pTemp1)
-                    {
-                        char *pTemp2 = strchr(pTemp,';');
-                        int iLen = (int)((pTemp2) ? (pTemp2 - pTemp1) - 1 : strlen(pTemp1 + 1));
-
-                        pTemp1++; // Skip '=' 
-                        while(iLen--)
-                            *pTemp1++ = '*'; // Replace with '*' 
+    if (!szConnStr || cbConnStr < 0) {
+        return;
                     }
+    std::string pStr;
+    std::string szKeywords[] = { "Password", "PWD"};
+    for (auto& kv : parseConnectionString(std::string(szConnStr, cbConnStr)))
+    {
+        const auto key = kv.first;
+        auto& value = kv.second;
+        for (auto& pwd : szKeywords) {
+            if (isStrNoCaseEequal(key, pwd)) {
+                value = std::string(value.size(), '*');
                 }
-            } // Loop 
         }
+        pStr += key + "=" + value + ";";
     }
 
-    if(pStr)
+    if(false == pStr.empty())
     {
-        traceStrValWithSmallLen(var,pStr,cbConnStr);
-        pStr = (char *)rs_free(pStr);
+        traceStrValWithSmallLen(var,pStr.c_str(),cbConnStr);
     }
  }
 
