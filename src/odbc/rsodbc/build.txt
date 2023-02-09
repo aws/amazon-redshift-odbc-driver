@@ -1,15 +1,15 @@
-DRV_SRCHOME is where you have Brazil package source.
+DRV_SRCHOME is where you have Brzl package source.
 
 [A] How to build 64 bit ODBC driver on Windows using IDE?
 
 1. Go under $DRV_SRCHOME/RedshiftODBCDriver/src/odbc/rsodbc
-2. Now open rsodbc_all.sln using VS 2015
+2. Now open rsodbc_all.sln using VS 2022 Community Edition
 3. Select the configuration to build
 4. Now do Project build
 
 [B] How to build and package 64 bit ODBC Driver on Windows using batch file?
 
-1. Open the "Visual Studio 2015 Command Prompt" from Visual Studio Program Item group.
+1. Open the "Visual Studio 2022 Command Prompt" from Visual Studio Program Item group.
 2. Change directory to $DRV_SRCHOME/RedshiftODBCDriver/src/odbc/rsodbc
 3. Now run package64.bat with version number as argument like 3.5.1
 4. It will build libpq.lib, libpgport.lib and rsodbc.dll. After that it will also create MSI package for the installation under "install" directory.
