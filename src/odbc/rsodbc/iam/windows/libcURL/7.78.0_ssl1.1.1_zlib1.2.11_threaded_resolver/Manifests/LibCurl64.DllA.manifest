@@ -1,0 +1,4 @@
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+    <assemblyIdentity name="LibCurl64.DllA" processorArchitecture="AMD64" version="7.78.0.0" type="win32" />
+    <file name = "libcurl.dll" />
+</assembly>
