@@ -13,7 +13,8 @@ Amazon Redshift provides 64-bit ODBC drivers for Linux, and Windows operating sy
 
 ## Build Driver
 ### Prerequisites
-* Visual Stuido 2015 (For Windows)
+* https://git-lfs.com/ (for correctly cloning this repository)
+* Visual Stuido 2022 Community Edition (For Windows)
 * g++ (For Linux)
 * Redshift instance connect to.
 
@@ -46,9 +47,8 @@ Default Installation Directory:
 See [Amazon Redshift ODBC Driver Installation and Configuration Guide](https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install.html) for more information.
 
 Here are download links for the latest release:
-
-* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.1/AmazonRedshiftODBC64-2.0.0.1.msi (For Windows)
-* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.1/AmazonRedshiftODBC-64-bit-2.0.0.1.x86_64.rpm (For Linux)
+* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.3/AmazonRedshiftODBC64-2.0.0.3.msi (For Windows)
+* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.3/AmazonRedshiftODBC-64-bit-2.0.0.3.x86_64.rpm (For Linux)
 
 ## Report Bugs
 

@@ -1,6 +1,22 @@
 Changelog
 =========
 
+
+v2.0.0.3 (2023-02-10)
+---------------------
+- Unicode Conversion Fix. [Vahid Saber Hamishagi]
+- Improve parsing Connection String containing special characters. [Vahid Saber Hamishagi]
+- IAM imporovements. [Vahid Saber Hamishagi]
+- Fixes in plugin "Identity Provider: PingFederate". [Vahid Saber Hamishagi]
+- Replace auto_ptr with unique_ptr in IAM. [Vahid Saber Hamishagi]
+- ARN Fix. [Vahid Saber Hamishagi]
+- Upgrade Linux build to C++17. [Vahid Saber Hamishagi]
+- Upgrade windows build. [Vahid Saber Hamishagi]
+- Upgrade to ssl 1.1.1. [Vahid Saber Hamishagi]
+- Upgrade to aws-cpp-sdk v1.9.289. [Vahid Saber Hamishagi]
+- Tracking large files(*.lib files) [Vahid Saber Hamishagi]
+
+
 v2.0.0.1 (2022-07-18)
 ---------------------
 - Fixes from security review. [ilesh Garish]
