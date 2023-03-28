@@ -7176,6 +7176,30 @@ char *getParamVal(char *pParamData, int iParamDataLen, SQLLEN *plParamDataStrLen
                 break;
             }
 
+            case SQL_C_BINARY:
+            {
+                switch(hSQLType){
+                    case SQL_LONGVARBINARY:
+                    case SQL_BINARY:
+                    case SQL_VARBINARY:
+                    {
+                        if(iIndicator != SQL_NULL_DATA)
+                        { 
+                            //c_binary to sql_binary is a defauly conversion
+                            pBindParamStrBuf->pBuf= pParamData;
+                        }
+                        else
+                        {
+                            pBindParamStrBuf->pBuf = NULL;
+                        }
+                        break;
+                    } 
+                }
+                break;
+            }
+
+
+
             default:
             {
                 pBindParamStrBuf->pBuf = NULL;
