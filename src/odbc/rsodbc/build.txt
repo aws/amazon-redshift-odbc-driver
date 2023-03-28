@@ -1,4 +1,4 @@
-DRV_SRCHOME is where you have Brzl package source.
+DRV_SRCHOME is where you have Brazil package source.
 
 [A] How to build 64 bit ODBC driver on Windows using IDE?
 

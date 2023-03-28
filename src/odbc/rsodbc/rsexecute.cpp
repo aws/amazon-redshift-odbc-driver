@@ -62,7 +62,7 @@ SQLRETURN SQL_API SQLExecDirectW(SQLHSTMT   phstmt,
        */
       std::string utf8;
       len = wchar16_to_utf8_str(pwCmd, cchLen, utf8);
-    szCmd = (char *)checkLenAndAllocatePaStrBuf(len, pStmt->pCmdBuf);
+      szCmd = (char *)checkLenAndAllocatePaStrBuf(len, pStmt->pCmdBuf);
       memcpy(szCmd, utf8.c_str(), len);  // szCmd is already null terminated
     }
 
