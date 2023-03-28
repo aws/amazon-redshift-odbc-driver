@@ -659,13 +659,13 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
                     *pcbLenInd = iDataLen;
                 }
 
-                if(pValue && pData && (iDataLen != SQL_NULL_DATA))
-                    rc = convertSQLDataToCData(pStmt, pData, iDataLen, pDescRec->hType, pValue, cbLen, pcbLenInd, hType, pDescRec->hRsSpecialType, format, pDescRec);
-                else
-                if(iDataLen == SQL_NULL_DATA)
-                {
-                    if(pValue && (cbLen > 0))
-                        *(char *)pValue = '\0';
+                if (pValue && pData && (iDataLen != SQL_NULL_DATA)) {
+                  rc = convertSQLDataToCData(
+                      pStmt, pData, iDataLen, pDescRec->hType, pValue, cbLen,
+                      &(pResult->cbLenOffset), pcbLenInd, hType,
+                      pDescRec->hRsSpecialType, format, pDescRec);
+                } else if (iDataLen == SQL_NULL_DATA) {
+                  if (pValue && (cbLen > 0)) *(char *)pValue = '\0';
 
                     if(!pcbLenInd)
                     {

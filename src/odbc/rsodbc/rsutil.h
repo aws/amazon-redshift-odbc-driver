@@ -275,7 +275,12 @@ int isAsyncEnable(RS_STMT_INFO *pStmt);
 SQLRETURN onConnectExecute(RS_CONN_INFO *pConn, char *pCmd);
 SQLRETURN onConnectAuditInfoExecute(RS_CONN_INFO *pConn);
 
-SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData, int iColDataLen, short hSQLType, void *pBuf, SQLLEN cbLen, SQLLEN *pcbLenInd, short hCType, short hRsSpecialType, int format, RS_DESC_REC *pDescRec);
+SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
+                                int iColDataLen, short hSQLType, void *pBuf,
+                                SQLLEN cbLen, SQLLEN *cbLenOffset,
+                                SQLLEN *pcbLenInd, short hCType,
+                                short hRsSpecialType, int format,
+                                RS_DESC_REC *pDescRec);
 int getRsVal(char *pColData, int iColDataLen, short hSQLType, RS_VALUE  *pPaVal, short hCType, int format, RS_DESC_REC *pDescRec, short hRsSpecialType, bool isTextData);
 void makeNullTerminateIntVal(char *pColData, int iColDataLen, char *szNumBuf, int iBufLen);
 

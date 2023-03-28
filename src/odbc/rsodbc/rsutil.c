@@ -1665,7 +1665,12 @@ error:
 //---------------------------------------------------------------------------------------------------------igarish
 // Convert SQL data into C data.
 //
-SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData, int iColDataLen, short hSQLType, void *pBuf, SQLLEN cbLen, SQLLEN *pcbLenInd, short hCType, short hRsSpecialType, int format, RS_DESC_REC *pDescRec)
+SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
+                                int iColDataLen, short hSQLType, void *pBuf,
+                                SQLLEN cbLen, SQLLEN *cbLenOffset,
+                                SQLLEN *pcbLenInd, short hCType,
+                                short hRsSpecialType, int format,
+                                RS_DESC_REC *pDescRec)
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_VALUE  rsVal;
@@ -1973,31 +1978,62 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData, int iColDat
                     break;
                 }
 
-				case SQL_VARCHAR:
-				{
-                    if ((IS_TEXT_FORMAT(format)) ||
-                        (hRsSpecialType != TIMETZOID &&
-                        hRsSpecialType != TIMESTAMPTZOID)) 
-                    {
-                        std::u16string wchar16;
-                        int len = char_utf8_to_wchar16(rsVal.pcVal, iColDataLen, wchar16);
-                        *pcbLenInd = wchar16.size() * sizeof(WCHAR);
-                        memcpy(pBuf, 
-                               wchar16.c_str(),
-                               //Do not cross limit
-                               std::min<SQLLEN>(*pcbLenInd, cbLen - sizeof(WCHAR)));
+                case SQL_VARCHAR: {
+                    if ((IS_TEXT_FORMAT(format)) || (hRsSpecialType != TIMETZOID &&
+                                                    hRsSpecialType != TIMESTAMPTZOID)) {
+                        // rc = copyWStrDataBigLen(rsVal.pcVal, iColDataLen,(WCHAR
+                        // *)pBuf, cbLen, pcbLenInd);
                         /*
-                        Normally the following should also work:
-                        ((WCHAR *)pBuf)[*pcbLenInd] = L'\0';
-                        But iteration by SQLWCHAR (normally 2 bytes) pointer might
-                        not always result into "\0\0".
-                        Therefore 'memset'ing ! 
+                            We are replacing the above(commented) function with
+                        the following hotfixes which include: 1- Unicode
+                        conversion. 2- Incrementa write to output buffer for
+                        larger data(Redshift-10107). Once we are certain of
+                        correct functionality as well as generality of the
+                        implementation, they should be moved to their own
+                        function(s).
                         */
-                       if ((*pcbLenInd) + sizeof(WCHAR) < cbLen) { //Do not cross limit
-                           memset((char*)pBuf + (*pcbLenInd), '\0', sizeof(WCHAR));
-                       }
+                        std::u16string wchar16;
+                        static const int wsize = sizeof(WCHAR);
+                        int wchar16Size =
+                            char_utf8_to_wchar16(rsVal.pcVal, iColDataLen, wchar16);
+                        // How many bytes we'd like to write:
+                        *pcbLenInd = wchar16.size() * wsize;
+                        // How many bytes we can actually write.
+                        // We assign space for null termination.
+                        int limit =
+                            std::min<SQLLEN>(*pcbLenInd - *cbLenOffset, cbLen - wsize);
+                        limit = limit > 0 ? limit : 0;
+                        if (*cbLenOffset > 0) {
+                            // We need to write from where we left
+                            // off.
+                            wchar16 = wchar16.substr(*cbLenOffset / wsize);
+                        }
+                        // Actual write
+                        memcpy(pBuf, wchar16.c_str(), limit);
+                        // Null termination
+                        memset((char *)pBuf + limit, '\0', wsize);
+                        if (*cbLenOffset + limit == *pcbLenInd) {
+                            rc = SQL_SUCCESS;
+                            // reset state
+                            *cbLenOffset = 0;
+                            // report how many data bytes written
+                            *pcbLenInd = limit;
+                        } else {
+                            // Another attempt to read rest of data is
+                            // needed.
+                            rc = SQL_SUCCESS_WITH_INFO;
+                            // Keep state of how much was written this
+                            // time.
+                            *cbLenOffset += limit;
+                        }
+                        traceDebug(
+                            "SQL_C_WCHAR->SQL_VARCHAR "
+                            "iColDataLen=%d, cbLen=%d, "
+                            "wchar16Size=%d, "
+                            "limit=%d, pcbLenInd=%d, cbLenOffset=%d, rc=%d",
+                            iColDataLen, cbLen, limit, *pcbLenInd, *cbLenOffset, rc);
                     } else {
-                                    // Binary TIMETZOID or TIMESTAMPTZOID
+                        // Binary TIMETZOID or TIMESTAMPTZOID
 #ifdef WIN32
 						if (iColDataLen > 0)
 						{
@@ -2041,9 +2077,8 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData, int iColDat
 						}
 
 #endif
-                                  }
-
-                                        break;
+                    }
+                    break;
 
 				}
 

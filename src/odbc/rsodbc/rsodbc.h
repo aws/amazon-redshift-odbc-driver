@@ -1328,6 +1328,7 @@ public:
       pIRDRecs = NULL;
 
       iPrevhCol = 0;
+      cbLenOffset = 0;
       pNext = NULL;
     }
 
@@ -1344,7 +1345,7 @@ public:
     struct _RS_DESC_REC *pIRDRecs; // IRD Records
 
     int iPrevhCol; // Track column number for SQLGetData. If same col number get called in same row then return SQL_NO_DATA.
-
+    SQLLEN cbLenOffset; // keeping state of how much data was processed last time.
     // Next element
     RS_RESULT_INFO *pNext;
 
