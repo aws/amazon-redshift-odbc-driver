@@ -1,6 +1,13 @@
 Changelog
 =========
 
+v2.0.0.5 (2023-03-28)
+---------------------
+- Minor codestyle changes. [Vahid Saber Hamishagi]
+- Fix Driver insert NULL into geometry column instead of returning error. [Janak Khadka]
+- Fix large column size issue in SQL_C_WCHAR->SQL_VARCHAR conversion.  [Vahid Saber Hamishagi]
+- Fix user AutoCreate feature in IAM. [Janak Khadka]
+
 
 v2.0.0.3 (2023-02-10)
 ---------------------
