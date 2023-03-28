@@ -350,6 +350,8 @@ void RsIamHelper::SetIamSettings(
   settings.m_idp_response_timeout = pIamProps->lIdpResponseTimeout;
   settings.m_login_url = pIamProps->szLoginUrl;
   settings.m_role_arn = pIamProps->szRoleArn;
+  //Added the autoCreate keyword from the user input connection string
+  settings.m_userAutoCreate = pIamProps->isAutoCreate;
 
   if (pIamProps->pszJwt)
     settings.m_web_identity_token = pIamProps->pszJwt;
