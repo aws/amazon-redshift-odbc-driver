@@ -130,11 +130,16 @@ AWSCredentials IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml(
         // Sample role attribute (Note: saml-provider (PrincipleArn) and role and be arbitrary order): 
         // arn:aws:iam::518627716765:saml-provider/ADFS,arn:aws:iam::518627716765:role/ADFS-Production
         std::vector<rs_string> roleInfo = IAMUtils::TokenizeSetting(attrRoles[i], ",");
+
         if (roleInfo.size() == 2)
         {
             // Role arn and role principal pair
             const rs_string& first = roleInfo[0];
             const rs_string& second = roleInfo[1];
+
+            // trimming whitespaces at the begining and the end of the Role arn & role principal pair
+            // std::string trim(std::string& first);
+            // std::string trim(std::string& second);
 
             if (first.find(":saml-provider/") == rs_string::npos)
             {
@@ -158,7 +163,6 @@ AWSCredentials IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml(
     {
         roleArn = m_argsMap[IAM_KEY_PREFERRED_ROLE];
         principalArn = roles[roleArn];
-
         if (principalArn.empty())
         {
             IAMUtils::ThrowConnectionExceptionWithInfo("Preferred role not found in the SAML assertion.");

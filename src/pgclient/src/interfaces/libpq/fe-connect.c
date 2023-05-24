@@ -3175,6 +3175,8 @@ freePGconn(PGconn *conn)
 		free(conn->sslkey);
 	if (conn->sslrootcert)
 		free(conn->sslrootcert);
+	if (conn->ssldefaultrootcert)
+		free(conn->ssldefaultrootcert);
 	if (conn->sslcrl)
 		free(conn->sslcrl);
 	if (conn->requirepeer)

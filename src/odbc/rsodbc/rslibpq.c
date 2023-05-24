@@ -1251,6 +1251,10 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
         rsUnlockSem(pConn->hSemMultiStmt);
     }
 
+    if(paramTypes)
+    {
+        paramTypes = (Oid *)rs_free(paramTypes);
+    }
     return rc;
 
 error:
@@ -1285,6 +1289,10 @@ error:
         rsUnlockSem(pConn->hSemMultiStmt);
     }
 
+    if(paramTypes)
+    {
+        paramTypes = (Oid *)rs_free(paramTypes);
+    }
     return rc;
 }
 

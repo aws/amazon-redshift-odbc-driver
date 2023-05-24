@@ -1,6 +1,13 @@
 Changelog
 =========
 
+v2.0.0.6 (2023-05-23)
+---------------------
+- Fix memory leak detected in API tests and conformance tests. [Ruei-Yang Huang]
+- Add test to verify the correctness of the 'character_octect_length' column retrieved from 'SQLColumns' function [Janak Khadka]
+- Support query column result larger than 2048 characters.  [Vahid Saber Hamishagi]
+
+
 v2.0.0.5 (2023-03-28)
 ---------------------
 - Minor codestyle changes. [Vahid Saber Hamishagi]

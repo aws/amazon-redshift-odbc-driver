@@ -3,7 +3,6 @@
 
 #include "../rs_iam_support.h"
 #include "IAMPluginCredentialsProvider.h"
-
 namespace Redshift
 {
 namespace IamSupport
@@ -103,6 +102,7 @@ namespace IamSupport
         /// 
         /// @return Saml assertion string 
         rs_string ExtractSamlAssertion(const rs_string& in_content, const rs_string& in_pattern);
+                        
 
     };
 }

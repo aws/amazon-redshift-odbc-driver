@@ -584,11 +584,16 @@ void  checkForIOExceptionCsc(void *_pCscStatementContext)
 void resetAfterOneResultReadFromServerFinishForStreamingCursor(struct _CscStatementContext *pCscStatementContext, PGconn *conn)
 {
 	// Indicate end of the rows
-	pCscStatementContext->m_StreamingCursorInfo.m_endOfStreamingCursor = TRUE;
+    pCscStatementContext->m_StreamingCursorInfo.m_endOfStreamingCursor = TRUE;
 
-	// We need to make it null because, we already pass the result back to caller.
-	if(pCscStatementContext->m_StreamingCursorInfo.m_streamResultBatchNumber > 0)
-	{
-		conn->result = NULL;
-	}
+    // We need to free it and make it null because, we already pass the result back to caller.
+    if(pCscStatementContext->m_StreamingCursorInfo.m_streamResultBatchNumber > 0)
+    {
+        if(conn->result)
+        {
+            PQclear(conn->result);
+        }
+        conn->result = NULL;
+    }
 }
+
