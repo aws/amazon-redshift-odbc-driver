@@ -47,8 +47,8 @@ Default Installation Directory:
 See [Amazon Redshift ODBC Driver Installation and Configuration Guide](https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install.html) for more information.
 
 Here are download links for the latest release:
-* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.5/AmazonRedshiftODBC64-2.0.0.5.msi (For Windows)
-* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.5/AmazonRedshiftODBC-64-bit-2.0.0.5.x86_64.rpm (For Linux)
+* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.6/AmazonRedshiftODBC64-2.0.0.6.msi (For Windows)
+* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.0.6/AmazonRedshiftODBC-64-bit-2.0.0.6.x86_64.rpm (For Linux)
 
 ## Report Bugs
 
