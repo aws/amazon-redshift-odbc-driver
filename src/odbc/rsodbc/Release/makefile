@@ -20,7 +20,7 @@ endif
 
 -include ../makefile.defs
 
-LIBS_PATH := -L../../../pgclient/src/interfaces/libpq/Release -L../../../pgclient/src/port/Release -L../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/lib  -L../iam/linux/aws-cpp-sdk/1.9.289/centos7/gcc5_5/release64/lib -L ../iam/linux/libcURL/7.78.0_ssl1.1.1_zlib1.2.11_threaded_resolver/centos7/gcc5_5/release64/lib
+LIBS_PATH := -L../../../pgclient/src/interfaces/libpq/Release -L../../../pgclient/src/port/Release
 
 # Add inputs and outputs from these tool invocations to the build variables 
 

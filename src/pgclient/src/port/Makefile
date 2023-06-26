@@ -26,7 +26,7 @@ include $(top_builddir)/src/Makefile.global
 override CPPFLAGS := -I$(top_builddir)/src/port -DFRONTEND $(CPPFLAGS)
 LIBS += $(PTHREAD_LIBS)
 
-override CFLAGS += -DLINUX -DUSE_SSL -I../../../odbc/rsodbc/iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include
+override CFLAGS += -DLINUX -DUSE_SSL
 
 ifdef LINUX32
 override CFLAGS := -DLINUX32 $(CFLAGS)

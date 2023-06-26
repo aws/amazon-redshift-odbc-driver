@@ -24,7 +24,7 @@ ifneq ($(PORTNAME), win32)
 override CFLAGS += $(PTHREAD_CFLAGS)
 endif
 
-override CFLAGS += -DLINUX -DUSE_SSL -I../../../../odbc/rsodbc/iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -DENABLE_GSS
+override CFLAGS += -DLINUX -DUSE_SSL -DENABLE_GSS
 
 # Need to recompile any external C files because we need
 # all object files to use the same compile flags as libpq; some

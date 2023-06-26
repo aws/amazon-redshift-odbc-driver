@@ -225,7 +225,7 @@ CFLAGS = -O2 -Wall -Wmissing-prototypes -Wpointer-arith -Wdeclaration-after-stat
 ifdef LINUX32
 override CFLAGS := -m32 $(CFLAGS)
 else
-override CFLAGS := -m64 $(CFLAGS)
+override CFLAGS := $(CFLAGS)
 endif #LINUX32
 
 
