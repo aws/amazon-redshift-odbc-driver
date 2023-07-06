@@ -1,5 +1,13 @@
 Changelog
 =========
+v2.0.0.7 (2023-07-06)
+---------------------
+- Upgrade windows aws-sdk-cpp to 1.11.111. [Janak Khadka]
+- Enable CNAME for windows. [Janak Khadka]
+- Fix windows log settings.  [Vahid Saber Hamishagi]
+- FAdd new pg type: NAMEARRAYOID.  [Vahid Saber Hamishagi]
+- Fix NULLABLE and IS_NULLABLE definition in Metadata.  [Vahid Saber Hamishagi]
+- Fix SQL_C_CHAR&SQL_C_WCHAR -> SQL_VARCHAR conversion.  [Vahid Saber Hamishagi]
 
 v2.0.0.6 (2023-05-23)
 ---------------------
