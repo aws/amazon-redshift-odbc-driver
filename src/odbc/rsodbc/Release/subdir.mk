@@ -3,6 +3,7 @@
 ################################################################################
 
 # Add inputs and outputs from these tool invocations to the build variables 
+
 C_SRCS += \
 ../dllmain.c \
 ../rslibpq.c \
@@ -172,25 +173,31 @@ C_DEPS += \
 
 
 # Each subdirectory must supply rules for building sources it contributes
+MYFLAGS = -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE
+ifdef ENBLE_CNAME
+ifeq ($(ENBLE_CNAME), 1)
+    MYFLAGS += -DENBLE_CNAME
+endif
+endif
 
 %.o: ../%.c 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I../iam -I../iam/core  -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ $(MYFLAGS) -I../iam -I../iam/core  -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../%.cpp
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I../iam -I../iam/core -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ $(MYFLAGS) -I../iam -I../iam/core -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../iam/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++17 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 $(MYFLAGS) -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
@@ -198,20 +205,20 @@ C_DEPS += \
 %.o : ../iam/http/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++17 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -I../iam/linux/libcURL/7.78.0_ssl1.1.1_zlib1.2.11_threaded_resolver/centos7/gcc5_5/release64/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 $(MYFLAGS) -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../iam/core/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++17 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -I../iam/linux/libcURL/7.78.0_ssl1.1.1_zlib1.2.11_threaded_resolver/centos7/gcc5_5/release64/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 $(MYFLAGS) -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR}  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../iam/plugins/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++17 -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../iam/linux/aws-cpp-sdk/1.9.289/include -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I../iam/linux/openssl/1.1.1/centos7/gcc5_5/release64/include -I../iam/linux/libcURL/7.78.0_ssl1.1.1_zlib1.2.11_threaded_resolver/centos7/gcc5_5/release64/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 $(MYFLAGS) -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR}  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
