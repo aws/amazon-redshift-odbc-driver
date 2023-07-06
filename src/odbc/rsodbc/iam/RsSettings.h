@@ -95,6 +95,9 @@ struct RsSettings
     rs_string  m_partnerSpid;
     rs_string  m_loginToRp;
     rs_string  m_oktaAppName;
+    rs_string  m_acctId;
+    rs_string  m_workGroup;
+
 
     int   m_accessDuration;
     short  m_idpPort;
@@ -126,6 +129,8 @@ struct RsSettings
     bool          m_sslInsecure;
     bool          m_useInstanceProfile;
 	bool		  m_groupFederation;
+    bool          m_isCname;
+    bool          m_isServerless;
 
     RsSettings() :
         m_port(0),
@@ -146,7 +151,9 @@ struct RsSettings
         m_host(""),
 		m_scope(""),
 		m_stsConnectionTimeout(0),
-		m_groupFederation(false)
+		m_groupFederation(false),
+        m_isCname(false),
+        m_isServerless(false)
     {
         /* Do nothing */
     }

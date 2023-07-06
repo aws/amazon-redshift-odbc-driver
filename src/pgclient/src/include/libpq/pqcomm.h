@@ -119,6 +119,7 @@ typedef uint32 PacketLen;
 
 #define SM_DATABASE		64
 #define SM_USER			32
+#define SM_PEER			64
 /* We append database name if db_user_namespace true. */
 #define SM_DATABASE_USER (SM_DATABASE+SM_USER+1)		/* +1 for @ */
 #define SM_OPTIONS		64

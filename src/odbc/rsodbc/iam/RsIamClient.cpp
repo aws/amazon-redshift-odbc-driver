@@ -5,6 +5,7 @@
 #include "rslock.h"
 #include "RsIamClient.h"
 #include "IAMUtils.h"
+#include "RsSettings.h"
 
 #include <aws/redshift/model/GetClusterCredentialsRequest.h>
 #include <aws/redshift/model/GetClusterCredentialsWithIAMRequest.h>
@@ -15,6 +16,10 @@
 //#include <aws/RedshiftServerless/model/DescribeConfigurationRequest.h>
 #include <aws/redshift/model/DescribeAuthenticationProfilesRequest.h>
 #include <aws/redshift/model/AuthenticationProfile.h>
+#if defined ENBLE_CNAME && ENBLE_CNAME == 1
+#include <aws/redshift/model/DescribeCustomDomainAssociationsRequest.h>
+#include <aws/redshift/model/DescribeCustomDomainAssociationsResult.h>
+#endif
 
 
 using namespace RedshiftODBC;
@@ -311,13 +316,20 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
         config.proxyPassword = m_settings.m_httpsProxyPassword;
     }
   
-    RedshiftClient client(in_credentialsProvider, config);
+    Aws::Redshift::RedshiftClient client(in_credentialsProvider, config);
 
     // Compose the ClusterCredentialRequest object
     Model::GetClusterCredentialsRequest request;
-
-    request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ? 
+#if defined ENBLE_CNAME && ENBLE_CNAME == 1
+    if(m_settings.m_isCname){
+        request.SetCustomDomainName(m_settings.m_host.c_str());
+    }
+    else
+#endif
+    {
+        request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ? 
         inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str());
+    }
 
     request.SetDbName(m_settings.m_database);
     request.SetDbUser(m_settings.m_dbUser);
@@ -360,29 +372,69 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
         request.SetAutoCreate(userAutoCreate);
     }
     
+    /*
+     If we know this is a custom cluster name, we need to fetch the clusterId associated with it
+    */
+    Model::GetClusterCredentialsOutcome outcome;
+    rs_string tempClusterIdentifier;
 
-    /* if host is empty describe cluster using cluster id */
-    if (m_settings.m_host.empty())
-    {
-        if (m_settings.m_clusterIdentifer.empty() || m_settings.m_awsRegion.empty())
-        {
-			RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest: Can not describe cluster: missing clusterId or region.");
+    try {
+#if defined ENBLE_CNAME && ENBLE_CNAME == 1       
+        if (m_settings.m_isCname) {
+            Model::DescribeCustomDomainAssociationsRequest describeRequest;
+            describeRequest.SetCustomDomainName(m_settings.m_host);
 
-            IAMUtils::ThrowConnectionExceptionWithInfo(
-                "Can not describe cluster: missing clusterId or region.");
+            const Model::DescribeCustomDomainAssociationsOutcome& describeResponseOutcome = client.DescribeCustomDomainAssociations(describeRequest);
+            if (describeResponseOutcome.IsSuccess()) {
+                const Model::DescribeCustomDomainAssociationsResult& describeResponse = describeResponseOutcome.GetResult();
+                const auto& associations = describeResponse.GetAssociations();
+                if (!associations.empty()) {
+                    const auto& certificateAssociations = associations[0].GetCertificateAssociations();
+                    if (!certificateAssociations.empty()) {
+                        tempClusterIdentifier = certificateAssociations[0].GetClusterIdentifier();
+                    }
+                    else{
+                        RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest:CNAME Feature: No certificateAssociations list Found!");
+                       IAMUtils::ThrowConnectionExceptionWithInfo("CNAME FEATURE::No certificateAssociations list Found!");
+                    }
+                }
+                else{
+                    RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest:CNAME Feature: No Associations list Found!");
+                    IAMUtils::ThrowConnectionExceptionWithInfo("CNAME FEATURE::No Associations list Found!");
+                }
+
+            } 
+            else {
+                RS_LOG(m_log)("Failed to describe custom domain associations. Assuming cluster incorrectly classified as cname, setting cluster identifier directly.");
+                
+                request.SetCustomDomainName(""); // Clear the custom domain name
+                request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ? inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str()); // Set the cluster identifier instead
+            }
+        }
+#endif        
+        /* if host is empty describe cluster using cluster id */
+        if (m_settings.m_host.empty() || m_settings.m_port == 0) {
+            if (m_settings.m_clusterIdentifer.empty() && tempClusterIdentifier.empty()) {
+                RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest: Can not describe cluster: missing clusterId or region.");
+                IAMUtils::ThrowConnectionExceptionWithInfo("Can not describe cluster: missing clusterId or region.");
+            }
+
+            Model::Endpoint endpoint = DescribeCluster(client, tempClusterIdentifier.empty() ? m_settings.m_clusterIdentifer : tempClusterIdentifier);
+            m_credentials.SetHost(endpoint.GetAddress());
+            m_credentials.SetPort(static_cast<short>(endpoint.GetPort()));
         }
 
-        Model::Endpoint endpoint = DescribeCluster(client, m_settings.m_clusterIdentifer);
-        m_credentials.SetHost(endpoint.GetAddress());
-        m_credentials.SetPort(static_cast<short>(endpoint.GetPort()));
+        RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest: Before GetClusterCredentials()");
+
+        // Send the request using RedshiftClient
+        outcome = client.GetClusterCredentials(request);
+
+        RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest: After GetClusterCredentials()");
+    } 
+    catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
+        RS_LOG(m_log)("Failed to call GetClusterCredentials. Exception: %s", ex);
+        throw ex;
     }
-
-	RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest: Before GetClusterCredentials()");
-
-    // Send the request using RedshiftClient
-    Model::GetClusterCredentialsOutcome outcome = client.GetClusterCredentials(request);
-
-	RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest: After GetClusterCredentials()");
 
     return outcome;
 }
@@ -453,37 +505,87 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
 
 	// Compose the ClusterCredentialRequest object
 	Model::GetClusterCredentialsWithIAMRequest request;
-
-	request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ?
+#if defined ENBLE_CNAME && ENBLE_CNAME == 1
+    if(m_settings.m_isCname){
+        //suppose to call the request.SetCustomDomainName() API but its not available.
+        //request.SetCustomDomainName();
+        request.SetCustomDomainName(m_settings.m_host.c_str());
+    }
+    else
+#endif
+    {
+        request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ?
 		inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str());
+    }
+	
 
 	request.SetDbName(m_settings.m_database);
 	request.SetDurationSeconds(m_settings.m_duration);
 
-	/* if host is empty describe cluster using cluster id */
-	if (m_settings.m_host.empty())
-	{
-		if (m_settings.m_clusterIdentifer.empty() || m_settings.m_awsRegion.empty())
-		{
-			RS_LOG(m_log)("RsIamClient::SendClusterCredentialsWithIAMRequest: Can not describe cluster: missing clusterId or region.");
+     /*
+     If we know this is a custom cluster name, we need to fetch the clusterId associated with it
+    */
+    Model::GetClusterCredentialsWithIAMOutcome outcome;
+    rs_string tempClusterIdentifierIAM;
 
-			IAMUtils::ThrowConnectionExceptionWithInfo(
-				"Can not describe cluster: missing clusterId or region.");
-		}
+    try {
+#if defined ENBLE_CNAME && ENBLE_CNAME == 1        
+        if (m_settings.m_isCname) {
+            Model::DescribeCustomDomainAssociationsRequest describeRequest;
+            describeRequest.SetCustomDomainName(m_settings.m_host);
 
-		Model::Endpoint endpoint = DescribeCluster(client, m_settings.m_clusterIdentifer);
-		m_credentials.SetHost(endpoint.GetAddress());
-		m_credentials.SetPort(static_cast<short>(endpoint.GetPort()));
-	}
+            const Model::DescribeCustomDomainAssociationsOutcome& describeResponseOutcome = client.DescribeCustomDomainAssociations(describeRequest);
+            if (describeResponseOutcome.IsSuccess()) {
+                const Model::DescribeCustomDomainAssociationsResult& describeResponse = describeResponseOutcome.GetResult();
+                const auto& associations = describeResponse.GetAssociations();
+                if (!associations.empty()) {
+                    const auto& certificateAssociations = associations[0].GetCertificateAssociations();
+                    if (!certificateAssociations.empty()) {
+                        tempClusterIdentifierIAM = certificateAssociations[0].GetClusterIdentifier();
+                    }
+                    else{
+                        RS_LOG(m_log)("RsIamClient::SendClusterCredentialWithIAMRequest:CNAME Feature: No certificateAssociations list Found!");
+                       IAMUtils::ThrowConnectionExceptionWithInfo("CNAME FEATURE::No certificateAssociations list Found!");
+                    }
+                }
+                else{
+                        RS_LOG(m_log)("RsIamClient::SendClusterCredentialWithIAMRequest:CNAME Feature: No Associations list Found!");
+                       IAMUtils::ThrowConnectionExceptionWithInfo("CNAME FEATURE::No Associations list Found!");
+                }
+            } 
+            else {
+                RS_LOG(m_log)("Failed to describe custom domain associations. Assuming cluster incorrectly classified as cname, setting cluster identifier directly.");
 
-	RS_LOG(m_log)("RsIamClient::SendClusterCredentialsWithIAMRequest: Before GetClusterCredentialsWithIAM()");
+                request.SetCustomDomainName(""); // Clear the custom domain name
+                request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ? inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str()); // Set the cluster identifier instead
+            }
+        }
+#endif        
+        /* if host is empty describe cluster using cluster id */
+        if (m_settings.m_host.empty() || m_settings.m_port==0) {
+            if (m_settings.m_clusterIdentifer.empty() && tempClusterIdentifierIAM.empty()) {
+                RS_LOG(m_log)("RsIamClient::SendClusterCredentialsithIAMRequest: Can not describe cluster: missing clusterId or region.");
+                IAMUtils::ThrowConnectionExceptionWithInfo("Can not describe cluster: missing clusterId or region.");
+            }
 
-	// Send the request using RedshiftClient
-	Model::GetClusterCredentialsWithIAMOutcome outcome = client.GetClusterCredentialsWithIAM(request);
+            Model::Endpoint endpoint = DescribeCluster(client, tempClusterIdentifierIAM.empty() ? m_settings.m_clusterIdentifer : tempClusterIdentifierIAM);
+            m_credentials.SetHost(endpoint.GetAddress());
+            m_credentials.SetPort(static_cast<short>(endpoint.GetPort()));
+        }
 
-	RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest: After GetClusterCredentialsWithIAM()");
+        RS_LOG(m_log)("RsIamClient::SendClusterCredentialswithIAMRequest: Before GetClusterCredentialswithIAM()");
 
-	return outcome;
+        // Send the request using RedshiftClient
+        outcome = client.GetClusterCredentialsWithIAM(request);
+
+        RS_LOG(m_log)("RsIamClient::SendClusterCredentialswithIAMRequest: After GetClusterCredentialswithIAM()");
+    } 
+    catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
+        RS_LOG(m_log)("Failed to call GetClusterCredentialsWithIAM. Exception:%s", ex);
+        throw ex;
+    }
+
+    return outcome;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -554,8 +656,13 @@ Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentia
 
 	request.SetDbName(m_settings.m_database);
 	request.SetWorkgroupName(inferredWorkgroup);
+#if defined ENBLE_CNAME && ENBLE_CNAME == 1
+    if(m_settings.m_isCname){
 
+        RS_LOG(m_log)("Custom cluster names are not supported for Redshift Serverless");
 
+    }         
+#endif
 	/* if port is 0 describe configuration to get host and port*/
 	if (m_settings.m_port == 0)
 	{

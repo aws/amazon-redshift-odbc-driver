@@ -1444,8 +1444,8 @@ open_client_SSL(PGconn *conn)
 	conn->peer_dn[sizeof(conn->peer_dn) - 1] = '\0';
 
 	r = X509_NAME_get_text_by_NID(X509_get_subject_name(conn->peer),
-								  NID_commonName, conn->peer_cn, SM_USER);
-	conn->peer_cn[SM_USER] = '\0';		/* buffer is SM_USER+1 chars! */
+								  NID_commonName, conn->peer_cn, SM_PEER);
+	conn->peer_cn[SM_PEER] = '\0';		/* buffer is SM_PEER+1 chars! */
 	if (r == -1)
 	{
 		/* Unable to get the CN, set it to blank so it can't be used */

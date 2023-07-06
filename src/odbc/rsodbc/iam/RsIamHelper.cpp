@@ -3,6 +3,7 @@
 #include "IAMUtils.h"
 #include "rslock.h"
 #include "RsLogger.h"
+#include <regex>
 
 #include <unordered_map>
 #ifdef WIN32
@@ -26,8 +27,13 @@ using namespace Redshift::IamSupport;
 // Map user credentials to unique keys to improve security
 static std::unordered_map<rs_string, RsCredentials> s_iamCredentialsCache;
 
+std::regex hostPattern("(.+)\\.(.+)\\.(.+).redshift(-dev)?\\.amazonaws\\.com(.)*");
+std::regex serverlessWorkgroupHostPattern("(.+)\\.(.+)\\.(.+).redshift-serverless(-dev)?\\.amazonaws\\.com(.)*");
+
+
 RsSettings RsIamHelper::s_rsSettings;
 MUTEX_HANDLE RsIamHelper::s_iam_helper_criticalSection = rsCreateMutex();;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void RsIamHelper::IamAuthentication(
@@ -306,7 +312,75 @@ void RsIamHelper::SetIamSettings(
   settings.m_host = pIamProps->szHost;
   settings.m_port = (pIamProps->szPort[0] != '\0') ? atoi((const char *)pIamProps->szPort) : 0;
   settings.m_database = pIamProps->szDatabase;
+  
+  std::vector<rs_string> hostnameTokens = IAMUtils::TokenizeSetting(settings.m_host, ".");
+  rs_string workGroup;
+  rs_string acctId;
+  rs_string requiredClusterId;
+  rs_string requiredAwsRegion;
+   if (hostnameTokens.size() >= 6 && (hostnameTokens[3].find("serverless") != rs_string::npos))
+    {
+        /*Serverless_cluster's host examples:
+		e.g., default.518627716765.us-east-1.redshift-serverless.amazonaws.com
+		*/ 
+		workGroup = hostnameTokens[0];
+		acctId = hostnameTokens[1];
+		settings.m_isServerless = true; 
+    }
+	else if (hostnameTokens.size() >= 6)
+	{
+		/*provisioned_cluster_host examples: 
+		e.g., redshiftj-iam-test.c2mf5zd3u3sv.us-west-2.redshift.amazonaws.com
+		e.g., redshiftj-iam-test.c2mf5zd3u3sv.us-west-2.redshift.amazonaws.com.cn
+		*/
+		requiredClusterId = hostnameTokens[0];
+		requiredAwsRegion = hostnameTokens[2];
+	}
 
+  std::smatch mProvisioned;
+  std::smatch mServerless;
+
+  bool provisionedMatches = std::regex_match(settings.m_host, mProvisioned, hostPattern);
+  bool serverlessMatches = std::regex_match(settings.m_host, mServerless, serverlessWorkgroupHostPattern);
+  rs_string clusterId;
+  rs_string userInputClusterId = pIamProps->szClusterId;
+
+  if(provisionedMatches){
+	RS_LOG(logger)("Code flow for regular provisioned cluster");
+	clusterId = requiredClusterId;
+  }
+  else if(serverlessMatches){
+	// serverless vanilla
+  	// do nothing, regular serverless logic flow
+	RS_LOG(logger)("Code flow for regular serverless cluster");
+  }
+  else if(settings.m_isServerless){
+	// hostname doesn't match serverless regex but serverless set to true explicitly by user
+	// when ready for implementation, remove setting of the isServerless property automatically in parseUrl(),
+	// set it here instead
+	// currently do nothing as server does not support cname for serverless
+	if(!(workGroup.empty())){
+		// workgroup specified by user - serverless nlb call
+		// check for serverlessAcctId to enter serverless NLB logic flow, for when we implement this for serverless after server side is ready
+		// currently do nothing as regular code flow is sufficient
+		RS_LOG(logger)("Code flow for nlb serverless cluster");
+	}
+	else{
+		// attempt serverless cname call - currently not supported by server
+		// currently sets isCname to true which will be asserted on later, as cname for serverless is not supported yet
+		RS_LOG(logger)("Code flow for cname serverless cluster");
+		settings.m_isCname = true;
+	}
+  }
+  else {
+	// clusterID specified by user - provisioned nlb call
+	// regular logic flow, no change needed
+	RS_LOG(logger)("Code flow for nlb/cname provisioned cluster");
+	clusterId = pIamProps->szClusterId;
+	// attempt provisioned cname call
+  	// cluster id will be fetched upon describing custom domain name
+	settings.m_isCname = true;
+  }
 
   settings.m_accessKeyID = pIamProps->szAccessKeyID;
   settings.m_secretAccessKey = pIamProps->szSecretAccessKey;
@@ -319,7 +393,15 @@ void RsIamHelper::SetIamSettings(
   if (settings.m_accessDuration < 900)
     settings.m_accessDuration = 900;
 
-  settings.m_clusterIdentifer = pIamProps->szClusterId;
+  settings.m_clusterIdentifer = clusterId;
+  RS_LOG(logger)("Cluster Identifier:%s", settings.m_clusterIdentifer );
+//settings.m_clusterIdentifer = pIamProps->szClusterId;
+
+
+  if(!settings.m_isServerless && !settings.m_isCname && (settings.m_clusterIdentifer.empty())){
+	RS_LOG(logger)( "Invalid connection property setting. cluster_identifier must be provided when IAM is enabled");
+  }
+  
   settings.m_dbUser = pIamProps->szDbUser;
   temp = pIamProps->szDbGroups;
   settings.m_dbGroups = IAMUtils::convertStringToWstring(temp);
