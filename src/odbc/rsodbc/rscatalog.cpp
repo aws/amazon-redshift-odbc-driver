@@ -4567,7 +4567,7 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " when external_type = 'nvarchar' THEN 0 "
 		 " ELSE 10"
 		 " END AS NUM_PREC_RADIX,"
-		 " NULL AS NULLABLE,"
+		 " CAST(CASE is_nullable WHEN 'true' THEN 1 WHEN 'false' THEN 0 ELSE NULL END AS SMALLINT) AS NULLABLE,"
 		 " NULL AS REMARKS,"
 		 " NULL AS COLUMN_DEF,"
 		 " CAST(CASE WHEN external_type = 'text' THEN 12"
@@ -4658,7 +4658,7 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN external_type = 'string' THEN 16383"
 		 " ELSE NULL END AS CHAR_OCTET_LENGTH,"
 		 " columnnum AS ORDINAL_POSITION,"
-		 " NULL AS IS_NULLABLE "
+         " CASE IS_NULLABLE when 'true' THEN 'YES' when 'false' then 'NO' ELSE NULL END AS IS_NULLABLE"
 		 " FROM svv_external_columns");
 
 	result.append(" WHERE true ");
