@@ -57,6 +57,7 @@
 #define CIDOID          29
 #define OIDVECTOROID    30
 #define ABSTIMEOID      702
+#define NAMEARRAYOID    1003
 #define INT2ARRAYOID    1005
 #define INT4ARRAYOID    1007
 #define TEXTARRAYOID    1009
@@ -1381,6 +1382,7 @@ short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType)
         case ABSTIMEOID:
         case INT2ARRAYOID:
         case INT4ARRAYOID:
+        case NAMEARRAYOID:
         case TEXTARRAYOID:
         case FLOAT4ARRAYOID:
         case ACLITEMARRAYOID:
