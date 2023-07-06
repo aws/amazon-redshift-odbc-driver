@@ -1383,7 +1383,7 @@ ConfigDSN(
 		GlobalFree(rs_dsn_setup_handle);
 		return FALSE;
 	}
-
+	rs_dsn_log(__LINE__, "odbc_glb_attrs <- rs_odbc_glb (defaults) ", helpfile_url);
 	memcpy(&rs_dsn_setup_ctxt->odbc_glb_attrs, rs_odbc_glb_attrs, sizeof(rs_odbc_glb_attrs));
 
 	/* Save original data source name */
@@ -3175,8 +3175,10 @@ rs_odbc_glb_write_attrs(
 	HKEY odbcKey;
 
 	rs_dsn_log(__LINE__, "rs_odbc_glb_write_attrs()");
-
-	if (ERROR_SUCCESS == RegOpenKeyEx(HKEY_CURRENT_USER, "SOFTWARE\\ODBC\\ODBC.INI\\ODBC", 0, KEY_ALL_ACCESS, &odbcKey))
+	//create an entry, if not exists
+	if (ERROR_SUCCESS == RegCreateKeyEx(HKEY_CURRENT_USER, "SOFTWARE\\ODBC\\ODBC.INI\\ODBC",
+	                                    0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL,
+										 &odbcKey, NULL))
 	{
 		/*
 		*	note that the value in the input context is our default
@@ -3188,6 +3190,8 @@ rs_odbc_glb_write_attrs(
 			rs_dsn_log(__LINE__, "rs_odbc_glb_write_attrs() key:%s val:%s", rs_odbc_glb_attrs[i].attr_code, attrs[i].attr_val);
 		}
 		RegCloseKey(odbcKey);
+	} else {
+		rs_dsn_log(__LINE__, "rs_odbc_glb_write_attrs() NOT successful");
 	}
 
 	rs_dsn_log(__LINE__, "rs_odbc_glb_write_attrs() return");
@@ -3265,6 +3269,8 @@ rs_odbc_glb_read_attrs(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 			rs_dsn_log(__LINE__, "rs_odbc_glb_read_attrs() key:%s val:%s", rs_odbc_glb_attrs[i].attr_code, attrs[i].attr_val);
 		}
 		RegCloseKey(odbcKey);
+	} else {
+		rs_dsn_log(__LINE__, "rs_odbc_glb_read_attrs() NOT successfull");
 	}
 
 	rs_dsn_log(__LINE__, "rs_odbc_glb_read_attrs() return");
