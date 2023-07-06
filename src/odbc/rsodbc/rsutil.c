@@ -1695,9 +1695,16 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				{
 					if ((IS_TEXT_FORMAT(format)) || (hRsSpecialType != TIMETZOID
 														&& hRsSpecialType != TIMESTAMPTZOID))
-						rc = copyStrDataBigLen(rsVal.pcVal, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
-					else
-					{
+                    {
+                        // As per getRsVal(), when getRsVal() returns false,
+                        // we should process the value as string directly.
+						rc = copyStrDataBigLen(iConversion ? rsVal.pcVal : pColData,
+                                               iColDataLen,
+                                               (char *)pBuf,
+                                               cbLen,
+                                                pcbLenInd);
+                    }
+					else {
 						if (iColDataLen > 0)
 						{
 							if(hRsSpecialType == TIMETZOID)
@@ -1995,7 +2002,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                         std::u16string wchar16;
                         static const int wsize = sizeof(WCHAR);
                         int wchar16Size =
-                            char_utf8_to_wchar16(rsVal.pcVal, iColDataLen, wchar16);
+                            char_utf8_to_wchar16(iConversion ? rsVal.pcVal : pColData, iColDataLen, wchar16);
                         // How many bytes we'd like to write:
                         *pcbLenInd = wchar16.size() * wsize;
                         // How many bytes we can actually write.
