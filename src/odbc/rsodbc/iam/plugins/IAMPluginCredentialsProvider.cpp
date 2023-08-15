@@ -453,10 +453,20 @@ rs_string IAMPluginCredentialsProvider::GetValueByKeyFromInput(
     const rs_string& in_input,
     const rs_string& in_key)
 {
-    const rs_string KEY_PATTERN = "(" + in_key + ")\\s*=\\s*\"(.*?)\"";
+    const rs_string KEY_PATTERN_DOUBLE_QUOTES = "(" + in_key + ")\\s*=\\s*\"(.*?)\"";
+    const rs_string KEY_PATTERN_SINGLE_QUOTES = "(" + in_key + ")\\s*=\\s*'(.*?)'";    
+   
     std::smatch match;
-    std::regex expression(KEY_PATTERN);
+    std::regex expression(KEY_PATTERN_DOUBLE_QUOTES);
 
+    // first try to find a match with double quotes
+    if (std::regex_search(in_input, match, expression))
+    {
+        return EscapeHtmlEntity(match.str(2));
+    }
+
+    // if no match is found, try to find a match with single quotes
+    expression = std::regex(KEY_PATTERN_SINGLE_QUOTES);
     if (std::regex_search(in_input, match, expression))
     {
         return EscapeHtmlEntity(match.str(2));
