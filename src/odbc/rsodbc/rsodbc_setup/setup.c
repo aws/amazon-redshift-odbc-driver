@@ -97,8 +97,9 @@
 #define IAM_PLUGIN_BROWSER_SAML     "BrowserSAML"
 #define IAM_PLUGIN_PING             "Ping"
 #define IAM_PLUGIN_OKTA             "Okta"
-#define IAM_PLUGIN_JWT              "JWT"
+#define IAM_PLUGIN_JWT              "JWT"    // used for federated native IdP auth
 #define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"
+#define PLUGIN_JWT_IAM_AUTH         "JwtIamAuthPlugin"    // used for federated IAM auth
 
 
 #define MAX_JWT					(16 * 1024)
@@ -601,6 +602,7 @@ static int rs_pooling_items[5] = {
 #define AUTH_OKTA			8
 #define AUTH_PING_FEDERATE	9
 #define AUTH_BROWSER_AZURE_OAUTH2	10
+#define AUTH_JWT_IAM		11
 
 static char *szAuthTypes[] = {
 	"Standard",
@@ -614,6 +616,7 @@ static char *szAuthTypes[] = {
 	"Identity Provider: Okta",
 	"Identity Provider: PingFederate",
 	"Identity Provider: Browser Azure AD OAUTH2",
+	"Identity Provider: JWT IAM Auth Plugin",
 	""
 };
 
@@ -1139,6 +1142,37 @@ static rs_dialog_controls rs_ping_federated_val_controls[] =
 	{ IDC_SSL_INSECURE, RS_CHECKBOX_CONTROL, RS_SSL_INSECURE },
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
 	{ IDC_STS_EPU,  RS_TEXT_CONTROL, RS_IAM_STS_ENDPOINT_URL },
+	{ 0,  RS_NONE_CONTROL,"" }
+};
+
+static int rs_jwt_iam_auth_controls[] =
+{
+	IDC_CID_STATIC,
+	IDC_CID,
+	IDC_REGION_STATIC,
+	IDC_REGION,
+	IDC_DBGROUPS_STATIC,
+	IDC_DBGROUPS,
+	IDC_WIT_STATIC,
+	IDC_WIT,
+	IDC_ROLE_STATIC,
+	IDC_ROLE,
+	IDC_DURATION_STATIC,
+	IDC_DURATION,
+	IDC_RSN_STATIC,
+	IDC_RSN,
+	0
+};
+
+static rs_dialog_controls rs_jwt_iam_auth_val_controls[] =
+{
+	{ IDC_CID, RS_TEXT_CONTROL,RS_CLUSTER_ID },
+	{ IDC_REGION, RS_TEXT_CONTROL, RS_REGION },
+	{ IDC_DBGROUPS, RS_TEXT_CONTROL, RS_DB_GROUPS },
+	{ IDC_WIT, RS_TEXT_CONTROL, RS_WEB_IDENTITY_TOKEN },
+	{ IDC_ROLE, RS_TEXT_CONTROL, RS_ROLE_ARN },
+	{ IDC_DURATION, RS_TEXT_CONTROL,  RS_DURATION },
+	{ IDC_RSN, RS_TEXT_CONTROL, RS_ROLE_SESSION_NAME },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -2354,7 +2388,7 @@ static void rs_hide_show_authtype_controls(HWND hwndDlg, char *curAuthType)
 	}
 	else
 	if (strcmp(curAuthType, szAuthTypes[AUTH_JWT]) == 0) {
-		// JWT. 
+		// JWT nativeIdP 
 		rs_show_controls(hwndDlg, rs_jwt_controls);
 	}
 	else
@@ -2371,6 +2405,11 @@ static void rs_hide_show_authtype_controls(HWND hwndDlg, char *curAuthType)
 	if (strcmp(curAuthType, szAuthTypes[AUTH_BROWSER_AZURE_OAUTH2]) == 0) {
 		// Azure Browser. 
 		rs_show_controls(hwndDlg, rs_azure_browser_oauth2_controls);
+	}
+	else
+	if (strcmp(curAuthType, szAuthTypes[AUTH_JWT_IAM]) == 0) {
+		// JWT IAM federated auth 
+		rs_show_controls(hwndDlg, rs_jwt_iam_auth_controls);
 	}
 }
 
@@ -2489,6 +2528,9 @@ static int get_auth_type_for_control(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 				else
 				if (strcmp(plugin, IAM_PLUGIN_BROWSER_AZURE_OAUTH2) == 0)
 					rc = AUTH_BROWSER_AZURE_OAUTH2;
+				else
+				if (strcmp(plugin, PLUGIN_JWT_IAM_AUTH) == 0)
+					rc = AUTH_JWT_IAM;
 			}
 		}
 	}
@@ -2568,6 +2610,11 @@ static void set_dlg_items_based_on_auth_type(int curAuthType, HWND hwndDlg, rs_d
 	if (curAuthType == AUTH_BROWSER_AZURE_OAUTH2)
 	{
 		set_idp_dlg_items(rs_azure_browser_oauth2_val_controls, hwndDlg, rs_dsn_setup_ctxt);
+	}
+	else
+	if (curAuthType == AUTH_JWT_IAM)
+	{
+		set_idp_dlg_items(rs_jwt_iam_auth_val_controls, hwndDlg, rs_dsn_setup_ctxt);
 	}
 }
 
@@ -2651,6 +2698,13 @@ static void rs_dsn_read_idp_items(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctx
 		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_IAM, "1");
 		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_PLUGIN_NAME, IAM_PLUGIN_PING);
 		rs_dsn_read_auth_type_items(rs_ping_federated_val_controls, hdlg, rs_dsn_setup_ctxt);
+	}
+	else
+	if (strcmp(curAuthType, szAuthTypes[AUTH_JWT_IAM]) == 0) {
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_AUTH_TYPE, RS_AUTH_TYPE_PLUGIN);
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_IAM, "1");
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_PLUGIN_NAME, PLUGIN_JWT_IAM_AUTH);
+		rs_dsn_read_auth_type_items(rs_jwt_iam_auth_val_controls, hdlg, rs_dsn_setup_ctxt);
 	}
 }
 

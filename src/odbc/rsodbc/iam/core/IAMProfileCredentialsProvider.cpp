@@ -15,6 +15,11 @@ using namespace Aws::Client;
 using namespace Aws::STS;
 using namespace Aws::Utils;
 
+#if (defined(_WIN32) || defined(_WIN64))
+#ifdef GetMessage
+#undef GetMessage
+#endif
+#endif
 namespace {
 
     /* Allocation log tag for Profile Credentials Provider */

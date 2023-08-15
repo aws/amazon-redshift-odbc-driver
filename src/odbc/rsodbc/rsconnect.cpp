@@ -3045,7 +3045,7 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
 
 		RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_DISABLE_CACHE, &(pIamProps->isDisableCache));
 
-        if(_stricmp( pIamProps->szPluginName,IAM_PLUGIN_JWT) == 0)
+        if(_stricmp(pIamProps->szPluginName,IAM_PLUGIN_JWT) == 0 || _stricmp(pIamProps->szPluginName, JWT_IAM_AUTH_PLUGIN) == 0)
         {
           pIamProps->pszJwt = (char *)rs_calloc(sizeof(char),MAX_IAM_JWT_LEN);
           RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_WEB_IDENTITY_TOKEN, "", pIamProps->pszJwt, MAX_IAM_JWT_LEN, ODBC_INI);

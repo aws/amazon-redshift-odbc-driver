@@ -198,6 +198,9 @@
     <ClCompile Include="iam\plugins\IAMBrowserAzureOAuth2CredentialsProvider.cpp">
       <Filter>Source Files\iam\plugins</Filter>
     </ClCompile>
+    <ClCompile Include="iam\plugins\JwtIamAuthPlugin.cpp">
+      <Filter>Source Files\iam\plugins</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="linux_port.h">
@@ -363,6 +366,9 @@
       <Filter>Header Files\iam\plugins</Filter>
     </ClInclude>
     <ClInclude Include="iam\plugins\IAMBrowserAzureOAuth2CredentialsProvider.h">
+      <Filter>Header Files\iam\plugins</Filter>
+    </ClInclude>
+    <ClInclude Include="iam\plugins\JwtIamAuthPlugin.h">
       <Filter>Header Files\iam\plugins</Filter>
     </ClInclude>
   </ItemGroup>

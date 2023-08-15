@@ -12,6 +12,7 @@
 #include "IAMExternalCredentialsProvider.h"
 #include "IAMJwtBasicCredentialsProvider.h"
 #include "IAMBrowserAzureOAuth2CredentialsProvider.h"
+#include "JwtIamAuthPlugin.h"
 
 #include <map>
 #include <memory>
@@ -140,6 +141,19 @@ namespace IamSupport
         /// 
         /// @return A credentials provider wrapped using smart pointer
         static std::unique_ptr<IAMJwtBasicCredentialsProvider> CreateJwtPlugin(
+            RsLogger* in_log,
+            const IAMConfiguration& in_config = IAMConfiguration(),
+            const std::map<rs_string, rs_string>& in_argsMap
+            = std::map<rs_string, rs_string>());
+
+        /// @brief Constructor           Construct Jwt IAM auth plugin using argument map
+        ///
+        /// @param in_log                The logger.
+        /// @param in_config             The IAM Connection Configuration
+        /// @param in_argsMap            Optional arguments map passed to the credentials provider
+        /// 
+        /// @return A credentials provider wrapped using smart pointer
+        static std::unique_ptr<JwtIamAuthPlugin> CreateJwtIamAuthPlugin(
             RsLogger* in_log,
             const IAMConfiguration& in_config = IAMConfiguration(),
             const std::map<rs_string, rs_string>& in_argsMap

@@ -57,6 +57,7 @@ CPP_SRCS += \
 ../iam/IAMBrowserAzureOAuth2CredentialsProvider.cpp \
 ../iam/plugins/IAMJwtPluginCredentialsProvider.cpp \
 ../iam/plugins/IAMJwtBasicCredentialsProvider.cpp \
+../iam/plugins/JwtIamAuthPlugin.cpp \
 ../iam/plugins/IAMExternalCredentialsProvider.cpp \
 ../iam/plugins/IAMPluginFactory.cpp 
 
@@ -111,6 +112,7 @@ OBJS += \
 ./IAMBrowserAzureOAuth2CredentialsProvider.o \
 ./IAMJwtPluginCredentialsProvider.o \
 ./IAMJwtBasicCredentialsProvider.o \
+./JwtIamAuthPlugin.o \
 ./IAMExternalCredentialsProvider.o \
 ./IAMPluginFactory.o 
 
@@ -168,6 +170,7 @@ C_DEPS += \
   ./IAMBrowserAzureOAuth2CredentialsProvider.d \
   ./IAMJwtPluginCredentialsProvider.d \
   ./IAMJwtBasicCredentialsProvider.d \
+  ./JwtIamAuthPlugin.d \
   ./IAMExternalCredentialsProvider.d \
   ./IAMPluginFactory.d 
 

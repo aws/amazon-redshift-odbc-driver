@@ -46,6 +46,10 @@ std::unique_ptr<IAMPluginCredentialsProvider> IAMPluginFactory::CreatePlugin(
     {
         credProvider = CreateJwtPlugin(in_log, in_config, in_argsMap);
     }
+    else if (IAMUtils::isEqual(in_pluginName, IAMUtils::convertCharStringToWstring(JWT_IAM_AUTH_PLUGIN), false))
+    {
+        credProvider = CreateJwtIamAuthPlugin(in_log, in_config, in_argsMap);
+    }
     else
     {
         credProvider = CreateExternalPlugin(in_log, in_config, in_argsMap); // .Detach()
@@ -148,6 +152,18 @@ std::unique_ptr<IAMJwtBasicCredentialsProvider> IAMPluginFactory::CreateJwtPlugi
 
     return std::unique_ptr<IAMJwtBasicCredentialsProvider>(
         new IAMJwtBasicCredentialsProvider(in_log, in_config, in_argsMap));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+std::unique_ptr<JwtIamAuthPlugin> IAMPluginFactory::CreateJwtIamAuthPlugin(
+    RsLogger* in_log,
+    const IAMConfiguration& in_config,
+    const std::map<rs_string, rs_string>& in_argsMap)
+{
+    RS_LOG(in_log)("IAMPluginFactory::CreateJwtIamAuthPlugin");
+
+    return std::unique_ptr<JwtIamAuthPlugin>(
+        new JwtIamAuthPlugin(in_log, in_config, in_argsMap));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

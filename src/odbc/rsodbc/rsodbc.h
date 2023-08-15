@@ -934,9 +934,9 @@ public:
 #define IAM_PLUGIN_BROWSER_SAML     "BrowserSAML"
 #define IAM_PLUGIN_PING             "Ping"
 #define IAM_PLUGIN_OKTA             "Okta"
-#define IAM_PLUGIN_JWT              "JWT"
-#define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"
-
+#define IAM_PLUGIN_JWT              "JWT"   // used for federated native IdP auth
+#define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"   // used for federated native IdP auth
+#define JWT_IAM_AUTH_PLUGIN         "JwtIamAuthPlugin"   // used for federated Jwt IAM auth
 
 
 struct RS_TCP_PROXY_CONN_PROPS_INFO {

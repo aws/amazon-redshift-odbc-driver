@@ -274,6 +274,7 @@
     <ClCompile Include="iam\plugins\IAMPluginCredentialsProvider.cpp" />
     <ClCompile Include="iam\plugins\IAMPluginFactory.cpp" />
     <ClCompile Include="iam\plugins\IAMSamlPluginCredentialsProvider.cpp" />
+    <ClCompile Include="iam\plugins\JwtIamAuthPlugin.cpp" />
     <ClCompile Include="iam\RsCredentials.cpp" />
     <ClCompile Include="iam\RsErrorException.cpp" />
     <ClCompile Include="iam\RsIamClient.cpp" />
@@ -331,6 +332,7 @@
     <ClInclude Include="iam\plugins\IAMPluginCredentialsProvider.h" />
     <ClInclude Include="iam\plugins\IAMPluginFactory.h" />
     <ClInclude Include="iam\plugins\IAMSamlPluginCredentialsProvider.h" />
+    <ClInclude Include="iam\plugins\JwtIamAuthPlugin.h" />
     <ClInclude Include="iam\RsCredentials.h" />
     <ClInclude Include="iam\RsErrorException.h" />
     <ClInclude Include="iam\RsHttpProxyProperties.h" />
