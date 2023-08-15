@@ -16,7 +16,7 @@
 //#include <aws/RedshiftServerless/model/DescribeConfigurationRequest.h>
 #include <aws/redshift/model/DescribeAuthenticationProfilesRequest.h>
 #include <aws/redshift/model/AuthenticationProfile.h>
-#if defined ENBLE_CNAME && ENBLE_CNAME == 1
+#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)
 #include <aws/redshift/model/DescribeCustomDomainAssociationsRequest.h>
 #include <aws/redshift/model/DescribeCustomDomainAssociationsResult.h>
 #endif
@@ -320,7 +320,7 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
 
     // Compose the ClusterCredentialRequest object
     Model::GetClusterCredentialsRequest request;
-#if defined ENBLE_CNAME && ENBLE_CNAME == 1
+#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)
     if(m_settings.m_isCname){
         request.SetCustomDomainName(m_settings.m_host.c_str());
     }
@@ -379,7 +379,7 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
     rs_string tempClusterIdentifier;
 
     try {
-#if defined ENBLE_CNAME && ENBLE_CNAME == 1       
+#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)       
         if (m_settings.m_isCname) {
             Model::DescribeCustomDomainAssociationsRequest describeRequest;
             describeRequest.SetCustomDomainName(m_settings.m_host);
@@ -505,7 +505,7 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
 
 	// Compose the ClusterCredentialRequest object
 	Model::GetClusterCredentialsWithIAMRequest request;
-#if defined ENBLE_CNAME && ENBLE_CNAME == 1
+#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)
     if(m_settings.m_isCname){
         //suppose to call the request.SetCustomDomainName() API but its not available.
         //request.SetCustomDomainName();
@@ -529,7 +529,7 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
     rs_string tempClusterIdentifierIAM;
 
     try {
-#if defined ENBLE_CNAME && ENBLE_CNAME == 1        
+#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)        
         if (m_settings.m_isCname) {
             Model::DescribeCustomDomainAssociationsRequest describeRequest;
             describeRequest.SetCustomDomainName(m_settings.m_host);
@@ -656,7 +656,7 @@ Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentia
 
 	request.SetDbName(m_settings.m_database);
 	request.SetWorkgroupName(inferredWorkgroup);
-#if defined ENBLE_CNAME && ENBLE_CNAME == 1
+#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)
     if(m_settings.m_isCname){
 
         RS_LOG(m_log)("Custom cluster names are not supported for Redshift Serverless");

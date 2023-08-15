@@ -23,7 +23,7 @@ echo "OPENSSL_INC_DIR=${OPENSSL_INC_DIR}"
 echo "OPENSSL_LIB_DIR=${OPENSSL_LIB_DIR}"
 echo "AWS_SDK_LIB_DIR=${AWS_SDK_LIB_DIR}"
 echo "CURL_LIB_DIR=${CURL_LIB_DIR}"
-echo "ENBLE_CNAME=${ENBLE_CNAME}"
+echo "ENABLE_CNAME=${ENABLE_CNAME}"
 
 # Build libpq & libpgport
 cd ./src/pgclient

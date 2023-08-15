@@ -177,9 +177,9 @@ C_DEPS += \
 
 # Each subdirectory must supply rules for building sources it contributes
 MYFLAGS = -DLINUX -DUSE_SSL -DODBCVER=0x0352 -DBUILD_REAL_64_BIT_MODE
-ifdef ENBLE_CNAME
-ifeq ($(ENBLE_CNAME), 1)
-    MYFLAGS += -DENBLE_CNAME
+ifdef ENABLE_CNAME
+ifeq ($(ENABLE_CNAME), 1)
+    MYFLAGS += -DENABLE_CNAME
 endif
 endif
 
