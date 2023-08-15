@@ -1,5 +1,14 @@
 Changelog
 =========
+v2.0.0.8 (2023-08-15)
+---------------------
+- Fixed regular expressions used for parsing HTML Tag value responses received form for Ping IdP.[Ruei-Yang Huang]
+- Added a new JWT IAM authentication plugin (JwtIamAuthPlugin) to replace BasicJwtCredentialsProvider which has been repurposed to support the new nativeIdP authentication.[Naveen Kumar]
+- Revert a memory issue fix in libpq’s MesageLoopState that was resulting in crashes since v2.0.0.6.[Vahid Saber Hamishagi]
+- Fixed enablement settings for Custom-Cluster Naming (CNAME) for Windows platform which was disabling CNAME permanently.[Janak Khadka]
+
+
+
 v2.0.0.7 (2023-07-06)
 ---------------------
 - Upgrade windows aws-sdk-cpp to 1.11.111. [Janak Khadka]
