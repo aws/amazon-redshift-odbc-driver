@@ -913,7 +913,14 @@ public:
 #define RS_DISABLE_CACHE           "DisableCache"
 // #define RS_IAM_STS_ENDPOINT_URL    "StsEndpointUrl"
 #define RS_IAM_STS_CONNECTION_TIMEOUT  "StsConnectionTimeout"
-#define RS_SCOPE						"scope"
+#define RS_SCOPE                       "scope"
+#define RS_BASIC_AUTH_TOKEN            "token"
+#define RS_START_URL                   "start_url"
+#define RS_IDC_REGION                  "idc_region"
+#define RS_IDENTITY_NAMESPACE          "identity_namespace" 
+#define RS_TOKEN_TYPE                  "token_type"
+#define RS_IDC_RESPONSE_TIMEOUT        "idc_response_timeout"
+#define RS_IDC_CLIENT_DISPLAY_NAME     "idc_client_display_name"
 
 
 
@@ -925,6 +932,8 @@ public:
 #define RS_AUTH_TYPE_STATIC   "Static"
 #define RS_AUTH_TYPE_PROFILE  "Profile"
 #define RS_AUTH_TYPE_PLUGIN   "Plugin"
+#define RS_IDP_TYPE_AWS_IDC   "AwsIdc"
+#define RS_TOKEN_TYPE_ACCESS_TOKEN  "ACCESS_TOKEN"
 
 
 /* Predefined external plug-in */
@@ -937,6 +946,9 @@ public:
 #define IAM_PLUGIN_JWT              "JWT"   // used for federated native IdP auth
 #define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"   // used for federated native IdP auth
 #define JWT_IAM_AUTH_PLUGIN         "JwtIamAuthPlugin"   // used for federated Jwt IAM auth
+#define PLUGIN_IDP_TOKEN_AUTH              "IdpTokenAuthPlugin"
+#define PLUGIN_BROWSER_IDC_AUTH            "BrowserIdcAuthPlugin"
+
 
 
 struct RS_TCP_PROXY_CONN_PROPS_INFO {
@@ -1015,6 +1027,7 @@ public:
       pConnectStr = NULL;
       cbConnectStr = 0;
       isIAMAuth = false;
+      isNativeAuth = false;
       pIamProps = NULL;
       pHttpsProps = NULL;
 	  pTcpProxyProps = NULL;
@@ -1027,18 +1040,18 @@ public:
 	  strncpy(szStringType, "varchar", sizeof(szStringType)); // "unspecified"
     }
 
-    char szHost[MAX_IDEN_LEN];
+    char szHost[MAX_IDEN_LEN] = {0};
     int  iHostNameKeyWordType; // SHORT_NAME or LONG_NAME?
-    char szPort[MAX_IDEN_LEN];
+    char szPort[MAX_IDEN_LEN] = {0};
     int  iPortKeyWordType;
-    char szDatabase[MAX_IDEN_LEN];
+    char szDatabase[MAX_IDEN_LEN] = {0};
     int  iDatabaseKeyWordType;
-    char szUser[MAX_IDEN_LEN];
+    char szUser[MAX_IDEN_LEN] = {0};
     int  iUserKeyWordType;
-    char szPassword[MAX_IDEN_LEN];
+    char szPassword[PADB_MAX_PARAMETERS] = {0};
     int  iPasswordKeyWordType;
-    char szDSN[MAX_IDEN_LEN];
-    char szDriver[MAX_IDEN_LEN];
+    char szDSN[MAX_IDEN_LEN] = {0};
+    char szDriver[MAX_IDEN_LEN] = {0};
 
 /*  If checked, retrieves parameter metadata from the PADB server when a query
     contains parameters (for use with the SQLDescribeParam() ODBC API function). Note that returned
@@ -1107,7 +1120,7 @@ public:
 /*  The directory in which to store the client side cursor files. If the provided path does
     not exist, the value is changed to the default. Default is TMP/TEMP.
 */
-    char szCscPath[MAX_PATH + 1];
+    char szCscPath[MAX_PATH + 1] = {0};
 
 /*  Threshold memory cursor size (in MB). If the client side cursor is enabled and the
     result set for a query exceeds the memory amount in cscthreshold, the excess data
@@ -1121,7 +1134,7 @@ public:
  * ValidateServerCertificate, szHostNameInCertificate.
  *
  */
-    char szSslMode[MAX_IDEN_LEN];
+    char szSslMode[MAX_IDEN_LEN] = {0};
 
 
 /*  The method the driver uses to encrypt data sent between the driver and the database server. 
@@ -1149,18 +1162,18 @@ public:
     and server authentication is used. The truststore file contains a list of the valid Certificate Authorities (CAs) that are trusted 
     by the client machine for SSL server authentication. 
 */
-    char szTrustStore[MAX_PATH + 1];
+    char szTrustStore[MAX_PATH + 1] = {0};
 
     // Multi-Insert conversion enable
     int iMultiInsertCmdConvertEnable;
 
 /* Kerberos authentication support specifying the service name 
 */
-    char szKerberosServiceName[MAX_IDEN_LEN];
+    char szKerberosServiceName[MAX_IDEN_LEN] = {0};
 
 /* Kerberos authentication support specifying API to use. SSPI or GSS. SSPI only avail on Windows.
 */
-    char szKerberosAPI[MAX_IDEN_LEN];
+    char szKerberosAPI[MAX_IDEN_LEN] = {0};
 
 /* Streaming Cursor size
 */
@@ -1176,25 +1189,27 @@ public:
     RS_IAM_CONN_PROPS_INFO *pIamProps;
     RS_PROXY_CONN_PROPS_INFO *pHttpsProps;
 
+    bool isNativeAuth;     // The connection property to determine if native auth needs to be used.
+
 	// Redshift TCP Proxy
 	RS_TCP_PROXY_CONN_PROPS_INFO *pTcpProxyProps;
 
 	// TCP keep alives
-	char szKeepAlive[MAX_NUMBER_BUF_LEN];
-	char szKeepAliveIdle[MAX_NUMBER_BUF_LEN];
-	char szKeepAliveCount[MAX_NUMBER_BUF_LEN];
-	char szKeepAliveInterval[MAX_NUMBER_BUF_LEN];
+	char szKeepAlive[MAX_NUMBER_BUF_LEN] = {0};
+	char szKeepAliveIdle[MAX_NUMBER_BUF_LEN] = {0};
+	char szKeepAliveCount[MAX_NUMBER_BUF_LEN] = {0};
+	char szKeepAliveInterval[MAX_NUMBER_BUF_LEN] = {0};
 
 	// Min TLS
-	char szMinTLS[MAX_NUMBER_BUF_LEN];
+	char szMinTLS[MAX_NUMBER_BUF_LEN] = {0};
 
 	// Redshift native auth
-	char szIdpType[MAX_IDEN_LEN];
-	char szProviderName[MAX_IDEN_LEN];
+	char szIdpType[MAX_IDEN_LEN] = {0};
+	char szProviderName[MAX_IDEN_LEN] = {0};
 
 	// Bind OID for VARCHAR
 	// The type to bind String parameters as (usually 'varchar', 'unspecified' allows implicit casting to other types)
-	char szStringType[MAX_SMALL_TEMP_BUF_LEN];
+	char szStringType[MAX_SMALL_TEMP_BUF_LEN] = {0};
 
 	int iClientProtocolVersion; // If user sets, the driver uses it otherwise there will be default value hardcoded.
 };

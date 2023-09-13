@@ -7,6 +7,13 @@
 #include "IAMUtils.h"
 #include "RsSettings.h"
 
+#include <ares.h>
+#include <ares_dns.h>
+#if defined LINUX
+#include <arpa/nameser.h>
+#include <netdb.h>    // Include netdb.h for the complete struct hostent definition
+#endif
+
 #include <aws/redshift/model/GetClusterCredentialsRequest.h>
 #include <aws/redshift/model/GetClusterCredentialsWithIAMRequest.h>
 #include <aws/redshift/model/DescribeClustersRequest.h>
@@ -42,6 +49,8 @@ namespace
     /************************************************************************/
     static const rs_string PGO_IAM_ERROR_SSL_DISABLED(
         "IAM Authentication requires SSL connection.");
+    static const rs_string PGO_FEDERATED_NON_IAM_ERROR_SSL_DISABLED(
+        "Authentication must use an SSL connection.");
 }
 
 // Static ==========================================================================================
@@ -73,14 +82,37 @@ m_log(in_logger)
     rsUnlockMutex(s_criticalSection);
 }
 
+bool static isIdcOrNativeIdpPlugin(const rs_string &pluginName) {
+    return IAMUtils::isEqual(IAMUtils::convertStringToWstring(pluginName),
+                             IAMUtils::convertCharStringToWstring(IAM_PLUGIN_BROWSER_AZURE_OAUTH2), false) ||
+           IAMUtils::isEqual(IAMUtils::convertStringToWstring(pluginName),
+                             IAMUtils::convertCharStringToWstring(PLUGIN_IDP_TOKEN_AUTH), false) ||
+           IAMUtils::isEqual(IAMUtils::convertStringToWstring(pluginName),
+                             IAMUtils::convertCharStringToWstring(PLUGIN_BROWSER_IDC_AUTH), false);
+}
+
+bool static isIdcPlugin(const rs_string &pluginName) {
+    return IAMUtils::isEqual(IAMUtils::convertStringToWstring(pluginName),
+                             IAMUtils::convertCharStringToWstring(PLUGIN_IDP_TOKEN_AUTH), false) ||
+           IAMUtils::isEqual(IAMUtils::convertStringToWstring(pluginName),
+                             IAMUtils::convertCharStringToWstring(PLUGIN_BROWSER_IDC_AUTH), false);
+}
+
+rs_string RsIamClient::GetPluginName() {
+    rs_wstring pluginName = m_settings.m_pluginName;
+    IAMUtils::trim(pluginName);
+    pluginName = IAMUtils::toLower(pluginName);
+    return IAMUtils::convertToUTF8(pluginName);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void RsIamClient::Connect()
 {
     RS_LOG(m_log)("RsIamClient::Connect");
 	bool isNativeAuth = false;
 
-    ValidateConnectionAttributes();
     const rs_string authType = InferCredentialsProvider();
+    ValidateConnectionAttributes(authType);
 
     RS_LOG(m_log)("RsIamClient::Connect IAM AuthType: %s",
         ((authType.empty()) ? (char *)"Default" : (char *)authType.c_str()));
@@ -90,17 +122,22 @@ void RsIamClient::Connect()
 
     if (authType == IAM_AUTH_TYPE_PLUGIN)
     {
+        if (isIdcPlugin(config.GetPluginName()) && m_settings.m_iamAuth) {
+            IAMUtils::ThrowConnectionExceptionWithInfo(
+                "You can not use this authentication plugin with IAM enabled.");
+        }
+
         credentialsProvider = IAMFactory::CreatePluginCredentialsProvider(m_log, config);
         if (credentialsProvider)
         {
-			if (IAMUtils::isEqual(IAMUtils::convertStringToWstring(config.GetPluginName()), IAMUtils::convertCharStringToWstring(IAM_PLUGIN_BROWSER_AZURE_OAUTH2), false))
-				isNativeAuth = true;
+            if (isIdcOrNativeIdpPlugin(config.GetPluginName())) {
+                isNativeAuth = true;
+            }
 
-			if (!isNativeAuth)
-			{
-				static_cast<IAMPluginCredentialsProvider&>(*credentialsProvider)
-					.GetConnectionSettings(m_credentials);
-			}
+            if (!isNativeAuth) {
+                static_cast<IAMPluginCredentialsProvider &>(*credentialsProvider)
+                    .GetConnectionSettings(m_credentials);
+            }
         }
     }
     else if (authType == IAM_AUTH_TYPE_PROFILE)
@@ -149,14 +186,22 @@ void RsIamClient::Connect()
 			GetClusterCredentials(credentialsProvider);
 		}
 	}
-	else
-	{
-		/* Validate that all required arguments for plugin are provided */
-		static_cast<IAMJwtPluginCredentialsProvider&>(*credentialsProvider).ValidateArgumentsMap();
-		rs_string idp_token = static_cast<IAMJwtPluginCredentialsProvider&>(*credentialsProvider).GetJwtAssertion();
-		m_credentials.SetIdpToken(idp_token);
-		m_credentials.SetFixExpirationTime();
-	}
+    else
+    {
+        if (isIdcPlugin(config.GetPluginName())) {
+            rs_string auth_token =
+                static_cast<NativePluginCredentialsProvider &>(*credentialsProvider).GetAuthToken();
+            m_credentials.SetIdpToken(auth_token);
+        } else { // native idp AzureAD plugin
+            /* Validate that all required arguments for plugin are provided */
+            static_cast<IAMJwtPluginCredentialsProvider &>(*credentialsProvider)
+                .ValidateArgumentsMap();
+            rs_string idp_token =
+                static_cast<IAMJwtPluginCredentialsProvider &>(*credentialsProvider).GetJwtAssertion();
+            m_credentials.SetIdpToken(idp_token);
+        }
+        m_credentials.SetFixExpirationTime();
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -278,8 +323,14 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
         inferredAwsRegion = hostnameTokens[2];
     }
 
+    if(m_settings.m_isCname && inferredAwsRegion.empty() ){
+    config.region = IAMUtils().GetAwsRegionFromCname(m_settings.m_host);
+    }
+    else
+    {
     config.region = m_settings.m_awsRegion.empty() ? inferredAwsRegion : m_settings.m_awsRegion;
     config.endpointOverride = IAMUtils::convertToUTF8(m_settings.m_endpointUrl);
+    }
 
 	if (m_settings.m_stsConnectionTimeout > 0)
 	{
@@ -411,7 +462,9 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
                 request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ? inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str()); // Set the cluster identifier instead
             }
         }
-#endif        
+
+#endif  
+    
         /* if host is empty describe cluster using cluster id */
         if (m_settings.m_host.empty() || m_settings.m_port == 0) {
             if (m_settings.m_clusterIdentifer.empty() && tempClusterIdentifier.empty()) {
@@ -463,8 +516,14 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
 		inferredAwsRegion = hostnameTokens[2];
 	}
 
+    if(m_settings.m_isCname && inferredAwsRegion.empty()){
+    config.region = IAMUtils().GetAwsRegionFromCname(m_settings.m_host);
+    }
+    else
+    {
 	config.region = m_settings.m_awsRegion.empty() ? inferredAwsRegion : m_settings.m_awsRegion;
 	config.endpointOverride = IAMUtils::convertToUTF8(m_settings.m_endpointUrl);
+    }
 
 	if (m_settings.m_stsConnectionTimeout > 0)
 	{
@@ -797,7 +856,7 @@ void RsIamClient::GetServerlessCredentials(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void RsIamClient::ValidateConnectionAttributes()
+void RsIamClient::ValidateConnectionAttributes(const rs_string &in_authType)
 {
     RS_LOG(m_log)("RsIamClient::ValidateConnectionAttributes");
 
@@ -812,6 +871,9 @@ void RsIamClient::ValidateConnectionAttributes()
 
     if (!isSSLModeEnabled)
     {
+        if(in_authType == IAM_AUTH_TYPE_PLUGIN && isIdcOrNativeIdpPlugin(GetPluginName())) {
+            IAMUtils::ThrowConnectionExceptionWithInfo(PGO_FEDERATED_NON_IAM_ERROR_SSL_DISABLED);
+        }
         IAMUtils::ThrowConnectionExceptionWithInfo(PGO_IAM_ERROR_SSL_DISABLED);
     }
 }
@@ -908,10 +970,7 @@ IAMConfiguration RsIamClient::CreateIAMConfiguration(const rs_string& in_authTyp
     if (in_authType == IAM_AUTH_TYPE_PLUGIN)
     {
         /* Plugin AuthType specific connection attributes */
-        rs_wstring pluginName = m_settings.m_pluginName;
-        IAMUtils::trim(pluginName);
-        pluginName = IAMUtils::toLower(pluginName);
-        config.SetPluginName(IAMUtils::convertToUTF8(pluginName));
+        config.SetPluginName(GetPluginName());
 
         config.SetIdpHost(IAMUtils::convertToUTF8(m_settings.m_idpHost));
         config.SetIdpPort(m_settings.m_idpPort);
@@ -933,7 +992,13 @@ IAMConfiguration RsIamClient::CreateIAMConfiguration(const rs_string& in_authTyp
         config.SetWebIdentityToken(m_settings.m_web_identity_token);
         config.SetDuration(m_settings.m_duration);
         config.SetRoleSessionName(m_settings.m_role_session_name);
+        config.SetIdpAuthToken(m_settings.m_idpAuthToken);
+        config.SetIdpAuthTokenType(m_settings.m_idpAuthTokenType);
         config.SetRegion(m_settings.m_awsRegion);
+        config.SetStartUrl(m_settings.m_startUrl);
+        config.SetIdcRegion(m_settings.m_idcRegion);
+        config.SetIdcResponseTimeout(m_settings.m_idcResponseTimeout);
+        config.SetIdcClientDisplayName(m_settings.m_idcClientDisplayName);
     }
     else if (in_authType == IAM_AUTH_TYPE_PROFILE)
     {

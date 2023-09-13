@@ -13,6 +13,8 @@
 #include "IAMJwtBasicCredentialsProvider.h"
 #include "IAMBrowserAzureOAuth2CredentialsProvider.h"
 #include "JwtIamAuthPlugin.h"
+#include "IdpTokenAuthPlugin.h"
+#include "BrowserIdcAuthPlugin.h"
 
 #include <map>
 #include <memory>
@@ -154,6 +156,32 @@ namespace IamSupport
         /// 
         /// @return A credentials provider wrapped using smart pointer
         static std::unique_ptr<JwtIamAuthPlugin> CreateJwtIamAuthPlugin(
+            RsLogger* in_log,
+            const IAMConfiguration& in_config = IAMConfiguration(),
+            const std::map<rs_string, rs_string>& in_argsMap
+            = std::map<rs_string, rs_string>());
+
+        /// @brief Constructor           Construct IdP token auth plugin using argument map
+        ///
+        /// @param in_log                The logger
+        /// @param in_config             The IAM Connection Configuration
+        /// @param in_argsMap            Optional arguments map passed to the credentials provider
+        /// 
+        /// @return IdP token auth plugin wrapped using smart pointer
+        static std::unique_ptr<IdpTokenAuthPlugin> CreateIdpTokenAuthPlugin(
+            RsLogger* in_log,
+            const IAMConfiguration& in_config = IAMConfiguration(),
+            const std::map<rs_string, rs_string>& in_argsMap
+            = std::map<rs_string, rs_string>());
+        
+        /// @brief Constructor           Construct IdC Browser credentials provider using argument map
+        ///
+        /// @param in_log                The logger
+        /// @param in_config             The IAM Connection Configuration
+        /// @param in_argsMap            Optional arguments map passed to the credentials provider
+        /// 
+        /// @return Browser IdC credentials provider wrapped using smart pointer
+        static std::unique_ptr<BrowserIdcAuthPlugin> CreateBrowserIdcAuthPlugin(
             RsLogger* in_log,
             const IAMConfiguration& in_config = IAMConfiguration(),
             const std::map<rs_string, rs_string>& in_argsMap

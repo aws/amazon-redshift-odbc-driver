@@ -130,6 +130,14 @@ private:
               RsSettings& settings,
               RsLogger *logger);
 
+    /// @brief Set the federated connection's common settings on PGOSettings
+    ///
+    /// @param pIamProps    Iam properties
+    /// @param settings    Connection settings 
+    static void SetCommonFederatedAuthSettings(
+              RS_IAM_CONN_PROPS_INFO *pIamProps,
+              RsSettings& settings);
+
 	/// @brief Get the users's key used to cache IAM credentials
 	///
 	/// @param in_settings              Connection Settings

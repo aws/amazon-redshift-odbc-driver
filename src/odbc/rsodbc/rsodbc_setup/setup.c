@@ -79,10 +79,17 @@
 #define RS_ROLE_SESSION_NAME      "role_session_name"
 #define RS_IAM_CA_PATH            "CaPath"
 #define RS_IAM_CA_FILE            "CaFile"
-#define RS_SSL_MODE				  "SSLMode"
-#define RS_IAM_STS_ENDPOINT_URL    "StsEndpointUrl"
-#define RS_IAM_AUTH_PROFILE        "AuthProfile"
-#define RS_SCOPE					"scope"
+#define RS_SSL_MODE               "SSLMode"
+#define RS_IAM_STS_ENDPOINT_URL   "StsEndpointUrl"
+#define RS_IAM_AUTH_PROFILE       "AuthProfile"
+#define RS_SCOPE                  "scope"
+#define RS_TOKEN                  "token"	
+#define RS_TOKEN_TYPE             "token_type"
+#define RS_IDENTITY_NAMESPACE     "identity_namespace"
+#define RS_IDC_REGION             "idc_region"
+#define RS_START_URL              "start_url"
+#define RS_IDC_RESPONSE_TIMEOUT   "idc_response_timeout"
+#define RS_IDC_CLIENT_DISPLAY_NAME    "idc_client_display_name"
 
 
  // Connection options value
@@ -100,6 +107,8 @@
 #define IAM_PLUGIN_JWT              "JWT"    // used for federated native IdP auth
 #define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"
 #define PLUGIN_JWT_IAM_AUTH         "JwtIamAuthPlugin"    // used for federated IAM auth
+#define PLUGIN_IDP_TOKEN_AUTH              "IdpTokenAuthPlugin"
+#define PLUGIN_BROWSER_IDC_AUTH            "BrowserIdcAuthPlugin"
 
 
 #define MAX_JWT					(16 * 1024)
@@ -219,6 +228,13 @@
 #define DFLT_STS_ENDPOINT_URL ""
 #define DFLT_AUTH_PROFILE ""
 #define DFLT_SCOPE ""
+#define DFLT_TOKEN ""
+#define DFLT_TOKEN_TYPE ""
+#define DFLT_IDENTITY_NAMESPACE ""
+#define DFLT_IDC_REGION ""
+#define DFLT_START_URL ""
+#define DFLT_IDC_RESPONSE_TIMEOUT ""
+#define DFLT_IDC_CLIENT_DISPLAY_NAME ""
 
 #define DFLT_DATABASE_METADATA_CURRENT_DB_ONLY "1"
 #define DFLT_READ_ONLY "0"
@@ -244,11 +260,11 @@
 #define MAXDSNAME		(32+1)	/* Max data source name length */
 
 /* 8 -> 4 for CSC + 1 for MICC + 1 for KSN + 1 for KSA  + 1 for SCR */
-/* 39 IAM/IDP */
+/* 46 IAM/IDP */ 
 /* 2 Advanced */ 
 /* 9 Proxy */
 
-#define DD_DSN_ATTR_COUNT (41 + 8 + 39 +  2 + 9) 
+#define DD_DSN_ATTR_COUNT (41 + 8 + 46 +  2 + 9)
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -438,6 +454,13 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_IAM_STS_ENDPOINT_URL , DFLT_STS_ENDPOINT_URL },
 { RS_IAM_AUTH_PROFILE , DFLT_AUTH_PROFILE },
 { RS_SCOPE , DFLT_SCOPE },
+{ RS_TOKEN , DFLT_TOKEN },
+{ RS_TOKEN_TYPE , DFLT_TOKEN_TYPE },
+{ RS_IDENTITY_NAMESPACE , DFLT_IDENTITY_NAMESPACE },
+{ RS_IDC_REGION , DFLT_IDC_REGION },
+{ RS_START_URL , DFLT_START_URL },
+{ RS_IDC_RESPONSE_TIMEOUT , DFLT_IDC_RESPONSE_TIMEOUT },
+{ RS_IDC_CLIENT_DISPLAY_NAME , DFLT_IDC_CLIENT_DISPLAY_NAME },
 { "", "" }
 };
 
@@ -554,6 +577,13 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { RS_IAM_STS_ENDPOINT_URL , RS_IAM_STS_ENDPOINT_URL },
 { RS_IAM_AUTH_PROFILE , RS_IAM_AUTH_PROFILE },
 { RS_SCOPE , RS_SCOPE },
+{ RS_TOKEN , RS_TOKEN },
+{ RS_TOKEN_TYPE , RS_TOKEN_TYPE },
+{ RS_IDENTITY_NAMESPACE , RS_IDENTITY_NAMESPACE },
+{ RS_IDC_REGION , RS_IDC_REGION },
+{ RS_START_URL , RS_START_URL },
+{ RS_IDC_RESPONSE_TIMEOUT , RS_IDC_RESPONSE_TIMEOUT },
+{ RS_IDC_CLIENT_DISPLAY_NAME , RS_IDC_CLIENT_DISPLAY_NAME },
 { "", "" }
 };
 
@@ -603,6 +633,8 @@ static int rs_pooling_items[5] = {
 #define AUTH_PING_FEDERATE	9
 #define AUTH_BROWSER_AZURE_OAUTH2	10
 #define AUTH_JWT_IAM		11
+#define AUTH_IDP_TOKEN      12
+#define AUTH_BROWSER_IDC    13
 
 static char *szAuthTypes[] = {
 	"Standard",
@@ -617,6 +649,8 @@ static char *szAuthTypes[] = {
 	"Identity Provider: PingFederate",
 	"Identity Provider: Browser Azure AD OAUTH2",
 	"Identity Provider: JWT IAM Auth Plugin",
+	"IdP Token Auth Plugin",
+	"Browser IdC Auth Plugin",
 	""
 };
 
@@ -636,7 +670,7 @@ static char *szLogLevels[] = {
 #define SSL_MODE_VERIFY_CA "verify-ca"
 #define SSL_MODE_VERIFY_FULL "verify-full"
 
-#define MAX_IDP_CONTROLS 51
+#define MAX_IDP_CONTROLS 58
 
 // Total controls of all IDP/IAM
 static int rs_idp_controls[] =
@@ -705,6 +739,20 @@ static int rs_idp_controls[] =
 	IDC_EPU,
 	IDC_SCOPE_STATIC,
 	IDC_SCOPE,
+	IDC_TOKEN_STATIC,
+	IDC_TOKEN,
+	IDC_TOKEN_TYPE_STATIC,
+	IDC_TOKEN_TYPE,
+	IDC_IDENTITY_NAMESPACE_STATIC,
+	IDC_IDENTITY_NAMESPACE,
+	IDC_IDC_REGION_STATIC, // Identity Center region
+	IDC_IDC_REGION,
+	IDC_START_URL_STATIC,
+	IDC_START_URL,
+	IDC_IDC_RESPONSE_TIMEOUT_STATIC, // Identity Center (IdC) response timeout
+	IDC_IDC_RESPONSE_TIMEOUT,
+	IDC_IDC_CLIENT_DISPLAY_NAME_STATIC, // Display name of client using IdC browser auth plugin 
+	IDC_IDC_CLIENT_DISPLAY_NAME,
 	0
 };
 
@@ -1176,6 +1224,50 @@ static rs_dialog_controls rs_jwt_iam_auth_val_controls[] =
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
+static int rs_idp_token_auth_controls[] =
+{
+	IDC_TOKEN_STATIC,
+	IDC_TOKEN,
+	IDC_TOKEN_TYPE_STATIC,
+	IDC_TOKEN_TYPE,
+	IDC_IDENTITY_NAMESPACE_STATIC,
+	IDC_IDENTITY_NAMESPACE,  
+	0
+};
+
+static rs_dialog_controls rs_idp_token_auth_val_controls[] =
+{
+	{ IDC_TOKEN, RS_TEXT_CONTROL, RS_TOKEN },
+	{ IDC_TOKEN_TYPE, RS_TEXT_CONTROL, RS_TOKEN_TYPE },
+	{ IDC_IDENTITY_NAMESPACE, RS_TEXT_CONTROL, RS_IDENTITY_NAMESPACE },
+	{ 0,  RS_NONE_CONTROL,"" }
+};
+
+static int rs_idc_browser_auth_controls[] =
+{
+	IDC_IDC_REGION_STATIC, // Identity Center region
+	IDC_IDC_REGION,
+	IDC_START_URL_STATIC,
+	IDC_START_URL,
+	IDC_IDENTITY_NAMESPACE_STATIC,
+	IDC_IDENTITY_NAMESPACE,
+	IDC_IDC_RESPONSE_TIMEOUT_STATIC,
+	IDC_IDC_RESPONSE_TIMEOUT,
+	IDC_IDC_CLIENT_DISPLAY_NAME_STATIC, 
+	IDC_IDC_CLIENT_DISPLAY_NAME,
+	0
+};
+
+static rs_dialog_controls rs_idc_browser_auth_val_controls[] =
+{
+	{ IDC_IDC_REGION, RS_TEXT_CONTROL, RS_IDC_REGION },
+	{ IDC_START_URL, RS_TEXT_CONTROL, RS_START_URL },
+	{ IDC_IDENTITY_NAMESPACE, RS_TEXT_CONTROL, RS_IDENTITY_NAMESPACE },
+	{ IDC_IDC_RESPONSE_TIMEOUT, RS_TEXT_CONTROL, RS_IDC_RESPONSE_TIMEOUT },
+	{ IDC_IDC_CLIENT_DISPLAY_NAME, RS_TEXT_CONTROL, RS_IDC_CLIENT_DISPLAY_NAME },
+	{ 0,  RS_NONE_CONTROL,"" }
+};
+
 
 HINSTANCE hModule;
 
@@ -1225,7 +1317,7 @@ static BOOL
 rs_dsn_set_attr(rs_dsn_setup_ptr_t rs_setup_ctxt, const char *attr, char *val)
 {
 	int i;
-	int maxVal = (strcmp(attr, RS_WEB_IDENTITY_TOKEN) == 0)
+	int maxVal = (strcmp(attr, RS_WEB_IDENTITY_TOKEN) == 0 || strcmp(attr, RS_TOKEN) == 0)
 					? MAX_JWT
 					: MAXVALLEN;
 
@@ -1277,7 +1369,7 @@ rs_dsn_get_attr(rs_dsn_setup_ptr_t rs_setup_ctxt, const char *attr)
 		strcmp(attr, rs_dsn_code2name[i].attr_code) &&
 		strcmp(attr, rs_dsn_code2name[i].attr_val); i++);
 	// rs_dsn_log(__LINE__, "get_attr returns %s", rs_setup_ctxt->attrs[i].attr_val ? rs_setup_ctxt->attrs[i].attr_val : "NULL" );
-	return (strcmp(attr, RS_WEB_IDENTITY_TOKEN) == 0)
+	return (strcmp(attr, RS_WEB_IDENTITY_TOKEN) == 0 || strcmp(attr, RS_TOKEN) == 0)
 			? rs_setup_ctxt->attrs[i].large_attr_val
 			: rs_setup_ctxt->attrs[i].attr_val;
 }
@@ -2411,6 +2503,16 @@ static void rs_hide_show_authtype_controls(HWND hwndDlg, char *curAuthType)
 		// JWT IAM federated auth 
 		rs_show_controls(hwndDlg, rs_jwt_iam_auth_controls);
 	}
+	else
+	if (strcmp(curAuthType, szAuthTypes[AUTH_IDP_TOKEN]) == 0) {
+		// Basic Programmatic plugin 
+		rs_show_controls(hwndDlg, rs_idp_token_auth_controls);
+	}
+	else
+	if (strcmp(curAuthType, szAuthTypes[AUTH_BROWSER_IDC]) == 0) {
+		// IdC Browser. 
+		rs_show_controls(hwndDlg, rs_idc_browser_auth_controls);
+	}
 }
 
 static void rs_hide_controls(HWND hwndDlg, int controlId[])
@@ -2451,7 +2553,7 @@ static void rs_enable_controls(HWND hwndDlg, int controlId[], BOOL bEnable)
 
 static char*get_attr_val(rs_dsn_attr_t *attr, BOOL bEncrypt)
 {
-	if (strcmp(attr->attr_code, RS_WEB_IDENTITY_TOKEN) == 0)
+	if (strcmp(attr->attr_code, RS_WEB_IDENTITY_TOKEN) == 0 || strcmp(attr->attr_code, RS_TOKEN) == 0)
 		return (attr->large_attr_val) ? attr->large_attr_val : "";
 	else
 	{
@@ -2473,7 +2575,7 @@ static char*get_attr_val(rs_dsn_attr_t *attr, BOOL bEncrypt)
 
 static void set_attr_val(rs_dsn_attr_t *attr, char *val)
 {
-	if (strcmp(attr->attr_code, RS_WEB_IDENTITY_TOKEN) == 0)
+	if (strcmp(attr->attr_code, RS_WEB_IDENTITY_TOKEN) == 0 || strcmp(attr->attr_code, RS_TOKEN) == 0)
 		attr->large_attr_val = _strdup(val);
 	else
 		strncpy(attr->attr_val, val,sizeof(attr->attr_val));
@@ -2531,6 +2633,12 @@ static int get_auth_type_for_control(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 				else
 				if (strcmp(plugin, PLUGIN_JWT_IAM_AUTH) == 0)
 					rc = AUTH_JWT_IAM;
+				else
+				if (strcmp(plugin, PLUGIN_IDP_TOKEN_AUTH) == 0)
+					rc = AUTH_IDP_TOKEN;
+				else
+				if (strcmp(plugin, PLUGIN_BROWSER_IDC_AUTH) == 0)
+					rc = AUTH_BROWSER_IDC;
 			}
 		}
 	}
@@ -2615,6 +2723,16 @@ static void set_dlg_items_based_on_auth_type(int curAuthType, HWND hwndDlg, rs_d
 	if (curAuthType == AUTH_JWT_IAM)
 	{
 		set_idp_dlg_items(rs_jwt_iam_auth_val_controls, hwndDlg, rs_dsn_setup_ctxt);
+	}
+	else
+	if (curAuthType == AUTH_IDP_TOKEN)
+	{
+		set_idp_dlg_items(rs_idp_token_auth_val_controls, hwndDlg, rs_dsn_setup_ctxt);
+	}
+	else
+	if (curAuthType == AUTH_BROWSER_IDC)
+	{
+		set_idp_dlg_items(rs_idc_browser_auth_val_controls, hwndDlg, rs_dsn_setup_ctxt);
 	}
 }
 
@@ -2705,6 +2823,18 @@ static void rs_dsn_read_idp_items(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctx
 		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_IAM, "1");
 		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_PLUGIN_NAME, PLUGIN_JWT_IAM_AUTH);
 		rs_dsn_read_auth_type_items(rs_jwt_iam_auth_val_controls, hdlg, rs_dsn_setup_ctxt);
+	}
+	else
+	if (strcmp(curAuthType, szAuthTypes[AUTH_IDP_TOKEN]) == 0) {
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_AUTH_TYPE, RS_AUTH_TYPE_PLUGIN);
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_PLUGIN_NAME, PLUGIN_IDP_TOKEN_AUTH);
+		rs_dsn_read_auth_type_items(rs_idp_token_auth_val_controls, hdlg, rs_dsn_setup_ctxt);
+	}
+	else
+	if (strcmp(curAuthType, szAuthTypes[AUTH_BROWSER_IDC]) == 0) {
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_AUTH_TYPE, RS_AUTH_TYPE_PLUGIN);
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_PLUGIN_NAME, PLUGIN_BROWSER_IDC_AUTH);
+		rs_dsn_read_auth_type_items(rs_idc_browser_auth_val_controls, hdlg, rs_dsn_setup_ctxt);
 	}
 }
 
@@ -2928,7 +3058,7 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 static void
 rs_dsn_read_text_entry(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt, int item, const char *attr)
 {
-	if (item == IDC_WIT)
+	if (item == IDC_WIT || item == IDC_TOKEN)
 	{
 		char *valbuf = (char *)calloc(1, MAX_JWT);
 		GetDlgItemText(hdlg, item, valbuf, MAX_JWT);
@@ -3271,7 +3401,8 @@ rs_dsn_read_attrs(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
  */
 	for (i = 0; rs_dsn_attrs[i].attr_code[0]; i++)
 	{ 
-		if (strcmp(rs_dsn_attrs[i].attr_code, RS_WEB_IDENTITY_TOKEN) == 0)
+		if (strcmp(rs_dsn_attrs[i].attr_code, RS_WEB_IDENTITY_TOKEN) == 0 || 
+		    strcmp(rs_dsn_attrs[i].attr_code, RS_TOKEN) == 0)
 		{
 			attrs[i].large_attr_val = (char *)calloc(1, MAX_JWT);
 			SQLGetPrivateProfileString(dsn, rs_dsn_attrs[i].attr_code, "",

@@ -98,6 +98,13 @@ namespace IamSupport
 	#define IAM_KEY_STS_CONNECTION_TIMEOUT  "StsConnectionTimeout"
 	#define IAM_KEY_SCOPE					"scope" // "api://" + client_id + "/User.Read"
 
+    #define KEY_IDP_AUTH_TOKEN              "token"
+    #define KEY_IDP_AUTH_TOKEN_TYPE         "token_type"
+    #define KEY_IDC_START_URL               "start_url"
+    #define KEY_IDC_REGION                  "idc_region"
+    #define KEY_IDC_RESPONSE_TIMEOUT        "idc_response_timeout"
+    #define KEY_IDC_CLIENT_DISPLAY_NAME     "idc_client_display_name"
+
 
 
     /* SAML pattern used to extract SAML assertion from the HTML response page */
@@ -114,6 +121,8 @@ namespace IamSupport
     #define IAM_PLUGIN_JWT              "JWT"    // used for federated native IdP auth
     #define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"  // used for federated native IdP auth
     #define JWT_IAM_AUTH_PLUGIN         "JwtIamAuthPlugin"    // used for federated Jwt IAM auth
+    #define PLUGIN_IDP_TOKEN_AUTH               "IdpTokenAuthPlugin"
+    #define PLUGIN_BROWSER_IDC_AUTH             "BrowserIdcAuthPlugin"
 
     /**
     * The CA path used to look up CA files

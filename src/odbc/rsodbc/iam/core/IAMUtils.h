@@ -4,7 +4,12 @@
 #include <vector>
 
 #include "../rs_iam_support.h"
-
+#include "../RsLogger.h"
+#include <ares.h>
+#include <ares_dns.h>
+#if defined LINUX
+#include <netdb.h>
+#endif
 namespace Redshift
 {
 namespace IamSupport
@@ -111,6 +116,16 @@ namespace IamSupport
        static bool isEqual(std::wstring  s1, std::wstring  s2, bool caseInsenstive);
        static rs_wstring convertStringToWstring(rs_string  str);
        static rs_wstring convertCharStringToWstring(char *str);
+
+        /// @brief Get the Fully Qualified Domain Name (FQDN) from cname endpoint;
+        ///
+        /// @param cnameEndpoint 
+        rs_string GetAwsRegionFromCname(const std::string& cnameEndpoint);
+        rs_string m_awsRegion;
+        /// @brief Destructor.
+
+        static void AresCallBack(void* arg, int status, int timeouts, struct hostent* hostent_result,  RsLogger* m_log);
+        RsLogger* m_log;
 
 #ifdef WIN32
        static std::wstring GetLastErrorText();

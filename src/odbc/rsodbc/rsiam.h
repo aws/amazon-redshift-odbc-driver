@@ -6,6 +6,7 @@
 #define MAX_IAM_DBGROUPS_LEN 1024
 #define MAX_IAM_JWT_LEN (16 * 1024)
 #define MAX_IDEN_LEN        (128 + 1)
+#define MAX_BASIC_AUTH_TOKEN_LEN (16 * 1024)
 
 struct RS_IAM_CONN_PROPS_INFO {
   // Standard = "", IAM = "Static", Profile = "Profile", any plugin = "Plugin"
@@ -54,9 +55,16 @@ struct RS_IAM_CONN_PROPS_INFO {
   char szPort[MAX_IDEN_LEN];
   char szDatabase[MAX_IDEN_LEN];
   char szAuthProfile[MAX_IAM_BUF_VAL];
+  char szBasicAuthToken[MAX_BASIC_AUTH_TOKEN_LEN];
+  char szStartUrl[MAX_IAM_BUF_VAL];
+  char szIdcRegion[MAX_IDEN_LEN];
+  char szIdentityNamespace[MAX_IAM_BUF_VAL];
+  char szTokenType[MAX_IDEN_LEN];
   bool isDisableCache; 
   int iStsConnectionTimeout; 
   bool isGroupFederation;
+  long lIdcResponseTimeout; // idc_response_timeout
+  char szIdcClientDisplayName[MAX_IAM_BUF_VAL]; // idc_client_display_name
 };
 
 struct RS_PROXY_CONN_PROPS_INFO {

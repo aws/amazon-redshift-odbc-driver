@@ -2542,6 +2542,13 @@ build_startup_packet(const PGconn *conn, char *packet,
 	if (conn->provider_name && conn->provider_name[0])
 		ADD_STARTUP_OPTION("provider_name", conn->provider_name);
 
+	if (conn->token_type && conn->token_type[0])
+		ADD_STARTUP_OPTION("token_type", conn->token_type);
+	if (conn->identity_namespace && conn->identity_namespace[0])
+		ADD_STARTUP_OPTION("identity_namespace", conn->identity_namespace);
+	if (conn->idc_client_display_name && conn->idc_client_display_name[0])
+		ADD_STARTUP_OPTION("idc_client_display_name", conn->idc_client_display_name);
+
 	if (conn->send_appname)
 	{
 		/* Use appname if present, otherwise use fallback */

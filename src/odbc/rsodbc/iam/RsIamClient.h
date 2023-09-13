@@ -44,14 +44,11 @@ namespace RedshiftODBC
 			rs_string host,
 			rs_string region);
 
-
         // count the number of PGOIamClient be initialized, used to InitAPI and ShutdownAPI
         static int s_iamClientCount;
 
         // The critical section used for Aws InitAPI LOCK
         static MUTEX_HANDLE s_criticalSection;
-
-        /// @brief Destructor.
         ~RsIamClient();
 
     private:
@@ -163,7 +160,7 @@ namespace RedshiftODBC
         /// @brief Validate the connection attributes in PGOSettings
         /// 
         /// @exception ErrorException when any attribute in PGOSettings is not valid.
-        void ValidateConnectionAttributes();
+        void ValidateConnectionAttributes(const rs_string& in_authType);
 
         /// @brief Infer the credentials provider to used given the connection attribute
         rs_string InferCredentialsProvider();
@@ -175,6 +172,9 @@ namespace RedshiftODBC
         /// @return A IAMConfiguration object for the given AuthType
         Redshift::IamSupport::IAMConfiguration CreateIAMConfiguration(
             const rs_string& in_authType = rs_string());
+
+        /// @brief Get the plugin name
+        rs_string GetPluginName();
 
         /// @brief Disabled assignment operator to avoid warning.
         ///

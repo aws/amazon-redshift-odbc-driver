@@ -388,11 +388,11 @@ SQLRETURN  SQL_API RS_CONN_INFO::RS_SQLConnect(SQLHDBC phdbc,
 		}
 
         // Check for mandatory values
-        if(!pConnectProps->isIAMAuth
-            && pConnectProps->szUser[0] == '\0') {
-          rc = SQL_ERROR;
-          addError(&pConn->pErrorList,"HY000", "User name is NULL or empty", 0, NULL);
-          goto error;
+        if(!pConnectProps->isIAMAuth && !pConnectProps->isNativeAuth && pConnectProps->szUser[0] == '\0') {
+            rc = SQL_ERROR;
+            addError(&pConn->pErrorList, "HY000",
+                    "User name is NULL or empty", 0, NULL);
+            goto error;
         }
 
         rc = doConnection(pConn);
@@ -2310,11 +2310,31 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
                      sizeof(pIamProps->szAuthProfile));
         } else if (_stricmp(pname, RS_IAM_STS_CONNECTION_TIMEOUT) == 0) {
           sscanf(pval, "%d", &(pIamProps->iStsConnectionTimeout));
+        } else if (_stricmp(pname, RS_BASIC_AUTH_TOKEN) == 0) {
+          rs_strncpy(pIamProps->szBasicAuthToken, pval,
+                     sizeof(pIamProps->szBasicAuthToken));
+        } else if (_stricmp(pname, RS_TOKEN_TYPE) == 0) {
+          rs_strncpy(pIamProps->szTokenType, pval,
+                     sizeof(pIamProps->szTokenType));
+        } else if (_stricmp(pname, RS_START_URL) == 0) {
+          rs_strncpy(pIamProps->szStartUrl, pval,
+                     sizeof(pIamProps->szStartUrl));
+        } else if (_stricmp(pname, RS_IDC_REGION) == 0) {
+          rs_strncpy(pIamProps->szIdcRegion, pval,
+                     sizeof(pIamProps->szIdcRegion));
+        } else if (_stricmp(pname, RS_IDC_RESPONSE_TIMEOUT) == 0) {
+          sscanf(pval, "%ld", &(pIamProps->lIdcResponseTimeout));
+        } else if (_stricmp(pname, RS_IDC_CLIENT_DISPLAY_NAME) == 0) {
+          rs_strncpy(pIamProps->szIdcClientDisplayName, pval,
+                     sizeof(pIamProps->szIdcClientDisplayName));
+        } else if (_stricmp(pname, RS_IDENTITY_NAMESPACE) == 0) {
+          rs_strncpy(pIamProps->szIdentityNamespace, pval,
+                     sizeof(pIamProps->szIdentityNamespace));
         } else if (_stricmp(pname, RS_STRING_TYPE) == 0) {
           if (pval)
             strncpy(pConnectProps->szStringType, pval,
                     sizeof(pConnectProps->szStringType));
-                    }
+        }
 #ifdef WIN32
         else if (_stricmp(pname, RS_KERBEROS_API) == 0 ||
                  _stricmp(pname, "KSA") == 0) {
@@ -2945,8 +2965,15 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
 	  // Min TLS
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_MIN_TLS, "", pConnectProps->szMinTLS, MAX_NUMBER_BUF_LEN, ODBC_INI);
 
+      char pluginName[MAX_IDEN_LEN];
+      RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_PLUGIN_NAME, "", pluginName, MAX_IDEN_LEN, ODBC_INI);
+
+      if(_stricmp(pluginName, PLUGIN_IDP_TOKEN_AUTH) == 0 || _stricmp(pluginName, PLUGIN_BROWSER_IDC_AUTH) == 0) {
+        pConnectProps->isNativeAuth = true;
+      }
+
       // Read IAM props
-      if(pConnectProps->isIAMAuth)
+      if(pConnectProps->isIAMAuth || pConnectProps->isNativeAuth)
         readIamConnectPropsFromRegistry();
 
       // Read HTTPS Proxy settings
@@ -3042,6 +3069,13 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_PARTNER_SPID, "", pIamProps->szPartnerSpid, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_APP_ID, "", pIamProps->szAppId, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_APP_NAME, "", pIamProps->szAppName, MAX_IAM_BUF_VAL, ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_BASIC_AUTH_TOKEN, "", pIamProps->szBasicAuthToken, MAX_BASIC_AUTH_TOKEN_LEN, ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_START_URL, "", pIamProps->szStartUrl, MAX_IAM_BUF_VAL, ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IDC_REGION, "", pIamProps->szIdcRegion, MAX_IDEN_LEN, ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IDENTITY_NAMESPACE, "", pIamProps->szIdentityNamespace, MAX_IAM_BUF_VAL, ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_TOKEN_TYPE, "", pIamProps->szTokenType, MAX_IDEN_LEN, ODBC_INI);
+        RS_CONN_INFO::readLongValFromDsn(pConnectProps->szDSN, RS_IDC_RESPONSE_TIMEOUT, &(pIamProps->lIdcResponseTimeout));
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IDC_CLIENT_DISPLAY_NAME, "", pIamProps->szIdcClientDisplayName, MAX_IAM_BUF_VAL, ODBC_INI);
 
 		RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_DISABLE_CACHE, &(pIamProps->isDisableCache));
 
@@ -3162,6 +3196,60 @@ bool RS_CONN_INFO::convertToBoolVal(const char *pVal)
 
 }
 
+/*====================================================================================================================================================*/
+
+static void copyCommonConnectionProperties(RS_IAM_CONN_PROPS_INFO* pIamProps, RS_CONNECT_PROPS_INFO* pConnectProps) {
+    rs_strncpy(pIamProps->szSslMode, pConnectProps->szSslMode, sizeof(pIamProps->szSslMode));
+    rs_strncpy(pIamProps->szHost, pConnectProps->szHost, sizeof(pIamProps->szHost));
+    rs_strncpy(pIamProps->szPort, pConnectProps->szPort, sizeof(pIamProps->szPort));
+    rs_strncpy(pIamProps->szDatabase, pConnectProps->szDatabase, sizeof(pIamProps->szDatabase));
+}
+
+
+static void invokeNativePluginAuthentication(RS_CONN_INFO* pConn, bool isIAMAuth) { 
+    RsIamEntry::NativePluginAuthentication(isIAMAuth,
+        pConn->pConnectProps->pIamProps,
+        pConn->pConnectProps->pHttpsProps,
+        pConn->iamSettings,
+        &(pConn->iamLogger));
+}
+
+static void copyIdpToken(RS_IAM_CONN_PROPS_INFO* pIamProps, const std::string& web_identity_token) {
+    const char* pval = web_identity_token.c_str();
+    int len = strlen(pval) + 1;
+    pIamProps->pszJwt = (char*)rs_calloc(sizeof(char), len);
+    rs_strncpy(pIamProps->pszJwt, pval, len);
+}
+
+static SQLRETURN handleFederatedNonIamConnection(RS_CONN_INFO* pConn) {
+    
+    RS_CONNECT_PROPS_INFO* pConnectProps = pConn->pConnectProps;
+    RS_IAM_CONN_PROPS_INFO* pIamProps = pConn->pConnectProps->pIamProps;
+
+    if (pIamProps && (pIamProps->szPluginName[0] != '\0') &&
+        (_stricmp(pIamProps->szPluginName, PLUGIN_IDP_TOKEN_AUTH) == 0 ||
+         _stricmp(pIamProps->szPluginName, PLUGIN_BROWSER_IDC_AUTH) == 0)) {
+        pConn->iamLogger.traceEnable = IS_TRACE_ON();
+        copyCommonConnectionProperties(pIamProps, pConnectProps);
+        pConnectProps->isNativeAuth = true;
+
+        try {
+            invokeNativePluginAuthentication(pConn, false);
+            rs_strncpy(pConnectProps->szIdpType, RS_IDP_TYPE_AWS_IDC, MAX_IDEN_LEN);
+
+            copyIdpToken(pIamProps, pConn->iamSettings.m_web_identity_token);
+            return SQL_SUCCESS;
+        }
+        catch (RsErrorException& ex) {
+            addError(&pConn->pErrorList, "HY000", ex.getErrorMessage(), 0, pConn);
+            return SQL_ERROR;
+        }
+        catch (...) {
+            addError(&pConn->pErrorList, "HY000", "IAM Unknown Error", 0, pConn);
+            return SQL_ERROR;
+        }
+    }
+}
 
 /*====================================================================================================================================================*/
 
@@ -3188,10 +3276,7 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
 		// Copy some DB Properties required for IAM
 		rs_strncpy(pIamProps->szUser, pConnectProps->szUser,sizeof(pIamProps->szUser));
 		rs_strncpy(pIamProps->szPassword, pConnectProps->szPassword,sizeof(pIamProps->szPassword));
-		rs_strncpy(pIamProps->szSslMode, pConnectProps->szSslMode,sizeof(pIamProps->szSslMode));
-		rs_strncpy(pIamProps->szHost, pConnectProps->szHost,sizeof(pIamProps->szHost));
-		rs_strncpy(pIamProps->szPort, pConnectProps->szPort,sizeof(pIamProps->szPort));
-		rs_strncpy(pIamProps->szDatabase, pConnectProps->szDatabase,sizeof(pIamProps->szDatabase));
+		copyCommonConnectionProperties(pIamProps, pConnectProps);
 
 		// Do IAM authentication and get derived user name and the temp db password
 		try
@@ -3202,12 +3287,7 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
 				&& _stricmp(pIamProps->szPluginName, IAM_PLUGIN_BROWSER_AZURE_OAUTH2) == 0)
 			{
 				isNativeAuth = true;
-				RsIamEntry::NativePluginAuthentication(pConn->pConnectProps->isIAMAuth,
-					pConn->pConnectProps->pIamProps,
-					pConn->pConnectProps->pHttpsProps,
-					pConn->iamSettings,
-					&(pConn->iamLogger));
-
+				invokeNativePluginAuthentication(pConn, true);
 				rs_strncpy(pConnectProps->szIdpType, "AzureAD", MAX_IDEN_LEN);
 			} // Redshift native auth
 			else
@@ -3248,17 +3328,17 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
 		}
 		else
 		{
-			// Copy IDP token
-			const char *pval = pConn->iamSettings.m_web_identity_token.c_str();
-			int len = strlen(pval) + 1;
-			pIamProps->pszJwt = (char *)rs_calloc(sizeof(char), len);
-
-			rs_strncpy(pIamProps->pszJwt, pval, len);
+			copyIdpToken(pIamProps, pConn->iamSettings.m_web_identity_token);
 		}
 	} // Non Redshift Native Auth
 
   } // IAM
-
+  else {
+    rc = handleFederatedNonIamConnection(pConn);
+    if(rc == SQL_ERROR) {
+        return rc;
+    }
+  }
 
   rc = libpqConnect(pConn);
 

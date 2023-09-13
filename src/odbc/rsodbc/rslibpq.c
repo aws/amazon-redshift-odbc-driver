@@ -335,12 +335,15 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 		ppValues[iCount++] = szOsVersion;
 
 		// Plugin name
-		char *plugin_name = (char *)((pConnectProps->isIAMAuth)
+		char *plugin_name = (char *)((pConnectProps->isIAMAuth || pConnectProps->isNativeAuth)
 			? ((pConnectProps->pIamProps->szPluginName[0] != '\0')
 				? pConnectProps->pIamProps->szPluginName : "none")
 			: "none");
 		ppKeywords[iCount] = "plugin_name";
 		ppValues[iCount++] = plugin_name;
+		if(IS_TRACE_LEVEL_DEBUG()) {
+			traceDebug("using plugin_name=%s", plugin_name);
+		}
 
 		// TCP Proxy
 		if (pConnectProps->pTcpProxyProps
@@ -389,6 +392,34 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 		{
 			ppKeywords[iCount] = "idp_type";
 			ppValues[iCount++] = pConnectProps->szIdpType;
+		}
+
+		if(pConnectProps->pIamProps) {
+			if(_stricmp(plugin_name, PLUGIN_BROWSER_IDC_AUTH) == 0) {
+				ppKeywords[iCount] = RS_TOKEN_TYPE;
+				ppValues[iCount++] = RS_TOKEN_TYPE_ACCESS_TOKEN;
+			}
+			if(_stricmp(plugin_name, PLUGIN_IDP_TOKEN_AUTH) == 0 && pConnectProps->pIamProps->szTokenType[0] != '\0') {
+				ppKeywords[iCount] = RS_TOKEN_TYPE;
+				ppValues[iCount++] = pConnectProps->pIamProps->szTokenType;
+			}
+		}
+
+		if (pConnectProps->pIamProps &&
+			 (_stricmp(plugin_name, PLUGIN_IDP_TOKEN_AUTH) == 0 ||
+			 _stricmp(plugin_name, PLUGIN_BROWSER_IDC_AUTH) == 0) &&
+			pConnectProps->pIamProps->szIdentityNamespace[0] != '\0') {
+			ppKeywords[iCount] = RS_IDENTITY_NAMESPACE;
+			ppValues[iCount++] = pConnectProps->pIamProps->szIdentityNamespace;
+			if(IS_TRACE_LEVEL_DEBUG()) {
+				traceDebug("using identity_namespace=%s", pConnectProps->pIamProps->szIdentityNamespace);
+			}
+		}
+
+		if (pConnectProps->pIamProps
+			 && pConnectProps->pIamProps->szIdcClientDisplayName[0] != '\0') {
+			ppKeywords[iCount] = RS_IDC_CLIENT_DISPLAY_NAME;
+			ppValues[iCount++] = pConnectProps->pIamProps->szIdcClientDisplayName;
 		}
 
 		if (pConnectProps->szProviderName[0] != '\0')

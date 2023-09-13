@@ -3210,7 +3210,7 @@ static void buildUniversalSchemaTablesQuery(char *pszCatalogQuery,
 		 " WHEN table_schema ~ '^pg_' AND table_schema != 'pg_toast' THEN 'TEMPORARY VIEW'" \
 		 " ELSE 'VIEW'" \
 		 " END" \
-		 " WHEN 'EXTERNAL TABLE' THEN 'EXTERNAL TABLE'" \
+		 " WHEN 'EXTERNAL TABLE' THEN 'TABLE'" \
 		 " END" \
 		 " AS VARCHAR(124)) AS TABLE_TYPE," \
 		 " REMARKS" \
@@ -3285,7 +3285,7 @@ static void buildExternalSchemaTablesQuery(char *pszCatalogQuery,
 	rs_strncpy(pszCatalogQuery, "SELECT * FROM (SELECT CAST(current_database() AS VARCHAR(124)) AS TABLE_CAT,"
 			 " schemaname AS table_schem,"
 			 " tablename AS TABLE_NAME,"
-			 " 'EXTERNAL TABLE' AS TABLE_TYPE,"
+			 " 'TABLE' AS TABLE_TYPE,"
 			 " NULL AS REMARKS"
 			 " FROM svv_external_tables)",
 				MAX_CATALOG_QUERY_LEN);

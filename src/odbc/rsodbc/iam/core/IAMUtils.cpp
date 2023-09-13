@@ -13,6 +13,19 @@
 #include <sstream>
 #include <regex>
 
+#include "rslock.h"
+#include "RsIamClient.h"
+#include "IAMUtils.h"
+#include "RsSettings.h"
+#include "../RsLogger.h"
+
+#include <ares.h>
+#include <ares_dns.h>
+#if defined LINUX
+#include <arpa/nameser.h>
+#include <netdb.h>    // Include netdb.h for the complete struct hostent definition
+#endif
+
 using namespace Redshift::IamSupport;
 
 extern "C" {
@@ -285,7 +298,89 @@ rs_wstring IAMUtils::convertCharStringToWstring(char *str) {
   rs_string temp = str;
   return  convertStringToWstring(temp);
 }
-
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+//this struct is use to create a callbackContext object which member variables will be used to store our aws-region 
+struct cares_async_context {
+    rs_string error;
+    rs_string aws_region;
+    int status;
+};
+///////////////////////////////////////////////////////////////////////////////////////////////////////
+void IAMUtils::AresCallBack(void* arg, int status, int timeouts, struct hostent* hostent_result, RsLogger* m_log) {
+    cares_async_context* callbackContext = static_cast<cares_async_context*>(arg);
+    try {
+        if (status == ARES_SUCCESS && hostent_result) {
+            RS_LOG(m_log) ("ares_call successful!");
+           rs_string fqdn = hostent_result->h_name;
+           std::vector<rs_string> fqdnTokens = IAMUtils::TokenizeSetting(fqdn, ".");
+            if (fqdnTokens.size() >= 6) {
+                callbackContext->aws_region = fqdnTokens[2];
+            }
+        }       
+        else {
+            callbackContext->error = rs_string(ares_strerror(status));
+            RS_LOG(m_log)("ares_call failed! Error: %s", ares_strerror(status));
+        }
+    }     
+    catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
+        RS_LOG(m_log)("Exception thrown during AresCallBack execution. Exception: %s", ex);
+        throw ex;
+    }
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+rs_string IAMUtils::GetAwsRegionFromCname(const std::string& cnameEndpoint) {
+    try {
+        ares_channel channel;
+        int status;
+        // Initialize c-ares library
+        status = ares_library_init(ARES_LIB_INIT_ALL);
+        if (status != ARES_SUCCESS) {
+            RS_LOG(m_log)("ares_library_init failed:, %s ", ares_strerror(status));    
+            return "";
+        }
+        // Create the c-ares channel
+        status = ares_init(&channel);
+        if (status != ARES_SUCCESS) {
+            RS_LOG(m_log)("ares_init failed: %s", ares_strerror(status));
+            ares_library_cleanup();
+            return "";
+        }
+        // Create the cares_async_context instance
+        cares_async_context callbackContext = {"",""};
+        // Perform the asynchronous DNS query
+        ares_gethostbyname(channel, cnameEndpoint.c_str(), AF_UNSPEC, reinterpret_cast<ares_host_callback>(AresCallBack), &callbackContext);
+        // Run the c-ares event loop until the DNS query completes
+        int nfds;
+        struct timeval tv;
+        int counter = 0;
+        while (++counter < 200) {
+            fd_set read_fds, write_fds;
+            FD_ZERO(&read_fds);
+            FD_ZERO(&write_fds);
+            nfds = ares_fds(channel, &read_fds, &write_fds);
+            if (nfds == 0) break;
+            tv.tv_sec = 0;
+            tv.tv_usec = 10000; // 10ms timeout
+            select(nfds, &read_fds, &write_fds, NULL, &tv);
+            ares_process(channel, &read_fds, &write_fds);
+        }
+        // Clean up
+        ares_destroy(channel);
+        ares_library_cleanup();
+        // Extract the region from the context after completion
+        if (callbackContext.error.empty() && !callbackContext.aws_region.empty()) {
+            return callbackContext.aws_region;
+        }
+        else{
+            RS_LOG(m_log)("Cannot fetch the aws region. Exception: %s", callbackContext.error.c_str());
+        }
+    } catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
+        RS_LOG(m_log)("Cannot fetch the aws region. Exception: %s", ex);
+        throw ex;
+    }
+    return "";
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #ifdef WIN32
 //Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::wstring IAMUtils::GetLastErrorText()

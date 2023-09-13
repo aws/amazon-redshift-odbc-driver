@@ -66,6 +66,13 @@
 #define IDC_SPID                        1029
 #define IDC_PROVIDER_NAME               1030
 #define IDC_SCOPE                       1031
+#define IDC_TOKEN                       1032
+#define IDC_TOKEN_TYPE                  1033
+#define IDC_IDENTITY_NAMESPACE          1034
+#define IDC_IDC_REGION                  1035
+#define IDC_START_URL                   1036
+#define IDC_IDC_RESPONSE_TIMEOUT        1037
+#define IDC_IDC_CLIENT_DISPLAY_NAME     1038
 #define IDC_DESCTEXT                    1039
 #define DRV_MSG_LABEL                   1040
 #define DLG_PASSWORD                    1048
@@ -220,6 +227,13 @@
 #define IDC_PROXY_STS                   1213
 #define IDC_PROXY_IDP                   1214
 #define IDC_LOG_LEVEL_COMBO             1216
+#define IDC_TOKEN_STATIC                1217
+#define IDC_TOKEN_TYPE_STATIC           1218
+#define IDC_IDENTITY_NAMESPACE_STATIC   1219
+#define IDC_IDC_REGION_STATIC           1220
+#define IDC_START_URL_STATIC            1221
+#define IDC_IDC_RESPONSE_TIMEOUT_STATIC 1222
+#define IDC_IDC_CLIENT_DISPLAY_NAME_STATIC  1223
 
 // Next default values for new objects
 // 

@@ -15,6 +15,14 @@ echo Building and Packaging 64 bit Linux Redshift ODBC Driver
 odbc_version=$1
 svn_rev=$2
 
+# The following routine set environment variable for compilation
+# Those variables in exports.sh link include paths to brazil dependnecies
+# build64.sh has the same routines
+source ../../../exports_basic.sh
+if test -f "../../../exports.sh"; then
+    source ../../../exports.sh
+fi
+
 # Build libpq & libpgport
 cd ../../pgclient
 ./build64.sh

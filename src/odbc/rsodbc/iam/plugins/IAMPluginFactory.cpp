@@ -50,6 +50,14 @@ std::unique_ptr<IAMPluginCredentialsProvider> IAMPluginFactory::CreatePlugin(
     {
         credProvider = CreateJwtIamAuthPlugin(in_log, in_config, in_argsMap);
     }
+    else if (IAMUtils::isEqual(in_pluginName, IAMUtils::convertCharStringToWstring(PLUGIN_IDP_TOKEN_AUTH), false))
+    {
+        credProvider = CreateIdpTokenAuthPlugin(in_log, in_config, in_argsMap);
+    }
+    else if (IAMUtils::isEqual(in_pluginName, IAMUtils::convertCharStringToWstring(PLUGIN_BROWSER_IDC_AUTH), false))
+    {
+        credProvider = CreateBrowserIdcAuthPlugin(in_log, in_config, in_argsMap);
+    }
     else
     {
         credProvider = CreateExternalPlugin(in_log, in_config, in_argsMap); // .Detach()
@@ -164,6 +172,30 @@ std::unique_ptr<JwtIamAuthPlugin> IAMPluginFactory::CreateJwtIamAuthPlugin(
 
     return std::unique_ptr<JwtIamAuthPlugin>(
         new JwtIamAuthPlugin(in_log, in_config, in_argsMap));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+std::unique_ptr<IdpTokenAuthPlugin> IAMPluginFactory::CreateIdpTokenAuthPlugin(
+    RsLogger* in_log,
+    const IAMConfiguration& in_config,
+    const std::map<rs_string, rs_string>& in_argsMap)
+{
+    RS_LOG(in_log)("IAMPluginFactory::CreateBasicPlugin");
+
+    return std::unique_ptr<IdpTokenAuthPlugin>(
+        new IdpTokenAuthPlugin(in_log, in_config, in_argsMap));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+std::unique_ptr<BrowserIdcAuthPlugin> IAMPluginFactory::CreateBrowserIdcAuthPlugin(
+    RsLogger* in_log,
+    const IAMConfiguration& in_config,
+    const std::map<rs_string, rs_string>& in_argsMap)
+{
+    RS_LOG(in_log)("IAMPluginFactory::CreateBrowserIdcAuthPlugin");
+
+    return std::unique_ptr<BrowserIdcAuthPlugin>(
+        new BrowserIdcAuthPlugin(in_log, in_config, in_argsMap));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

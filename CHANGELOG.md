@@ -1,5 +1,13 @@
 Changelog
 =========
+v2.0.0.9 (2023-09-11)
+==================
+
+1. Added Identity Center authentication support with new plugins.
+2. Fixed IAM Authentication to support longer temporary passwords from 129 to 32767 characters.
+3. Added automatic region detection for Custom Cluster Naming (CNAME) feature.
+
+
 v2.0.0.8 (2023-08-15)
 ---------------------
 - Fixed regular expressions used for parsing HTML Tag value responses received form for Ping IdP.[Ruei-Yang Huang]

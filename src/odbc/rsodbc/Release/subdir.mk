@@ -58,6 +58,9 @@ CPP_SRCS += \
 ../iam/plugins/IAMJwtPluginCredentialsProvider.cpp \
 ../iam/plugins/IAMJwtBasicCredentialsProvider.cpp \
 ../iam/plugins/JwtIamAuthPlugin.cpp \
+../iam/plugins/IdpTokenAuthPlugin.cpp \
+../iam/plugins/BrowserIdcAuthPlugin.cpp \
+../iam/plugins/NativePluginCredentialsProvider.cpp \
 ../iam/plugins/IAMExternalCredentialsProvider.cpp \
 ../iam/plugins/IAMPluginFactory.cpp 
 
@@ -113,6 +116,9 @@ OBJS += \
 ./IAMJwtPluginCredentialsProvider.o \
 ./IAMJwtBasicCredentialsProvider.o \
 ./JwtIamAuthPlugin.o \
+./IdpTokenAuthPlugin.o \
+./BrowserIdcAuthPlugin.o \
+./NativePluginCredentialsProvider.o \
 ./IAMExternalCredentialsProvider.o \
 ./IAMPluginFactory.o 
 
@@ -169,8 +175,11 @@ C_DEPS += \
   ./IAMBrowserAzureCredentialsProvider.d \
   ./IAMBrowserAzureOAuth2CredentialsProvider.d \
   ./IAMJwtPluginCredentialsProvider.d \
+  ./NativePluginCredentialsProvider.d \
   ./IAMJwtBasicCredentialsProvider.d \
   ./JwtIamAuthPlugin.d \
+  ./IdpTokenAuthPlugin.d \
+  ./BrowserIdcAuthPlugin.d \
   ./IAMExternalCredentialsProvider.d \
   ./IAMPluginFactory.d 
 
