@@ -11763,37 +11763,33 @@ int doesAnyOtherStreamingCursorOpen(RS_CONN_INFO *pConn, RS_STMT_INFO *pStmt)
 // Get param types when there is at least one OUT parameter
 //
 
-Oid *getParamTypes(int iNoOfBindParams, RS_DESC_REC *pDescRecHead, RS_CONNECT_PROPS_INFO *pConnectProps)
-{
-	Oid *paramTypes = (Oid *)rs_calloc(sizeof(Oid), iNoOfBindParams);
+std::vector<Oid> getParamTypes(int iNoOfBindParams, RS_DESC_REC *pDescRecHead,
+                               RS_CONNECT_PROPS_INFO *pConnectProps) {
+    std::vector<Oid> paramTypes(iNoOfBindParams, UNSPECIFIEDOID);
 
-	if (paramTypes)
-	{
-		RS_DESC_REC *pDescRec;
-		int paramIndex = 0;
+    RS_DESC_REC *pDescRec;
+    int paramIndex = 0;
 
-		for (pDescRec = pDescRecHead; pDescRec != NULL; pDescRec = pDescRec->pNext)
-		{
-			if (pDescRec->hInOutType == SQL_PARAM_OUTPUT)
-				paramTypes[paramIndex] = VOIDOID;
-			else
-			{
-				if (pDescRec->hParamSQLType == SQL_CHAR
-					|| pDescRec->hParamSQLType == SQL_VARCHAR)
-				{
-					if (_stricmp(pConnectProps->szStringType, "unspecified") == 0)
-						paramTypes[paramIndex] = UNSPECIFIEDOID;
-					else
-						paramTypes[paramIndex] = VARCHAROID;
-				}
-				else
-					paramTypes[paramIndex] = UNSPECIFIEDOID;
-			}
-			paramIndex++;
-		}
-	}
+    for (pDescRec = pDescRecHead;
+         pDescRec != NULL && paramIndex < iNoOfBindParams;
+         pDescRec = pDescRec->pNext) {
 
-	return paramTypes;
+        if (pDescRec->hInOutType == SQL_PARAM_OUTPUT)
+            paramTypes[paramIndex] = VOIDOID;
+        else {
+            if (pDescRec->hParamSQLType == SQL_CHAR ||
+                pDescRec->hParamSQLType == SQL_VARCHAR) {
+                if (_stricmp(pConnectProps->szStringType, "unspecified") == 0)
+                    paramTypes[paramIndex] = UNSPECIFIEDOID;
+                else
+                    paramTypes[paramIndex] = VARCHAROID;
+            } else
+                paramTypes[paramIndex] = UNSPECIFIEDOID;
+        }
+        paramIndex++;
+    }
+
+    return std::move(paramTypes);
 }
 
 /*====================================================================================================================================================*/

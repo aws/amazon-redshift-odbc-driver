@@ -850,7 +850,12 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
     int iBeginCommand = FALSE;
     int iCscThreadCreated = FALSE;
     int iLastBatchMultiInsertPrepare = FALSE;
-	Oid *paramTypes = NULL;
+    std::vector<Oid> paramTypes;
+    // Use for legacy functions that need pointer and need to indicate null as
+    // empty
+    auto getParamTypesPtr = [&]() -> const Oid * {
+        return paramTypes.empty() ? nullptr : paramTypes.data();
+    };
 
     if(iLockRequired)
     {
@@ -1094,7 +1099,7 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
 
                         if(asyncEnable)
                         {
-                            sendStatus = (!executePrepared) ? ( (iNumBindParams) ? PQsendQueryParams( pConn->pgConn, pszCmd, nParams, paramTypes,(const char *const * )ppBindParamVals,NULL, piParamFormats, RS_TEXT_FORMAT)
+                            sendStatus = (!executePrepared) ? ( (iNumBindParams) ? PQsendQueryParams( pConn->pgConn, pszCmd, nParams, getParamTypesPtr(),(const char *const * )ppBindParamVals,NULL, piParamFormats, RS_TEXT_FORMAT)
                                                                                   : PQsendQuery(pConn->pgConn, pszCmd) )
                                                             : PQsendQueryPrepared(pConn->pgConn, pStmt->szCursorName, nParams, (const char *const * )ppBindParamVals, NULL, piParamFormats, RS_TEXT_FORMAT);
 
@@ -1109,7 +1114,7 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                           if (!executePrepared) {
                             if (iNumBindParams) {
                               pgResult = pqexecParams(
-                                  pConn->pgConn, pszCmd, nParams, paramTypes,
+                                  pConn->pgConn, pszCmd, nParams, getParamTypesPtr(),
                                   (const char *const *)ppBindParamVals, NULL,
                                   piParamFormats, RS_TEXT_FORMAT,
                                   pStmt->pCscStatementContext);
@@ -1229,7 +1234,7 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                         pBindParamStrBuf = (RS_BIND_PARAM_STR_BUF *)rs_free(pBindParamStrBuf);
                     }
 
-					paramTypes = (Oid *)rs_free(paramTypes);
+					paramTypes.clear();
 
                     iOffset = 0;
                 }
@@ -1295,10 +1300,6 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
         rsUnlockSem(pConn->hSemMultiStmt);
     }
 
-    if(paramTypes)
-    {
-        paramTypes = (Oid *)rs_free(paramTypes);
-    }
     return rc;
 
 error:
@@ -1322,8 +1323,6 @@ error:
 
             pBindParamStrBuf = (RS_BIND_PARAM_STR_BUF *)rs_free(pBindParamStrBuf);
         }
-
-		paramTypes = (Oid *)rs_free(paramTypes);
     }
 
 
@@ -1333,10 +1332,6 @@ error:
         rsUnlockSem(pConn->hSemMultiStmt);
     }
 
-    if(paramTypes)
-    {
-        paramTypes = (Oid *)rs_free(paramTypes);
-    }
     return rc;
 }
 
@@ -1699,21 +1694,25 @@ SQLRETURN libpqPrepareOnThread(RS_STMT_INFO *pStmt, char *pszCmd)
         int asyncEnable = isAsyncEnable(pStmt);
         int sendStatus = 1;
         RS_PREPARE_INFO *pPrepare;
-
+        // TODO: improve the code repetition in if and else
         if(asyncEnable)
         {
 			int iNoOfBindParams = countBindParams(pStmt->pStmtAttr->pAPD->pDescRecHead);
 
 			if (pStmt->iNumOfOutOnlyParams == 0 && iNoOfBindParams == 0)
 				sendStatus = pqSendPrepareAndDescribe(pConn->pgConn, pStmt->szCursorName, pszCmd, 0, NULL);
-			else
-			{
-				Oid *paramTypes = getParamTypes(iNoOfBindParams, pStmt->pStmtAttr->pAPD->pDescRecHead, pConn->pConnectProps);
+            else {
+                std::vector<Oid> paramTypes = getParamTypes(
+                    iNoOfBindParams,
+                    pStmt->pStmtAttr->pAPD->pDescRecHead,
+                    pConn->pConnectProps);
 
-				sendStatus = pqSendPrepareAndDescribe(pConn->pgConn, pStmt->szCursorName, pszCmd, iNoOfBindParams, paramTypes);
-
-				paramTypes = (Oid *)rs_free(paramTypes);
-			}
+                sendStatus = pqSendPrepareAndDescribe(
+                    pConn->pgConn, pStmt->szCursorName, pszCmd,
+                    iNoOfBindParams,
+                    paramTypes.empty() ? nullptr
+                                       : paramTypes.data());
+            }
 
             if(sendStatus)
             {
@@ -1728,15 +1727,19 @@ SQLRETURN libpqPrepareOnThread(RS_STMT_INFO *pStmt, char *pszCmd)
 			int iNoOfBindParams = countBindParams(pStmt->pStmtAttr->pAPD->pDescRecHead);
 			if(pStmt->iNumOfOutOnlyParams == 0 && iNoOfBindParams == 0)
 				pgResult = pqPrepare(pConn->pgConn, pStmt->szCursorName, pszCmd, 0, NULL);
-			else
-			{
-				Oid *paramTypes = getParamTypes(iNoOfBindParams, pStmt->pStmtAttr->pAPD->pDescRecHead, pConn->pConnectProps);
+            else {
+                std::vector<Oid> paramTypes = getParamTypes(
+                    iNoOfBindParams,
+                    pStmt->pStmtAttr->pAPD->pDescRecHead,
+                    pConn->pConnectProps);
 
-				// OUT parameters in the stmt
-				pgResult = pqPrepare(pConn->pgConn, pStmt->szCursorName, pszCmd, iNoOfBindParams, paramTypes);
-
-				paramTypes = (Oid *)rs_free(paramTypes);
-			}
+                // OUT parameters in the stmt
+                pgResult = pqPrepare(
+                    pConn->pgConn, pStmt->szCursorName, pszCmd,
+                    iNoOfBindParams,
+                    paramTypes.empty() ? nullptr
+                                       : paramTypes.data());
+            }
             pqRc = PQresultStatus(pgResult);
         }
 

@@ -18,7 +18,7 @@
 #include <map>
 #include <functional>
 #include <algorithm>
-
+#include <vector>
 //#include <strsafe.h>
 
 #include "rsodbc.h"
@@ -453,7 +453,6 @@ void skipAllResultsOfStreamingRowsUsingConnection(RS_CONN_INFO *pConn);
 int doesAnyOtherStreamingCursorOpen(RS_CONN_INFO *pConn, RS_STMT_INFO *pStmt);
 
 SQLRETURN getOneQueryVal(RS_CONN_INFO *pConn, char * pSqlCmd, char *pVarBuf, int iBufLen);
-Oid *getParamTypes(int iNoOfBindParams, RS_DESC_REC *pDescRecHead, RS_CONNECT_PROPS_INFO *pConnectProps);
 int updateOutBindParametersValue(RS_STMT_INFO *pStmt);
 
 char *rs_strncpy(char *dest, const char *src, size_t n);
@@ -480,6 +479,7 @@ long long getInt64FromBinary(char *pColData, int idx);
 #ifdef __cplusplus
 }
 
+std::vector<Oid> getParamTypes(int iNoOfBindParams, RS_DESC_REC *pDescRecHead, RS_CONNECT_PROPS_INFO *pConnectProps);
 
 typedef std::map<std::string, std::string,
                  std::function<bool(const std::string &, const std::string &)>>
