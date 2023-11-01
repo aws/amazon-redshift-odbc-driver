@@ -556,7 +556,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 			&& !checkForValidCatalogName(pStmt, pCatalogName))
 		{
 			rc = SQL_ERROR;
-			addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+			addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLTables", 0, NULL);
 			goto error;
 		} 
 
@@ -735,7 +735,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
 		&& !checkForValidCatalogName(pStmt, pCatalogName))
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLColumns", 0, NULL);
         goto error; 
     }
 
@@ -917,7 +917,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLStatistics(SQLHSTMT phstmt,
     if(!checkForValidCatalogName(pStmt, pCatalogName))
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLStatistics", 0, NULL);
         goto error; 
     }
 
@@ -1041,14 +1041,14 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLSpecialColumns(SQLHSTMT phstmt,
     if(!checkForValidCatalogName(pStmt, pCatalogName))
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented:RS_SQLSpecialColumns", 0, NULL);
         goto error; 
     }
 
     if(pTableName == NULL || cbTableName == SQL_NULL_DATA)
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
+        addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer:RS_SQLSpecialColumns", 0, NULL);
         goto error; 
     }
 
@@ -1199,7 +1199,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
     if(!checkForValidCatalogName(pStmt, pCatalogName))
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLProcedureColumns", 0, NULL);
         goto error; 
     }
 
@@ -1834,7 +1834,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedures(SQLHSTMT           phstmt,
     if(!checkForValidCatalogName(pStmt, pCatalogName))
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLProcedures", 0, NULL);
         goto error; 
     }
 
@@ -1982,7 +1982,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLForeignKeys(SQLHSTMT               phstmt,
         )
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLForeignKeys", 0, NULL);
         goto error; 
     }
 
@@ -2128,7 +2128,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLPrimaryKeys(SQLHSTMT           phstmt,
     if(!checkForValidCatalogName(pStmt, pCatalogName))
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLPrimaryKeys", 0, NULL);
         goto error; 
     }
 
@@ -2464,7 +2464,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLColumnPrivileges(SQLHSTMT           phstmt,
     if(!checkForValidCatalogName(pStmt, pCatalogName))
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLColumnPrivileges", 0, NULL);
         goto error; 
     }
 
@@ -2602,7 +2602,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLTablePrivileges(SQLHSTMT           phstmt,
     if(!checkForValidCatalogName(pStmt, pCatalogName))
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLTablePrivileges", 0, NULL);
         goto error; 
     }
 

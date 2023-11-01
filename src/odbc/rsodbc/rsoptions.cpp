@@ -59,7 +59,7 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectOption(SQLHDBC phdbc,
         case SQL_TRANSLATE_DLL: iAttribute = SQL_ATTR_TRANSLATE_LIB; break;
         case SQL_TRANSLATE_OPTION: iAttribute = SQL_ATTR_TRANSLATE_OPTION;  break;
         case SQL_TXN_ISOLATION: iAttribute = SQL_ATTR_TXN_ISOLATION; break;
-        default: rc = checkHdbcHandleAndAddError(phdbc,SQL_ERROR,"HYC00", "Optional feature not implemented"); goto error;
+        default: rc = checkHdbcHandleAndAddError(phdbc,SQL_ERROR,"HYC00", "Optional feature not implemented::RS_SQLSetConnectOption"); goto error;
     } // Switch
 
      rc = RsOptions::RS_SQLSetConnectAttr(phdbc, iAttribute, (SQLPOINTER) Value, SQL_NTS);
@@ -207,7 +207,7 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetConnectOption(SQLHDBC phdbc,
         case SQL_TRANSLATE_OPTION: iAttribute = SQL_ATTR_TRANSLATE_OPTION;  break;
         case SQL_TXN_ISOLATION: iAttribute = SQL_ATTR_TXN_ISOLATION; break;
         case SQL_ATTR_CONNECTION_DEAD: iAttribute = SQL_ATTR_CONNECTION_DEAD; break;
-        default: rc = checkHdbcHandleAndAddError(phdbc,SQL_ERROR,"HYC00", "Optional feature not implemented"); goto error;
+        default: rc = checkHdbcHandleAndAddError(phdbc,SQL_ERROR,"HYC00", "Optional feature not implemented::RS_SQLGetConnectOption"); goto error;
     } // Switch
 
      rc = RsOptions::RS_SQLGetConnectAttr(phdbc, iAttribute, pValue, SQL_MAX_OPTION_STRING_LENGTH, NULL);
@@ -351,7 +351,7 @@ SQLRETURN SQL_API SQLSetScrollOptions(SQLHSTMT phstmt,
             case SQL_SCROLL_STATIC: iCursorType = SQL_CURSOR_STATIC; break;
             case SQL_SCROLL_KEYSET_DRIVEN: iCursorType = SQL_CURSOR_KEYSET_DRIVEN; break;
             case SQL_SCROLL_DYNAMIC: iCursorType = SQL_CURSOR_DYNAMIC; break;
-            default: rc = checkHstmtHandleAndAddError(phstmt,SQL_ERROR,"HYC00", "Optional feature not implemented"); goto error;
+            default: rc = checkHstmtHandleAndAddError(phstmt,SQL_ERROR,"HYC00", "Optional feature not implemented:SQLSetScrollOptions"); goto error;
         }
     }
 
@@ -576,7 +576,7 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetConnectAttr(SQLHDBC phdbc,
         default:
         {
             rc = SQL_ERROR;
-            addError(&pConn->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+            addError(&pConn->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLGetConnectAttr", 0, NULL);
             goto error;
         }
 
@@ -856,7 +856,7 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetStmtAttr(SQLHSTMT        phstmt,
         default:
         {
             rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+            addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLGetStmtAttr", 0, NULL);
             goto error;
         }
     } // Switch
@@ -1180,7 +1180,7 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
             else
             {
                 rc = SQL_ERROR;
-                addError(&pConn->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+                addError(&pConn->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLSetConnectAttr-1", 0, NULL);
                 goto error;
             }
 
@@ -1204,7 +1204,7 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
         default:
         {
             rc = SQL_ERROR;
-            addError(&pConn->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+            addError(&pConn->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLSetConnectAttr-2", 0, NULL);
             goto error;
         }
 
@@ -1590,7 +1590,7 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetStmtAttr(SQLHSTMT    phstmt,
         default:
         {
             rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+            addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLSetStmtAttr", 0, NULL);
             goto error;
         }
     } // Switch
@@ -1858,7 +1858,7 @@ SQLRETURN  SQL_API SQLSetEnvAttr(SQLHENV phenv,
                 case SQL_FALSE:
                 {
                     rc = SQL_ERROR;
-                    addError(&pEnv->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+                    addError(&pEnv->pErrorList,"HYC00", "Optional feature not implemented:SQLSetEnvAttr", 0, NULL);
                     goto error; 
                 }
 
