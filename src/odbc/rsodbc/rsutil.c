@@ -1424,9 +1424,6 @@ RS_DESC_INFO *releaseExplicitDescs(RS_DESC_INFO *phdescHead)
     {
         pNext = pDesc->pNext;
 
-        // Reset values, in case application use it again
-        pDesc->phdbc=NULL;
-
         // Free descriptor
         pDesc = releaseDescriptor(pDesc, FALSE);
     } // Loop

@@ -767,6 +767,13 @@ public:
       pNext = NULL;
     }
 
+    ~RS_DESC_INFO() {
+        phdbc = NULL;
+        pDescRecHead = NULL;
+        pErrorList = NULL;
+        pNext = NULL;
+    }
+
     int        iType; // Desc type as shown above.
     RS_CONN_INFO *phdbc; // Parent HDBC, who created this descriptor.
 

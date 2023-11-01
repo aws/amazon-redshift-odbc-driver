@@ -1890,9 +1890,6 @@ SQLRETURN  SQL_API RS_DESC_INFO::RS_SQLFreeDesc(SQLHDESC phdesc)
     // Remove from HDBC list
     removeDescriptor(pDesc);
 
-    // Reset values, in case application use it again
-    pDesc->phdbc=NULL;
-
     // Free descriptor
     pDesc = releaseDescriptor(pDesc, FALSE);
 
