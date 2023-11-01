@@ -309,12 +309,12 @@ SQLRETURN  SQL_API RsExecute::RS_SQLExecDirect(SQLHSTMT phstmt,
         if((pStmt->iMultiInsert == 0) && (pStmt->pszUserInsertCmd != NULL))
         {
             // Is it array binding?
-            RS_DESC_HEADER *pAPDDescHeader = pStmt->pStmtAttr->pAPD->pDescHeader;
+            RS_DESC_HEADER &pAPDDescHeader = pStmt->pStmtAttr->pAPD->pDescHeader;
 
-            if(pAPDDescHeader)
+            if(pAPDDescHeader.valid)
             {
                 // Bind array/single value
-                long lArraySize = (pAPDDescHeader->lArraySize <= 0) ? 1 : pAPDDescHeader->lArraySize;
+                long lArraySize = pAPDDescHeader.lArraySize <= 0 ? 1 : pAPDDescHeader.lArraySize;
                 int  iArrayBinding = (lArraySize > 1);
 
                 if(iArrayBinding)

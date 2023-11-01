@@ -615,11 +615,36 @@ public:
     RS_DESC_HEADER(short _hAllocType) {
       hAllocType = _hAllocType;
       lArraySize = 1;
+
+      /*
+      TODO:
+      We don't see this being ever initialized.
+      it is usually used in conjuction with lArraySize (via lParamsToBind and
+      lRowsToFetch) but corresponding logic are never executed due to
+      phArrayStatusPtr's NULL check; which makes it useless. Before considering
+      removing the variable and all the respective logic around it, find where
+      this status array was supposed to be used. If found a valid/missing use
+      case, fix the ptr manipulation and use the collected status wherever
+      necessary.
+      */
       phArrayStatusPtr = NULL;
+
+      /*
+      TODO:
+      Cannot find real non-null usage of plBindOffsetPtr
+      */
       plBindOffsetPtr = NULL;
+
       lBindType = SQL_PARAM_BIND_TYPE_DEFAULT;
       hHighestCount = 0;
+
+      /*
+      TODO:
+      Cannot find real non-null usage of plRowsProcessedPtr
+      */
       plRowsProcessedPtr = NULL;
+
+      valid = true;
     }
 
     short hAllocType; // SQL_DESC_ALLOC_AUTO or USER
@@ -629,6 +654,7 @@ public:
     long  lBindType; // Columnwise or Rowwise
     short hHighestCount; // Highest column bound
     long *plRowsProcessedPtr; // Rows returned
+    bool valid; // to replace malloc based null checks(defaults to true)
 };
 
 /*
@@ -756,11 +782,12 @@ public:
 #define RS_DESC_RECS_LINKED_LIST 0
 #define RS_DESC_RECS_ARRAY_LIST  1
 
-    RS_DESC_INFO(RS_CONN_INFO *_phdbc, int _iType, short _hAllocType) {
+    RS_DESC_INFO(RS_CONN_INFO *_phdbc, int _iType, short _hAllocType) 
+    : pDescHeader(_hAllocType)
+    {
       // Initialize HDESC
       phdbc = _phdbc;
       iType = _iType;
-      pDescHeader = (RS_DESC_HEADER *) new RS_DESC_HEADER(_hAllocType);
       iRecListType = RS_DESC_RECS_LINKED_LIST;
       pDescRecHead = NULL;
       pErrorList = NULL;
@@ -778,7 +805,7 @@ public:
     RS_CONN_INFO *phdbc; // Parent HDBC, who created this descriptor.
 
     // Header fields
-    RS_DESC_HEADER *pDescHeader;
+    RS_DESC_HEADER pDescHeader;
 
     // Record list
     int iRecListType; // 0 means linked list, 1 means array

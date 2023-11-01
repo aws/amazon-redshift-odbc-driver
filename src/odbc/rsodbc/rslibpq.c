@@ -878,14 +878,14 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
 
         if(rc == SQL_SUCCESS)
         {
-            RS_DESC_HEADER *pIPDDescHeader = pStmt->pIPD->pDescHeader;
-            RS_DESC_HEADER *pAPDDescHeader = pStmt->pStmtAttr->pAPD->pDescHeader;
+            RS_DESC_HEADER &pIPDDescHeader = pStmt->pIPD->pDescHeader;
+            RS_DESC_HEADER &pAPDDescHeader = pStmt->pStmtAttr->pAPD->pDescHeader;
 
             // Bind array/single value
-            long lParamsToBind = (pAPDDescHeader->lArraySize <= 0) ? 1 : pAPDDescHeader->lArraySize;
+            long lParamsToBind = (pAPDDescHeader.lArraySize <= 0) ? 1 : pAPDDescHeader.lArraySize;
             long lParamProcessed = 0;
             int  iArrayBinding = (lParamsToBind > 1);
-            int  iBindOffset = (pAPDDescHeader && pAPDDescHeader->plBindOffsetPtr) ? *(pAPDDescHeader->plBindOffsetPtr) : 0;
+            int  iBindOffset = (pAPDDescHeader.plBindOffsetPtr) ? *(pAPDDescHeader.plBindOffsetPtr) : 0;
             int  iMultiInsert = pStmt->iMultiInsert;
             int  iLastBatchMultiInsert = pStmt->iLastBatchMultiInsert;
             int  iOffset = 0;
@@ -971,7 +971,7 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
 
                             if(iArrayBinding)
                             {
-                                if(pAPDDescHeader->lBindType == SQL_BIND_BY_COLUMN)
+                                if(pAPDDescHeader.lBindType == SQL_BIND_BY_COLUMN)
                                 {
                                     // Column wise binding
                                     iValOffset = pDescRec->iOctetLen;
@@ -986,7 +986,7 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                                 else
                                 {
                                     // Row wise binding
-                                    iValOffset = pAPDDescHeader->lBindType;
+                                    iValOffset = pAPDDescHeader.lBindType;
                                 }
                             }
 
@@ -1021,14 +1021,14 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                         } // Bind param loop
 
                         // Put the param processed count
-                        if(pIPDDescHeader != NULL)
+                        if(pIPDDescHeader.valid)
                         {
                             // Param processed count
-                            if(pIPDDescHeader->plRowsProcessedPtr)
-                                *(pIPDDescHeader->plRowsProcessedPtr) = lParamProcessed + 1;
+                            if(pIPDDescHeader.plRowsProcessedPtr)
+                                *(pIPDDescHeader.plRowsProcessedPtr) = lParamProcessed + 1;
 
                             // Param status
-                            if(pIPDDescHeader->phArrayStatusPtr)
+                            if(pIPDDescHeader.phArrayStatusPtr)
                             {
                                 short hParamStatus;
 
@@ -1043,10 +1043,10 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                                 else
                                     hParamStatus = SQL_PARAM_ERROR;
 
-                                *(pIPDDescHeader->phArrayStatusPtr + lParamProcessed) = hParamStatus;
+                                *(pIPDDescHeader.phArrayStatusPtr + lParamProcessed) = hParamStatus;
                             }
 
-                        }
+                    }
 
                     } /* !Data_At_Exec */
                 }

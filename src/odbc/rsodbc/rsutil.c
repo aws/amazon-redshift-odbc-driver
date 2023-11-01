@@ -371,7 +371,9 @@ void removeStatement(RS_STMT_INFO *pStmt)
 void clearBindColList(RS_DESC_INFO *pARD)
 {
     // Release ARD recs
-    pARD->pDescHeader->hHighestCount = 0;
+    if (pARD) {
+        pARD->pDescHeader.hHighestCount = 0;
+    }
     releaseDescriptorRecs(pARD);
 }
 
@@ -5797,7 +5799,7 @@ void releasePrepares(RS_STMT_INFO *pStmt)
     if(pStmt->pPrepareHead)
     {
         // Release DescribeParam IPD recs
-        pStmt->pIPD->pDescHeader->hHighestCount = 0;
+        pStmt->pIPD->pDescHeader.hHighestCount = 0;
         releaseDescriptorRecs(pStmt->pIPD);
         pStmt->pIPD->iRecListType = RS_DESC_RECS_LINKED_LIST;
     }
@@ -6061,8 +6063,9 @@ void clearBindParamList(RS_STMT_INFO *pStmt)
 
     // Release APD recs
 
-	if(pAPD && pAPD->pDescHeader)
-		pAPD->pDescHeader->hHighestCount = 0;
+	if(pAPD) {
+		pAPD->pDescHeader.hHighestCount = 0;
+    }
     releaseDescriptorRecs(pAPD);
 }
 
@@ -7618,12 +7621,8 @@ RS_DESC_INFO *releaseDescriptor(RS_DESC_INFO *pDesc, int iImplicit)
                 } // Loop
             }
 
-            // Free descriptor content
-            if(pDesc->pDescHeader != NULL) {
-              delete pDesc->pDescHeader;
-              pDesc->pDescHeader = NULL;
-            }
-
+            // Invalidate header
+            pDesc->pDescHeader.valid = false;
             releaseDescriptorRecs(pDesc);
 
             // Free any error info
@@ -7907,7 +7906,7 @@ void copyIRDRecsFromResult(RS_RESULT_INFO *pResultHead, RS_DESC_INFO *pIRD)
     if(pResultHead && pIRD)
     {
         // Reset header info in pIRD
-        pIRD->pDescHeader->hHighestCount = 0;
+        pIRD->pDescHeader.hHighestCount = 0;
 
         // Release pIRD recs, if any
         releaseDescriptorRecs(pIRD);
@@ -7929,7 +7928,7 @@ void copyIPDRecsFromPrepare(RS_PREPARE_INFO *pPrepareHead, RS_DESC_INFO *pIPD)
     if(pPrepareHead && pIPD)
     {
         // Reset header info in pIPD
-        pIPD->pDescHeader->hHighestCount = 0;
+        pIPD->pDescHeader.hHighestCount = 0;
 
         // Release pIPD recs, if any
         releaseDescriptorRecs(pIPD);
@@ -9398,7 +9397,7 @@ void releaseResult(RS_RESULT_INFO *pResult, int iAtHeadResult, RS_STMT_INFO *pSt
         if(iAtHeadResult)
         {
             // Release DescribeCol result IRD recs
-            pStmt->pIRD->pDescHeader->hHighestCount = 0;
+            pStmt->pIRD->pDescHeader.hHighestCount = 0;
             releaseDescriptorRecs(pStmt->pIRD);
             pStmt->pIRD->iRecListType = RS_DESC_RECS_LINKED_LIST;
         }
@@ -10970,10 +10969,10 @@ char *parseForMultiInsertCommand(RS_STMT_INFO *pStmt, char *pCmd, size_t cbLen, 
                && _strnicmp(pToken, "INSERT", iTokenLen) == 0)
            {
                 // Is it array binding?
-                RS_DESC_HEADER *pAPDDescHeader = pStmt->pStmtAttr->pAPD->pDescHeader;
+                RS_DESC_HEADER &pAPDDescHeader = pStmt->pStmtAttr->pAPD->pDescHeader;
 
                 // Bind array/single value
-                long lArraySize = ((pAPDDescHeader == NULL) || (pAPDDescHeader->lArraySize <= 0)) ? 1 : pAPDDescHeader->lArraySize;
+                long lArraySize = (pAPDDescHeader.valid == false || pAPDDescHeader.lArraySize <= 0) ? 1 : pAPDDescHeader.lArraySize;
                 int  iArrayBinding = (lArraySize > 1);
 
                 if(iArrayBinding)

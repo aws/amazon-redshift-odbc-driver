@@ -43,10 +43,12 @@ SQLRETURN  SQL_API RsDesc::RS_SQLCopyDesc(SQLHDESC phdescSrc,
     SQLRETURN rc = SQL_SUCCESS;
     RS_DESC_INFO *pDescSrc = (RS_DESC_INFO *)phdescSrc;
     RS_DESC_INFO *pDescDest = (RS_DESC_INFO *)phdescDest;
-    RS_DESC_HEADER *pDescHeaderSrc;
-    RS_DESC_HEADER *pDescHeaderDest;
     RS_DESC_REC *pDescRecSrc;
     RS_DESC_REC *pDescRecDest;
+    
+    RS_DESC_HEADER& pDescHeaderSrc = pDescSrc->pDescHeader;
+    RS_DESC_HEADER& pDescHeaderDest = pDescDest->pDescHeader;
+    short hAllocType = pDescHeaderDest.hAllocType;
 
     if(!VALID_HDESC(phdescSrc)
         || !VALID_HDESC(phdescDest))
@@ -71,16 +73,9 @@ SQLRETURN  SQL_API RsDesc::RS_SQLCopyDesc(SQLHDESC phdescSrc,
     }
 
     // Copy header info
-    pDescHeaderSrc = pDescSrc->pDescHeader;
-    pDescHeaderDest = pDescDest->pDescHeader;
-    if(pDescHeaderSrc != NULL
-        && pDescHeaderDest != NULL)
-    {
-        short hAllocType = pDescHeaderDest-> hAllocType;
-
-        memcpy(pDescHeaderDest, pDescHeaderSrc, sizeof(RS_DESC_HEADER));
-
-        pDescHeaderDest-> hAllocType = hAllocType;
+    if (pDescHeaderDest.valid && pDescHeaderSrc.valid) {
+        pDescHeaderDest = pDescHeaderSrc;
+        pDescHeaderDest.hAllocType = hAllocType;
     }
 
     // Release destination recs
@@ -162,7 +157,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_DESC_INFO *pDesc = (RS_DESC_INFO *)phdesc;
-    RS_DESC_HEADER *pDescHeader = NULL;
+    RS_DESC_HEADER &pDescHeader = pDesc->pDescHeader;
     SQLINTEGER *piVal = (SQLINTEGER *)pValue;
     short *phVal = (short *)pValue;
     void **ppVal = (void **)pValue;
@@ -222,8 +217,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
 
     if(iIsHeaderField)
     {
-        pDescHeader = pDesc->pDescHeader;
-        if(pDescHeader == NULL)
+        if(pDesc->pDescHeader.valid == false)
         {
             rc = SQL_ERROR;
             addError(&pDesc->pErrorList,"HY000", "Null pointer found", 0, NULL);
@@ -236,46 +230,46 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
         // Header fields
         case SQL_DESC_ALLOC_TYPE:
         {
-            getShortVal(pDescHeader->hAllocType, phVal, pcbLen);
+            getShortVal(pDescHeader.hAllocType, phVal, pcbLen);
             break;
         }
 
         case SQL_DESC_ARRAY_SIZE:
         {
-            getSQLINTEGERVal(pDescHeader->lArraySize,piVal, pcbLen);
+            getSQLINTEGERVal(pDescHeader.lArraySize,piVal, pcbLen);
             break;
         }
 
         case SQL_DESC_ARRAY_STATUS_PTR:
         {
-            getPointerVal(pDescHeader->phArrayStatusPtr,ppVal,pcbLen);
+            getPointerVal(pDescHeader.phArrayStatusPtr,ppVal,pcbLen);
             break;
         }
 
         case SQL_DESC_BIND_OFFSET_PTR:
         {
-            getPointerVal(pDescHeader->plBindOffsetPtr,ppVal,pcbLen);
+            getPointerVal(pDescHeader.plBindOffsetPtr,ppVal,pcbLen);
             break;
         }
 
         case SQL_DESC_BIND_TYPE:
         {
-            getSQLINTEGERVal(pDescHeader->lBindType,piVal, pcbLen);
+            getSQLINTEGERVal(pDescHeader.lBindType,piVal, pcbLen);
             break;
         }
 
         case SQL_DESC_COUNT:
         {
-            if(pDescHeader->hHighestCount == 0)
-                pDescHeader->hHighestCount = findHighestRecCount(pDesc);
+            if(pDescHeader.hHighestCount == 0)
+                pDescHeader.hHighestCount = findHighestRecCount(pDesc);
 
-            getShortVal(pDescHeader->hHighestCount, phVal, pcbLen);
+            getShortVal(pDescHeader.hHighestCount, phVal, pcbLen);
             break;
         }
 
         case SQL_DESC_ROWS_PROCESSED_PTR:
         {
-            getPointerVal(pDescHeader->plRowsProcessedPtr,ppVal,pcbLen);
+            getPointerVal(pDescHeader.plRowsProcessedPtr,ppVal,pcbLen);
             break;
         }
 
@@ -723,7 +717,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_DESC_INFO *pDesc = (RS_DESC_INFO *)phdesc;
-    RS_DESC_HEADER *pDescHeader = NULL;
+    RS_DESC_HEADER &pDescHeader = pDesc->pDescHeader;;
     RS_DESC_REC *pDescRec = NULL;
     int iVal = (int)(long)pValue;
     long lVal = 0;
@@ -777,8 +771,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
     }
     else
     {
-        pDescHeader = pDesc->pDescHeader;
-        if(pDescHeader == NULL)
+        if(pDesc->pDescHeader.valid == false)
         {
             rc = SQL_ERROR;
             addError(&pDesc->pErrorList,"HY000", "Null pointer found", 0, NULL);
@@ -798,21 +791,21 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
                 goto error;
             }
 
-            pDescHeader->lArraySize = lVal;
+            pDescHeader.lArraySize = lVal;
 
             break;
         }
 
         case SQL_DESC_ARRAY_STATUS_PTR:
         {
-            pDescHeader->phArrayStatusPtr = (short *)pValue;
+            pDescHeader.phArrayStatusPtr = (short *)pValue;
 
             break;
         }
 
         case SQL_DESC_BIND_OFFSET_PTR:
         {
-            pDescHeader->plBindOffsetPtr = (long *)pValue;
+            pDescHeader.plBindOffsetPtr = (long *)pValue;
 
             break;
         }
@@ -827,7 +820,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
                 goto error;
             }
 
-            pDescHeader->lBindType = lVal;
+            pDescHeader.lBindType = lVal;
 
             break;
         }
@@ -846,7 +839,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
                 goto error;
             }
 
-            pDescHeader->hHighestCount = hVal;
+            pDescHeader.hHighestCount = hVal;
 
             if(hVal != 0)
             {
@@ -869,7 +862,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
 
         case SQL_DESC_ROWS_PROCESSED_PTR:
         {
-            pDescHeader->plRowsProcessedPtr = (long *)pValue;
+            pDescHeader.plRowsProcessedPtr = (long *)pValue;
 
             break;
         }

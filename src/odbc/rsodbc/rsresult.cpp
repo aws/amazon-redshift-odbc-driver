@@ -1273,14 +1273,14 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
 
     if(pResult)
     {
-        RS_DESC_HEADER *pIRDDescHeader = pStmt->pIRD->pDescHeader;
-        RS_DESC_HEADER *pARDDescHeader = pStmt->pStmtAttr->pARD->pDescHeader;
+        RS_DESC_HEADER &pIRDDescHeader = pStmt->pIRD->pDescHeader;
+        RS_DESC_HEADER &pARDDescHeader = pStmt->pStmtAttr->pARD->pDescHeader;
 
         // Fetch array/single row
-        long lRowsToFetch = (pARDDescHeader->lArraySize <= 0) ? 1 : pARDDescHeader->lArraySize;
+        long lRowsToFetch = (pARDDescHeader.lArraySize <= 0) ? 1 : pARDDescHeader.lArraySize;
         long lRowFetched = 0;
         int  iBlockCursor = (lRowsToFetch > 1);
-        int  iBindOffset = (pARDDescHeader && pARDDescHeader->plBindOffsetPtr) ? *(pARDDescHeader->plBindOffsetPtr) : 0;
+        int  iBindOffset = (pARDDescHeader.plBindOffsetPtr) ? *(pARDDescHeader.plBindOffsetPtr) : 0;
 
 		// Reset previous hCol for SQLGetData
 		pResult->iPrevhCol = 0;
@@ -1570,7 +1570,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
 
                         if(iBlockCursor)
                         {
-                            if(pARDDescHeader->lBindType == SQL_BIND_BY_COLUMN)
+                            if(pARDDescHeader.lBindType == SQL_BIND_BY_COLUMN)
                             {
                                 // Column wise binding
                                 iValOffset = pDescRec->iOctetLen;
@@ -1587,7 +1587,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                             else
                             {
                                 // Row wise binding
-                                iValOffset = pARDDescHeader->lBindType;
+                                iValOffset = pARDDescHeader.lBindType;
 
                                 if(pDescRec->plOctetLen == NULL)
                                 {
@@ -1619,14 +1619,14 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                     } // Column loop
 
                     // Put the fetch count
-                    if(pIRDDescHeader != NULL)
+                    if(pIRDDescHeader.valid)
                     {
                         // Row count
-                        if(pIRDDescHeader->plRowsProcessedPtr)
-                            *(pIRDDescHeader->plRowsProcessedPtr) = lRowFetched + 1;
+                        if(pIRDDescHeader.plRowsProcessedPtr)
+                            *(pIRDDescHeader.plRowsProcessedPtr) = lRowFetched + 1;
 
                         // Row status
-                        if(pIRDDescHeader->phArrayStatusPtr)
+                        if(pIRDDescHeader.phArrayStatusPtr)
                         {
                             short hRowStatus;
 
@@ -1641,7 +1641,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                             else
                                 hRowStatus = SQL_ROW_ERROR;
 
-                            *(pIRDDescHeader->phArrayStatusPtr + lRowFetched) = hRowStatus;
+                            *(pIRDDescHeader.phArrayStatusPtr + lRowFetched) = hRowStatus;
                         }
                     } 
                 } // SQL_RD_ON
@@ -1653,12 +1653,10 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                     // Put the row status of last row as SQL_ROW_NOROW
                     if(pStmt->pStmtAttr->iRetrieveData == SQL_RD_ON)
                     {
-                        if(pIRDDescHeader != NULL)
-                        {
-                            if(pIRDDescHeader->phArrayStatusPtr)
-                            {
-                                *(pIRDDescHeader->phArrayStatusPtr + lRowFetched) = SQL_ROW_NOROW;
-                            }
+                        if (pIRDDescHeader.valid &&
+                            pIRDDescHeader.phArrayStatusPtr) {
+                            *(pIRDDescHeader.phArrayStatusPtr + lRowFetched) =
+                                SQL_ROW_NOROW;
                         }
                     } // SQL_RD_ON
                 }
