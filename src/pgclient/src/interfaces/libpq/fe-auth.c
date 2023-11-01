@@ -808,7 +808,7 @@ pg_password_sendauth(PGconn *conn, const char *password, AuthRequest areq)
 
 	int			algorithm = 0;
 	const char *pwd_to_send;
-	const char	nonce_to_send[16];
+	char	    nonce_to_send[16];
 	size_t		clientNonceLength = sizeof(nonce_to_send);
 
 
@@ -821,7 +821,7 @@ pg_password_sendauth(PGconn *conn, const char *password, AuthRequest areq)
 				char	   *crypt_pwd2;
 
 				/* Allocate enough space for two MD5 hashes */
-				crypt_pwd = malloc(2 * (MD5_PASSWD_LEN + 1));
+				crypt_pwd = (char *) malloc(2 * (MD5_PASSWD_LEN + 1));
 				if (!crypt_pwd)
 				{
 					printfPQExpBuffer(&conn->errorMessage,
@@ -876,7 +876,7 @@ pg_password_sendauth(PGconn *conn, const char *password, AuthRequest areq)
 				}
 
 				// Get the salt from server
-				serverSalt = calloc(serverSaltLen + 1, sizeof(char));
+				serverSalt = (char *) calloc(serverSaltLen + 1, sizeof(char));
 				if (!serverSalt)
 				{
 					printfPQExpBuffer(&conn->errorMessage,
@@ -895,7 +895,7 @@ pg_password_sendauth(PGconn *conn, const char *password, AuthRequest areq)
 				}
 
 				// Get the nonce from server
-				serverNonce = calloc(serverNonceLen + 1, sizeof(char));
+				serverNonce = (char *) calloc(serverNonceLen + 1, sizeof(char));
 				if (!serverNonce)
 				{
 					printfPQExpBuffer(&conn->errorMessage,
