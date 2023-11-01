@@ -263,7 +263,7 @@
 /* 2 Advanced */ 
 /* 9 Proxy */
 
-#define DD_DSN_ATTR_COUNT (41 + 8 + 46 +  2 + 9)
+#define DD_DSN_ATTR_COUNT 99
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -465,7 +465,7 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 
 static char*g_setOfKSA[] = {"SSPI","GSS"};
 
-static const rs_odbc_glb_attr_t rs_odbc_glb_attrs[] =
+static const rs_odbc_glb_attr_t rs_odbc_glb_attrs[ODBC_GLB_ATTR_COUNT] =
 {
 	{ RS_LOG_LEVEL_OPTION_NAME , DFLT_LOG_LEVEL },
 	{ RS_LOG_PATH_OPTION_NAME , DFLT_LOG_PATH },
@@ -1328,8 +1328,10 @@ rs_dsn_set_attr(rs_dsn_setup_ptr_t rs_setup_ctxt, const char *attr, char *val)
 	for (i = 0; rs_dsn_code2name[i].attr_code[0] &&
 		strcmp(attr, rs_dsn_code2name[i].attr_code) &&
 		strcmp(attr, rs_dsn_code2name[i].attr_val); i++);
-	if (0 == rs_dsn_code2name[i].attr_code[0])
+	if (0 == rs_dsn_code2name[i].attr_code[0]) {
+		// rs_dsn_log(__LINE__, "missing rs_dsn_code2name NOT set_attr: attr %s value %s", attr, val);
 		return FALSE;
+	}
 
 	set_attr_val(&(rs_setup_ctxt->attrs[i]), val);
 
@@ -1387,6 +1389,7 @@ rs_odbc_glb_get_attr(rs_dsn_setup_ptr_t rs_setup_ctxt, const char *attr)
 static const char *
 rs_dsn_attr_code2name(const char *code)
 {
+	rs_dsn_log(__LINE__, "rs_dsn_attr_code2name %s",code);
 	int i;
 	for (i = 0; rs_dsn_code2name[i].attr_code[0] &&
 		strcmp(code, rs_dsn_code2name[i].attr_code); i++);
@@ -1508,7 +1511,7 @@ ConfigDSN(
 		GlobalFree(rs_dsn_setup_handle);
 		return FALSE;
 	}
-	rs_dsn_log(__LINE__, "odbc_glb_attrs <- rs_odbc_glb (defaults) ", helpfile_url);
+    rs_dsn_log(__LINE__, "odbc_glb_attrs <- rs_odbc_glb (defaults) ", helpfile_url);
 	memcpy(&rs_dsn_setup_ctxt->odbc_glb_attrs, rs_odbc_glb_attrs, sizeof(rs_odbc_glb_attrs));
 
 	/* Save original data source name */
@@ -1974,7 +1977,8 @@ static LRESULT CALLBACK rs_dsn_advanced_sheet(HWND hwndDlg, UINT message, WPARAM
 			SetDlgItemText(hwndDlg, IDC_INI_SQL_EDIT, rs_dsn_get_attr(rs_dsn_setup_ctxt, "InitializationString"));
 			CheckDlgButton(hwndDlg, IDC_CURRENT_DB_ONLY, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_DATABASE_METADATA_CURRENT_DB_ONLY, TRUE));
 			CheckDlgButton(hwndDlg, IDC_READ_ONLY, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_READ_ONLY, FALSE));
-
+			// Already read from reg into local cache(rs_dsn_setup_ctxt); and now update the page
+			// Log Level
 			for (i = 0;; i++)
 			{
 				if (szLogLevels[i][0] == '\0')
@@ -2927,6 +2931,7 @@ rs_dsn_make_connect_str(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt, char *connectstr,i
 	snprintf(connectstr,buf_len, "DRIVER=%s", rs_dsn_setup_ctxt->driver_desc);
 	ptr = connectstr + strlen(connectstr);
 	for (i = 0; attrs[i].attr_code[0]; i++) {
+		rs_dsn_log(__LINE__, "%d: make_connect_str trying %s", i, attrs[i].attr_code);
 /*
  *	need special handling for Description (possibly escaping)
  *	and a prompt dialog for password
@@ -3143,7 +3148,7 @@ rs_dsn_read_advanced_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_ROLLBACK_ERR, "TransactionErrorBehavior");
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_CURRENT_DB_ONLY, RS_DATABASE_METADATA_CURRENT_DB_ONLY);
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_READ_ONLY, RS_READ_ONLY);
-
+		// read from page into local cache
 		lb = GetDlgItem(hdlg, IDC_LOG_LEVEL_COMBO);
 		n = ComboBox_GetCurSel(lb);
 		snprintf(temp_buf, sizeof(temp_buf), "%d", n);

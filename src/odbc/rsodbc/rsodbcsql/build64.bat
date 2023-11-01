@@ -2,7 +2,7 @@
 echo Building 64 bit Windows rsodbcsql
 
 echo Setting environment variables
-call vcvars64
+@REM call vcvars64
 
 devenv /Rebuild "Release|x64" rsodbcsql.sln
 
