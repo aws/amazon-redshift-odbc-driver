@@ -16,34 +16,48 @@ odbc_version=$1
 svn_rev=$2
 
 # The following routine set environment variable for compilation
-# Those variables in exports.sh link include paths to brazil dependnecies
+# Those variables in exports.sh link include paths to dependnecies
 # build64.sh has the same routines
-source ../../../exports_basic.sh
-if test -f "../../../exports.sh"; then
-    source ../../../exports.sh
+RS_ROOT_DIR="../../.." #Technically RS_ROOT_DIR is same as ROOT_DIR unless folders change
+pushd ${RS_ROOT_DIR}
+source ${ROOT_DIR}/exports_basic.sh
+if test -f "${ROOT_DIR}/exports.sh"; then
+    source ${ROOT_DIR}/exports.sh
 fi
+popd
+
+# Build logger
+pushd ${RS_ROOT_DIR}/src/logging
+make clean
+checkExitCode $?
+make
+checkExitCode $?
+popd
 
 # Build libpq & libpgport
-cd ../../pgclient
+pushd ${RS_ROOT_DIR}/src/pgclient
 ./build64.sh
 checkExitCode $?
+popd
 
 # Build ODBC Driver Shared Object
-cd ../odbc/rsodbc
+
+pushd ${RS_ROOT_DIR}/src/odbc/rsodbc
 ./build64.sh $odbc_version $svn_rev
 checkExitCode $?
+popd
 
 # Build ODBC Driver Samples
-cd ./samples
+pushd ./samples
 ./build64.sh
 checkExitCode $?
-cd ..
+popd
 
 # Build rsodbcsql
-cd ./rsodbcsql
+pushd ./rsodbcsql
 ./build64.sh
 checkExitCode $?
-cd ..
+popd
 
 
 # Now make the installer using RPM label provided
