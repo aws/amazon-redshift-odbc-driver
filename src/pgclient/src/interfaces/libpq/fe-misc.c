@@ -59,6 +59,7 @@
 #include "mb/pg_wchar.h"
 #include "pg_config_paths.h"
 
+#include <rslog.h>
 
 static int	pqPutMsgBytes(const void *buf, size_t len, PGconn *conn);
 static int	pqSendSome(PGconn *conn, int len);
@@ -76,6 +77,7 @@ PQlibVersion(void)
 }
 
 /*
+ * Deprecated.
  * fputnbytes: print exactly N bytes to a file
  *
  * We avoid using %.*s here because it can misbehave if the data
@@ -104,8 +106,7 @@ pqGetc(char *result, PGconn *conn)
 
 	*result = conn->inBuffer[conn->inCursor++];
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "From backend> %c\n", *result);
+	RS_LOG_TRACE("ODBCPQ",  "From backend[C]> %c", *result);
 
 	return 0;
 }
@@ -120,8 +121,7 @@ pqPutc(char c, PGconn *conn)
 	if (pqPutMsgBytes(&c, 1, conn))
 		return EOF;
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "To backend> %c\n", c);
+	RS_LOG_TRACE("ODBCPQ",  "To backend[C]> %c", c);
 
 	return 0;
 }
@@ -158,9 +158,8 @@ pqGets_internal(PQExpBuffer buf, PGconn *conn, bool resetbuffer)
 
 	conn->inCursor = ++inCursor;
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "From backend> \"%s\"\n",
-				buf->data);
+	RS_LOG_TRACE("ODBCPQ", "From backend[S]> ...");
+	RS_STREAM_LOG_TRACE("ODBCPQ",  buf->data, buf->len);
 
 	return 0;
 }
@@ -187,8 +186,8 @@ pqPuts(const char *s, PGconn *conn)
 	if (pqPutMsgBytes(s, strlen(s) + 1, conn))
 		return EOF;
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "To backend> \"%s\"\n", s);
+	RS_LOG_TRACE("ODBCPQ", "To backend[S]> ...");
+	RS_STREAM_LOG_TRACE("ODBCPQ", s, -1);
 
 	return 0;
 }
@@ -207,14 +206,8 @@ pqGetnchar(char *s, size_t len, PGconn *conn)
 	/* no terminating null */
 
 	conn->inCursor += len;
-
-	if (conn->Pfdebug)
-	{
-		fprintf(conn->Pfdebug, "From backend (%lu)> ", (unsigned long) len);
-		fputnbytes(conn->Pfdebug, s, len);
-		fprintf(conn->Pfdebug, "\n");
-	}
-
+	RS_LOG_TRACE("ODBCPQ", "From backend[S:%d]...", len);
+	RS_STREAM_LOG_TRACE("ODBCPQ", s, len);
 	return 0;
 }
 
@@ -227,13 +220,8 @@ pqPutnchar(const char *s, size_t len, PGconn *conn)
 {
 	if (pqPutMsgBytes(s, len, conn))
 		return EOF;
-
-	if (conn->Pfdebug)
-	{
-		fprintf(conn->Pfdebug, "To backend> ");
-		fputnbytes(conn->Pfdebug, s, len);
-		fprintf(conn->Pfdebug, "\n");
-	}
+	RS_LOG_TRACE("ODBCPQ", "To backend[S:%d]...", len);
+	RS_STREAM_LOG_TRACE("ODBCPQ", s, len);
 
 	return 0;
 }
@@ -272,8 +260,7 @@ pqGetInt(int *result, size_t bytes, PGconn *conn)
 			return EOF;
 	}
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "From backend (#%lu)> %d\n", (unsigned long) bytes, *result);
+	RS_LOG_TRACE("ODBCPQ",  "From backend [I:%lu]> %d", (unsigned long) bytes, *result);
 
 	return 0;
 }
@@ -308,8 +295,7 @@ pqPutInt(int value, size_t bytes, PGconn *conn)
 			return EOF;
 	}
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "To backend (%lu#)> %d\n", (unsigned long) bytes, value);
+	RS_LOG_TRACE("ODBCPQ",  "To backend[I:%lu]> %d", bytes, value);
 
 	return 0;
 }
@@ -495,10 +481,8 @@ pqPutMsgStart(char msg_type, bool force_len, PGconn *conn)
 	conn->outMsgStart = lenPos;
 	conn->outMsgEnd = endPos;
 	/* length word, if needed, will be filled in by pqPutMsgEnd */
-
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "To backend> Msg %c\n",
-				msg_type ? msg_type : ' ');
+	char c = (msg_type ? msg_type : ' ');
+	RS_LOG_TRACE("ODBCPQ",  "To backend[C]> Msg %c",c);
 
 	return 0;
 }
@@ -534,9 +518,7 @@ pqPutMsgBytes(const void *buf, size_t len, PGconn *conn)
 int
 pqPutMsgEnd(PGconn *conn)
 {
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "To backend> Msg complete, length %u\n",
-				conn->outMsgEnd - conn->outCount);
+	RS_LOG_TRACE("ODBCPQ",  "To backend> Msg complete, length %u", conn->outMsgEnd - conn->outCount);
 
 	/* Fill in length word if needed */
 	if (conn->outMsgStart >= 0)

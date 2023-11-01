@@ -22,8 +22,6 @@ void _pgFreeTuplePointers(PGresult * res);
 void initCscLib(FILE    *fpTrace)
 {
     g_CscMethodLock = rsCreateMutex();
-
-    setTraceInfoCsc(fpTrace);
 }
 
 /*====================================================================================================================================================*/
@@ -33,8 +31,6 @@ void initCscLib(FILE    *fpTrace)
 //
 void uninitCscLib(void)
 {
-    setTraceInfoCsc(NULL);
-
     rsDestroyMutex(g_CscMethodLock);
     g_CscMethodLock = NULL;
 }

@@ -12,8 +12,6 @@
 #include "rslock.h"
 #include "rserror.h"
 
-#include <time.h>
-
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
@@ -21,10 +19,10 @@
 //
 void setTraceLevelAndFile(int iTracelLevel, char *pTraceFile)
 {
-    gRsGlobalVars.iTraceLevel = iTracelLevel;
+    getGlobalLogVars()->iTraceLevel = iTracelLevel;
 
     if(pTraceFile && *pTraceFile != '\0')
-        rs_strncpy(gRsGlobalVars.szTraceFile, pTraceFile, sizeof(gRsGlobalVars.szTraceFile));
+        rs_strncpy(getGlobalLogVars()->szTraceFile, pTraceFile, sizeof(getGlobalLogVars()->szTraceFile));
     else
     {
         DWORD dwRetVal = 0;
@@ -36,49 +34,35 @@ void setTraceLevelAndFile(int iTracelLevel, char *pTraceFile)
             szTempPath[0] = '\0';
         }
 
-        snprintf(gRsGlobalVars.szTraceFile,sizeof(gRsGlobalVars.szTraceFile),"%s%s%s", szTempPath, (szTempPath[0] != '\0') ? PATH_SEPARATOR : "", TRACE_FILE_NAME);
+        snprintf(getGlobalLogVars()->szTraceFile,sizeof(getGlobalLogVars()->szTraceFile),"%s%s%s", szTempPath, (szTempPath[0] != '\0') ? PATH_SEPARATOR : "", TRACE_FILE_NAME);
     }
-
-//    printf("gPaGlobalVars.iTraceLevel = %d gPaGlobalVars.szTraceFile=%s\n", gPaGlobalVars.iTraceLevel, gPaGlobalVars.szTraceFile);
-}
-
-/*====================================================================================================================================================*/
-
-//---------------------------------------------------------------------------------------------------------igarish
-// Initialize the trace on startup.
-//
-void initTrace()
-{
-    // Read reg settings
-    readAndSetTraceInfo();
-
-    // Create trace file, if it's ON
-    createTraceFile();
 }
 
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
 // Create trace file.
+// Deprecated
 //
 void createTraceFile()
 {
+    return;
     if(IS_TRACE_ON())
     {
-        if(gRsGlobalVars.szTraceFile[0] != '\0')
+        if(getGlobalLogVars()->szTraceFile[0] != '\0')
         {
-            gRsGlobalVars.fpTrace = fopen(gRsGlobalVars.szTraceFile, (IS_TRACE_LEVEL_DEBUG_APPEND()) ? "a+" : "w+");
+            getGlobalLogVars()->fpTrace = fopen(getGlobalLogVars()->szTraceFile, (IS_TRACE_LEVEL_DEBUG_APPEND()) ? "a+" : "w+");
 
-            if(!gRsGlobalVars.fpTrace)
+            if(!getGlobalLogVars()->fpTrace)
             {
                 // Try to create under TEMP directory
-                if(strchr(gRsGlobalVars.szTraceFile, PATH_SEPARATOR_CHAR) == NULL)
+                if(strchr(getGlobalLogVars()->szTraceFile, PATH_SEPARATOR_CHAR) == NULL)
                 {
                     DWORD dwRetVal = 0;
                     char  szTempPath[MAX_PATH + 1];
                     char  szFileName[MAX_PATH + 1];
 
-                    rs_strncpy(szFileName, gRsGlobalVars.szTraceFile,sizeof(szFileName));
+                    rs_strncpy(szFileName, getGlobalLogVars()->szTraceFile,sizeof(szFileName));
 
                     dwRetVal = GetTempPath(MAX_PATH, szTempPath); 
                     if (dwRetVal > MAX_PATH || (dwRetVal == 0))
@@ -88,16 +72,16 @@ void createTraceFile()
 
                     if(szTempPath[0] != '\0')
                     {
-                        snprintf(szFileName,sizeof(szFileName),"%s%s%s", szTempPath, PATH_SEPARATOR, gRsGlobalVars.szTraceFile);
-                        rs_strncpy(gRsGlobalVars.szTraceFile, szFileName, sizeof(gRsGlobalVars.szTraceFile));
+                        snprintf(szFileName,sizeof(szFileName),"%s%s%s", szTempPath, PATH_SEPARATOR, getGlobalLogVars()->szTraceFile);
+                        rs_strncpy(getGlobalLogVars()->szTraceFile, szFileName, sizeof(getGlobalLogVars()->szTraceFile));
 
-                        gRsGlobalVars.fpTrace = fopen(gRsGlobalVars.szTraceFile, (IS_TRACE_LEVEL_DEBUG_APPEND()) ? "a+" : "w+");
+                        getGlobalLogVars()->fpTrace = fopen(getGlobalLogVars()->szTraceFile, (IS_TRACE_LEVEL_DEBUG_APPEND()) ? "a+" : "w+");
                     }
                 }
             }
 
-            if(!gRsGlobalVars.fpTrace)
-                gRsGlobalVars.iTraceLevel = TRACE_OFF;
+            if(!getGlobalLogVars()->fpTrace)
+                getGlobalLogVars()->iTraceLevel = LOG_LEVEL_OFF;
         }
     }
 }
@@ -109,7 +93,8 @@ void createTraceFile()
 //
 FILE *getTraceFileHandle()
 {
-    return gRsGlobalVars.fpTrace;
+    // return getGlobalLogVars()->fpTrace;
+    return NULL;
 }
 
 //---------------------------------------------------------------------------------------------------------igarish
@@ -117,112 +102,58 @@ FILE *getTraceFileHandle()
 //
 char *getTraceFileName()
 {
-    return gRsGlobalVars.szTraceFile;
+    return getGlobalLogVars()->szTraceFile;
 }
 
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
 // Close the trace file.
+// Deprecated
 //
 void closeTraceFile()
 {
+    return;
     if(IS_TRACE_ON())
     {
-        if(gRsGlobalVars.fpTrace)
+        if(getGlobalLogVars()->fpTrace)
         {
-            fclose(gRsGlobalVars.fpTrace);
-            gRsGlobalVars.fpTrace = NULL;
+            fclose(getGlobalLogVars()->fpTrace);
+            getGlobalLogVars()->fpTrace = NULL;
         }
     }
 }
 
 /*====================================================================================================================================================*/
 
-void traceError(const char *fmt,...)
+void RsTrace::traceError(const char *fmt,...)
 {
-    if(IS_TRACE_LEVEL_ERROR())
-    {
-        WRITE_INTO_FILE(TRUE);
-    }
+    WRITE_INTO_FILE(TRUE);
+}
+
+/*====================================================================================================================================================*/
+void RsTrace::traceAPICall(const char *fmt,...)
+{
+    WRITE_INTO_FILE(TRUE);
 }
 
 /*====================================================================================================================================================*/
 
-void traceAPICall(const char *fmt,...)
+void RsTrace::traceArg(const char *fmt,...)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
-    {
-        // Write prefix
-        if(gRsGlobalVars.fpTrace)
-        {
-            time_t        stamp_time = time(NULL);
-            char        strfbuf[128];    
-            long        lProcessId = rsGetCurrentProcessId();
-            long        lThreadId  = rsGetCurrentThreadId();
-
-            strftime(strfbuf, sizeof(strfbuf), "%Y-%m-%d %H:%M:%S",    localtime(&stamp_time));
-            fprintf(gRsGlobalVars.fpTrace,"[%s Process:%ld Thread:%ld] ", strfbuf, lProcessId,lThreadId);
-        }
-
-        // Write actual message
-        WRITE_INTO_FILE(TRUE);
-    }
+    WRITE_INTO_FILE(TRUE);
 }
 
 /*====================================================================================================================================================*/
 
-void traceArg(const char *fmt,...)
+void RsTrace::traceArgVal(const char *fmt,...)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
-    {
-        WRITE_INTO_FILE(TRUE);
-    }
+    WRITE_INTO_FILE(FALSE);
 }
 
 /*====================================================================================================================================================*/
 
-void traceArgVal(const char *fmt,...)
-{
-    if(IS_TRACE_LEVEL_API_CALL())
-    {
-        WRITE_INTO_FILE(FALSE);
-    }
-}
-
-/*====================================================================================================================================================*/
-
-void traceInfo(const char *fmt,...)
-{
-    if(IS_TRACE_LEVEL_INFO())
-    {
-        WRITE_INTO_FILE(TRUE);
-    }
-}
-
-/*====================================================================================================================================================*/
-
-void traceDebug(const char *fmt,...)
-{
-    if(IS_TRACE_LEVEL_DEBUG())
-    {
-        WRITE_INTO_FILE(TRUE);
-    }
-}
-
-/*====================================================================================================================================================*/
-
-void traceDebugWithArgList(const char *fmt, va_list args)
-{
-    if(IS_TRACE_LEVEL_DEBUG())
-    {
-        WRITE_INTO_FILE_WITH_ARG_LIST(TRUE, args);
-    }
-}
-
-/*====================================================================================================================================================*/
-
-void traceHandle(const char *pArgName, SQLHANDLE handle)
+void RsTrace::traceHandle(const char *pArgName, SQLHANDLE handle)
 {
     if (handle == NULL)    
         traceArg("\t%s=NULL",pArgName);
@@ -239,7 +170,7 @@ void traceHandle(const char *pArgName, SQLHANDLE handle)
 
 /*====================================================================================================================================================*/
 
-void tracePointer(const char *var, void *ptr)
+void RsTrace::tracePointer(const char *var, void *ptr)
 {
     if (ptr == NULL)    
         traceArg("\t%s=NULL",var);
@@ -256,7 +187,7 @@ void tracePointer(const char *var, void *ptr)
 
 /*====================================================================================================================================================*/
 
-char *getRcString(SQLRETURN iRc)
+char* RsTrace::getRcString(SQLRETURN iRc)
 {
     switch(iRc)
     {
@@ -273,7 +204,7 @@ char *getRcString(SQLRETURN iRc)
 
 /*====================================================================================================================================================*/
 
-void traceErrorList(SQLHENV phenv,SQLHDBC phdbc,SQLHSTMT phstmt,SQLHDESC phdesc)
+void RsTrace::traceErrorList(SQLHENV phenv,SQLHDBC phdbc,SQLHSTMT phstmt,SQLHDESC phdesc)
 {
     if(IS_TRACE_LEVEL_ERROR())
     {
@@ -300,7 +231,7 @@ void traceErrorList(SQLHENV phenv,SQLHDBC phdbc,SQLHSTMT phstmt,SQLHDESC phdesc)
 
 /*====================================================================================================================================================*/
 
-void traceHandleType(SQLSMALLINT hHandleType)
+void RsTrace::traceHandleType(SQLSMALLINT hHandleType)
 {
     switch(hHandleType) 
     {
@@ -324,14 +255,14 @@ void traceHandleType(SQLSMALLINT hHandleType)
 
 /*====================================================================================================================================================*/
 
-void traceClosingBracket()
+void RsTrace::traceClosingBracket()
 {
     traceArg("\t )");
 }
 
 /*====================================================================================================================================================*/
 
-void traceStrValWithSmallLen(const char *pArgName, const char *pVal, SQLSMALLINT cbLen)
+void RsTrace::traceStrValWithSmallLen(const char *pArgName, const char *pVal, SQLSMALLINT cbLen)
 {
     if(pVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -353,7 +284,7 @@ void traceStrValWithSmallLen(const char *pArgName, const char *pVal, SQLSMALLINT
 
 /*====================================================================================================================================================*/
 
-void traceStrValWithLargeLen(const char *pArgName, const char *pVal, SQLINTEGER cbLen)
+void RsTrace::traceStrValWithLargeLen(const char *pArgName, const char *pVal, SQLINTEGER cbLen)
 {
     if(pVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -375,7 +306,9 @@ void traceStrValWithLargeLen(const char *pArgName, const char *pVal, SQLINTEGER 
 
 /*====================================================================================================================================================*/
 
-void traceLongLongPtrVal(const char *pArgName, long long*pllVal)
+/*====================================================================================================================================================*/
+
+void RsTrace::traceLongLongPtrVal(const char *pArgName, long long*pllVal)
 {
     if(pllVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -385,7 +318,7 @@ void traceLongLongPtrVal(const char *pArgName, long long*pllVal)
 
 /*====================================================================================================================================================*/
 
-void traceIntPtrVal(const char *pArgName, int *piVal)
+void RsTrace::traceIntPtrVal(const char *pArgName, int *piVal)
 {
     if(piVal == NULL)
         traceArg("\t%s=NULL",pArgName);
@@ -395,7 +328,7 @@ void traceIntPtrVal(const char *pArgName, int *piVal)
 
 /*====================================================================================================================================================*/
 
-void traceLongPtrVal(const char *pArgName, long *plVal)
+void RsTrace::traceLongPtrVal(const char *pArgName, long *plVal)
 {
     if(plVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -405,7 +338,7 @@ void traceLongPtrVal(const char *pArgName, long *plVal)
 
 /*====================================================================================================================================================*/
 
-void traceShortPtrVal(const char *pArgName, short *phVal)
+void RsTrace::traceShortPtrVal(const char *pArgName, short *phVal)
 {
     if(phVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -415,7 +348,7 @@ void traceShortPtrVal(const char *pArgName, short *phVal)
 
 /*====================================================================================================================================================*/
 
-void traceFloatPtrVal(const char *pArgName, float *pfVal)
+void RsTrace::traceFloatPtrVal(const char *pArgName, float *pfVal)
 {
     if(pfVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -425,7 +358,7 @@ void traceFloatPtrVal(const char *pArgName, float *pfVal)
 
 /*====================================================================================================================================================*/
 
-void traceDoublePtrVal(const char *pArgName, double *pdVal)
+void RsTrace::traceDoublePtrVal(const char *pArgName, double *pdVal)
 {
     if(pdVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -435,7 +368,7 @@ void traceDoublePtrVal(const char *pArgName, double *pdVal)
 
 /*====================================================================================================================================================*/
 
-void traceBitPtrVal(const char *pArgName, char *pbVal)
+void RsTrace::traceBitPtrVal(const char *pArgName, char *pbVal)
 {
     if(pbVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -445,7 +378,7 @@ void traceBitPtrVal(const char *pArgName, char *pbVal)
 
 /*====================================================================================================================================================*/
 
-void traceDatePtrVal(const char *pArgName, DATE_STRUCT *pdtVal)
+void RsTrace::traceDatePtrVal(const char *pArgName, DATE_STRUCT *pdtVal)
 {
     if(pdtVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -457,7 +390,7 @@ void traceDatePtrVal(const char *pArgName, DATE_STRUCT *pdtVal)
 
 /*====================================================================================================================================================*/
 
-void traceTimeStampPtrVal(const char *pArgName, TIMESTAMP_STRUCT *ptsVal)
+void RsTrace::traceTimeStampPtrVal(const char *pArgName, TIMESTAMP_STRUCT *ptsVal)
 {
     if(ptsVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -471,7 +404,7 @@ void traceTimeStampPtrVal(const char *pArgName, TIMESTAMP_STRUCT *ptsVal)
 
 /*====================================================================================================================================================*/
 
-void traceTimePtrVal(const char *pArgName, TIME_STRUCT *ptVal)
+void RsTrace::traceTimePtrVal(const char *pArgName, TIME_STRUCT *ptVal)
 {
     if(ptVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -483,7 +416,7 @@ void traceTimePtrVal(const char *pArgName, TIME_STRUCT *ptVal)
 
 /*====================================================================================================================================================*/
 
-void traceNumericPtrVal(const char *pArgName, SQL_NUMERIC_STRUCT *pnVal)
+void RsTrace::traceNumericPtrVal(const char *pArgName, SQL_NUMERIC_STRUCT *pnVal)
 {
     if(pnVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -500,7 +433,7 @@ void traceNumericPtrVal(const char *pArgName, SQL_NUMERIC_STRUCT *pnVal)
 
 /*====================================================================================================================================================*/
 
-void traceStrSmallLen(const char *pArgName, SQLSMALLINT cbLen)
+void RsTrace::traceStrSmallLen(const char *pArgName, SQLSMALLINT cbLen)
 {
     if (cbLen == SQL_NULL_DATA) 
         traceArg("\t%s=%s",pArgName,"SQL_NULL_DATA");
@@ -513,7 +446,7 @@ void traceStrSmallLen(const char *pArgName, SQLSMALLINT cbLen)
 
 /*====================================================================================================================================================*/
 
-void traceStrLargeLen(const char *pArgName, SQLINTEGER cbLen)
+void RsTrace::traceStrLargeLen(const char *pArgName, SQLINTEGER cbLen)
 {
     if (cbLen == SQL_NULL_DATA) 
         traceArg("\t%s=%s",pArgName,"SQL_NULL_DATA");
@@ -526,7 +459,7 @@ void traceStrLargeLen(const char *pArgName, SQLINTEGER cbLen)
 
 /*====================================================================================================================================================*/
 
-void traceStrOutSmallLen(const char *pArgName, SQLSMALLINT *pcbLen)
+void RsTrace::traceStrOutSmallLen(const char *pArgName, SQLSMALLINT *pcbLen)
 {
     if(pcbLen)
     {
@@ -544,7 +477,7 @@ void traceStrOutSmallLen(const char *pArgName, SQLSMALLINT *pcbLen)
 
 /*====================================================================================================================================================*/
 
-void traceStrOutLargeLen(const char *pArgName, SQLINTEGER *pcbLen)
+void RsTrace::traceStrOutLargeLen(const char *pArgName, SQLINTEGER *pcbLen)
 {
     if(pcbLen)
     {
@@ -562,7 +495,7 @@ void traceStrOutLargeLen(const char *pArgName, SQLINTEGER *pcbLen)
 
 /*====================================================================================================================================================*/
 
-void traceDiagIdentifier(SQLSMALLINT hDiagIdentifier)
+void RsTrace::traceDiagIdentifier(SQLSMALLINT hDiagIdentifier)
 {
     switch(hDiagIdentifier) 
     {
@@ -619,7 +552,7 @@ void traceDiagIdentifier(SQLSMALLINT hDiagIdentifier)
 
 /*====================================================================================================================================================*/
 
-void traceDiagIdentifierOutput(SQLSMALLINT hDiagIdentifier,
+void RsTrace::traceDiagIdentifierOutput(SQLSMALLINT hDiagIdentifier,
                                 SQLPOINTER  pDiagInfo, 
                                 SQLSMALLINT cbLen,
                                 int iUnicode)
@@ -658,7 +591,7 @@ void traceDiagIdentifierOutput(SQLSMALLINT hDiagIdentifier,
 
 /*====================================================================================================================================================*/
 
-void traceGetInfoType(SQLUSMALLINT hInfoType)
+void RsTrace::traceGetInfoType(SQLUSMALLINT hInfoType)
 {
     switch (hInfoType) 
     {
@@ -1686,7 +1619,7 @@ void traceGetInfoType(SQLUSMALLINT hInfoType)
 
 /*====================================================================================================================================================*/
 
-void traceGetInfoOutput(SQLUSMALLINT hInfoType, 
+void RsTrace::traceGetInfoOutput(SQLUSMALLINT hInfoType, 
                         SQLPOINTER pInfoValue,
                         SQLSMALLINT cbLen,
                         int iUnicode)
@@ -1896,7 +1829,7 @@ void traceGetInfoOutput(SQLUSMALLINT hInfoType,
 
 /*====================================================================================================================================================*/
 
-void traceBulkOperationOption(SQLSMALLINT hOperation)
+void RsTrace::traceBulkOperationOption(SQLSMALLINT hOperation)
 {
     switch(hOperation)
     {
@@ -1932,7 +1865,7 @@ void traceBulkOperationOption(SQLSMALLINT hOperation)
 
 /*====================================================================================================================================================*/
 
-void traceCType(const char *pArgName, SQLSMALLINT hCType)
+void RsTrace::traceCType(const char *pArgName, SQLSMALLINT hCType)
 {
     switch(hCType) 
     {
@@ -2016,7 +1949,7 @@ void traceCType(const char *pArgName, SQLSMALLINT hCType)
 
 /*====================================================================================================================================================*/
 
-void traceSQLType(const char *pArgName,SQLSMALLINT hSQLType)
+void RsTrace::traceSQLType(const char *pArgName,SQLSMALLINT hSQLType)
 {
     switch(hSQLType) 
     {
@@ -2088,7 +2021,7 @@ void traceSQLType(const char *pArgName,SQLSMALLINT hSQLType)
 
 /*====================================================================================================================================================*/
 
-void traceNullableOutput(const char *pArgName,SQLSMALLINT *pNullable)
+void RsTrace::traceNullableOutput(const char *pArgName,SQLSMALLINT *pNullable)
 {
     if(pNullable) 
     {
@@ -2114,56 +2047,56 @@ void traceNullableOutput(const char *pArgName,SQLSMALLINT *pNullable)
 
 /*====================================================================================================================================================*/
 
-void traceLongLongVal(const char *pArgName,long long llVal)
+void RsTrace::traceLongLongVal(const char *pArgName,long long llVal)
 {
     traceArg("\t%s=0x%llx",pArgName,llVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceLongVal(const char *pArgName,long lVal)
+void RsTrace::traceLongVal(const char *pArgName,long lVal)
 {
     traceArg("\t%s=0x%lx",pArgName,lVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceIntVal(const char *pArgName,int iVal)
+void RsTrace::traceIntVal(const char *pArgName,int iVal)
 {
     traceArg("\t%s=0x%x",pArgName,iVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceShortVal(const char *pArgName,short hVal)
+void RsTrace::traceShortVal(const char *pArgName,short hVal)
 {
     traceArg("\t%s=%hd",pArgName,hVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceFloatVal(const char *pArgName,float fVal)
+void RsTrace::traceFloatVal(const char *pArgName,float fVal)
 {
     traceArg("\t%s=%f",pArgName,fVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceDoubleVal(const char *pArgName,double dVal)
+void RsTrace::traceDoubleVal(const char *pArgName,double dVal)
 {
     traceArg("\t%s=%g",pArgName,dVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceBitVal(const char *pArgName,char bVal)
+void RsTrace::traceBitVal(const char *pArgName,char bVal)
 {
     traceArg("\t%s=%d",pArgName,(int)bVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceFieldIdentifier(const char *pArgName, SQLUSMALLINT hFieldIdentifier)
+void RsTrace::traceFieldIdentifier(const char *pArgName, SQLUSMALLINT hFieldIdentifier)
 {
     switch(hFieldIdentifier)
     {
@@ -2222,7 +2155,7 @@ void traceFieldIdentifier(const char *pArgName, SQLUSMALLINT hFieldIdentifier)
 
 /*====================================================================================================================================================*/
 
-void traceEnvAttr(const char *pArgName, SQLINTEGER iAttribute)
+void RsTrace::traceEnvAttr(const char *pArgName, SQLINTEGER iAttribute)
 {
     switch(iAttribute)
     {
@@ -2236,14 +2169,14 @@ void traceEnvAttr(const char *pArgName, SQLINTEGER iAttribute)
 
 /*====================================================================================================================================================*/
 
-void traceEnvAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen)
+void RsTrace::traceEnvAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen)
 {
     traceLongVal(pArgName, (long)pVal);
 }
 
 /*====================================================================================================================================================*/
 
-void traceConnectAttr(const char *pArgName, SQLINTEGER iAttribute)
+void RsTrace::traceConnectAttr(const char *pArgName, SQLINTEGER iAttribute)
 {
     switch(iAttribute)
     {
@@ -2270,7 +2203,7 @@ void traceConnectAttr(const char *pArgName, SQLINTEGER iAttribute)
 
 /*====================================================================================================================================================*/
 
-void traceConnectAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal)
+void RsTrace::traceConnectAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal)
 {
     if(iAttribute == SQL_ATTR_CURRENT_CATALOG
         || iAttribute == SQL_ATTR_TRACEFILE
@@ -2292,7 +2225,7 @@ void traceConnectAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER 
 
 /*====================================================================================================================================================*/
 
-void traceStmtAttr(const char *pArgName, SQLINTEGER iAttribute)
+void RsTrace::traceStmtAttr(const char *pArgName, SQLINTEGER iAttribute)
 {
     switch(iAttribute)
     {
@@ -2352,7 +2285,7 @@ void traceStmtAttr(const char *pArgName, SQLINTEGER iAttribute)
 
 /*====================================================================================================================================================*/
 
-void traceStmtAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal)
+void RsTrace::traceStmtAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVal, SQLINTEGER    cbLen, int iUnicode, int iSetVal)
 {
     if(iAttribute == SQL_ATTR_CURRENT_CATALOG
         || iAttribute == SQL_ATTR_TRACEFILE
@@ -2374,7 +2307,7 @@ void traceStmtAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPOINTER pVa
 
 /*====================================================================================================================================================*/
 
-void traceWStrValWithSmallLen(const char *pArgName, SQLWCHAR *pwVal, SQLSMALLINT cchLen)
+void RsTrace::traceWStrValWithSmallLen(const char *pArgName, SQLWCHAR *pwVal, SQLSMALLINT cchLen)
 {
     if(pwVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -2417,7 +2350,7 @@ void traceWStrValWithSmallLen(const char *pArgName, SQLWCHAR *pwVal, SQLSMALLINT
 
 /*====================================================================================================================================================*/
 
-void traceWStrValWithLargeLen(const char *pArgName, SQLWCHAR *pwVal, SQLINTEGER cchLen)
+void RsTrace::traceWStrValWithLargeLen(const char *pArgName, SQLWCHAR *pwVal, SQLINTEGER cchLen)
 {
     if(pwVal == NULL) 
         traceArg("\t%s=NULL",pArgName);
@@ -2461,7 +2394,7 @@ void traceWStrValWithLargeLen(const char *pArgName, SQLWCHAR *pwVal, SQLINTEGER 
 
 /*====================================================================================================================================================*/
 
-void traceDriverCompletion(const char *pArgName, SQLUSMALLINT hDriverCompletion)
+void RsTrace::traceDriverCompletion(const char *pArgName, SQLUSMALLINT hDriverCompletion)
 {
     switch (hDriverCompletion) 
     {
@@ -2485,7 +2418,7 @@ void traceDriverCompletion(const char *pArgName, SQLUSMALLINT hDriverCompletion)
 
 /*====================================================================================================================================================*/
 
-void traceIdenTypeSpecialColumns(const char *pArgName, SQLUSMALLINT   hIdenType)
+void RsTrace::traceIdenTypeSpecialColumns(const char *pArgName, SQLUSMALLINT   hIdenType)
 {
     switch (hIdenType)
     {
@@ -2503,7 +2436,7 @@ void traceIdenTypeSpecialColumns(const char *pArgName, SQLUSMALLINT   hIdenType)
 
 /*====================================================================================================================================================*/
 
-void traceScopeSpecialColumns(const char *pArgName, SQLUSMALLINT   hScope)
+void RsTrace::traceScopeSpecialColumns(const char *pArgName, SQLUSMALLINT   hScope)
 {
     switch (hScope)
     {
@@ -2524,7 +2457,7 @@ void traceScopeSpecialColumns(const char *pArgName, SQLUSMALLINT   hScope)
 
 /*====================================================================================================================================================*/
 
-void traceUniqueStatistics(const char *pArgName, SQLUSMALLINT hUnique)
+void RsTrace::traceUniqueStatistics(const char *pArgName, SQLUSMALLINT hUnique)
 {
     switch(hUnique)
     {
@@ -2542,7 +2475,7 @@ void traceUniqueStatistics(const char *pArgName, SQLUSMALLINT hUnique)
 
 /*====================================================================================================================================================*/
 
-void traceReservedStatistics(const char *pArgName, SQLUSMALLINT hReserved)
+void RsTrace::traceReservedStatistics(const char *pArgName, SQLUSMALLINT hReserved)
 {
     switch(hReserved)
     {
@@ -2560,7 +2493,7 @@ void traceReservedStatistics(const char *pArgName, SQLUSMALLINT hReserved)
 
 /*====================================================================================================================================================*/
 
-void traceData(const char *pArgName, SQLSMALLINT hType, SQLPOINTER pValue, SQLLEN cbLen)
+void RsTrace::traceData(const char *pArgName, SQLSMALLINT hType, SQLPOINTER pValue, SQLLEN cbLen)
 {
     switch(hType)
     {
@@ -2666,13 +2599,13 @@ void traceData(const char *pArgName, SQLSMALLINT hType, SQLPOINTER pValue, SQLLE
 
 /*====================================================================================================================================================*/
 
-void TraceSQLAllocEnv(int iCallOrRet,
+void RsTrace::TraceSQLAllocEnv(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHENV *pphenv)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -2699,14 +2632,14 @@ void TraceSQLAllocEnv(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLAllocConnect(int iCallOrRet,
+void RsTrace::TraceSQLAllocConnect(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHENV   phenv,
                             SQLHDBC   *pphdbc)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -2734,14 +2667,14 @@ void TraceSQLAllocConnect(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLAllocStmt(int iCallOrRet,
+void RsTrace::TraceSQLAllocStmt(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHDBC   phdbc,
                         SQLHSTMT *pphstmt)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -2769,13 +2702,13 @@ void TraceSQLAllocStmt(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLFreeEnv(int iCallOrRet,
+void RsTrace::TraceSQLFreeEnv(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHENV    phenv)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-         switch (iCallOrRet) 
+         switch (logWhat(iCallOrRet)) 
          {
             case FUNC_CALL:
             {
@@ -2801,13 +2734,13 @@ void TraceSQLFreeEnv(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLFreeConnect(int iCallOrRet,
+void RsTrace::TraceSQLFreeConnect(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHDBC    phdbc)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-         switch (iCallOrRet) 
+         switch (logWhat(iCallOrRet)) 
          {
             case FUNC_CALL:
             {
@@ -2833,14 +2766,14 @@ void TraceSQLFreeConnect(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLFreeStmt(int iCallOrRet,
+void RsTrace::TraceSQLFreeStmt(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHSTMT phstmt,
                         SQLUSMALLINT uhOption)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-         switch (iCallOrRet) 
+         switch (logWhat(iCallOrRet)) 
          {
             case FUNC_CALL:
             {
@@ -2885,15 +2818,15 @@ void TraceSQLFreeStmt(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLAllocHandle(int iCallOrRet,
+void RsTrace::TraceSQLAllocHandle(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLSMALLINT hHandleType,
                             SQLHANDLE pInputHandle, 
                             SQLHANDLE *ppOutputHandle)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -2925,14 +2858,14 @@ void TraceSQLAllocHandle(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLFreeHandle(int iCallOrRet,
+void RsTrace::TraceSQLFreeHandle(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLSMALLINT hHandleType, 
                         SQLHANDLE pHandle)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -2962,7 +2895,7 @@ void TraceSQLFreeHandle(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLConnect(int iCallOrRet,
+void RsTrace::TraceSQLConnect(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHDBC phdbc,
                         SQLCHAR *szDSN, 
@@ -2972,9 +2905,9 @@ void TraceSQLConnect(int iCallOrRet,
                         SQLCHAR *szAuthStr, 
                         SQLSMALLINT cchAuthStr)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -3006,13 +2939,13 @@ void TraceSQLConnect(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLDisconnect(int iCallOrRet,
+void RsTrace::TraceSQLDisconnect(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHDBC phdbc)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -3038,7 +2971,7 @@ void TraceSQLDisconnect(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLDriverConnect(int              iCallOrRet,
+void RsTrace::TraceSQLDriverConnect(int              iCallOrRet,
                             SQLRETURN      iRc,
                             SQLHDBC          phdbc,
                             SQLHWND          hwnd,
@@ -3049,9 +2982,9 @@ void TraceSQLDriverConnect(int              iCallOrRet,
                             SQLSMALLINT   *pcbConnStrOut,
                             SQLUSMALLINT   hDriverCompletion)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -3088,7 +3021,7 @@ void TraceSQLDriverConnect(int              iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLBrowseConnect(int              iCallOrRet,
+void RsTrace::TraceSQLBrowseConnect(int              iCallOrRet,
                             SQLRETURN      iRc,
                             SQLHDBC          phdbc,
                             SQLCHAR       *szConnStrIn,
@@ -3097,9 +3030,9 @@ void TraceSQLBrowseConnect(int              iCallOrRet,
                             SQLSMALLINT   cbConnStrOut,
                             SQLSMALLINT   *pcbConnStrOut)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -3134,7 +3067,7 @@ void TraceSQLBrowseConnect(int              iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLError(int iCallOrRet,
+void RsTrace::TraceSQLError(int iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHENV phenv,
                     SQLHDBC phdbc, 
@@ -3145,10 +3078,10 @@ void TraceSQLError(int iCallOrRet,
                     SQLSMALLINT cbLen,
                     SQLSMALLINT *pcbLen)
 {
-    if(IS_TRACE_LEVEL_ERROR()
+    if(true || IS_TRACE_LEVEL_ERROR()
         || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -3190,7 +3123,7 @@ void TraceSQLError(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetDiagRec(int iCallOrRet,
+void RsTrace::TraceSQLGetDiagRec(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLSMALLINT hHandleType, 
                         SQLHANDLE pHandle,
@@ -3201,10 +3134,10 @@ void TraceSQLGetDiagRec(int iCallOrRet,
                         SQLSMALLINT cbLen, 
                         SQLSMALLINT *pcbLen)
 {
-    if(IS_TRACE_LEVEL_ERROR()
+    if(true || IS_TRACE_LEVEL_ERROR()
         || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -3249,7 +3182,7 @@ void TraceSQLGetDiagRec(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetDiagField(int iCallOrRet,
+void RsTrace::TraceSQLGetDiagField(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLSMALLINT hHandleType, 
                             SQLHANDLE pHandle,
@@ -3259,10 +3192,10 @@ void TraceSQLGetDiagField(int iCallOrRet,
                             SQLSMALLINT cbLen,
                             SQLSMALLINT *pcbLen)
 {
-    if(IS_TRACE_LEVEL_ERROR()
+    if(true || IS_TRACE_LEVEL_ERROR()
         || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -3304,15 +3237,15 @@ void TraceSQLGetDiagField(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLTransact(int iCallOrRet,
+void RsTrace::TraceSQLTransact(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHENV phenv,
                         SQLHDBC phdbc, 
                         SQLUSMALLINT hCompletionType)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-         switch (iCallOrRet) 
+         switch (logWhat(iCallOrRet)) 
          {
             case FUNC_CALL:
             {
@@ -3353,15 +3286,15 @@ void TraceSQLTransact(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLEndTran(int iCallOrRet,
+void RsTrace::TraceSQLEndTran(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLSMALLINT hHandleType, 
                         SQLHANDLE pHandle,
                         SQLSMALLINT hCompletionType)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-         switch (iCallOrRet) 
+         switch (logWhat(iCallOrRet)) 
          {
             case FUNC_CALL:
             {
@@ -3403,7 +3336,7 @@ void TraceSQLEndTran(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetInfo(int iCallOrRet,
+void RsTrace::TraceSQLGetInfo(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHDBC    phdbc,
                         SQLUSMALLINT hInfoType, 
@@ -3411,7 +3344,7 @@ void TraceSQLGetInfo(int iCallOrRet,
                         SQLSMALLINT cbLen, 
                         SQLSMALLINT *pcbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -3442,13 +3375,13 @@ void TraceSQLGetInfo(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetFunctions(int iCallOrRet, 
+void RsTrace::TraceSQLGetFunctions(int iCallOrRet, 
                            SQLRETURN  iRc,
                            SQLHDBC phdbc,
                            SQLUSMALLINT uhFunctionId, 
                            SQLUSMALLINT *puhSupported)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3479,13 +3412,13 @@ void TraceSQLGetFunctions(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLExecDirect(int iCallOrRet,
+void RsTrace::TraceSQLExecDirect(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHSTMT phstmt,
                         SQLCHAR* pCmd,
                         SQLINTEGER cbLen)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3511,11 +3444,11 @@ void TraceSQLExecDirect(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLExecute(int iCallOrRet,
+void RsTrace::TraceSQLExecute(int iCallOrRet,
                      SQLRETURN  iRc,
                      SQLHSTMT   phstmt)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3539,14 +3472,14 @@ void TraceSQLExecute(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLPrepare(int iCallOrRet,
+void RsTrace::TraceSQLPrepare(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHSTMT phstmt,
                         SQLCHAR* pCmd,
                         SQLINTEGER cbLen)
 {
-     switch (iCallOrRet) 
-     {
+    switch (logWhat(iCallOrRet)) 
+    {
         case FUNC_CALL:
         {
             traceAPICall("SQLPrepare(");
@@ -3571,11 +3504,11 @@ void TraceSQLPrepare(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLCancel(int iCallOrRet,
+void RsTrace::TraceSQLCancel(int iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHSTMT   phstmt)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3599,12 +3532,12 @@ void TraceSQLCancel(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLParamData(int iCallOrRet,
+void RsTrace::TraceSQLParamData(int iCallOrRet,
                        SQLRETURN  iRc,
                        SQLHSTMT   phstmt,
                        SQLPOINTER *ppValue)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -3629,13 +3562,13 @@ void TraceSQLParamData(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLPutData(int iCallOrRet,
+void RsTrace::TraceSQLPutData(int iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHSTMT   phstmt,
                     SQLPOINTER pData, 
                     SQLLEN cbLen)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3661,12 +3594,12 @@ void TraceSQLPutData(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLBulkOperations(int iCallOrRet,
+void RsTrace::TraceSQLBulkOperations(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT   phstmt,
                             SQLSMALLINT hOperation) 
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3691,7 +3624,7 @@ void TraceSQLBulkOperations(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void  TraceSQLNativeSql(int iCallOrRet,
+void RsTrace::TraceSQLNativeSql(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHDBC   phdbc,
                         SQLCHAR*    szSqlStrIn,
@@ -3700,7 +3633,7 @@ void  TraceSQLNativeSql(int iCallOrRet,
                         SQLINTEGER  cbSqlStrOut,
                         SQLINTEGER  *pcbSqlStrOut)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3734,14 +3667,13 @@ void  TraceSQLNativeSql(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetCursorName(int iCallOrRet,
+void RsTrace::TraceSQLSetCursorName(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT phstmt,
                             SQLCHAR* pCursorName,
                             SQLSMALLINT cbLen)
 {
-
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3767,14 +3699,14 @@ void TraceSQLSetCursorName(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetCursorName(int iCallOrRet,
+void RsTrace::TraceSQLGetCursorName(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT phstmt,
                             SQLCHAR *pCursorName,
                             SQLSMALLINT cbLen,
                             SQLSMALLINT *pcbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -3806,11 +3738,11 @@ void TraceSQLGetCursorName(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLCloseCursor(int iCallOrRet,
+void RsTrace::TraceSQLCloseCursor(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT phstmt)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3834,7 +3766,7 @@ void TraceSQLCloseCursor(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLBindParameter(int iCallOrRet, 
+void RsTrace::TraceSQLBindParameter(int iCallOrRet, 
                             SQLRETURN  iRc,
                             SQLHSTMT       phstmt,
                             SQLUSMALLINT   hParam,
@@ -3847,8 +3779,7 @@ void TraceSQLBindParameter(int iCallOrRet,
                             SQLLEN         cbLen,
                             SQLLEN         *pcbLenInd)
 {
-
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3898,7 +3829,7 @@ void TraceSQLBindParameter(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetParam(int iCallOrRet, 
+void RsTrace::TraceSQLSetParam(int iCallOrRet, 
                         SQLRETURN  iRc,
                         SQLHSTMT    phstmt,
                         SQLUSMALLINT hParam, 
@@ -3909,8 +3840,7 @@ void TraceSQLSetParam(int iCallOrRet,
                         SQLPOINTER pParamVal,
                         SQLLEN *piStrLen_or_Ind)
 {
-
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3941,7 +3871,7 @@ void TraceSQLSetParam(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLBindParam(int iCallOrRet, 
+void RsTrace::TraceSQLBindParam(int iCallOrRet, 
                         SQLRETURN  iRc,
                         SQLHSTMT     phstmt,
                         SQLUSMALLINT hParam, 
@@ -3952,8 +3882,7 @@ void TraceSQLBindParam(int iCallOrRet,
                         SQLPOINTER  pParamVal,
                         SQLLEN        *piStrLen_or_Ind)
 {
-
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -3984,12 +3913,12 @@ void TraceSQLBindParam(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLNumParams(int iCallOrRet, 
+void RsTrace::TraceSQLNumParams(int iCallOrRet, 
                        SQLRETURN  iRc,
                        SQLHSTMT      phstmt,
                        SQLSMALLINT   *pParamCount)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4015,13 +3944,13 @@ void TraceSQLNumParams(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLParamOptions(int iCallOrRet, 
+void RsTrace::TraceSQLParamOptions(int iCallOrRet, 
                            SQLRETURN  iRc,
                            SQLHSTMT   phstmt,
                            SQLULEN  iCrow,
                            SQLULEN  *piRow)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4047,7 +3976,7 @@ void TraceSQLParamOptions(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLDescribeParam(int iCallOrRet, 
+void RsTrace::TraceSQLDescribeParam(int iCallOrRet, 
                             SQLRETURN  iRc,
                             SQLHSTMT        phstmt,
                             SQLUSMALLINT    hParam,
@@ -4056,7 +3985,7 @@ void TraceSQLDescribeParam(int iCallOrRet,
                             SQLSMALLINT     *pDecimalDigits,
                             SQLSMALLINT     *pNullable)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4095,12 +4024,12 @@ void TraceSQLDescribeParam(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLNumResultCols(int iCallOrRet,
+void RsTrace::TraceSQLNumResultCols(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT    phstmt,
                             SQLSMALLINT *pColumnCount)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -4128,7 +4057,7 @@ void TraceSQLNumResultCols(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLDescribeCol(int iCallOrRet,
+void RsTrace::TraceSQLDescribeCol(int iCallOrRet,
                            SQLRETURN  iRc,
                            SQLHSTMT    phstmt,
                            SQLUSMALLINT hCol, 
@@ -4140,7 +4069,7 @@ void TraceSQLDescribeCol(int iCallOrRet,
                            SQLSMALLINT *pDecimalDigits,  
                            SQLSMALLINT *pNullable)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4184,7 +4113,7 @@ void TraceSQLDescribeCol(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLColAttribute(int iCallOrRet,
+void RsTrace::TraceSQLColAttribute(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT    phstmt,
                             SQLUSMALLINT hCol, 
@@ -4194,7 +4123,7 @@ void TraceSQLColAttribute(int iCallOrRet,
                             SQLSMALLINT *pcbLen, 
                             SQLLEN       *plValue)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4233,7 +4162,7 @@ void TraceSQLColAttribute(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLColAttributes(int iCallOrRet,
+void RsTrace::TraceSQLColAttributes(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT    phstmt,
                             SQLUSMALLINT hCol, 
@@ -4243,7 +4172,7 @@ void TraceSQLColAttributes(int iCallOrRet,
                             SQLSMALLINT *pcbLen, 
                             SQLLEN       *plValue)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4282,7 +4211,7 @@ void TraceSQLColAttributes(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLBindCol(int iCallOrRet,
+void RsTrace::TraceSQLBindCol(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHSTMT   phstmt,
                         SQLUSMALLINT hCol, 
@@ -4291,7 +4220,7 @@ void TraceSQLBindCol(int iCallOrRet,
                         SQLLEN cbLen, 
                         SQLLEN *pcbLenInd)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4319,11 +4248,11 @@ void TraceSQLBindCol(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLFetch(int iCallOrRet,
+void RsTrace::TraceSQLFetch(int iCallOrRet,
                      SQLRETURN  iRc,
                      SQLHSTMT   phstmt)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4347,11 +4276,11 @@ void TraceSQLFetch(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLMoreResults(int iCallOrRet,
+void RsTrace::TraceSQLMoreResults(int iCallOrRet,
                          SQLRETURN  iRc,
                          SQLHSTMT   phstmt)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4375,7 +4304,7 @@ void TraceSQLMoreResults(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLExtendedFetch(int  iCallOrRet,
+void RsTrace::TraceSQLExtendedFetch(int  iCallOrRet,
                             SQLRETURN    iRc,
                             SQLHSTMT    phstmt,
                             SQLUSMALLINT    hFetchOrientation,
@@ -4383,7 +4312,7 @@ void TraceSQLExtendedFetch(int  iCallOrRet,
                             SQLULEN         *piRowCount,
                             SQLUSMALLINT    *phRowStatus)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4410,7 +4339,7 @@ void TraceSQLExtendedFetch(int  iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetData(int  iCallOrRet,
+void RsTrace::TraceSQLGetData(int  iCallOrRet,
                       SQLRETURN    iRc,
                       SQLHSTMT    phstmt,
                       SQLUSMALLINT hCol, 
@@ -4419,8 +4348,7 @@ void TraceSQLGetData(int  iCallOrRet,
                       SQLLEN cbLen,
                       SQLLEN *pcbLenInd)
 {
-
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -4454,12 +4382,12 @@ void TraceSQLGetData(int  iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLRowCount(int  iCallOrRet,
+void RsTrace::TraceSQLRowCount(int  iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHSTMT  phstmt,
                         SQLLEN* pRowCount)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -4486,14 +4414,14 @@ void TraceSQLRowCount(int  iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetPos(int  iCallOrRet,
+void RsTrace::TraceSQLSetPos(int  iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHSTMT  phstmt,
                     SQLSETPOSIROW  iRow,
                     SQLUSMALLINT   hOperation,
                     SQLUSMALLINT   hLockType)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -4521,13 +4449,13 @@ void TraceSQLSetPos(int  iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLFetchScroll(int iCallOrRet,
+void RsTrace::TraceSQLFetchScroll(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT    phstmt,
                             SQLSMALLINT hFetchOrientation,
                             SQLLEN      iFetchOffset)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4582,12 +4510,12 @@ void TraceSQLFetchScroll(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLCopyDesc(int iCallOrRet,
+void RsTrace::TraceSQLCopyDesc(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHDESC phdescSrc,
                         SQLHDESC phdescDest)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4617,7 +4545,7 @@ void TraceSQLCopyDesc(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetDescField(int iCallOrRet,
+void RsTrace::TraceSQLGetDescField(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHDESC phdesc,
                             SQLSMALLINT hRecNumber, 
@@ -4626,7 +4554,7 @@ void TraceSQLGetDescField(int iCallOrRet,
                             SQLINTEGER cbLen,
                             SQLINTEGER *pcbLen)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4672,7 +4600,7 @@ void TraceSQLGetDescField(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetDescRec(int iCallOrRet,
+void RsTrace::TraceSQLGetDescRec(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHDESC phdesc,
                             SQLSMALLINT hRecNumber, 
@@ -4686,7 +4614,7 @@ void TraceSQLGetDescRec(int iCallOrRet,
                             SQLSMALLINT *phScale, 
                             SQLSMALLINT *phNullable)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4732,7 +4660,7 @@ void TraceSQLGetDescRec(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetDescField(int iCallOrRet,
+void RsTrace::TraceSQLSetDescField(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHDESC phdesc,
                             SQLSMALLINT hRecNumber, 
@@ -4740,7 +4668,7 @@ void TraceSQLSetDescField(int iCallOrRet,
                             SQLPOINTER pValue, 
                             SQLINTEGER cbLen)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4782,7 +4710,7 @@ void TraceSQLSetDescField(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetDescRec(int iCallOrRet,
+void RsTrace::TraceSQLSetDescRec(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHDESC phdesc,
                             SQLSMALLINT hRecNumber, 
@@ -4795,7 +4723,7 @@ void TraceSQLSetDescRec(int iCallOrRet,
                             SQLLEN *    plStrLen,
                             SQLLEN *    plIndicator)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -4831,13 +4759,13 @@ void TraceSQLSetDescRec(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetConnectOption(int   iCallOrRet,
+void RsTrace::TraceSQLSetConnectOption(int   iCallOrRet,
                                 SQLRETURN   iRc,
                                 SQLHDBC    phdbc,
                                 SQLUSMALLINT hOption, 
                                 SQLULEN pValue)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -4863,13 +4791,13 @@ void TraceSQLSetConnectOption(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetConnectOption(int   iCallOrRet,
+void RsTrace::TraceSQLGetConnectOption(int   iCallOrRet,
                                 SQLRETURN   iRc,
                                 SQLHDBC    phdbc,
                                 SQLUSMALLINT hOption, 
                                 SQLPOINTER pValue)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -4897,13 +4825,13 @@ void TraceSQLGetConnectOption(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetStmtOption(int   iCallOrRet,
+void RsTrace::TraceSQLSetStmtOption(int   iCallOrRet,
                             SQLRETURN   iRc,
                             SQLHSTMT phstmt,
                             SQLUSMALLINT hOption, 
                             SQLULEN Value)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -4929,13 +4857,13 @@ void TraceSQLSetStmtOption(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetStmtOption(int   iCallOrRet,
+void RsTrace::TraceSQLGetStmtOption(int   iCallOrRet,
                                 SQLRETURN   iRc,
                                 SQLHSTMT phstmt,
                                 SQLUSMALLINT hOption, 
                                 SQLPOINTER pValue)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -4963,14 +4891,14 @@ void TraceSQLGetStmtOption(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetScrollOptions(int   iCallOrRet,
+void RsTrace::TraceSQLSetScrollOptions(int   iCallOrRet,
                                 SQLRETURN   iRc,
                                 SQLHSTMT phstmt,
                                 SQLUSMALLINT  hConcurrency,
                                 SQLLEN        iKeysetSize,
                                 SQLUSMALLINT  hRowsetSize)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -4997,7 +4925,7 @@ void TraceSQLSetScrollOptions(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetConnectAttr(int   iCallOrRet,
+void RsTrace::TraceSQLGetConnectAttr(int   iCallOrRet,
                             SQLRETURN   iRc,
                             SQLHDBC    phdbc,
                             SQLINTEGER    iAttribute, 
@@ -5005,7 +4933,7 @@ void TraceSQLGetConnectAttr(int   iCallOrRet,
                             SQLINTEGER    cbLen, 
                             SQLINTEGER  *pcbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5038,7 +4966,7 @@ void TraceSQLGetConnectAttr(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetStmtAttr(int   iCallOrRet,
+void RsTrace::TraceSQLGetStmtAttr(int   iCallOrRet,
                            SQLRETURN   iRc,
                            SQLHSTMT phstmt,
                            SQLINTEGER    iAttribute, 
@@ -5046,7 +4974,7 @@ void TraceSQLGetStmtAttr(int   iCallOrRet,
                            SQLINTEGER    cbLen, 
                            SQLINTEGER  *pcbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5079,14 +5007,14 @@ void TraceSQLGetStmtAttr(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetConnectAttr(int   iCallOrRet,
+void RsTrace::TraceSQLSetConnectAttr(int   iCallOrRet,
                                SQLRETURN   iRc,
                                SQLHDBC    phdbc,
                                SQLINTEGER    iAttribute, 
                                SQLPOINTER    pValue,
                                SQLINTEGER    cbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5113,14 +5041,14 @@ void TraceSQLSetConnectAttr(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetStmtAttr(int   iCallOrRet,
+void RsTrace::TraceSQLSetStmtAttr(int   iCallOrRet,
                            SQLRETURN   iRc,
                            SQLHSTMT phstmt,
                            SQLINTEGER    iAttribute, 
                            SQLPOINTER    pValue,
                            SQLINTEGER    cbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5147,14 +5075,14 @@ void TraceSQLSetStmtAttr(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetEnvAttr(int iCallOrRet,
+void RsTrace::TraceSQLSetEnvAttr(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHENV phenv,
                         SQLINTEGER    iAttribute, 
                         SQLPOINTER    pValue,
                         SQLINTEGER    cbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5179,7 +5107,7 @@ void TraceSQLSetEnvAttr(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetEnvAttr(int   iCallOrRet,
+void RsTrace::TraceSQLGetEnvAttr(int   iCallOrRet,
                         SQLRETURN   iRc,
                         SQLHENV phenv,
                         SQLINTEGER    iAttribute, 
@@ -5187,7 +5115,7 @@ void TraceSQLGetEnvAttr(int   iCallOrRet,
                         SQLINTEGER    cbLen, 
                         SQLINTEGER    *pcbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5220,7 +5148,7 @@ void TraceSQLGetEnvAttr(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLTables(int iCallOrRet,
+void RsTrace::TraceSQLTables(int iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHSTMT       phstmt,
                     SQLCHAR *pCatalogName, 
@@ -5232,7 +5160,7 @@ void TraceSQLTables(int iCallOrRet,
                     SQLCHAR *pTableType, 
                     SQLSMALLINT cbTableType)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5264,7 +5192,7 @@ void TraceSQLTables(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLColumns(int iCallOrRet,
+void RsTrace::TraceSQLColumns(int iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHSTMT       phstmt,
                     SQLCHAR *pCatalogName, 
@@ -5276,7 +5204,7 @@ void TraceSQLColumns(int iCallOrRet,
                     SQLCHAR *pColumnName, 
                     SQLSMALLINT cbColumnName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5308,7 +5236,7 @@ void TraceSQLColumns(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLStatistics(int iCallOrRet,
+void RsTrace::TraceSQLStatistics(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHSTMT       phstmt,
                         SQLCHAR *pCatalogName, 
@@ -5320,7 +5248,7 @@ void TraceSQLStatistics(int iCallOrRet,
                         SQLUSMALLINT hUnique, 
                         SQLUSMALLINT hReserved)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5352,7 +5280,7 @@ void TraceSQLStatistics(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSpecialColumns(int iCallOrRet,
+void RsTrace::TraceSQLSpecialColumns(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT       phstmt,
                            SQLUSMALLINT hIdenType, 
@@ -5365,7 +5293,7 @@ void TraceSQLSpecialColumns(int iCallOrRet,
                            SQLUSMALLINT hScope, 
                            SQLUSMALLINT hNullable)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5398,7 +5326,7 @@ void TraceSQLSpecialColumns(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLProcedureColumns(int iCallOrRet,
+void RsTrace::TraceSQLProcedureColumns(int iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHSTMT       phstmt,
                     SQLCHAR          *pCatalogName,
@@ -5410,7 +5338,7 @@ void TraceSQLProcedureColumns(int iCallOrRet,
                     SQLCHAR          *pColumnName,
                     SQLSMALLINT      cbColumnName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5442,7 +5370,7 @@ void TraceSQLProcedureColumns(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLProcedures(int iCallOrRet,
+void RsTrace::TraceSQLProcedures(int iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHSTMT       phstmt,
                     SQLCHAR        *pCatalogName,
@@ -5452,7 +5380,7 @@ void TraceSQLProcedures(int iCallOrRet,
                     SQLCHAR        *pProcName,
                     SQLSMALLINT    cbProcName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5482,7 +5410,7 @@ void TraceSQLProcedures(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLForeignKeys(int iCallOrRet,
+void RsTrace::TraceSQLForeignKeys(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT       phstmt,
                             SQLCHAR           *pPkCatalogName,
@@ -5498,7 +5426,7 @@ void TraceSQLForeignKeys(int iCallOrRet,
                             SQLCHAR           *pFkTableName,
                             SQLSMALLINT        cbFkTableName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5535,7 +5463,7 @@ void TraceSQLForeignKeys(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLPrimaryKeys(int iCallOrRet,
+void RsTrace::TraceSQLPrimaryKeys(int iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHSTMT   phstmt,
                     SQLCHAR      *pCatalogName,
@@ -5545,7 +5473,7 @@ void TraceSQLPrimaryKeys(int iCallOrRet,
                     SQLCHAR      *pTableName,
                     SQLSMALLINT   cbTableName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5575,12 +5503,12 @@ void TraceSQLPrimaryKeys(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetTypeInfo(int iCallOrRet,
+void RsTrace::TraceSQLGetTypeInfo(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT   phstmt,
                             SQLSMALLINT hType)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5606,7 +5534,7 @@ void TraceSQLGetTypeInfo(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLColumnPrivileges(int iCallOrRet,
+void RsTrace::TraceSQLColumnPrivileges(int iCallOrRet,
                                 SQLRETURN  iRc,
                                 SQLHSTMT       phstmt,
                                 SQLCHAR          *pCatalogName,
@@ -5618,7 +5546,7 @@ void TraceSQLColumnPrivileges(int iCallOrRet,
                                 SQLCHAR          *pColumnName,
                                 SQLSMALLINT      cbColumnName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5650,7 +5578,7 @@ void TraceSQLColumnPrivileges(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLTablePrivileges(int iCallOrRet,
+void RsTrace::TraceSQLTablePrivileges(int iCallOrRet,
                                 SQLRETURN  iRc,
                                 SQLHSTMT       phstmt,
                                 SQLCHAR         *pCatalogName,
@@ -5660,7 +5588,7 @@ void TraceSQLTablePrivileges(int iCallOrRet,
                                 SQLCHAR         *pTableName,
                                 SQLSMALLINT      cbTableName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5690,7 +5618,7 @@ void TraceSQLTablePrivileges(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLConnectW(int iCallOrRet,
+void RsTrace::TraceSQLConnectW(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHDBC phdbc,
                         SQLWCHAR*            wszDSN,
@@ -5702,7 +5630,7 @@ void TraceSQLConnectW(int iCallOrRet,
 {
     if(IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -5734,7 +5662,7 @@ void TraceSQLConnectW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLDriverConnectW(int              iCallOrRet,
+void RsTrace::TraceSQLDriverConnectW(int              iCallOrRet,
                             SQLRETURN      iRc,
                             SQLHDBC             phdbc,
                             SQLHWND             hwnd,
@@ -5745,9 +5673,9 @@ void TraceSQLDriverConnectW(int              iCallOrRet,
                             SQLSMALLINT*        pcchConnStrOut,
                             SQLUSMALLINT        hDriverCompletion)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -5784,7 +5712,7 @@ void TraceSQLDriverConnectW(int              iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLBrowseConnectW(int             iCallOrRet,
+void RsTrace::TraceSQLBrowseConnectW(int             iCallOrRet,
                             SQLRETURN     iRc,
                             SQLHDBC         phdbc,
                             SQLWCHAR*     wszConnStrIn,
@@ -5793,9 +5721,9 @@ void TraceSQLBrowseConnectW(int             iCallOrRet,
                             SQLSMALLINT  cchConnStrOut,
                             SQLSMALLINT* pcchConnStrOut)
 {
-    if(IS_TRACE_LEVEL_API_CALL())
+    if(true || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -5830,7 +5758,7 @@ void TraceSQLBrowseConnectW(int             iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetInfoW(int iCallOrRet,
+void RsTrace::TraceSQLGetInfoW(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHDBC    phdbc,
                         SQLUSMALLINT    hInfoType,
@@ -5838,7 +5766,7 @@ void TraceSQLGetInfoW(int iCallOrRet,
                         SQLSMALLINT     cbLen,
                         SQLSMALLINT*    pcbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -5869,7 +5797,7 @@ void TraceSQLGetInfoW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLErrorW(int iCallOrRet,
+void RsTrace::TraceSQLErrorW(int iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHENV phenv,
                     SQLHDBC phdbc, 
@@ -5880,10 +5808,10 @@ void TraceSQLErrorW(int iCallOrRet,
                     SQLSMALLINT  cchLen,
                     SQLSMALLINT* pcchLen)
 {
-    if(IS_TRACE_LEVEL_ERROR()
+    if(true || IS_TRACE_LEVEL_ERROR()
         || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -5925,7 +5853,7 @@ void TraceSQLErrorW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetDiagRecW(int iCallOrRet,
+void RsTrace::TraceSQLGetDiagRecW(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLSMALLINT hHandleType, 
                         SQLHANDLE      pHandle,
@@ -5936,10 +5864,10 @@ void TraceSQLGetDiagRecW(int iCallOrRet,
                         SQLSMALLINT    cchLen,
                         SQLSMALLINT    *pcchLen)
 {
-    if(IS_TRACE_LEVEL_ERROR()
+    if(true || IS_TRACE_LEVEL_ERROR()
         || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -5984,7 +5912,7 @@ void TraceSQLGetDiagRecW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetDiagFieldW(int iCallOrRet,
+void RsTrace::TraceSQLGetDiagFieldW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLSMALLINT hHandleType, 
                             SQLHANDLE pHandle,
@@ -5994,10 +5922,10 @@ void TraceSQLGetDiagFieldW(int iCallOrRet,
                             SQLSMALLINT cbLen,
                             SQLSMALLINT *pcbLen)
 {
-    if(IS_TRACE_LEVEL_ERROR()
+    if(true || IS_TRACE_LEVEL_ERROR()
         || IS_TRACE_LEVEL_API_CALL())
     {
-        switch (iCallOrRet) 
+        switch (logWhat(iCallOrRet)) 
         {
             case FUNC_CALL:
             {
@@ -6039,13 +5967,13 @@ void TraceSQLGetDiagFieldW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLExecDirectW(int iCallOrRet,
+void RsTrace::TraceSQLExecDirectW(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHSTMT phstmt,
                         SQLWCHAR* pwCmd,
                         SQLINTEGER  cchLen)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -6071,7 +5999,7 @@ void TraceSQLExecDirectW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void  TraceSQLNativeSqlW(int iCallOrRet,
+void RsTrace::TraceSQLNativeSqlW(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHDBC   phdbc,
                         SQLWCHAR*    wszSqlStrIn,
@@ -6080,7 +6008,7 @@ void  TraceSQLNativeSqlW(int iCallOrRet,
                         SQLINTEGER   cchSqlStrOut,
                         SQLINTEGER*  pcchSqlStrOut)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -6114,7 +6042,7 @@ void  TraceSQLNativeSqlW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetConnectAttrW(int   iCallOrRet,
+void RsTrace::TraceSQLGetConnectAttrW(int   iCallOrRet,
                             SQLRETURN   iRc,
                             SQLHDBC    phdbc,
                             SQLINTEGER    iAttribute, 
@@ -6122,7 +6050,7 @@ void TraceSQLGetConnectAttrW(int   iCallOrRet,
                             SQLINTEGER    cbLen, 
                             SQLINTEGER  *pcbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6155,13 +6083,13 @@ void TraceSQLGetConnectAttrW(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetConnectOptionW(int   iCallOrRet,
+void RsTrace::TraceSQLGetConnectOptionW(int   iCallOrRet,
                                 SQLRETURN   iRc,
                                 SQLHDBC    phdbc,
                                 SQLUSMALLINT hOption, 
                                 SQLPOINTER pwValue)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6189,7 +6117,7 @@ void TraceSQLGetConnectOptionW(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetStmtAttrW(int   iCallOrRet,
+void RsTrace::TraceSQLGetStmtAttrW(int   iCallOrRet,
                            SQLRETURN   iRc,
                            SQLHSTMT phstmt,
                            SQLINTEGER    iAttribute, 
@@ -6197,7 +6125,7 @@ void TraceSQLGetStmtAttrW(int   iCallOrRet,
                            SQLINTEGER    cbLen, 
                            SQLINTEGER  *pcbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6230,14 +6158,14 @@ void TraceSQLGetStmtAttrW(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetConnectAttrW(int   iCallOrRet,
+void RsTrace::TraceSQLSetConnectAttrW(int   iCallOrRet,
                                SQLRETURN   iRc,
                                SQLHDBC    phdbc,
                                SQLINTEGER    iAttribute, 
                                SQLPOINTER    pwValue,
                                SQLINTEGER    cbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6264,13 +6192,13 @@ void TraceSQLSetConnectAttrW(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetConnectOptionW(int   iCallOrRet,
+void RsTrace::TraceSQLSetConnectOptionW(int   iCallOrRet,
                                 SQLRETURN   iRc,
                                 SQLHDBC    phdbc,
                                 SQLUSMALLINT hOption, 
                                 SQLULEN pwValue)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6296,14 +6224,14 @@ void TraceSQLSetConnectOptionW(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetStmtAttrW(int   iCallOrRet,
+void RsTrace::TraceSQLSetStmtAttrW(int   iCallOrRet,
                            SQLRETURN   iRc,
                            SQLHSTMT phstmt,
                            SQLINTEGER    iAttribute, 
                            SQLPOINTER    pwValue,
                            SQLINTEGER    cbLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6330,14 +6258,14 @@ void TraceSQLSetStmtAttrW(int   iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetCursorNameW(int iCallOrRet,
+void RsTrace::TraceSQLGetCursorNameW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT phstmt,
                             SQLWCHAR*        pwCursorName,
                             SQLSMALLINT     cchLen,
                             SQLSMALLINT*    pcchLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6369,13 +6297,13 @@ void TraceSQLGetCursorNameW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLPrepareW(int iCallOrRet,
+void RsTrace::TraceSQLPrepareW(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHSTMT phstmt,
                         SQLWCHAR* pwCmd,
                         SQLINTEGER cchLen)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6401,14 +6329,13 @@ void TraceSQLPrepareW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetCursorNameW(int iCallOrRet,
+void RsTrace::TraceSQLSetCursorNameW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT phstmt,
                             SQLWCHAR*    pwCursorName,
                             SQLSMALLINT cchLen)
 {
-
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -6434,7 +6361,7 @@ void TraceSQLSetCursorNameW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLColAttributesW(int iCallOrRet,
+void RsTrace::TraceSQLColAttributesW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT phstmt,
                             SQLUSMALLINT hCol, 
@@ -6444,7 +6371,7 @@ void TraceSQLColAttributesW(int iCallOrRet,
                             SQLSMALLINT *pcbLen, 
                             SQLLEN        *plValue)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -6483,7 +6410,7 @@ void TraceSQLColAttributesW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLColAttributeW(int iCallOrRet,
+void RsTrace::TraceSQLColAttributeW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT    phstmt,
                             SQLUSMALLINT hCol, 
@@ -6493,7 +6420,7 @@ void TraceSQLColAttributeW(int iCallOrRet,
                             SQLSMALLINT *pcbLen, 
                             SQLLEN       *plValue)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -6532,7 +6459,7 @@ void TraceSQLColAttributeW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLDescribeColW(int iCallOrRet,
+void RsTrace::TraceSQLDescribeColW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT    phstmt,
                             SQLUSMALLINT    hCol,
@@ -6544,7 +6471,7 @@ void TraceSQLDescribeColW(int iCallOrRet,
                             SQLSMALLINT*    pDecimalDigits,
                             SQLSMALLINT*    pNullable)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -6588,7 +6515,7 @@ void TraceSQLDescribeColW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetDescFieldW(int iCallOrRet,
+void RsTrace::TraceSQLGetDescFieldW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHDESC phdesc,
                             SQLSMALLINT hRecNumber, 
@@ -6597,7 +6524,7 @@ void TraceSQLGetDescFieldW(int iCallOrRet,
                             SQLINTEGER cbLen,
                             SQLINTEGER *pcbLen)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -6643,7 +6570,7 @@ void TraceSQLGetDescFieldW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetDescRecW(int iCallOrRet,
+void RsTrace::TraceSQLGetDescRecW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHDESC phdesc,
                             SQLSMALLINT hRecNumber, 
@@ -6657,7 +6584,7 @@ void TraceSQLGetDescRecW(int iCallOrRet,
                             SQLSMALLINT *phScale, 
                             SQLSMALLINT *phNullable)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -6703,7 +6630,7 @@ void TraceSQLGetDescRecW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSetDescFieldW(int iCallOrRet,
+void RsTrace::TraceSQLSetDescFieldW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHDESC phdesc,
                             SQLSMALLINT hRecNumber, 
@@ -6711,7 +6638,7 @@ void TraceSQLSetDescFieldW(int iCallOrRet,
                             SQLPOINTER pwValue, 
                             SQLINTEGER cbLen)
 {
-    switch (iCallOrRet) 
+    switch (logWhat(iCallOrRet)) 
     {
         case FUNC_CALL:
         {
@@ -6753,7 +6680,7 @@ void TraceSQLSetDescFieldW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLColumnPrivilegesW(int iCallOrRet,
+void RsTrace::TraceSQLColumnPrivilegesW(int iCallOrRet,
                                 SQLRETURN  iRc,
                                 SQLHSTMT       phstmt,
                                 SQLWCHAR*     pwCatalogName,
@@ -6765,7 +6692,7 @@ void TraceSQLColumnPrivilegesW(int iCallOrRet,
                                 SQLWCHAR*    pwColumnName,
                                 SQLSMALLINT  cchColumnName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6797,7 +6724,7 @@ void TraceSQLColumnPrivilegesW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLColumnsW(int iCallOrRet,
+void RsTrace::TraceSQLColumnsW(int iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHSTMT       phstmt,
                     SQLWCHAR*    pwCatalogName,
@@ -6809,7 +6736,7 @@ void TraceSQLColumnsW(int iCallOrRet,
                     SQLWCHAR*    pwColumnName,
                     SQLSMALLINT  cchColumnName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6841,7 +6768,7 @@ void TraceSQLColumnsW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLForeignKeysW(int iCallOrRet,
+void RsTrace::TraceSQLForeignKeysW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT       phstmt,
                             SQLWCHAR*    pwPkCatalogName,
@@ -6857,7 +6784,7 @@ void TraceSQLForeignKeysW(int iCallOrRet,
                             SQLWCHAR*    pwFkTableName,
                             SQLSMALLINT  cchFkTableName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6894,12 +6821,12 @@ void TraceSQLForeignKeysW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLGetTypeInfoW(int iCallOrRet,
+void RsTrace::TraceSQLGetTypeInfoW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT   phstmt,
                             SQLSMALLINT hType)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6925,7 +6852,7 @@ void TraceSQLGetTypeInfoW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLPrimaryKeysW(int iCallOrRet,
+void RsTrace::TraceSQLPrimaryKeysW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT   phstmt,
                             SQLWCHAR*    pwCatalogName,
@@ -6935,7 +6862,7 @@ void TraceSQLPrimaryKeysW(int iCallOrRet,
                             SQLWCHAR*    pwTableName,
                             SQLSMALLINT  cchTableName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -6965,7 +6892,7 @@ void TraceSQLPrimaryKeysW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLProcedureColumnsW(int iCallOrRet,
+void RsTrace::TraceSQLProcedureColumnsW(int iCallOrRet,
                                 SQLRETURN  iRc,
                                 SQLHSTMT       phstmt,
                                 SQLWCHAR*    pwCatalogName,
@@ -6977,7 +6904,7 @@ void TraceSQLProcedureColumnsW(int iCallOrRet,
                                 SQLWCHAR*    pwColumnName,
                                 SQLSMALLINT  cchColumnName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -7009,7 +6936,7 @@ void TraceSQLProcedureColumnsW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLProceduresW(int iCallOrRet,
+void RsTrace::TraceSQLProceduresW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT       phstmt,
                             SQLWCHAR*    pwCatalogName,
@@ -7019,7 +6946,7 @@ void TraceSQLProceduresW(int iCallOrRet,
                             SQLWCHAR*    pwProcName,
                             SQLSMALLINT  cchProcName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -7049,7 +6976,7 @@ void TraceSQLProceduresW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLSpecialColumnsW(int iCallOrRet,
+void RsTrace::TraceSQLSpecialColumnsW(int iCallOrRet,
                             SQLRETURN  iRc,
                             SQLHSTMT       phstmt,
                             SQLUSMALLINT   hIdenType,
@@ -7062,7 +6989,7 @@ void TraceSQLSpecialColumnsW(int iCallOrRet,
                             SQLUSMALLINT   hScope,
                             SQLUSMALLINT   hNullable)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -7095,7 +7022,7 @@ void TraceSQLSpecialColumnsW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLStatisticsW(int iCallOrRet,
+void RsTrace::TraceSQLStatisticsW(int iCallOrRet,
                         SQLRETURN  iRc,
                         SQLHSTMT       phstmt,
                         SQLWCHAR*    pwCatalogName,
@@ -7107,7 +7034,7 @@ void TraceSQLStatisticsW(int iCallOrRet,
                         SQLUSMALLINT hUnique,
                         SQLUSMALLINT hReserved)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -7139,7 +7066,7 @@ void TraceSQLStatisticsW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLTablePrivilegesW(int iCallOrRet,
+void RsTrace::TraceSQLTablePrivilegesW(int iCallOrRet,
                                 SQLRETURN  iRc,
                                 SQLHSTMT       phstmt,
                                 SQLWCHAR*    pwCatalogName,
@@ -7149,7 +7076,7 @@ void TraceSQLTablePrivilegesW(int iCallOrRet,
                                 SQLWCHAR*    pwTableName,
                                 SQLSMALLINT  cchTableName)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -7179,7 +7106,7 @@ void TraceSQLTablePrivilegesW(int iCallOrRet,
 
 /*====================================================================================================================================================*/
 
-void TraceSQLTablesW(int iCallOrRet,
+void RsTrace::TraceSQLTablesW(int iCallOrRet,
                     SQLRETURN  iRc,
                     SQLHSTMT       phstmt,
                     SQLWCHAR*      pwCatalogName,
@@ -7191,7 +7118,7 @@ void TraceSQLTablesW(int iCallOrRet,
                     SQLWCHAR*      pwTableType,
                     SQLSMALLINT    cchTableType)
 {
-     switch (iCallOrRet) 
+     switch (logWhat(iCallOrRet)) 
      {
         case FUNC_CALL:
         {
@@ -7226,7 +7153,7 @@ void TraceSQLTablesW(int iCallOrRet,
 //---------------------------------------------------------------------------------------------------------igarish
 // Replace password with * in the trace file.
 //
-void tracePasswordConnectString(char *var,char *szConnStr, SQLSMALLINT  cbConnStr)
+void RsTrace::tracePasswordConnectString(char *var,char *szConnStr, SQLSMALLINT  cbConnStr)
 {
     if (!szConnStr || cbConnStr < 0) {
         return;
@@ -7256,7 +7183,7 @@ void tracePasswordConnectString(char *var,char *szConnStr, SQLSMALLINT  cbConnSt
 //---------------------------------------------------------------------------------------------------------igarish
 // Replace password with * in the trace file.
 //
-void tracePasswordConnectStringW(char *var,SQLWCHAR *wszConnStr, SQLSMALLINT  cchConnStr)
+void RsTrace::tracePasswordConnectStringW(char *var,SQLWCHAR *wszConnStr, SQLSMALLINT  cchConnStr)
 {
     char *pTemp = (char *)convertWcharToUtf8(wszConnStr, cchConnStr);
 
@@ -7264,3 +7191,1284 @@ void tracePasswordConnectStringW(char *var,SQLWCHAR *wszConnStr, SQLSMALLINT  cc
 
     pTemp = (char *)rs_free(pTemp);
 }
+
+
+void TraceSQLAllocEnv(int iCallOrRet, SQLRETURN iRc, SQLHENV *pphenv) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLAllocEnv(iCallOrRet, iRc, pphenv);
+        logger.process();
+    }
+}
+
+void TraceSQLAllocConnect(int iCallOrRet, SQLRETURN iRc, HENV phenv,
+                          HDBC *pphdbc) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLAllocConnect(iCallOrRet, iRc, phenv, pphdbc);
+        logger.process();
+    }
+}
+
+void TraceSQLAllocStmt(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                       SQLHSTMT *pphstmt) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLAllocStmt(iCallOrRet, iRc, phdbc, pphstmt);
+        logger.process();
+    }
+}
+
+void TraceSQLFreeEnv(int iCallOrRet, SQLRETURN iRc, SQLHENV phenv) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLFreeEnv(iCallOrRet, iRc, phenv);
+        logger.process();
+    }
+}
+
+void TraceSQLFreeConnect(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLFreeConnect(iCallOrRet, iRc, phdbc);
+        logger.process();
+    }
+}
+
+void TraceSQLFreeStmt(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                      SQLUSMALLINT uhOption) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLFreeStmt(iCallOrRet, iRc, phstmt, uhOption);
+        logger.process();
+    }
+}
+
+void TraceSQLAllocHandle(int iCallOrRet, SQLRETURN iRc, SQLSMALLINT hHandleType,
+                         SQLHANDLE pInputHandle, SQLHANDLE *ppOutputHandle) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLAllocHandle(iCallOrRet, iRc, hHandleType, pInputHandle,
+                                ppOutputHandle);
+        logger.process();
+    }
+}
+
+void TraceSQLFreeHandle(int iCallOrRet, SQLRETURN iRc, SQLSMALLINT hHandleType,
+                        SQLHANDLE pHandle) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLFreeHandle(iCallOrRet, iRc, hHandleType, pHandle);
+        logger.process();
+    }
+}
+
+void TraceSQLConnect(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                     SQLCHAR *szDSN, SQLSMALLINT cchDSN, SQLCHAR *szUID,
+                     SQLSMALLINT cchUID, SQLCHAR *szAuthStr,
+                     SQLSMALLINT cchAuthStr) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLConnect(iCallOrRet, iRc, phdbc, szDSN, cchDSN, szUID,
+                                cchUID, szAuthStr, cchAuthStr);
+        logger.process();
+    }
+}
+
+void TraceSQLDisconnect(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLDisconnect(iCallOrRet, iRc, phdbc);
+        logger.process();
+    }
+}
+
+void TraceSQLDriverConnect(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                           SQLHWND hwnd, SQLCHAR *szConnStrIn,
+                           SQLSMALLINT cbConnStrIn, SQLCHAR *szConnStrOut,
+                           SQLSMALLINT cbConnStrOut, SQLSMALLINT *pcbConnStrOut,
+                           SQLUSMALLINT hDriverCompletion) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLDriverConnect(iCallOrRet, iRc, phdbc, hwnd, szConnStrIn,
+                                      cbConnStrIn, szConnStrOut, cbConnStrOut,
+                                      pcbConnStrOut, hDriverCompletion);
+        logger.process();
+    }
+}
+
+void TraceSQLBrowseConnect(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                           SQLCHAR *szConnStrIn, SQLSMALLINT cbConnStrIn,
+                           SQLCHAR *szConnStrOut, SQLSMALLINT cbConnStrOut,
+                           SQLSMALLINT *pcbConnStrOut) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLBrowseConnect(iCallOrRet, iRc, phdbc, szConnStrIn,
+                                      cbConnStrIn, szConnStrOut, cbConnStrOut,
+                                      pcbConnStrOut);
+        logger.process();
+    }
+}
+
+void TraceSQLError(int iCallOrRet, SQLRETURN iRc, SQLHENV phenv, SQLHDBC phdbc,
+                   SQLHSTMT phstmt, SQLCHAR *pSqlstate,
+                   SQLINTEGER *pNativeError, SQLCHAR *pMessageText,
+                   SQLSMALLINT cbLen, SQLSMALLINT *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLError(iCallOrRet, iRc, phenv, phdbc, phstmt, pSqlstate,
+                              pNativeError, pMessageText, cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetDiagRec(int iCallOrRet, SQLRETURN iRc, SQLSMALLINT hHandleType,
+                        SQLHANDLE pHandle, SQLSMALLINT hRecNumber,
+                        SQLCHAR *pSqlstate, SQLINTEGER *piNativeError,
+                        SQLCHAR *pMessageText, SQLSMALLINT cbLen,
+                        SQLSMALLINT *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetDiagRec(iCallOrRet, iRc, hHandleType, pHandle,
+                                   hRecNumber, pSqlstate, piNativeError,
+                                   pMessageText, cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetDiagField(int iCallOrRet, SQLRETURN iRc,
+                          SQLSMALLINT hHandleType, SQLHANDLE pHandle,
+                          SQLSMALLINT hRecNumber, SQLSMALLINT hDiagIdentifier,
+                          SQLPOINTER pDiagInfo, SQLSMALLINT cbLen,
+                          SQLSMALLINT *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetDiagField(iCallOrRet, iRc, hHandleType, pHandle,
+                                     hRecNumber, hDiagIdentifier, pDiagInfo,
+                                     cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLTransact(int iCallOrRet, SQLRETURN iRc, SQLHENV phenv,
+                      SQLHDBC phdbc, SQLUSMALLINT hCompletionType) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLTransact(iCallOrRet, iRc, phenv, phdbc,
+                                 hCompletionType);
+        logger.process();
+    }
+}
+
+void TraceSQLEndTran(int iCallOrRet, SQLRETURN iRc, SQLSMALLINT hHandleType,
+                     SQLHANDLE pHandle, SQLSMALLINT hCompletionType) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLEndTran(iCallOrRet, iRc, hHandleType, pHandle,
+                                hCompletionType);
+        logger.process();
+    }
+}
+
+void TraceSQLGetInfo(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                     SQLUSMALLINT hInfoType, SQLPOINTER pInfoValue,
+                     SQLSMALLINT cbLen, SQLSMALLINT *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetInfo(iCallOrRet, iRc, phdbc, hInfoType, pInfoValue,
+                                cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetFunctions(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                          SQLUSMALLINT uhFunctionId,
+                          SQLUSMALLINT *puhSupported) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetFunctions(iCallOrRet, iRc, phdbc, uhFunctionId,
+                                     puhSupported);
+        logger.process();
+    }
+}
+
+void TraceSQLExecDirect(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                        SQLCHAR *pCmd, SQLINTEGER cbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLExecDirect(iCallOrRet, iRc, phstmt, pCmd, cbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLExecute(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLExecute(iCallOrRet, iRc, phstmt);
+        logger.process();
+    }
+}
+
+void TraceSQLPrepare(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                     SQLCHAR *pCmd, SQLINTEGER cbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLPrepare(iCallOrRet, iRc, phstmt, pCmd, cbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLCancel(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLCancel(iCallOrRet, iRc, phstmt);
+        logger.process();
+    }
+}
+
+void TraceSQLParamData(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                       SQLPOINTER *ppValue) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLParamData(iCallOrRet, iRc, phstmt, ppValue);
+        logger.process();
+    }
+}
+
+void TraceSQLPutData(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                     SQLPOINTER pData, SQLLEN cbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLPutData(iCallOrRet, iRc, phstmt, pData, cbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLBulkOperations(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                            SQLSMALLINT hOperation) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLBulkOperations(iCallOrRet, iRc, phstmt, hOperation);
+        logger.process();
+    }
+}
+
+void TraceSQLNativeSql(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                       SQLCHAR *szSqlStrIn, SQLINTEGER cbSqlStrIn,
+                       SQLCHAR *szSqlStrOut, SQLINTEGER cbSqlStrOut,
+                       SQLINTEGER *pcbSqlStrOut) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLNativeSql(iCallOrRet, iRc, phdbc, szSqlStrIn,
+                                  cbSqlStrIn, szSqlStrOut, cbSqlStrOut,
+                                  pcbSqlStrOut);
+        logger.process();
+    }
+}
+
+void TraceSQLSetCursorName(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                           SQLCHAR *pCursorName, SQLSMALLINT cbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetCursorName(iCallOrRet, iRc, phstmt, pCursorName,
+                                      cbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetCursorName(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                           SQLCHAR *pCursorName, SQLSMALLINT cbLen,
+                           SQLSMALLINT *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetCursorName(iCallOrRet, iRc, phstmt, pCursorName,
+                                      cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLCloseCursor(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLCloseCursor(iCallOrRet, iRc, phstmt);
+        logger.process();
+    }
+}
+
+void TraceSQLBindParameter(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                           SQLUSMALLINT hParam, SQLSMALLINT hInOutType,
+                           SQLSMALLINT hType, SQLSMALLINT hSQLType,
+                           SQLULEN iColSize, SQLSMALLINT hScale,
+                           SQLPOINTER pValue, SQLLEN cbLen, SQLLEN *pcbLenInd) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLBindParameter(iCallOrRet, iRc, phstmt, hParam,
+                                      hInOutType, hType, hSQLType, iColSize,
+                                      hScale, pValue, cbLen, pcbLenInd);
+        logger.process();
+    }
+}
+
+void TraceSQLSetParam(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                      SQLUSMALLINT hParam, SQLSMALLINT hValType,
+                      SQLSMALLINT hParamType, SQLULEN iLengthPrecision,
+                      SQLSMALLINT hParamScale, SQLPOINTER pParamVal,
+                      SQLLEN *piStrLen_or_Ind) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetParam(iCallOrRet, iRc, phstmt, hParam, hValType,
+                                 hParamType, iLengthPrecision, hParamScale,
+                                 pParamVal, piStrLen_or_Ind);
+        logger.process();
+    }
+}
+
+void TraceSQLBindParam(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                       SQLUSMALLINT hParam, SQLSMALLINT hValType,
+                       SQLSMALLINT hParamType, SQLULEN iLengthPrecision,
+                       SQLSMALLINT hParamScale, SQLPOINTER pParamVal,
+                       SQLLEN *piStrLen_or_Ind) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLBindParam(iCallOrRet, iRc, phstmt, hParam, hValType,
+                                  hParamType, iLengthPrecision, hParamScale,
+                                  pParamVal, piStrLen_or_Ind);
+        logger.process();
+    }
+}
+
+void TraceSQLNumParams(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                       SQLSMALLINT *pParamCount) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLNumParams(iCallOrRet, iRc, phstmt, pParamCount);
+        logger.process();
+    }
+}
+
+void TraceSQLParamOptions(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                          SQLULEN iCrow, SQLULEN *piRow) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLParamOptions(iCallOrRet, iRc, phstmt, iCrow, piRow);
+        logger.process();
+    }
+}
+
+void TraceSQLDescribeParam(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                           SQLUSMALLINT hParam, SQLSMALLINT *pDataType,
+                           SQLULEN *pParamSize, SQLSMALLINT *pDecimalDigits,
+                           SQLSMALLINT *pNullable) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLDescribeParam(iCallOrRet, iRc, phstmt, hParam,
+                                      pDataType, pParamSize, pDecimalDigits,
+                                      pNullable);
+        logger.process();
+    }
+}
+    
+
+void TraceSQLNumResultCols(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                           SQLSMALLINT *pColumnCount) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLNumResultCols(iCallOrRet, iRc, phstmt, pColumnCount);
+        logger.process();
+    }
+}
+
+void TraceSQLDescribeCol(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                         SQLUSMALLINT hCol, SQLCHAR *pColName,
+                         SQLSMALLINT cbLen, SQLSMALLINT *pcbLen,
+                         SQLSMALLINT *pDataType, SQLULEN *pColSize,
+                         SQLSMALLINT *pDecimalDigits, SQLSMALLINT *pNullable) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLDescribeCol(iCallOrRet, iRc, phstmt, hCol, pColName,
+                                    cbLen, pcbLen, pDataType, pColSize,
+                                    pDecimalDigits, pNullable);
+        logger.process();
+    }
+}
+
+void TraceSQLColAttribute(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                          SQLUSMALLINT hCol, SQLUSMALLINT hFieldIdentifier,
+                          SQLPOINTER pcValue, SQLSMALLINT cbLen,
+                          SQLSMALLINT *pcbLen, SQLLEN *plValue) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLColAttribute(iCallOrRet, iRc, phstmt, hCol,
+                                     hFieldIdentifier, pcValue, cbLen, pcbLen,
+                                     plValue);
+        logger.process();
+    }
+}
+
+void TraceSQLColAttributes(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                           SQLUSMALLINT hCol, SQLUSMALLINT hFieldIdentifier,
+                           SQLPOINTER pcValue, SQLSMALLINT cbLen,
+                           SQLSMALLINT *pcbLen, SQLLEN *plValue) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLColAttributes(iCallOrRet, iRc, phstmt, hCol,
+                                      hFieldIdentifier, pcValue, cbLen, pcbLen,
+                                      plValue);
+        logger.process();
+    }
+}
+
+void TraceSQLBindCol(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                     SQLUSMALLINT hCol, SQLSMALLINT hType, SQLPOINTER pValue,
+                     SQLLEN cbLen, SQLLEN *pcbLenInd) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLBindCol(iCallOrRet, iRc, phstmt, hCol, hType, pValue,
+                                cbLen, pcbLenInd);
+        logger.process();
+    }
+}
+
+void TraceSQLFetch(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLFetch(iCallOrRet, iRc, phstmt);
+        logger.process();
+    }
+}
+
+void TraceSQLMoreResults(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLMoreResults(iCallOrRet, iRc, phstmt);
+        logger.process();
+    }
+}
+
+void TraceSQLExtendedFetch(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                           SQLUSMALLINT hFetchOrientation, SQLLEN iFetchOffset,
+                           SQLULEN *piRowCount, SQLUSMALLINT *phRowStatus) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLExtendedFetch(iCallOrRet, iRc, phstmt,
+                                      hFetchOrientation, iFetchOffset,
+                                      piRowCount, phRowStatus);
+        logger.process();
+    }
+}
+
+void TraceSQLGetData(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                     SQLUSMALLINT hCol, SQLSMALLINT hType, SQLPOINTER pValue,
+                     SQLLEN cbLen, SQLLEN *pcbLenInd) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetData(iCallOrRet, iRc, phstmt, hCol, hType, pValue,
+                                cbLen, pcbLenInd);
+        logger.process();
+    }
+}
+
+void TraceSQLRowCount(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                      SQLLEN *pRowCount) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLRowCount(iCallOrRet, iRc, phstmt, pRowCount);
+        logger.process();
+    }
+}
+
+void TraceSQLSetPos(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                    SQLSETPOSIROW iRow, SQLUSMALLINT hOperation,
+                    SQLUSMALLINT hLockType) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetPos(iCallOrRet, iRc, phstmt, iRow, hOperation,
+                               hLockType);
+        logger.process();
+    }
+}
+
+void TraceSQLFetchScroll(int iCallOrRet, SQLRETURN iRc, SQLHSTMT hstmt,
+                         SQLSMALLINT FetchOrientation, SQLLEN FetchOffset) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLFetchScroll(iCallOrRet, iRc, hstmt, FetchOrientation,
+                                    FetchOffset);
+        logger.process();
+    }
+}
+
+void TraceSQLCopyDesc(int iCallOrRet, SQLRETURN iRc, SQLHDESC phdescSrc,
+                      SQLHDESC phdescDest) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLCopyDesc(iCallOrRet, iRc, phdescSrc, phdescDest);
+        logger.process();
+    }
+}
+
+void TraceSQLGetDescField(int iCallOrRet, SQLRETURN iRc, SQLHDESC phdesc,
+                          SQLSMALLINT hRecNumber, SQLSMALLINT hFieldIdentifier,
+                          SQLPOINTER pValue, SQLINTEGER cbLen,
+                          SQLINTEGER *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetDescField(iCallOrRet, iRc, phdesc, hRecNumber,
+                                     hFieldIdentifier, pValue, cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetDescRec(int iCallOrRet, SQLRETURN iRc, SQLHDESC phdesc,
+                        SQLSMALLINT hRecNumber, SQLCHAR *pName,
+                        SQLSMALLINT cbName, SQLSMALLINT *pcbName,
+                        SQLSMALLINT *phType, SQLSMALLINT *phSubType,
+                        SQLLEN *plOctetLength, SQLSMALLINT *phPrecision,
+                        SQLSMALLINT *phScale, SQLSMALLINT *phNullable) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetDescRec(
+        iCallOrRet, iRc, phdesc, hRecNumber, pName, cbName, pcbName, phType,
+        phSubType, plOctetLength, phPrecision, phScale, phNullable);
+        logger.process();
+    }
+}
+
+void TraceSQLSetDescField(int iCallOrRet, SQLRETURN iRc, SQLHDESC phdesc,
+                          SQLSMALLINT hRecNumber, SQLSMALLINT hFieldIdentifier,
+                          SQLPOINTER pValue, SQLINTEGER cbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetDescField(iCallOrRet, iRc, phdesc, hRecNumber,
+                                     hFieldIdentifier, pValue, cbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLSetDescRec(int iCallOrRet, SQLRETURN iRc, SQLHDESC phdesc,
+                        SQLSMALLINT hRecNumber, SQLSMALLINT hType,
+                        SQLSMALLINT hSubType, SQLLEN iOctetLength,
+                        SQLSMALLINT hPrecision, SQLSMALLINT hScale,
+                        SQLPOINTER pData, SQLLEN *plStrLen,
+                        SQLLEN *plIndicator) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetDescRec(iCallOrRet, iRc, phdesc, hRecNumber, hType,
+                                   hSubType, iOctetLength, hPrecision, hScale,
+                                   pData, plStrLen, plIndicator);
+        logger.process();
+    }
+}
+
+void TraceSQLSetConnectOption(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                              SQLUSMALLINT hOption, SQLULEN pValue) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetConnectOption(iCallOrRet, iRc, phdbc, hOption,
+                                         pValue);
+        logger.process();
+    }
+}
+
+void TraceSQLGetConnectOption(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                              SQLUSMALLINT hOption, SQLPOINTER pValue) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetConnectOption(iCallOrRet, iRc, phdbc, hOption,
+                                         pValue);
+        logger.process();
+    }
+}
+
+void TraceSQLSetStmtOption(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                           SQLUSMALLINT hOption, SQLULEN pValue) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetStmtOption(iCallOrRet, iRc, phstmt, hOption, pValue);
+        logger.process();
+    }
+}
+
+void TraceSQLGetStmtOption(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                           SQLUSMALLINT hOption, SQLPOINTER pValue) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetStmtOption(iCallOrRet, iRc, phstmt, hOption, pValue);
+        logger.process();
+    }
+}
+
+void TraceSQLSetScrollOptions(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                              SQLUSMALLINT hConcurrency, SQLLEN iKeysetSize,
+                              SQLUSMALLINT hRowsetSize) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetScrollOptions(iCallOrRet, iRc, phstmt, hConcurrency,
+                                         iKeysetSize, hRowsetSize);
+        logger.process();
+    }
+}
+
+void TraceSQLGetConnectAttr(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                            SQLINTEGER iAttribute, SQLPOINTER pValue,
+                            SQLINTEGER cbLen, SQLINTEGER *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetConnectAttr(iCallOrRet, iRc, phdbc, iAttribute,
+                                       pValue, cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetStmtAttr(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                         SQLINTEGER iAttribute, SQLPOINTER pValue,
+                         SQLINTEGER cbLen, SQLINTEGER *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetStmtAttr(iCallOrRet, iRc, phstmt, iAttribute, pValue,
+                                    cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLSetConnectAttr(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                            SQLINTEGER iAttribute, SQLPOINTER pValue,
+                            SQLINTEGER cbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetConnectAttr(iCallOrRet, iRc, phdbc, iAttribute,
+                                       pValue, cbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLSetStmtAttr(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                         SQLINTEGER iAttribute, SQLPOINTER pValue,
+                         SQLINTEGER cbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetStmtAttr(iCallOrRet, iRc, phstmt, iAttribute, pValue,
+                                    cbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLSetEnvAttr(int iCallOrRet, SQLRETURN iRc, SQLHENV phenv,
+                        SQLINTEGER iAttribute, SQLPOINTER pValue,
+                        SQLINTEGER cbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetEnvAttr(iCallOrRet, iRc, phenv, iAttribute, pValue,
+                                   cbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetEnvAttr(int iCallOrRet, SQLRETURN iRc, SQLHENV phenv,
+                        SQLINTEGER iAttribute, SQLPOINTER pValue,
+                        SQLINTEGER cbLen, SQLINTEGER *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetEnvAttr(iCallOrRet, iRc, phenv, iAttribute, pValue,
+                                   cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLTables(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                    SQLCHAR *pCatalogName, SQLSMALLINT cbCatalogName,
+                    SQLCHAR *pSchemaName, SQLSMALLINT cbSchemaName,
+                    SQLCHAR *pTableName, SQLSMALLINT cbTableName,
+                    SQLCHAR *pTableType, SQLSMALLINT cbTableType) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLTables(
+        iCallOrRet, iRc, phstmt, pCatalogName, cbCatalogName, pSchemaName,
+        cbSchemaName, pTableName, cbTableName, pTableType, cbTableType);
+        logger.process();
+    }
+}
+
+void TraceSQLColumns(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                     SQLCHAR *pCatalogName, SQLSMALLINT cbCatalogName,
+                     SQLCHAR *pSchemaName, SQLSMALLINT cbSchemaName,
+                     SQLCHAR *pTableName, SQLSMALLINT cbTableName,
+                     SQLCHAR *pColumnName, SQLSMALLINT cbColumnName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLColumns(
+        iCallOrRet, iRc, phstmt, pCatalogName, cbCatalogName, pSchemaName,
+        cbSchemaName, pTableName, cbTableName, pColumnName, cbColumnName);
+        logger.process();
+    }
+}
+
+void TraceSQLStatistics(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                        SQLCHAR *pCatalogName, SQLSMALLINT cbCatalogName,
+                        SQLCHAR *pSchemaName, SQLSMALLINT cbSchemaName,
+                        SQLCHAR *pTableName, SQLSMALLINT cbTableName,
+                        SQLUSMALLINT hUnique, SQLUSMALLINT hReserved) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLStatistics(iCallOrRet, iRc, phstmt, pCatalogName,
+                                   cbCatalogName, pSchemaName, cbSchemaName,
+                                   pTableName, cbTableName, hUnique, hReserved);
+        logger.process();
+    }
+}
+    
+
+void TraceSQLSpecialColumns(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                            SQLUSMALLINT hIdenType, SQLCHAR *pCatalogName,
+                            SQLSMALLINT cbCatalogName, SQLCHAR *pSchemaName,
+                            SQLSMALLINT cbSchemaName, SQLCHAR *pTableName,
+                            SQLSMALLINT cbTableName, SQLUSMALLINT hScope,
+                            SQLUSMALLINT hNullable) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSpecialColumns(
+        iCallOrRet, iRc, phstmt, hIdenType, pCatalogName, cbCatalogName,
+        pSchemaName, cbSchemaName, pTableName, cbTableName, hScope, hNullable);
+        logger.process();
+    }
+}
+
+void TraceSQLProcedureColumns(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                              SQLCHAR *pCatalogName, SQLSMALLINT cbCatalogName,
+                              SQLCHAR *pSchemaName, SQLSMALLINT cbSchemaName,
+                              SQLCHAR *pProcName, SQLSMALLINT cbProcName,
+                              SQLCHAR *pColumnName, SQLSMALLINT cbColumnName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLProcedureColumns(
+        iCallOrRet, iRc, phstmt, pCatalogName, cbCatalogName, pSchemaName,
+        cbSchemaName, pProcName, cbProcName, pColumnName, cbColumnName);
+        logger.process();
+    }
+}
+
+void TraceSQLProcedures(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                        SQLCHAR *pCatalogName, SQLSMALLINT cbCatalogName,
+                        SQLCHAR *pSchemaName, SQLSMALLINT cbSchemaName,
+                        SQLCHAR *pProcName, SQLSMALLINT cbProcName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLProcedures(iCallOrRet, iRc, phstmt, pCatalogName,
+                                   cbCatalogName, pSchemaName, cbSchemaName,
+                                   pProcName, cbProcName);
+        logger.process();
+    }
+}
+
+void TraceSQLForeignKeys(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                         SQLCHAR *pPkCatalogName, SQLSMALLINT cbPkCatalogName,
+                         SQLCHAR *pPkSchemaName, SQLSMALLINT cbPkSchemaName,
+                         SQLCHAR *pPkTableName, SQLSMALLINT cbPkTableName,
+                         SQLCHAR *pFkCatalogName, SQLSMALLINT cbFkCatalogName,
+                         SQLCHAR *pFkSchemaName, SQLSMALLINT cbFkSchemaName,
+                         SQLCHAR *pFkTableName, SQLSMALLINT cbFkTableName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLForeignKeys(
+        iCallOrRet, iRc, phstmt, pPkCatalogName, cbPkCatalogName, pPkSchemaName,
+        cbPkSchemaName, pPkTableName, cbPkTableName, pFkCatalogName,
+        cbFkCatalogName, pFkSchemaName, cbFkSchemaName, pFkTableName,
+        cbFkTableName);
+        logger.process();
+    }
+}
+
+void TraceSQLPrimaryKeys(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                         SQLCHAR *pCatalogName, SQLSMALLINT cbCatalogName,
+                         SQLCHAR *pSchemaName, SQLSMALLINT cbSchemaName,
+                         SQLCHAR *pTableName, SQLSMALLINT cbTableName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLPrimaryKeys(iCallOrRet, iRc, phstmt, pCatalogName,
+                                    cbCatalogName, pSchemaName, cbSchemaName,
+                                    pTableName, cbTableName);
+        logger.process();
+    }
+}
+
+void TraceSQLGetTypeInfo(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                         SQLSMALLINT hType) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetTypeInfo(iCallOrRet, iRc, phstmt, hType);
+        logger.process();
+    }
+}
+
+void TraceSQLColumnPrivileges(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                              SQLCHAR *pCatalogName, SQLSMALLINT cbCatalogName,
+                              SQLCHAR *pSchemaName, SQLSMALLINT cbSchemaName,
+                              SQLCHAR *pTableName, SQLSMALLINT cbTableName,
+                              SQLCHAR *pColumnName, SQLSMALLINT cbColumnName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLColumnPrivileges(
+        iCallOrRet, iRc, phstmt, pCatalogName, cbCatalogName, pSchemaName,
+        cbSchemaName, pTableName, cbTableName, pColumnName, cbColumnName);
+        logger.process();
+    }
+}
+
+void TraceSQLTablePrivileges(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                             SQLCHAR *pCatalogName, SQLSMALLINT cbCatalogName,
+                             SQLCHAR *pSchemaName, SQLSMALLINT cbSchemaName,
+                             SQLCHAR *pTableName, SQLSMALLINT cbTableName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLTablePrivileges(iCallOrRet, iRc, phstmt, pCatalogName,
+                                        cbCatalogName, pSchemaName,
+                                        cbSchemaName, pTableName, cbTableName);
+        logger.process();
+    }
+}
+
+void TraceSQLConnectW(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                      SQLWCHAR *wszDSN, SQLSMALLINT cchDSN, SQLWCHAR *wszUID,
+                      SQLSMALLINT cchUID, SQLWCHAR *wszAuthStr,
+                      SQLSMALLINT cchAuthStr) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLConnectW(iCallOrRet, iRc, phdbc, wszDSN, cchDSN, wszUID,
+                                 cchUID, wszAuthStr, cchAuthStr);
+        logger.process();
+    }
+}
+
+void TraceSQLDriverConnectW(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                            SQLHWND hwnd, SQLWCHAR *wszConnStrIn,
+                            SQLSMALLINT cchConnStrIn, SQLWCHAR *wszConnStrOut,
+                            SQLSMALLINT cchConnStrOut,
+                            SQLSMALLINT *pcchConnStrOut,
+                            SQLUSMALLINT hDriverCompletion) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLDriverConnectW(
+        iCallOrRet, iRc, phdbc, hwnd, wszConnStrIn, cchConnStrIn, wszConnStrOut,
+        cchConnStrOut, pcchConnStrOut, hDriverCompletion);
+        logger.process();
+    }
+}
+
+void TraceSQLBrowseConnectW(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                            SQLWCHAR *wszConnStrIn, SQLSMALLINT cchConnStrIn,
+                            SQLWCHAR *wszConnStrOut, SQLSMALLINT cchConnStrOut,
+                            SQLSMALLINT *pcchConnStrOut) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLBrowseConnectW(iCallOrRet, iRc, phdbc, wszConnStrIn,
+                                       cchConnStrIn, wszConnStrOut,
+                                       cchConnStrOut, pcchConnStrOut);
+        logger.process();
+    }
+}
+
+void TraceSQLGetInfoW(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                      SQLUSMALLINT hInfoType, SQLPOINTER pwInfoValue,
+                      SQLSMALLINT cbLen, SQLSMALLINT *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetInfoW(iCallOrRet, iRc, phdbc, hInfoType, pwInfoValue,
+                                 cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLErrorW(int iCallOrRet, SQLRETURN iRc, SQLHENV phenv, SQLHDBC phdbc,
+                    SQLHSTMT phstmt, SQLWCHAR *pwSqlState,
+                    SQLINTEGER *piNativeError, SQLWCHAR *pwMessageText,
+                    SQLSMALLINT cchLen, SQLSMALLINT *pcchLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLErrorW(iCallOrRet, iRc, phenv, phdbc, phstmt,
+                               pwSqlState, piNativeError, pwMessageText, cchLen,
+                               pcchLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetDiagRecW(int iCallOrRet, SQLRETURN iRc, SQLSMALLINT hHandleType,
+                         SQLHANDLE pHandle, SQLSMALLINT hRecNumber,
+                         SQLWCHAR *pwSqlState, SQLINTEGER *piNativeError,
+                         SQLWCHAR *pwMessageText, SQLSMALLINT cchLen,
+                         SQLSMALLINT *pcchLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetDiagRecW(iCallOrRet, iRc, hHandleType, pHandle,
+                                    hRecNumber, pwSqlState, piNativeError,
+                                    pwMessageText, cchLen, pcchLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetDiagFieldW(int iCallOrRet, SQLRETURN iRc,
+                           SQLSMALLINT hHandleType, SQLHANDLE pHandle,
+                           SQLSMALLINT hRecNumber, SQLSMALLINT hDiagIdentifier,
+                           SQLPOINTER pwDiagInfo, SQLSMALLINT cbLen,
+                           SQLSMALLINT *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetDiagFieldW(iCallOrRet, iRc, hHandleType, pHandle,
+                                      hRecNumber, hDiagIdentifier, pwDiagInfo,
+                                      cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLExecDirectW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                         SQLWCHAR *pwCmd, SQLINTEGER cchLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLExecDirectW(iCallOrRet, iRc, phstmt, pwCmd, cchLen);
+        logger.process();
+    }
+}
+
+void TraceSQLNativeSqlW(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                        SQLWCHAR *wszSqlStrIn, SQLINTEGER cchSqlStrIn,
+                        SQLWCHAR *wszSqlStrOut, SQLINTEGER cchSqlStrOut,
+                        SQLINTEGER *pcchSqlStrOut) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLNativeSqlW(iCallOrRet, iRc, phdbc, wszSqlStrIn,
+                                   cchSqlStrIn, wszSqlStrOut, cchSqlStrOut,
+                                   pcchSqlStrOut);
+        logger.process();
+    }
+}
+
+void TraceSQLGetConnectAttrW(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                             SQLINTEGER iAttribute, SQLPOINTER pwValue,
+                             SQLINTEGER cbLen, SQLINTEGER *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetConnectAttrW(iCallOrRet, iRc, phdbc, iAttribute,
+                                        pwValue, cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetConnectOptionW(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                               SQLUSMALLINT hOption, SQLPOINTER pwValue) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetConnectOptionW(iCallOrRet, iRc, phdbc, hOption,
+                                          pwValue);
+        logger.process();
+    }
+}
+
+void TraceSQLGetStmtAttrW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                          SQLINTEGER iAttribute, SQLPOINTER pwValue,
+                          SQLINTEGER cbLen, SQLINTEGER *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetStmtAttrW(iCallOrRet, iRc, phstmt, iAttribute,
+                                     pwValue, cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLSetConnectAttrW(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                             SQLINTEGER iAttribute, SQLPOINTER pwValue,
+                             SQLINTEGER cbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetConnectAttrW(iCallOrRet, iRc, phdbc, iAttribute,
+                                        pwValue, cbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLSetConnectOptionW(int iCallOrRet, SQLRETURN iRc, SQLHDBC phdbc,
+                               SQLUSMALLINT hOption, SQLULEN pwValue) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetConnectOptionW(iCallOrRet, iRc, phdbc, hOption,
+                                          pwValue);
+        logger.process();
+    }
+}
+
+void TraceSQLSetStmtAttrW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                          SQLINTEGER iAttribute, SQLPOINTER pwValue,
+                          SQLINTEGER cbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetStmtAttrW(iCallOrRet, iRc, phstmt, iAttribute,
+                                     pwValue, cbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetCursorNameW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                            SQLWCHAR *pwCursorName, SQLSMALLINT cchLen,
+                            SQLSMALLINT *pcchLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetCursorNameW(iCallOrRet, iRc, phstmt, pwCursorName,
+                                       cchLen, pcchLen);
+        logger.process();
+    }
+}
+
+void TraceSQLPrepareW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                      SQLWCHAR *pwCmd, SQLINTEGER cchLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLPrepareW(iCallOrRet, iRc, phstmt, pwCmd, cchLen);
+        logger.process();
+    }
+}
+
+void TraceSQLSetCursorNameW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                            SQLWCHAR *pwCursorName, SQLSMALLINT cchLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetCursorNameW(iCallOrRet, iRc, phstmt, pwCursorName,
+                                       cchLen);
+        logger.process();
+    }
+}
+
+void TraceSQLColAttributesW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                            SQLUSMALLINT hCol, SQLUSMALLINT hFieldIdentifier,
+                            SQLPOINTER pwValue, SQLSMALLINT cbLen,
+                            SQLSMALLINT *pcbLen, SQLLEN *plValue) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLColAttributesW(iCallOrRet, iRc, phstmt, hCol,
+                                       hFieldIdentifier, pwValue, cbLen, pcbLen,
+                                       plValue);
+        logger.process();
+    }
+}
+
+void TraceSQLColAttributeW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                           SQLUSMALLINT hCol, SQLUSMALLINT hFieldIdentifier,
+                           SQLPOINTER pwValue, SQLSMALLINT cbLen,
+                           SQLSMALLINT *pcbLen, SQLLEN *plValue) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLColAttributeW(iCallOrRet, iRc, phstmt, hCol,
+                                      hFieldIdentifier, pwValue, cbLen, pcbLen,
+                                      plValue);
+        logger.process();
+    }
+}
+
+void TraceSQLDescribeColW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                          SQLUSMALLINT hCol, SQLWCHAR *pwColName,
+                          SQLSMALLINT cchLen, SQLSMALLINT *pcchLen,
+                          SQLSMALLINT *pDataType, SQLULEN *pColSize,
+                          SQLSMALLINT *pDecimalDigits, SQLSMALLINT *pNullable) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLDescribeColW(iCallOrRet, iRc, phstmt, hCol, pwColName,
+                                     cchLen, pcchLen, pDataType, pColSize,
+                                     pDecimalDigits, pNullable);
+        logger.process();
+    }
+}
+
+void TraceSQLGetDescFieldW(int iCallOrRet, SQLRETURN iRc, SQLHDESC phdesc,
+                           SQLSMALLINT hRecNumber, SQLSMALLINT hFieldIdentifier,
+                           SQLPOINTER pwValue, SQLINTEGER cbLen,
+                           SQLINTEGER *pcbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetDescFieldW(iCallOrRet, iRc, phdesc, hRecNumber,
+                                      hFieldIdentifier, pwValue, cbLen, pcbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLGetDescRecW(int iCallOrRet, SQLRETURN iRc, SQLHDESC phdesc,
+                         SQLSMALLINT hRecNumber, SQLWCHAR *pwName,
+                         SQLSMALLINT cchName, SQLSMALLINT *pcchName,
+                         SQLSMALLINT *phType, SQLSMALLINT *phSubType,
+                         SQLLEN *plOctetLength, SQLSMALLINT *phPrecision,
+                         SQLSMALLINT *phScale, SQLSMALLINT *phNullable) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetDescRecW(
+        iCallOrRet, iRc, phdesc, hRecNumber, pwName, cchName, pcchName, phType,
+        phSubType, plOctetLength, phPrecision, phScale, phNullable);
+        logger.process();
+    }
+}
+
+void TraceSQLSetDescFieldW(int iCallOrRet, SQLRETURN iRc, SQLHDESC phdesc,
+                           SQLSMALLINT hRecNumber, SQLSMALLINT hFieldIdentifier,
+                           SQLPOINTER pwValue, SQLINTEGER cbLen) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSetDescFieldW(iCallOrRet, iRc, phdesc, hRecNumber,
+                                      hFieldIdentifier, pwValue, cbLen);
+        logger.process();
+    }
+}
+
+void TraceSQLColumnPrivilegesW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                               SQLWCHAR *pwCatalogName,
+                               SQLSMALLINT cchCatalogName,
+                               SQLWCHAR *pwSchemaName,
+                               SQLSMALLINT cchSchemaName, SQLWCHAR *pwTableName,
+                               SQLSMALLINT cchTableName, SQLWCHAR *pwColumnName,
+                               SQLSMALLINT cchColumnName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLColumnPrivilegesW(
+        iCallOrRet, iRc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName,
+        cchSchemaName, pwTableName, cchTableName, pwColumnName, cchColumnName);
+        logger.process();
+    }
+}
+
+void TraceSQLColumnsW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                      SQLWCHAR *pwCatalogName, SQLSMALLINT cchCatalogName,
+                      SQLWCHAR *pwSchemaName, SQLSMALLINT cchSchemaName,
+                      SQLWCHAR *pwTableName, SQLSMALLINT cchTableName,
+                      SQLWCHAR *pwColumnName, SQLSMALLINT cchColumnName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLColumnsW(
+        iCallOrRet, iRc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName,
+        cchSchemaName, pwTableName, cchTableName, pwColumnName, cchColumnName);
+        logger.process();
+    }
+}
+
+void TraceSQLForeignKeysW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                          SQLWCHAR *pwPkCatalogName,
+                          SQLSMALLINT cchPkCatalogName,
+                          SQLWCHAR *pwPkSchemaName, SQLSMALLINT cchPkSchemaName,
+                          SQLWCHAR *pwPkTableName, SQLSMALLINT cchPkTableName,
+                          SQLWCHAR *pwFkCatalogName,
+                          SQLSMALLINT cchFkCatalogName,
+                          SQLWCHAR *pwFkSchemaName, SQLSMALLINT cchFkSchemaName,
+                          SQLWCHAR *pwFkTableName, SQLSMALLINT cchFkTableName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLForeignKeysW(
+        iCallOrRet, iRc, phstmt, pwPkCatalogName, cchPkCatalogName,
+        pwPkSchemaName, cchPkSchemaName, pwPkTableName, cchPkTableName,
+        pwFkCatalogName, cchFkCatalogName, pwFkSchemaName, cchFkSchemaName,
+        pwFkTableName, cchFkTableName);
+        logger.process();
+    }
+}
+
+void TraceSQLGetTypeInfoW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                          SQLSMALLINT hType) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLGetTypeInfoW(iCallOrRet, iRc, phstmt, hType);
+        logger.process();
+    }
+}
+
+void TraceSQLPrimaryKeysW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                          SQLWCHAR *pwCatalogName, SQLSMALLINT cchCatalogName,
+                          SQLWCHAR *pwSchemaName, SQLSMALLINT cchSchemaName,
+                          SQLWCHAR *pwTableName, SQLSMALLINT cchTableName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLPrimaryKeysW(iCallOrRet, iRc, phstmt, pwCatalogName,
+                                     cchCatalogName, pwSchemaName,
+                                     cchSchemaName, pwTableName, cchTableName);
+        logger.process();
+    }
+}
+
+void TraceSQLProcedureColumnsW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                               SQLWCHAR *pwCatalogName,
+                               SQLSMALLINT cchCatalogName,
+                               SQLWCHAR *pwSchemaName,
+                               SQLSMALLINT cchSchemaName, SQLWCHAR *pwProcName,
+                               SQLSMALLINT cchProcName, SQLWCHAR *pwColumnName,
+                               SQLSMALLINT cchColumnName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLProcedureColumnsW(
+        iCallOrRet, iRc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName,
+        cchSchemaName, pwProcName, cchProcName, pwColumnName, cchColumnName);
+        logger.process();
+    }
+}
+
+void TraceSQLProceduresW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                         SQLWCHAR *pwCatalogName, SQLSMALLINT cchCatalogName,
+                         SQLWCHAR *pwSchemaName, SQLSMALLINT cchSchemaName,
+                         SQLWCHAR *pwProcName, SQLSMALLINT cchProcName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLProceduresW(iCallOrRet, iRc, phstmt, pwCatalogName,
+                                    cchCatalogName, pwSchemaName, cchSchemaName,
+                                    pwProcName, cchProcName);
+        logger.process();
+    }
+}
+
+void TraceSQLSpecialColumnsW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                             SQLUSMALLINT hIdenType, SQLWCHAR *pwCatalogName,
+                             SQLSMALLINT cchCatalogName, SQLWCHAR *pwSchemaName,
+                             SQLSMALLINT cchSchemaName, SQLWCHAR *pwTableName,
+                             SQLSMALLINT cchTableName, SQLUSMALLINT hScope,
+                             SQLUSMALLINT hNullable) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLSpecialColumnsW(
+        iCallOrRet, iRc, phstmt, hIdenType, pwCatalogName, cchCatalogName,
+        pwSchemaName, cchSchemaName, pwTableName, cchTableName, hScope,
+        hNullable);
+        logger.process();
+    }
+}
+
+void TraceSQLStatisticsW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                         SQLWCHAR *pwCatalogName, SQLSMALLINT cchCatalogName,
+                         SQLWCHAR *pwSchemaName, SQLSMALLINT cchSchemaName,
+                         SQLWCHAR *pwTableName, SQLSMALLINT cchTableName,
+                         SQLUSMALLINT hUnique, SQLUSMALLINT hReserved) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLStatisticsW(
+        iCallOrRet, iRc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName,
+        cchSchemaName, pwTableName, cchTableName, hUnique, hReserved);
+        logger.process();
+    }
+}
+
+void TraceSQLTablePrivilegesW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                              SQLWCHAR *pwCatalogName,
+                              SQLSMALLINT cchCatalogName,
+                              SQLWCHAR *pwSchemaName, SQLSMALLINT cchSchemaName,
+                              SQLWCHAR *pwTableName, SQLSMALLINT cchTableName) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLTablePrivilegesW(
+        iCallOrRet, iRc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName,
+        cchSchemaName, pwTableName, cchTableName);
+        logger.process();
+    }
+}
+
+void TraceSQLTablesW(int iCallOrRet, SQLRETURN iRc, SQLHSTMT phstmt,
+                     SQLWCHAR *pwCatalogName, SQLSMALLINT cchCatalogName,
+                     SQLWCHAR *pwSchemaName, SQLSMALLINT cchSchemaName,
+                     SQLWCHAR *pwTableName, SQLSMALLINT cchTableName,
+                     SQLWCHAR *pwTableType, SQLSMALLINT cchTableType) {
+    if (getRsLoglevel() >= LOG_LEVEL_DEBUG) {
+        RsTrace logger;
+        logger.TraceSQLTablesW(
+        iCallOrRet, iRc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName,
+        cchSchemaName, pwTableName, cchTableName, pwTableType, cchTableType);
+        logger.process();
+    }
+}
+

@@ -29,7 +29,6 @@ CPP_SRCS += \
 ../iam/RsCredentials.cpp \
 ../iam/RsErrorException.cpp \
 ../iam/RsIamEntry.cpp \
-../iam/RsLogger.cpp \
 ../iam/RsIamClient.cpp \
 ../iam/RsIamHelper.cpp \
 ../iam/http/AddrInformation.cpp \
@@ -87,7 +86,6 @@ OBJS += \
 ./RsCredentials.o \
 ./RsErrorException.o \
 ./RsIamEntry.o \
-./RsLogger.o \
 ./RsIamClient.o \
 ./RsIamHelper.o \
 ./AddrInformation.o \
@@ -148,7 +146,6 @@ C_DEPS += \
   ./RsCredentials.d \
   ./RsErrorException.d \
   ./RsIamEntry.d \
-  ./RsLogger.d \
   ./RsIamClient.d \
   ./RsIamHelper.d \
   ./AddrInformation.d \
@@ -195,21 +192,21 @@ endif
 %.o: ../%.c 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ $(MYFLAGS) -I../iam -I../iam/core  -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 $(MYFLAGS) -I../iam -I../iam/core -I${ROOT_DIR}/src/logging  -I${ROOT_DIR}/src/pgclient/src/interfaces/libpq -I${ROOT_DIR}/src/pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../%.cpp
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ $(MYFLAGS) -I../iam -I../iam/core -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 $(MYFLAGS) -I../iam -I../iam/core -I${ROOT_DIR}/src/logging -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -I${ROOT_DIR}/src/pgclient/src/interfaces/libpq -I${ROOT_DIR}/src/pgclient/src/include -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../iam/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++17 $(MYFLAGS) -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 $(MYFLAGS) -I${ROOT_DIR}/src/logging -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I${ROOT_DIR}/src/pgclient/src/interfaces/libpq -I${ROOT_DIR}/src/pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
@@ -217,20 +214,27 @@ endif
 %.o : ../iam/http/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++17 $(MYFLAGS) -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 $(MYFLAGS) -I${ROOT_DIR}/src/logging -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR} -I${ROOT_DIR}/src/pgclient/src/interfaces/libpq -I${ROOT_DIR}/src/pgclient/src/include  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../iam/core/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++17 $(MYFLAGS) -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR}  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 $(MYFLAGS) -I${ROOT_DIR}/src/logging -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I${ROOT_DIR}/src/pgclient/src/interfaces/libpq -I${ROOT_DIR}/src/pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR}  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
 %.o : ../iam/plugins/%.cpp 
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -std=gnu++17 $(MYFLAGS) -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I../../../pgclient/src/interfaces/libpq -I../../../pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR}  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -std=gnu++17 $(MYFLAGS) -I${ROOT_DIR}/src/logging -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I${ROOT_DIR}/src/pgclient/src/interfaces/libpq -I${ROOT_DIR}/src/pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR}  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	@echo 'Finished building: $<'
+	@echo ' '
+
+%.o : ../../../logging/%.cpp 
+	@echo 'Building file: $<'
+	@echo 'Invoking: GCC C++ Compiler'
+	g++ -std=gnu++17 $(MYFLAGS) -I${ROOT_DIR}/src/logging -I.. -I../iam -I../iam/core -I../iam/plugins -I../iam/http -I${ROOT_DIR}/src/pgclient/src/interfaces/libpq -I${ROOT_DIR}/src/pgclient/src/include -I${OPENSSL_INC_DIR} -I${AWS_SDK_INC_DIR} -I${CURL_INC_DIR}  -ggdb -gdwarf-3 -g -Wall -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '

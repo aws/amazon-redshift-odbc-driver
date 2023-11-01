@@ -1912,7 +1912,6 @@ int RS_CONN_INFO::readAuthProfile(int append)
 		try
 		{
 			char *pAuthProfileConnStr;
-			pConn->iamLogger.traceEnable = IS_TRACE_ON();
 			RS_IAM_CONN_PROPS_INFO *pIamProps = pConn->pConnectProps->pIamProps;
 
 			// Copy some DB Properties required for IAM
@@ -1920,8 +1919,7 @@ int RS_CONN_INFO::readAuthProfile(int append)
 
 			pAuthProfileConnStr = RsIamEntry::ReadAuthProfile(pConn->pConnectProps->isIAMAuth,
 				pIamProps,
-				pConn->pConnectProps->pHttpsProps,
-				&(pConn->iamLogger));
+				pConn->pConnectProps->pHttpsProps);
 			if (pAuthProfileConnStr && *pAuthProfileConnStr != '\0')
 			{
 				// Parse the input string for all
@@ -2085,18 +2083,18 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
           sscanf(pval, "%d", &pConnAttr->iTrace);
 
           if (pConnAttr->iTrace == SQL_OPT_TRACE_ON)
-                            pConnectProps->iTraceLevel = TRACE_DEBUG;
+                            pConnectProps->iTraceLevel = LOG_LEVEL_DEBUG;
           else if (pConnAttr->iTrace == SQL_OPT_TRACE_OFF)
-                            pConnectProps->iTraceLevel = TRACE_OFF;
+                            pConnectProps->iTraceLevel = LOG_LEVEL_OFF;
         } else if (_stricmp(pname, RS_TRACE_FILE) == 0) {
                         pConnAttr->pTraceFile = (char *)rs_free(pConnAttr->pTraceFile);
           pConnAttr->pTraceFile = rs_strdup(pval, SQL_NTS);
         } else if (_stricmp(pname, RS_TRACE_LEVEL) == 0) {
           sscanf(pval, "%d", &pConnectProps->iTraceLevel);
 
-          if (pConnectProps->iTraceLevel == TRACE_DEBUG)
+          if (pConnectProps->iTraceLevel == LOG_LEVEL_DEBUG)
                             pConnAttr->iTrace = SQL_OPT_TRACE_ON;
-          else if (pConnectProps->iTraceLevel == TRACE_OFF)
+          else if (pConnectProps->iTraceLevel == LOG_LEVEL_OFF)
                             pConnAttr->iTrace = SQL_OPT_TRACE_OFF;
         } else if (_stricmp(pname, RS_CSC_ENABLE) == 0) {
           sscanf(pval, "%d", &pConnectProps->iCscEnable);
@@ -2889,10 +2887,10 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
 
         RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_TRACE, &(pConnAttr->iTrace));
         if(pConnAttr->iTrace == SQL_OPT_TRACE_ON)
-            pConnectProps->iTraceLevel = TRACE_DEBUG;
+            pConnectProps->iTraceLevel = LOG_LEVEL_DEBUG;
         else
         if(pConnAttr->iTrace == SQL_OPT_TRACE_OFF)
-            pConnectProps->iTraceLevel = TRACE_OFF;
+            pConnectProps->iTraceLevel = LOG_LEVEL_OFF;
 
         if(pConnAttr->pTraceFile == NULL || pConnAttr->pTraceFile[0] == '\0')
         {
@@ -2903,10 +2901,10 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
         }
 
         RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_TRACE_LEVEL, &(pConnectProps->iTraceLevel));
-        if(pConnectProps->iTraceLevel == TRACE_DEBUG)
+        if(pConnectProps->iTraceLevel == LOG_LEVEL_DEBUG)
             pConnAttr->iTrace = SQL_OPT_TRACE_ON;
         else
-        if(pConnectProps->iTraceLevel == TRACE_OFF)
+        if(pConnectProps->iTraceLevel == LOG_LEVEL_OFF)
             pConnAttr->iTrace = SQL_OPT_TRACE_OFF;
 
         // Read CSC related parameters
@@ -3210,8 +3208,7 @@ static void invokeNativePluginAuthentication(RS_CONN_INFO* pConn, bool isIAMAuth
     RsIamEntry::NativePluginAuthentication(isIAMAuth,
         pConn->pConnectProps->pIamProps,
         pConn->pConnectProps->pHttpsProps,
-        pConn->iamSettings,
-        &(pConn->iamLogger));
+        pConn->iamSettings);
 }
 
 static void copyIdpToken(RS_IAM_CONN_PROPS_INFO* pIamProps, const std::string& web_identity_token) {
@@ -3229,7 +3226,6 @@ static SQLRETURN handleFederatedNonIamConnection(RS_CONN_INFO* pConn) {
     if (pIamProps && (pIamProps->szPluginName[0] != '\0') &&
         (_stricmp(pIamProps->szPluginName, PLUGIN_IDP_TOKEN_AUTH) == 0 ||
          _stricmp(pIamProps->szPluginName, PLUGIN_BROWSER_IDC_AUTH) == 0)) {
-        pConn->iamLogger.traceEnable = IS_TRACE_ON();
         copyCommonConnectionProperties(pIamProps, pConnectProps);
         pConnectProps->isNativeAuth = true;
 
@@ -3281,8 +3277,6 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
 		// Do IAM authentication and get derived user name and the temp db password
 		try
 		{
-			pConn->iamLogger.traceEnable = IS_TRACE_ON();
-
 			if (pIamProps->szPluginName[0] != '\0'
 				&& _stricmp(pIamProps->szPluginName, IAM_PLUGIN_BROWSER_AZURE_OAUTH2) == 0)
 			{
@@ -3295,8 +3289,7 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
 				RsIamEntry::IamAuthentication(pConn->pConnectProps->isIAMAuth,
 					pConn->pConnectProps->pIamProps,
 					pConn->pConnectProps->pHttpsProps,
-					pConn->iamSettings,
-					&(pConn->iamLogger));
+					pConn->iamSettings);
 			}
 		}
 		catch (RsErrorException& ex)

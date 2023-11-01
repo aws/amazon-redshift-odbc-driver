@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "../rs_iam_support.h"
-#include "../RsLogger.h"
+
 #include <ares.h>
 #include <ares_dns.h>
 #if defined LINUX
@@ -124,8 +124,7 @@ namespace IamSupport
         rs_string m_awsRegion;
         /// @brief Destructor.
 
-        static void AresCallBack(void* arg, int status, int timeouts, struct hostent* hostent_result,  RsLogger* m_log);
-        RsLogger* m_log;
+        static void AresCallBack(void* arg, int status, int timeouts, struct hostent* hostent_result);
 
 #ifdef WIN32
        static std::wstring GetLastErrorText();

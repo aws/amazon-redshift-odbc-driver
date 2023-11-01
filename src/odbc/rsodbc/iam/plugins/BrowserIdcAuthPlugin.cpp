@@ -50,25 +50,25 @@ namespace {
 }
 
 BrowserIdcAuthPlugin::BrowserIdcAuthPlugin(
-    RsLogger *in_log, const IAMConfiguration &in_config,
+    const IAMConfiguration &in_config,
     const std::map<rs_string, rs_string> &in_argsMap)
-    : NativePluginCredentialsProvider(in_log, in_config, in_argsMap) {
-    RS_LOG(m_log)("BrowserIdcAuthPlugin::BrowserIdcAuthPlugin");
-    RS_LOG(m_log)("Current UTC time:%ld", system_clock::to_time_t(system_clock::now()));
+    : NativePluginCredentialsProvider(in_config, in_argsMap) {
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::BrowserIdcAuthPlugin");
+    RS_LOG_DEBUG("IAMIDC", "Current UTC time:%ld", system_clock::to_time_t(system_clock::now()));
     InitArgumentsMap();
 }
 
 BrowserIdcAuthPlugin::~BrowserIdcAuthPlugin() {
-    RS_LOG(m_log)("BrowserIdcAuthPlugin::~BrowserIdcAuthPlugin");
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::~BrowserIdcAuthPlugin");
 }
 
 rs_string BrowserIdcAuthPlugin::GetAuthToken() {
-    RS_LOG(m_log)("BrowserIdcAuthPlugin::GetAuthToken");
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::GetAuthToken");
     return GetIdcToken();
 }
 
 void BrowserIdcAuthPlugin::InitArgumentsMap() {
-    RS_LOG(m_log)("BrowserIdcAuthPlugin::InitArgumentsMap");
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::InitArgumentsMap");
 
     const rs_string startUrl = m_config.GetStartUrl();
     const rs_string idcRegion = m_config.GetIdcRegion();
@@ -76,19 +76,19 @@ void BrowserIdcAuthPlugin::InitArgumentsMap() {
 
     if (!IAMUtils::rs_trim(startUrl).empty()) {
         m_argsMap[KEY_IDC_START_URL] = startUrl;
-        RS_LOG(m_log)("Setting start_url=%s", startUrl.c_str());
+        RS_LOG_DEBUG("IAMIDC", "Setting start_url=%s", startUrl.c_str());
     }
     if (!IAMUtils::rs_trim(idcRegion).empty()) {
         m_argsMap[KEY_IDC_REGION] = idcRegion;
-        RS_LOG(m_log)("Setting idc_region=%s", idcRegion.c_str());
+        RS_LOG_DEBUG("IAMIDC", "Setting idc_region=%s", idcRegion.c_str());
     }
     
     if (idcResponseTimeout >= 10) { // minimum allowed timeout value is 10 secs 
         m_argsMap[KEY_IDC_RESPONSE_TIMEOUT] = std::to_string(idcResponseTimeout);
-        RS_LOG(m_log)("Setting idc_response_timeout=%s", m_argsMap[KEY_IDC_RESPONSE_TIMEOUT].c_str());
+        RS_LOG_DEBUG("IAMIDC", "Setting idc_response_timeout=%s", m_argsMap[KEY_IDC_RESPONSE_TIMEOUT].c_str());
     } else {
         m_argsMap[KEY_IDC_RESPONSE_TIMEOUT] = std::to_string(DEFAULT_BROWSER_AUTH_VERIFY_TIMEOUT);
-        RS_LOG(m_log)("Setting idc_response_timeout=%s; provided value=%d", 
+        RS_LOG_DEBUG("IAMIDC", "Setting idc_response_timeout=%s; provided value=%d", 
                         m_argsMap[KEY_IDC_RESPONSE_TIMEOUT].c_str(), idcResponseTimeout);
     }
     
@@ -99,14 +99,14 @@ void BrowserIdcAuthPlugin::InitArgumentsMap() {
     m_idcClientDisplayName = m_config.GetIdcClientDisplayName().empty()
                                   ? DEFAULT_IDC_CLIENT_DISPLAY_NAME
                                   : m_config.GetIdcClientDisplayName();
-    RS_LOG(m_log)("Setting display application name=%s", m_idcClientDisplayName.c_str());
+    RS_LOG_DEBUG("IAMIDC", "Setting display application name=%s", m_idcClientDisplayName.c_str());
 
     m_registerClientCacheKey =
         m_idcClientDisplayName + ":" + idcRegion;
 }
 
 rs_string BrowserIdcAuthPlugin::GetIdcToken() {
-    RS_LOG(m_log)("BrowserIdcAuthPlugin::GetIdcToken");
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::GetIdcToken");
     ValidateArgumentsMap();
 
     SSOOIDCClient idc_client =
@@ -130,19 +130,19 @@ rs_string BrowserIdcAuthPlugin::GetIdcToken() {
 }
 
 void BrowserIdcAuthPlugin::ValidateArgumentsMap() {
-    RS_LOG(m_log)("BrowserIdcAuthPlugin::ValidateArgumentsMap");
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::ValidateArgumentsMap");
 
     // Validate the parameters passed in and make sure we have the required fields.
     if (!m_argsMap.count(KEY_IDC_START_URL)) {
-        RS_LOG(m_log)
-        ("IdC authentication failed: start_url needs to be provided in "
+        RS_LOG_ERROR("IAMIDC",
+        "IdC authentication failed: start_url needs to be provided in "
          "connection params");
         IAMUtils::ThrowConnectionExceptionWithInfo(
             "IdC authentication failed: The start URL must be included in the "
             "connection parameters.");
     } else if (!m_argsMap.count(KEY_IDC_REGION)) {
-        RS_LOG(m_log)
-        ("IdC authentication failed: idc_region needs to be provided in "
+        RS_LOG_ERROR("IAMIDC",
+        "IdC authentication failed: idc_region needs to be provided in "
          "connection params");
         IAMUtils::ThrowConnectionExceptionWithInfo(
             "IdC authentication failed: The IdC region must be included in the "
@@ -152,7 +152,7 @@ void BrowserIdcAuthPlugin::ValidateArgumentsMap() {
 
 SSOOIDCClient BrowserIdcAuthPlugin::InitializeIdcClient(
     const std::string &in_idcRegion) {
-    RS_LOG(m_log)("BrowserIdcAuthPlugin::InitializeIdcClient");
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::InitializeIdcClient");
     Aws::Client::ClientConfiguration client_config;
     client_config.region = in_idcRegion;
     SSOOIDCClient client(client_config);
@@ -165,7 +165,7 @@ void BrowserIdcAuthPlugin::LogFailureResponse(
     int responseCode = static_cast<int>(outcome.GetError().GetResponseCode());
     std::string exceptionName = outcome.GetError().GetExceptionName();
     std::string errorMessage = (outcome.GetError()).GetMessage();
-    RS_LOG(m_log)("%s - Response code:%d; Exception name:%s; Error message:%s", 
+    RS_LOG_DEBUG("IAMIDC", "%s - Response code:%d; Exception name:%s; Error message:%s", 
         operation.c_str(), responseCode, exceptionName.c_str(), errorMessage.c_str());
 }
 
@@ -173,17 +173,17 @@ RegisterClientResult BrowserIdcAuthPlugin::RegisterClient(
     SSOOIDCClient &idc_client, const std::string &in_registerClientCacheKey,
     const std::string &in_idcClientDisplayName,
     const std::string &in_clientType, const std::string &in_scope) {
-    RS_LOG(m_log)("BrowserIdcAuthPlugin::RegisterClient");
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::RegisterClient");
 
     // Check if a RegisterClientResult exists in the cache and if it is not expired
     if (m_registerClientCache.count(in_registerClientCacheKey) > 0) {
         // check if RegisterClientResult found from cache is expired
         if (m_registerClientCache[in_registerClientCacheKey].GetClientSecretExpiresAt() >
             system_clock::to_time_t(system_clock::now())) {
-            RS_LOG(m_log)("Valid RegisterClientResult found from cache");
+            RS_LOG_DEBUG("IAMIDC", "Valid RegisterClientResult found from cache");
             return m_registerClientCache[in_registerClientCacheKey];
         } else {
-            RS_LOG(m_log)("RegisterClientResult found from cache is expired");
+            RS_LOG_DEBUG("IAMIDC", "RegisterClientResult found from cache is expired");
             m_registerClientCache.erase(in_registerClientCacheKey);
         }
     }
@@ -201,7 +201,7 @@ RegisterClientResult BrowserIdcAuthPlugin::RegisterClient(
     auto outcome = idc_client.RegisterClient(request);
 
     if(!outcome.IsSuccess()) {
-        RS_LOG(m_log)("Failed to register client with IdC");
+        RS_LOG_DEBUG("IAMIDC", "Failed to register client with IdC");
         HandleRegisterClientError(outcome);
     }
 
@@ -234,7 +234,7 @@ void BrowserIdcAuthPlugin::HandleRegisterClientError(
 StartDeviceAuthorizationResult BrowserIdcAuthPlugin::StartDeviceAuthorization(
     SSOOIDCClient &idc_client, const std::string &in_clientId,
     const std::string &in_clientSecret, const std::string &in_startUrl) {
-    RS_LOG(m_log)("BrowserIdcAuthPlugin::StartDeviceAuthorization");
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::StartDeviceAuthorization");
 
     StartDeviceAuthorizationRequest request;
     request.SetClientId(in_clientId);
@@ -244,7 +244,7 @@ StartDeviceAuthorizationResult BrowserIdcAuthPlugin::StartDeviceAuthorization(
     auto outcome = idc_client.StartDeviceAuthorization(request);
 
     if(!outcome.IsSuccess()) {
-        RS_LOG(m_log)("Failed to start device authorization with IdC");
+        RS_LOG_DEBUG("IAMIDC", "Failed to start device authorization with IdC");
         HandleStartDeviceAuthorizationError(outcome);
     }
 
@@ -282,7 +282,7 @@ void BrowserIdcAuthPlugin::HandleStartDeviceAuthorizationError(
 }
 
 void BrowserIdcAuthPlugin::LaunchBrowser(const std::string &uri) {
-    RS_LOG(m_log)("BrowserIdcAuthPlugin::LaunchBrowser");
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::LaunchBrowser");
 
     ValidateURL(uri);
 
@@ -318,7 +318,7 @@ void BrowserIdcAuthPlugin::LaunchBrowser(const std::string &uri) {
 	else
 #endif
 	{
-		RS_LOG(m_log)("Failed to open the URL in a web browser");
+		RS_LOG_ERROR("IAMIDC", "Failed to open the URL in a web browser");
 		IAMUtils::ThrowConnectionExceptionWithInfo(
             "IdC authentication failed : The URL can't be opened in a web browser.");
         }
@@ -329,7 +329,7 @@ std::string BrowserIdcAuthPlugin::PollForAccessToken(
     const RegisterClientResult &in_registerClientResult,
     const StartDeviceAuthorizationResult &in_startDeviceAuthorizationResult,
     const std::string &in_grantType) {
-    RS_LOG(m_log)("BrowserIdcAuthPlugin::PollForAccessToken");
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::PollForAccessToken");
 
     int browser_auth_timeout_in_sec = std::stoi(m_argsMap[KEY_IDC_RESPONSE_TIMEOUT]);
     auto pollingEndTime =
@@ -358,12 +358,12 @@ std::string BrowserIdcAuthPlugin::PollForAccessToken(
                     "IdC authentication failed : The credential token couldn't "
                     "be created.");
             }
-            RS_LOG(m_log)("Fetched an IdC token successfully");
+            RS_LOG_DEBUG("IAMIDC", "Fetched an IdC token successfully");
             return access_token;
         } else {
             const auto errorType = createTokenOutcome.GetError().GetErrorType();
             if (errorType == Aws::SSOOIDC::SSOOIDCErrors::AUTHORIZATION_PENDING) {
-	            RS_LOG(m_log)("Browser authorization pending from user");
+	            RS_LOG_DEBUG("IAMIDC", "Browser authorization pending from user");
 	            std::this_thread::sleep_for(seconds(pollingIntervalInSec));
 	        } else {
                 HandleCreateTokenError(createTokenOutcome);

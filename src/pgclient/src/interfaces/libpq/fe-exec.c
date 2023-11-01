@@ -29,6 +29,7 @@
 #endif
 
 #include "MessageLoopState.h"
+#include <rslog.h>
 
 /* keep this in same order as ExecStatusType in libpq-fe.h */
 char	   *const pgresStatus[] = {
@@ -964,7 +965,7 @@ pqSaveParameterStatus(PGconn *conn, const char *name, const char *value)
 	pgParameterStatus *prev;
 
 	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug, "pqSaveParameterStatus: '%s' = '%s'\n",
+		RS_LOG_DEBUG("ODBCPQ",  "pqSaveParameterStatus: '%s' = '%s'\n",
 				name, value);
 
 	/*

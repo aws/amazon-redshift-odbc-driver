@@ -1091,10 +1091,10 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
             pConnAttr->iTrace = iVal;
 
             if(pConnAttr->iTrace == SQL_OPT_TRACE_ON)
-                pConnectProps->iTraceLevel = TRACE_DEBUG;
+                pConnectProps->iTraceLevel = LOG_LEVEL_DEBUG;
             else
             if(pConnAttr->iTrace == SQL_OPT_TRACE_OFF)
-                pConnectProps->iTraceLevel = TRACE_OFF;
+                pConnectProps->iTraceLevel = LOG_LEVEL_OFF;
 
             break;
         }

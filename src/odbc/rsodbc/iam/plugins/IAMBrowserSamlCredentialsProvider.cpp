@@ -37,12 +37,11 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMBrowserSamlCredentialsProvider::IAMBrowserSamlCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMSamlPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMSamlPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::IAMBrowserSamlCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::IAMBrowserSamlCredentialsProvider");
 
     InitArgumentsMap();
 }
@@ -50,7 +49,7 @@ IAMBrowserSamlCredentialsProvider::IAMBrowserSamlCredentialsProvider(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserSamlCredentialsProvider::InitArgumentsMap()
 {
-    RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::InitArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::InitArgumentsMap");
     
     /* We grab the parameters needed to get the SAML Assertion and get the temporary IAM Credentials.
     We are using the base class implementation but we override for logging purposes. */
@@ -60,7 +59,7 @@ void IAMBrowserSamlCredentialsProvider::InitArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserSamlCredentialsProvider::ValidateArgumentsMap()
 {
-    RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::ValidateArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::ValidateArgumentsMap");
     
     /* We validate the parameters passed in and make sure we have the required fields. */
     if (!m_argsMap.count(IAM_KEY_LOGIN_URL))
@@ -89,7 +88,7 @@ void IAMBrowserSamlCredentialsProvider::ValidateArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserSamlCredentialsProvider::GetSamlAssertion()
 {
-    RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::GetSamlAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::GetSamlAssertion");
     
     /* All plugins must have this method implemented. We need to return the SAML Response back to base class.
     It is also good to make an entrance log to this method. */
@@ -99,7 +98,7 @@ rs_string IAMBrowserSamlCredentialsProvider::GetSamlAssertion()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 int IAMBrowserSamlCredentialsProvider::GenerateRandomInteger(int low, int high)
  {
-    RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::GenerateLength");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::GenerateLength");
 
     std::random_device rd;
     std::mt19937 generator(rd());
@@ -111,7 +110,7 @@ int IAMBrowserSamlCredentialsProvider::GenerateRandomInteger(int low, int high)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserSamlCredentialsProvider::GenerateState()
 {
-    RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::GenerateState");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::GenerateState");
 
     const char chars[] = "0123456789abcdefghijklmnopqrstuvwxyz";
     const int chars_size = (sizeof(chars) / sizeof(*chars)) - 1;
@@ -131,7 +130,7 @@ rs_string IAMBrowserSamlCredentialsProvider::GenerateState()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserSamlCredentialsProvider::LaunchBrowser(const rs_string& uri)
 {
-    RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::LaunchBrowser");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::LaunchBrowser");
 
 	// Avoid system calls where possible for LOGIN_URL to help avoid possible remote code execution
 #if (defined(_WIN32) || defined(_WIN64))
@@ -172,7 +171,7 @@ void IAMBrowserSamlCredentialsProvider::LaunchBrowser(const rs_string& uri)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserSamlCredentialsProvider::EraseLineFeeds(rs_string& str)
 {
-    RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::EraseLineFeeds");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::EraseLineFeeds");
 
     const rs_string linefeed = "\r\n";
     size_t pos = 0;
@@ -186,7 +185,7 @@ void IAMBrowserSamlCredentialsProvider::EraseLineFeeds(rs_string& str)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserSamlCredentialsProvider::WaitForServer(WEBServer& srv)
 {
-    RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::WaitForServer");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::WaitForServer");
 
     auto start = std::chrono::system_clock::now();
 
@@ -204,13 +203,13 @@ void IAMBrowserSamlCredentialsProvider::WaitForServer(WEBServer& srv)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserSamlCredentialsProvider::RequestSamlAssertion()
 {
-    RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::RequestSamlAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::RequestSamlAssertion");
     
     /*  Generate state to include in URI to prevent the cross-site request forgery attacks.
     This state will be verified in the token response.  */
     rs_string state = GenerateState();
     
-    WEBServer srv(m_log, state,
+    WEBServer srv(state,
     m_argsMap[IAM_KEY_LISTEN_PORT],
     m_argsMap[IAM_KEY_IDP_RESPONSE_TIMEOUT]);
     
@@ -243,7 +242,7 @@ rs_string IAMBrowserSamlCredentialsProvider::RequestSamlAssertion()
 
     EraseLineFeeds(SAMLResponse);
 
-    RS_LOG(m_log)("IAMBrowserSamlCredentialsProvider::RequestSamlAssertion %s",
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::RequestSamlAssertion %s",
         SAMLResponse.c_str());
     
     return SAMLResponse;

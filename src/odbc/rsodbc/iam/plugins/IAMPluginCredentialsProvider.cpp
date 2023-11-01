@@ -38,19 +38,18 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMPluginCredentialsProvider::IAMPluginCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMCredentialsProvider(in_log, in_config),
+    IAMCredentialsProvider( in_config),
     m_argsMap(in_argsMap)
 {
-    RS_LOG(m_log)("IAMPluginCredentialsProvider::IAMPluginCredentialsProvider");
+    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider::IAMPluginCredentialsProvider");
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMPluginCredentialsProvider::InitArgumentsMap()
 {
-    RS_LOG(m_log)("IAMPluginCredentialsProvider::InitArgumentsMap");
+    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider::InitArgumentsMap");
 
     /* Precedence of connection attributes: Connection String > Profile > SAML Assertion
     Set these connection attributes if they're already being set in the connection string */
@@ -193,7 +192,7 @@ void IAMPluginCredentialsProvider::InitArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMPluginCredentialsProvider::SaveSettings(const Aws::Auth::AWSCredentials& in_credentials) 
 {
-    RS_LOG(m_log)("IAMPluginCredentialsProvider::SaveSettings");
+    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider::SaveSettings");
 
     m_credentials.SetAWSCredentials(in_credentials);
 
@@ -224,7 +223,7 @@ void IAMPluginCredentialsProvider::SaveSettings(const Aws::Auth::AWSCredentials&
 std::shared_ptr<IAMHttpClient> IAMPluginCredentialsProvider::GetHttpClient(
     const HttpClientConfig& in_config)
 {
-    RS_LOG(m_log)( "IAMPluginCredentialsProvider", "GetHttpClient");
+    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider", "GetHttpClient");
 #ifdef _WIN32
     return Aws::MakeShared<IAMWinHttpClientDelegate>(LOG_TAG, in_config);
 #else
@@ -239,7 +238,7 @@ void IAMPluginCredentialsProvider::SetArgumentKeyValuePair(
     const rs_string& in_defaultValue,
     bool in_urlEncoded)
 {
-    RS_LOG(m_log)("IAMPluginCredentialsProvider::SetArgumentKeyValuePair");
+    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider::SetArgumentKeyValuePair");
 
     // foreach argument: 1. Connection String > 2: AWS Profile > 3: Default Value
     if (!in_value.empty())
@@ -331,7 +330,7 @@ void IAMPluginCredentialsProvider::GetXmlAttributeValues(
 std::vector<rs_string> IAMPluginCredentialsProvider::GetInputTagsFromHtml(
     const rs_string& in_htmlBody)
 {
-    RS_LOG(m_log)("IAMPluginCredentialsProvider::GetInputTagsFromHtml");
+    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider::GetInputTagsFromHtml");
     std::vector<rs_string> inputTags;
 
     std::smatch match;
@@ -351,7 +350,7 @@ std::vector<rs_string> IAMPluginCredentialsProvider::GetInputTagsFromHtml(
 std::map<rs_string, rs_string> IAMPluginCredentialsProvider::GetNameValuePairFromInputTag(
     const std::vector<rs_string>& in_inputTags)
 {
-    RS_LOG(m_log)("IAMPluginCredentialsProvider::GetNameValuePairFromInputTag");
+    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider::GetNameValuePairFromInputTag");
 
     std::map<rs_string, rs_string> paramMap;
     std::unordered_set<std::string> uniqueTagNames;
@@ -384,7 +383,7 @@ std::map<rs_string, rs_string> IAMPluginCredentialsProvider::GetNameValuePairFro
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMPluginCredentialsProvider::GetFormActionFromHtml(const rs_string& in_htmlBody)
 {
-    RS_LOG(m_log)("IAMPluginCredentialsProvider::GetFormActionFromHtml");
+    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider::GetFormActionFromHtml");
 
     std::smatch match;
     std::regex expression(FORM_ACTION_PATTERN);
@@ -397,7 +396,7 @@ rs_string IAMPluginCredentialsProvider::GetFormActionFromHtml(const rs_string& i
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMPluginCredentialsProvider::EscapeHtmlEntity(const rs_string& in_str)
 {
-    RS_LOG(m_log)( "IAMPluginCredentialsProvider", "EscapeHtmlEntity");
+    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider", "EscapeHtmlEntity");
 
     rs_string res = "";
     size_t length = in_str.size();

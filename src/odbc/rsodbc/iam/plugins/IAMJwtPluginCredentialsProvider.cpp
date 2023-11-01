@@ -20,18 +20,17 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMJwtPluginCredentialsProvider::IAMJwtPluginCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("IAMJwtPluginCredentialsProvider::IAMJwtPluginCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::IAMJwtPluginCredentialsProvider");
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 AWSCredentials IAMJwtPluginCredentialsProvider::GetAWSCredentials()
 {
-    RS_LOG(m_log)( "IAMJwtPluginCredentialsProvider", "GetAWSCredentials");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider", "GetAWSCredentials");
     /* return cached AWSCredentials from the IAMCredentialsHolder */
     if (CanUseCachedAwsCredentials())
     {
@@ -49,13 +48,13 @@ AWSCredentials IAMJwtPluginCredentialsProvider::GetAWSCredentials()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMJwtPluginCredentialsProvider::ValidateArgumentsMap()
 {
-    RS_LOG(m_log)("IAMJwtPluginCredentialsProvider::ValidateArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::ValidateArgumentsMap");
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMJwtPluginCredentialsProvider::DecodeBase64String(const rs_string& str)
 {
-    RS_LOG(m_log)( "IAMJwtPluginCredentialsProvider", "DecodeBase64String");
+    RS_LOG_DEBUG( "IAMJwtPluginCredentialsProvider", "DecodeBase64String");
     Base64::Base64 base64;
     ByteBuffer buf = base64.Decode(str);
     return rs_string(
@@ -65,7 +64,7 @@ rs_string IAMJwtPluginCredentialsProvider::DecodeBase64String(const rs_string& s
 
 void IAMJwtPluginCredentialsProvider::AlignPayloadToken(rs_string& str)
 {
-    RS_LOG(m_log)("IAMJwtPluginCredentialsProvider::AlignPayloadToken");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::AlignPayloadToken");
 
     int padding = str.size() % 4;
     if (padding != 0)
@@ -80,7 +79,7 @@ void IAMJwtPluginCredentialsProvider::AlignPayloadToken(rs_string& str)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 JWTAssertion IAMJwtPluginCredentialsProvider::DecodeJwtToken(const rs_string& jwt)
 {
-    RS_LOG(m_log)("IAMJwtPluginCredentialsProvider::DecodeJwtToken");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::DecodeJwtToken");
 
     std::vector<rs_string> tokens;
     std::stringstream ss(jwt);
@@ -88,7 +87,7 @@ JWTAssertion IAMJwtPluginCredentialsProvider::DecodeJwtToken(const rs_string& jw
 
     while (std::getline(ss, token, '.'))
     {
-        RS_LOG(m_log)("IAMJwtPluginCredentialsProvider::DecodeJwtToken ",
+        RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::DecodeJwtToken ",
             + "token: %s", token.c_str());
         tokens.push_back(token);
     }
@@ -107,7 +106,7 @@ JWTAssertion IAMJwtPluginCredentialsProvider::DecodeJwtToken(const rs_string& jw
         tokens[2]
     };
 
-    RS_LOG(m_log)("IAMJwtPluginCredentialsProvider::DecodeJwtToken ",
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::DecodeJwtToken ",
           + "Header: %s, Payload: %s, Signature: %s",
         jwtAssertion.header.c_str(),
         jwtAssertion.payload.c_str(),
@@ -119,7 +118,7 @@ JWTAssertion IAMJwtPluginCredentialsProvider::DecodeJwtToken(const rs_string& jw
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMJwtPluginCredentialsProvider::RetrieveDbUserField(const JWTAssertion& jwt)
 {
-    RS_LOG(m_log)("IAMJwtPluginCredentialsProvider::ParseJWTAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::ParseJWTAssertion");
 
     Json::JsonValue json(jwt.payload);
 
@@ -138,7 +137,7 @@ void IAMJwtPluginCredentialsProvider::RetrieveDbUserField(const JWTAssertion& jw
     {
         dbuser = GetValueByKeyFromJson(json, f);
 
-        RS_LOG(m_log)("IAMJwtPluginCredentialsProvider::RetrieveDbUserField ",
+        RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::RetrieveDbUserField ",
             + "%s: %s", f.c_str(), dbuser.c_str());
 
         if (!dbuser.empty())
@@ -162,7 +161,7 @@ void IAMJwtPluginCredentialsProvider::RetrieveDbUserField(const JWTAssertion& jw
 AWSCredentials IAMJwtPluginCredentialsProvider::GetAWSCredentialsWithJwt(
     const rs_string& in_jwtAssertion)
 {
-    RS_LOG(m_log)("IAMJwtPluginCredentialsProvider::GetAWSCredentialsWithJwt");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::GetAWSCredentialsWithJwt");
 
     if (in_jwtAssertion.empty())
     {
@@ -184,7 +183,7 @@ AWSCredentials IAMJwtPluginCredentialsProvider::AssumeRoleWithJwtRequest(
     const rs_string& in_roleArn,
     const rs_string& in_roleSessionName)
 {
-    RS_LOG(m_log)("IAMJwtPluginCredentialsProvider::AssumeRoleWithJwtRequest");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::AssumeRoleWithJwtRequest");
 
     ClientConfiguration config;
 
@@ -257,6 +256,6 @@ AWSCredentials IAMJwtPluginCredentialsProvider::AssumeRoleWithJwtRequest(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMJwtPluginCredentialsProvider::~IAMJwtPluginCredentialsProvider()
 {
-    RS_LOG(m_log)("IAMJwtPluginCredentialsProvider::~IAMJwtPluginCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::~IAMJwtPluginCredentialsProvider");
     /* Do nothing */
 }

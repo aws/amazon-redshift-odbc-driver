@@ -25,6 +25,14 @@ echo "AWS_SDK_LIB_DIR=${AWS_SDK_LIB_DIR}"
 echo "CURL_LIB_DIR=${CURL_LIB_DIR}"
 echo "ENABLE_CNAME=${ENABLE_CNAME}"
 
+# Build logger
+pushd src/logging
+make clean
+checkExitCode $?
+make
+checkExitCode $?
+popd
+
 # Build libpq & libpgport
 cd ./src/pgclient
 ./build64.sh

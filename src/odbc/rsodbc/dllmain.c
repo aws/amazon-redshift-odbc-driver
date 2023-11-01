@@ -16,8 +16,7 @@
 #include "rsodbc.h"
 #include "rsutil.h"
 #include "rsunicode.h"
-#include "rstrace.h"
-
+#include <rslog.h>
 
 /*====================================================================================================================================================*/
 
@@ -40,7 +39,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
             initODBC(hModule);
 
             if(IS_TRACE_LEVEL_DEBUG())
-                traceDebug("DLL_PROCESS_ATTACH");
+                RS_LOG_DEBUG("ODBCDLL", "DLL_PROCESS_ATTACH");
 
             break;
         }
@@ -48,7 +47,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
         case DLL_THREAD_ATTACH:
         {
             if(IS_TRACE_LEVEL_DEBUG())
-                traceDebug("DLL_THREAD_ATTACH");
+                RS_LOG_DEBUG("ODBCDLL", "DLL_THREAD_ATTACH");
 
             break;
         }
@@ -56,7 +55,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
         case DLL_THREAD_DETACH:
         {
             if(IS_TRACE_LEVEL_DEBUG())
-                traceDebug("DLL_THREAD_DETACH");
+                RS_LOG_DEBUG("ODBCDLL", "DLL_THREAD_DETACH");
 
             break;
         }
@@ -64,7 +63,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
         case DLL_PROCESS_DETACH:
         {
             if(IS_TRACE_LEVEL_DEBUG())
-                traceDebug("DLL_PROCESS_DETACH");
+                RS_LOG_DEBUG("ODBCDLL", "DLL_PROCESS_DETACH");
 
             uninitODBC();
 

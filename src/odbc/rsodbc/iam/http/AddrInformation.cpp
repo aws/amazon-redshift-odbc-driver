@@ -5,10 +5,9 @@
 #include <string.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-AddrInformation::AddrInformation(RsLogger *in_log, const rs_string& port)
-    : logger_(in_log)
+AddrInformation::AddrInformation( const rs_string& port)
 {
-    RS_LOG(logger_)("AddrInformation::AddrInformation");
+    RS_LOG_DEBUG("IAMHTTP", "AddrInformation::AddrInformation");
 
     addrinfo hints;
 

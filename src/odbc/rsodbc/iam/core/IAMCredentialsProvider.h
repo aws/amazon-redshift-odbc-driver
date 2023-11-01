@@ -3,7 +3,7 @@
 
 #include "IAMCredentials.h"
 #include "IAMConfiguration.h"
-#include "RsLogger.h"
+#include "rslog.h"
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include "../rs_iam_support.h"
 
@@ -16,11 +16,9 @@ namespace IamSupport
     {
     public:
         /// @brief Constructor        Construct credentials provider
-        /// @param in_log             The logger. (NOT OWN)
         /// @param in_config          The IAMConfiguration 
         explicit IAMCredentialsProvider(
-            RsLogger* in_log,
-            const IAMConfiguration& in_config = IAMConfiguration());
+                        const IAMConfiguration& in_config = IAMConfiguration());
 
         /// @brief  Get AWS credentials for the given credentials provider
         /// 
@@ -66,7 +64,6 @@ namespace IamSupport
 
 
         // The connection log. (NOT OWN)
-        RsLogger* m_log;
 
         // The IAMConfiguration contains all IAM related settings.
         const IAMConfiguration m_config;

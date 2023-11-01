@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RsLogger.h"
+#include "rslog.h"
 #include "SocketSupport.h"
 #include "Selector.h"
 #include "rs_string.h"
@@ -13,9 +13,9 @@
 class Socket
 {
     public:
-        Socket(RsLogger *in_log);
+        Socket();
         
-        Socket(RsLogger *in_log, SOCKET sfd);
+        Socket( SOCKET sfd);
         
         Socket(const Socket& s) = delete;
         
@@ -101,7 +101,6 @@ class Socket
         int Bind(const struct sockaddr *address, size_t address_len) const;
         
     private:
-        RsLogger *logger_;
 
         const int CONNECTION_BACKLOG = 10;
 
@@ -109,13 +108,13 @@ class Socket
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-inline Socket::Socket(RsLogger *in_log) : logger_(in_log), socket_fd_(INVALID_SOCKET)
+inline Socket::Socket() : socket_fd_(INVALID_SOCKET)
 {
     ; // Do nothing.
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-inline Socket::Socket(RsLogger *in_log, SOCKET sfd) : logger_(in_log), socket_fd_(sfd)
+inline Socket::Socket(SOCKET sfd) : socket_fd_(sfd)
 {
     ; // Do nothing.
 }
@@ -141,7 +140,7 @@ inline Socket& Socket::operator=(Socket&& s)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline Socket::~Socket()
 {
-  logger_->log("Socket::~Socket");
+  RS_LOG_DEBUG("IAM", "Socket::~Socket");
 
     Close();
 }
@@ -149,7 +148,7 @@ inline Socket::~Socket()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool Socket::SetNonBlocking() const
 {
-  logger_->log("Socket::SetNonBlocking");
+  RS_LOG_DEBUG("IAM", "Socket::SetNonBlocking");
 
 #if (defined(_WIN32) || defined(_WIN64))
     unsigned long mode = 1;
@@ -163,7 +162,7 @@ inline bool Socket::SetNonBlocking() const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool Socket::IsNonBlockingError() const
 {
-  logger_->log("Socket::IsNonBlockingError");
+  RS_LOG_DEBUG("IAM", "Socket::IsNonBlockingError");
 
 #if (defined(_WIN32) || defined(_WIN64))
     return WSAGetLastError() == WSAEWOULDBLOCK;
@@ -175,7 +174,7 @@ inline bool Socket::IsNonBlockingError() const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline void Socket::Register(Selector& selector) const
 {
-  logger_->log("Socket::Register");
+  RS_LOG_DEBUG("IAM", "Socket::Register");
 
     selector.Register(socket_fd_);
 }
@@ -183,7 +182,7 @@ inline void Socket::Register(Selector& selector) const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline void Socket::Unregister(Selector& selector) const
 {
-  logger_->log("Socket::Unregister");
+  RS_LOG_DEBUG("IAM", "Socket::Unregister");
     
     selector.Unregister(socket_fd_);
 }
@@ -191,7 +190,7 @@ inline void Socket::Unregister(Selector& selector) const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline int Socket::Bind(const struct sockaddr *address, size_t address_len) const
 {
-    logger_->log("Socket::Bind");
+    RS_LOG_DEBUG("IAM", "Socket::Bind");
 
     return bind(socket_fd_, address, (int)address_len);
 }
@@ -199,7 +198,7 @@ inline int Socket::Bind(const struct sockaddr *address, size_t address_len) cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline int Socket::GetListenPort() const
 {
-  logger_->log("Socket::GetListenPort");
+  RS_LOG_DEBUG("IAM", "Socket::GetListenPort");
 
     sockaddr_storage addr;
     socklen_t len = sizeof(addr);
@@ -208,7 +207,7 @@ inline int Socket::GetListenPort() const
     getsockname(socket_fd_, (struct sockaddr*)&addr, &len);
     port = htons(((sockaddr_in*)&addr)->sin_port);
 
-    logger_->log(
+    RS_LOG_DEBUG(
         "Socket::GetListenPort %s",
         std::to_string(port).c_str());
 
@@ -218,7 +217,7 @@ inline int Socket::GetListenPort() const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline int Socket::Listen(int backlog) const
 {
-  logger_->log("Socket::Listen");
+  RS_LOG_DEBUG("IAM", "Socket::Listen");
 
     return listen(socket_fd_, backlog);
 }
@@ -226,18 +225,18 @@ inline int Socket::Listen(int backlog) const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline Socket Socket::Accept() const
 {
-  logger_->log("Socket::Accept");
+  RS_LOG_DEBUG("IAM", "Socket::Accept");
 
     sockaddr_storage remoteaddr;
     socklen_t addrlen = sizeof(remoteaddr);
 
-    return Socket(logger_, accept(socket_fd_, (struct sockaddr*)&remoteaddr, &addrlen));
+    return Socket(accept(socket_fd_, (struct sockaddr*)&remoteaddr, &addrlen));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool Socket::SetReusable() const
 {
-  logger_->log("Socket::SetReusable");
+  RS_LOG_DEBUG("IAM", "Socket::SetReusable");
     
     int yes = 1;
 

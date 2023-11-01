@@ -22,8 +22,7 @@ namespace RedshiftODBC
         /// @brief Constructor.
         ///
         /// @param in_settings      The connection settings.
-        /// @param in_logger        The logger. (NOT OWN)
-        RsIamClient(const RsSettings& in_settings, RsLogger* in_logger);
+        RsIamClient(const RsSettings& in_settings);
 
 		/// @brief Connect to retrieve AWS IAM Credentials.
 		void Connect();
@@ -190,7 +189,6 @@ namespace RedshiftODBC
         RsCredentials m_credentials;
 
         // The driver log. (NOT OWN)
-        RsLogger* m_log;
     };
 
 }

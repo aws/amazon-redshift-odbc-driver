@@ -19,12 +19,13 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <rslog.h>
 
 // Golbal var
-extern FILE    *g_CscFpTrace; // Trace file handle, set if trace level is >= TRACE_INFO
+extern FILE    *g_CscFpTrace; // Trace file handle, set if trace level is >= LOG_LEVEL_INFO
 
 #define IS_TRACE_ON_CSC() (g_CscFpTrace != NULL)
-
+// #define IS_TRACE_ON_CSC() TRUE
 #define WRITE_INTO_TRACE_FILE_CSC() \
         if(g_CscFpTrace) \
         {                          \
@@ -36,7 +37,10 @@ extern FILE    *g_CscFpTrace; // Trace file handle, set if trace level is >= TRA
             va_end(args); \
         }
 
+//Deprecated
 void setTraceInfoCsc(FILE    *fpTrace);
-void traceInfoCsc(char *fmt,...);
+//redirec to trace level logging
+// void traceInfoCsc(char *fmt,...);
+#define traceInfoCsc(...) RS_LOG_INFO("ODBCPQ", __VA_ARGS__)
 
 

@@ -39,19 +39,18 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMBrowserAzureOAuth2CredentialsProvider::IAMBrowserAzureOAuth2CredentialsProvider(
-	RsLogger* in_log,
-	const IAMConfiguration& in_config,
+		const IAMConfiguration& in_config,
 	const std::map<rs_string, rs_string>& in_argsMap) :
-	IAMJwtPluginCredentialsProvider(in_log, in_config, in_argsMap)
+	IAMJwtPluginCredentialsProvider( in_config, in_argsMap)
 {
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::IAMBrowserAzureOAuth2CredentialsProvider");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::IAMBrowserAzureOAuth2CredentialsProvider");
 	InitArgumentsMap();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserAzureOAuth2CredentialsProvider::InitArgumentsMap()
 {
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::InitArgumentsMap");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::InitArgumentsMap");
 
 	/* We grab the parameters needed to get the OAUTH Assertion and get the temporary IAM Credentials.
 	We are using the base class implementation but we override for logging purposes. */
@@ -61,7 +60,7 @@ void IAMBrowserAzureOAuth2CredentialsProvider::InitArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserAzureOAuth2CredentialsProvider::ValidateArgumentsMap()
 {
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::ValidateArgumentsMap");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::ValidateArgumentsMap");
 
 	/* We validate the parameters passed in and make sure we have the required fields. */
 	if (!m_argsMap.count(IAM_KEY_IDP_TENANT))
@@ -83,7 +82,7 @@ void IAMBrowserAzureOAuth2CredentialsProvider::ValidateArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserAzureOAuth2CredentialsProvider::GetJwtAssertion()
 {
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::GetJwtAssertion");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::GetJwtAssertion");
 
 	/* All plugins must have this method implemented. We need to return the OAUTH Response back to base class.
 	It is also good to make an entrance log to this method. */
@@ -93,7 +92,7 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::GetJwtAssertion()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 int IAMBrowserAzureOAuth2CredentialsProvider::GenerateRandomInteger(int low, int high)
 {
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::GenerateLength");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::GenerateLength");
 
 	std::random_device rd;
 	std::mt19937 generator(rd());
@@ -105,7 +104,7 @@ int IAMBrowserAzureOAuth2CredentialsProvider::GenerateRandomInteger(int low, int
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserAzureOAuth2CredentialsProvider::GenerateState()
 {
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::GenerateState");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::GenerateState");
 
 	const char chars[] = "0123456789abcdefghijklmnopqrstuvwxyz";
 	const int chars_size = (sizeof(chars) / sizeof(*chars)) - 1;
@@ -125,7 +124,7 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::GenerateState()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser(const rs_string& uri)
 {
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser");
 
 	//  Avoid system calls where possible for LOGIN_URL to help avoid possible remote code execution
 #if (defined(_WIN32) || defined(_WIN64))
@@ -166,7 +165,7 @@ void IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser(const rs_string& ur
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserAzureOAuth2CredentialsProvider::WaitForServer(WEBServer& srv)
 {
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::WaitForServer");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::WaitForServer");
 
 	auto start = std::chrono::system_clock::now();
 
@@ -184,7 +183,7 @@ void IAMBrowserAzureOAuth2CredentialsProvider::WaitForServer(WEBServer& srv)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 {
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode");
 
 	/*  Generate state to include in URI to prevent the cross-site request forgery attacks.
 	This state will be verified in the token response.  */
@@ -193,7 +192,7 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 	/* Let the server to listen on the random free port on the system. */
 	rs_string random_port = "0";
 
-	WEBServer srv(m_log, state, random_port, m_argsMap[IAM_KEY_IDP_RESPONSE_TIMEOUT]);
+	WEBServer srv(state, random_port, m_argsMap[IAM_KEY_IDP_RESPONSE_TIMEOUT]);
 
 	/* Launch WEB Server to wait the response with the authorization code from /oauth2/authorize/. */
 	srv.LaunchServer();
@@ -219,7 +218,7 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 			"&state=" +
 			state;
 
-		RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode",
+		RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode",
 			"uri=%s\n",uri.c_str());
 
 
@@ -248,7 +247,7 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_string& authCode)
 {
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken");
 
 	/* By default we enable verifying server certificate, use argument ssl_insecure = true to disable
 	verifying the server certificate (e.g., self-signed IDP server) */
@@ -279,7 +278,7 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 	config.m_caFile = m_config.GetCaFile();
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken ",
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken ",
 		"HttpClientConfig.m_timeout: %ld",
 		config.m_timeout);
 
@@ -309,7 +308,7 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 		requestHeader,
 		requestBody);
 
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken: response %s\n", response.GetResponseBody().c_str());
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken: response %s\n", response.GetResponseBody().c_str());
 
 	IAMHttpClient::CheckHttpResponseStatus(response,
 		"Authentication failed on the Browser server. Please check the IdP Tenant and Client ID.");
@@ -324,7 +323,7 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserAzureOAuth2CredentialsProvider::BrowserOauthBasedAuthentication()
 {
-	RS_LOG(m_log)("IAMBrowserAzureOAuth2CredentialsProvider::BrowserOauthBasedAuthentication");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::BrowserOauthBasedAuthentication");
 
 	const rs_string authCode = RequestAuthorizationCode();
 

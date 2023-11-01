@@ -42,6 +42,7 @@
 #include "fe-auth.h"
 #include "libpq/md5.h"
 
+#include <rslog.h>
 
 #ifdef KRB5
 /*
@@ -346,8 +347,7 @@ pg_GSS_error(const char *mprefix, PGconn *conn,
 	/* Add the minor codes as well */
 	pg_GSS_error_int(&conn->errorMessage, mprefix, min_stat, GSS_C_MECH_CODE);
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_GSS_error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "No error");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "No error");
 }
 
 /*
@@ -360,11 +360,9 @@ pg_GSS_continue(PGconn *conn)
 				min_stat,
 				lmin_s;
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_GSS_continue() called\n");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue() called\n");
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_GSS_continue(): Before gss_init_sec_context() called\n");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue(): Before gss_init_sec_context() called\n");
 
 	maj_stat = gss_init_sec_context(&min_stat,
 									GSS_C_NO_CREDENTIAL,
@@ -380,8 +378,7 @@ pg_GSS_continue(PGconn *conn)
 									NULL,
 									NULL);
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_GSS_continue(): After gss_init_sec_context() called\n");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue(): After gss_init_sec_context() called\n");
 
 	if (conn->gctx != GSS_C_NO_CONTEXT)
 	{
@@ -392,8 +389,7 @@ pg_GSS_continue(PGconn *conn)
 
 	if (conn->goutbuf.length != 0)
 	{
-		if (conn->Pfdebug)
-			fprintf(conn->Pfdebug,"pg_GSS_continue(): Before pqPacketSend() called\n");
+		RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue(): Before pqPacketSend() called\n");
 
 		/*
 		 * GSS generated data to send to the server. We don't care if it's the
@@ -406,45 +402,38 @@ pg_GSS_continue(PGconn *conn)
 		{
 			gss_release_buffer(&lmin_s, &conn->goutbuf);
 
-			if (conn->Pfdebug)
-				fprintf(conn->Pfdebug,"pg_GSS_continue() return error, when trying to send packet.\n");
+			RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue() return error, when trying to send packet.\n");
 
 			return STATUS_ERROR;
 		}
 	}
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_GSS_continue(): Before gss_release_buffer() called\n");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue(): Before gss_release_buffer() called\n");
 
 	gss_release_buffer(&lmin_s, &conn->goutbuf);
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_GSS_continue(): After gss_release_buffer() called\n");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue(): After gss_release_buffer() called\n");
 
 	if (maj_stat != GSS_S_COMPLETE && maj_stat != GSS_S_CONTINUE_NEEDED)
 	{
-		if (conn->Pfdebug)
-			fprintf(conn->Pfdebug,"pg_GSS_continue(): Before pg_GSS_error() called\n");
+		RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue(): Before pg_GSS_error() called\n");
 
 		pg_GSS_error(libpq_gettext("GSSAPI continuation error"),
 					 conn,
 					 maj_stat, min_stat);
 
-		if (conn->Pfdebug)
-			fprintf(conn->Pfdebug,"pg_GSS_continue(): Before gss_release_name() called\n");
+		RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue(): Before gss_release_name() called\n");
 
 		gss_release_name(&lmin_s, &conn->gtarg_nam);
 
 		if (conn->gctx)
 		{
-			if (conn->Pfdebug)
-				fprintf(conn->Pfdebug,"pg_GSS_continue(): Before gss_delete_sec_context() called\n");
+			RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue(): Before gss_delete_sec_context() called\n");
 
 			gss_delete_sec_context(&lmin_s, &conn->gctx, GSS_C_NO_BUFFER);
 		}
 
-		if (conn->Pfdebug)
-				fprintf(conn->Pfdebug,"pg_GSS_continue(): return error\n");
+		RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue(): return error\n");
 
 		return STATUS_ERROR;
 	}
@@ -452,8 +441,7 @@ pg_GSS_continue(PGconn *conn)
 	if (maj_stat == GSS_S_COMPLETE)
 		gss_release_name(&lmin_s, &conn->gtarg_nam);
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_GSS_continue() return\n");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_continue() return\n");
 
 	return STATUS_OK;
 }
@@ -469,15 +457,13 @@ pg_GSS_startup(PGconn *conn)
 	int			maxlen;
 	gss_buffer_desc temp_gbuf;
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_GSS_startup() called\n");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_startup() called\n");
 
 	if (!(conn->pghost && conn->pghost[0] != '\0'))
 	{
 		printfPQExpBuffer(&conn->errorMessage,
 						  libpq_gettext("host name must be specified\n"));
-		if (conn->Pfdebug)
-			fprintf(conn->Pfdebug,"pg_GSS_startup() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
+		RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_startup() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
 
 		return STATUS_ERROR;
 	}
@@ -487,8 +473,7 @@ pg_GSS_startup(PGconn *conn)
 		printfPQExpBuffer(&conn->errorMessage,
 					libpq_gettext("duplicate GSS authentication request\n"));
 
-		if (conn->Pfdebug)
-			fprintf(conn->Pfdebug,"pg_GSS_startup() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
+		RS_LOG_DEBUG("ODBC-PQ", "pg_GSS_startup() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
 
 		return STATUS_ERROR;
 	}
@@ -499,9 +484,9 @@ pg_GSS_startup(PGconn *conn)
 	 */
 	maxlen = NI_MAXHOST + strlen(conn->krbsrvname) + 2;
 	temp_gbuf.value = (char *) malloc(maxlen);
-	snprintf(temp_gbuf.value, maxlen, "%s@%s",
+	snprintf((char *) temp_gbuf.value, maxlen, "%s@%s",
 			 conn->krbsrvname, conn->pghost);
-	temp_gbuf.length = strlen(temp_gbuf.value);
+	temp_gbuf.length = strlen((char *)temp_gbuf.value);
 
 	maj_stat = gss_import_name(&min_stat, &temp_gbuf,
 							   GSS_C_NT_HOSTBASED_SERVICE, &conn->gtarg_nam);
@@ -545,8 +530,7 @@ pg_SSPI_error(PGconn *conn, const char *mprefix, SECURITY_STATUS r)
 		printfPQExpBuffer(&conn->errorMessage, "%s: %s (%x)",
 						  mprefix, sysmsg, (unsigned int) r);
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_SSPI_error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_SSPI_error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
 }
 
 /*
@@ -563,8 +547,7 @@ pg_SSPI_continue(PGconn *conn)
 	SecBuffer	OutBuffers[1];
 	SecBuffer	InBuffers[1];
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_SSPI_continue() called\n");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_SSPI_continue() called\n");
 
 	if (conn->sspictx != NULL)
 	{
@@ -614,8 +597,7 @@ pg_SSPI_continue(PGconn *conn)
 		if (conn->sspictx == NULL)
 		{
 			printfPQExpBuffer(&conn->errorMessage, libpq_gettext("out of memory\n"));
-			if (conn->Pfdebug)
-				fprintf(conn->Pfdebug,"pg_SSPI_continue() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
+			RS_LOG_DEBUG("ODBC-PQ", "pg_SSPI_continue() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
 
 			return STATUS_ERROR;
 		}
@@ -646,8 +628,7 @@ pg_SSPI_continue(PGconn *conn)
 			 * authentication methods later.
 			 */
 			printfPQExpBuffer(&conn->errorMessage, "SSPI returned invalid number of output buffers\n");
-			if (conn->Pfdebug)
-				fprintf(conn->Pfdebug,"pg_SSPI_continue() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
+			RS_LOG_DEBUG("ODBC-PQ", "pg_SSPI_continue() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
 
 			return STATUS_ERROR;
 		}
@@ -664,8 +645,7 @@ pg_SSPI_continue(PGconn *conn)
 			{
 				FreeContextBuffer(outbuf.pBuffers[0].pvBuffer);
 
-				if (conn->Pfdebug)
-					fprintf(conn->Pfdebug,"pg_SSPI_continue() return error, when trying to send packet.\n");
+				RS_LOG_DEBUG("ODBC-PQ", "pg_SSPI_continue() return error, when trying to send packet.\n");
 
 				return STATUS_ERROR;
 			}
@@ -673,8 +653,7 @@ pg_SSPI_continue(PGconn *conn)
 		FreeContextBuffer(outbuf.pBuffers[0].pvBuffer);
 	}
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_SSPI_continue() return\n");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_SSPI_continue() return\n");
 
 	/* Cleanup is handled by the code in freePGconn() */
 	return STATUS_OK;
@@ -695,8 +674,7 @@ pg_SSPI_startup(PGconn *conn, int use_negotiate)
 
 	conn->sspictx = NULL;
 
-	if (conn->Pfdebug)
-		fprintf(conn->Pfdebug,"pg_SSPI_startup() called\n");
+	RS_LOG_DEBUG("ODBC-PQ", "pg_SSPI_startup() called\n");
 
 	/*
 	 * Retreive credentials handle
@@ -705,8 +683,7 @@ pg_SSPI_startup(PGconn *conn, int use_negotiate)
 	if (conn->sspicred == NULL)
 	{
 		printfPQExpBuffer(&conn->errorMessage, libpq_gettext("out of memory\n"));
-		if (conn->Pfdebug)
-			fprintf(conn->Pfdebug,"pg_SSPI_startup() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
+		RS_LOG_DEBUG("ODBC-PQ", "pg_SSPI_startup() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
 
 		return STATUS_ERROR;
 	}
@@ -737,8 +714,7 @@ pg_SSPI_startup(PGconn *conn, int use_negotiate)
 	{
 		printfPQExpBuffer(&conn->errorMessage,
 						  libpq_gettext("host name must be specified\n"));
-		if (conn->Pfdebug)
-			fprintf(conn->Pfdebug,"pg_SSPI_startup() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
+		RS_LOG_DEBUG("ODBC-PQ", "pg_SSPI_startup() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
 
 		return STATUS_ERROR;
 	}
@@ -747,8 +723,7 @@ pg_SSPI_startup(PGconn *conn, int use_negotiate)
 	if (!conn->sspitarget)
 	{
 		printfPQExpBuffer(&conn->errorMessage, libpq_gettext("out of memory\n"));
-		if (conn->Pfdebug)
-			fprintf(conn->Pfdebug,"pg_SSPI_startup() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
+		RS_LOG_DEBUG("ODBC-PQ", "pg_SSPI_startup() return error:%s\n", (conn->errorMessage.data != NULL) ? conn->errorMessage.data : "");
 
 		return STATUS_ERROR;
 	}
@@ -1064,8 +1039,7 @@ pg_fe_sendauth(AuthRequest areq, PGconn *conn)
 
 				pglock_thread();
 
-				if (conn->Pfdebug)
-					fprintf(conn->Pfdebug,"pg_fe_sendauth:areq=%d\n", areq);
+				RS_LOG_DEBUG("ODBC-PQ", "pg_fe_sendauth:areq=%d\n", areq);
 
 
 				/*

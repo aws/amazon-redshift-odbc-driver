@@ -29,12 +29,10 @@ namespace {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMProfileCredentialsProvider::IAMProfileCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config) :
+        const IAMConfiguration& in_config) :
     ProfileConfigFileAWSCredentialsProvider(
         in_config.GetProfileName().c_str(), 
         Aws::Auth::REFRESH_THRESHOLD),
-    m_log(in_log),
     m_config(in_config),
     m_profileToUse(in_config.GetProfileName()),
     m_configFileLoader(
@@ -46,7 +44,9 @@ IAMProfileCredentialsProvider::IAMProfileCredentialsProvider(
         PROFILE_LOG_TAG,
         GetCredentialsProfileFilename()))
 {
-  m_log->log("Redshift::IamSuppor::%s::%s()t", "IAMProfileCredentialsProvider", "IAMProfileCredentialsProvider");
+    RS_LOG_DEBUG("IAM", "Redshift::IamSuppor::%s::%s()t",
+                 "IAMProfileCredentialsProvider",
+                 "IAMProfileCredentialsProvider");
 
     /* Use default profile to look up IAM profile configurations */
     if (m_profileToUse.empty())
@@ -67,7 +67,8 @@ IAMProfileCredentialsProvider::IAMProfileCredentialsProvider(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials()
 {
-  m_log->log("Redshift::IamSupport::%s::%s()", "IAMProfileCredentialsProvider", "GetAWSCredentials");
+    RS_LOG_DEBUG("IAM", "Redshift::IamSupport::%s::%s()",
+                 "IAMProfileCredentialsProvider", "GetAWSCredentials");
     /* return cached AWSCredentials */
     if (CanUseCachedAwsCredentials())
     {
@@ -83,7 +84,8 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string& in_profile)
 {
-  m_log->log("Redshift::IamSupport::%s::%s()", "IAMProfileCredentialsProvider", "GetAWSCredentials");
+    RS_LOG_DEBUG("IAM", "Redshift::IamSupport::%s::%s()",
+                 "IAMProfileCredentialsProvider", "GetAWSCredentials");
     /* check for profile type:
     1. Default profile
     2. Role-based profile
@@ -99,13 +101,13 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
 
     if (!IAMUtils::isEmpty(pluginName))
     {
-      m_log->log(
-            "IAMProfileCredentialsProvider.GetAWSCredentials() Using plugin based profile: %s",
-            pluginName.c_str());
+        RS_LOG_DEBUG("IAM",
+                     "IAMProfileCredentialsProvider.GetAWSCredentials() Using "
+                     "plugin based profile: %s",
+                     pluginName.c_str());
 
         std::unique_ptr<IAMPluginCredentialsProvider> plugin = IAMPluginFactory::CreatePlugin(
             IAMUtils::trim(pluginName),
-            m_log, 
             m_config,
             profile.GetProfileAttributes());
 
@@ -120,9 +122,10 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
     }
     else if (!roleArn.empty())
     {
-      m_log->log(
-            "IAMProfileCredentialsProvider.GetAWSCredentials Using role based profile: %s",
-            roleArn.c_str());
+        RS_LOG_DEBUG("IAM",
+                     "IAMProfileCredentialsProvider.GetAWSCredentials Using "
+                     "role based profile: %s",
+                     roleArn.c_str());
 
         /* role-based profile */
         const rs_string sourceProfile = profile.GetSourceProfile();
@@ -132,13 +135,15 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
     }
 	else if (!IAMUtils::isEmpty(credential_process))
 	{
-		m_log->log(
-			"IAMProfileCredentialsProvider.GetAWSCredentials Using credential process based profile: %s",
-			credential_process.c_str());
+        RS_LOG_DEBUG("IAM",
+                     "IAMProfileCredentialsProvider.GetAWSCredentials Using "
+                     "credential process based profile: %s",
+                     credential_process.c_str());
 
-		/* credential process profile */
-		ProcessCredentialsProvider  processCredentialsProvider(profile.GetName());
-		return processCredentialsProvider.GetAWSCredentials();
+        /* credential process profile */
+        ProcessCredentialsProvider processCredentialsProvider(
+            profile.GetName());
+        return processCredentialsProvider.GetAWSCredentials();
 	}
 
     
@@ -164,11 +169,9 @@ IAMProfile IAMProfileCredentialsProvider::LoadProfile(const rs_string& in_profil
     /* keep track of each chained profile */
     m_chainedProfiles.insert(in_profile);
 
-    m_log->log(
-        "Redshift::IamSupport::%s::%s() Loading profile: %s",
-        "IAMProfileCredentialsProvider",
-        "LoadProfile",
-        in_profile.c_str());
+    RS_LOG_DEBUG("IAM", "Redshift::IamSupport::%s::%s() Loading profile: %s",
+                 "IAMProfileCredentialsProvider", "LoadProfile",
+                 in_profile.c_str());
 
     /* load profiles from credentials file if credentials file loader is empty */
     if (m_credentialsFileLoader->GetProfiles().empty())
@@ -205,7 +208,7 @@ AWSCredentials IAMProfileCredentialsProvider::AssumeRole(
 	const rs_string& in_roleSessionName,
     const std::shared_ptr<AWSCredentialsProvider>& in_credentialsProvider)
 {
-    m_log->log("Redshift::IamSupport::%s::%s()", "IAMProfileCredentialsProvider", "AssumeRole");
+    RS_LOG_DEBUG("IAM","Redshift::IamSupport::%s::%s()", "IAMProfileCredentialsProvider", "AssumeRole");
 
     ClientConfiguration config;
 
@@ -235,13 +238,16 @@ AWSCredentials IAMProfileCredentialsProvider::AssumeRole(
 	config.connectTimeoutMs = m_config.GetStsConnectionTimeout();
 	config.requestTimeoutMs = m_config.GetStsConnectionTimeout();
 
-	m_log->log("Redshift::IamSupport::%s::%s(): httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld", "IAMProfileCredentialsProvider", "AssumeRole",
-				config.httpRequestTimeoutMs, config.connectTimeoutMs, config.requestTimeoutMs);
+    RS_LOG_DEBUG("IAM",
+                    "Redshift::IamSupport::%s::%s(): httpRequestTimeoutMs: "
+                    "%ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
+                    "IAMProfileCredentialsProvider", "AssumeRole",
+                    config.httpRequestTimeoutMs, config.connectTimeoutMs,
+                    config.requestTimeoutMs);
 
-
-    STSClient client(in_credentialsProvider, config);
-    Model::AssumeRoleRequest request = Model::AssumeRoleRequest();
-    request.SetRoleArn(in_roleArn);
+        STSClient client(in_credentialsProvider, config);
+        Model::AssumeRoleRequest request = Model::AssumeRoleRequest();
+        request.SetRoleArn(in_roleArn);
 
 	// Support role_session_name in the AWS Profile
 	if (!in_roleSessionName.empty())
@@ -254,20 +260,21 @@ AWSCredentials IAMProfileCredentialsProvider::AssumeRole(
 		request.SetRoleSessionName(roleSessionName);
 	}
 
-	m_log->log("IAMProfileCredentialsProvider::AssumeRole: Calling client.AssumeRole with role_arn: %s and role_session_name: %s",
-		request.GetRoleArn().c_str(),
-		request.GetRoleSessionName().c_str());
+        RS_LOG_DEBUG(
+            "IAM",
+            "IAMProfileCredentialsProvider::AssumeRole: Calling "
+            "client.AssumeRole with role_arn: %s and role_session_name: %s",
+            request.GetRoleArn().c_str(), request.GetRoleSessionName().c_str());
 
-    Model::AssumeRoleOutcome outcome = client.AssumeRole(request);
+        Model::AssumeRoleOutcome outcome = client.AssumeRole(request);
 
-    if (!outcome.IsSuccess())
-    {
-        const AWSError<STSErrors>& error = outcome.GetError();
-        const rs_string& exceptionName = error.GetExceptionName();
-        const rs_string& errorMessage = error.GetMessage();
+        if (!outcome.IsSuccess()) {
+            const AWSError<STSErrors> &error = outcome.GetError();
+            const rs_string &exceptionName = error.GetExceptionName();
+            const rs_string &errorMessage = error.GetMessage();
 
-        rs_string fullErrorMsg = exceptionName + ": " + errorMessage;
-        IAMUtils::ThrowConnectionExceptionWithInfo(fullErrorMsg);
+            rs_string fullErrorMsg = exceptionName + ": " + errorMessage;
+            IAMUtils::ThrowConnectionExceptionWithInfo(fullErrorMsg);
     }
 
     const Model::Credentials& credentials = outcome.GetResult().GetCredentials();
@@ -333,7 +340,8 @@ IAMCredentials IAMProfileCredentialsProvider::GetIAMCredentials()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool IAMProfileCredentialsProvider::CanUseCachedAwsCredentials()
 {
-    m_log->log("Redshift::IamSupport::%s::%s()", "IAMProfileCredentialsProvider", "CanUseCachedAwsCredentials");
+    RS_LOG_DEBUG("IAM", "Redshift::IamSupport::%s::%s()",
+                 "IAMProfileCredentialsProvider", "CanUseCachedAwsCredentials");
     return 
         ((!m_credentials.GetAWSCredentials().GetAWSAccessKeyId().empty())
             && (!m_credentials.GetAWSCredentials().GetAWSSecretKey().empty()));
@@ -343,6 +351,9 @@ bool IAMProfileCredentialsProvider::CanUseCachedAwsCredentials()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMProfileCredentialsProvider::~IAMProfileCredentialsProvider()
 {
-    m_log->log("Redshift::IamSupport::%s::%s()" "IAMProfileCredentialsProvider", "~IAMProfileCredentialsProvider");
+    RS_LOG_DEBUG("IAM",
+                 "Redshift::IamSupport::%s::%s()"
+                 "IAMProfileCredentialsProvider",
+                 "~IAMProfileCredentialsProvider");
     /* Do nothing */
 }

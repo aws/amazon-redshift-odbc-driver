@@ -10,26 +10,25 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 JwtIamAuthPlugin::JwtIamAuthPlugin(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMJwtPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMJwtPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("JwtIamAuthPlugin::JwtIamAuthPlugin");
+    RS_LOG_DEBUG("IAMJWT", "JwtIamAuthPlugin::JwtIamAuthPlugin");
     InitArgumentsMap();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void JwtIamAuthPlugin::InitArgumentsMap()
 {
-    RS_LOG(m_log)( "JwtIamAuthPlugin::InitArgumentsMap");
+    RS_LOG_DEBUG("IAMJWT", "JwtIamAuthPlugin::InitArgumentsMap");
     IAMPluginCredentialsProvider::InitArgumentsMap();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void JwtIamAuthPlugin::ValidateArgumentsMap()
 {
-    RS_LOG(m_log)("JwtIamAuthPlugin::ValidateArgumentsMap");
+    RS_LOG_DEBUG("IAMJWT", "JwtIamAuthPlugin::ValidateArgumentsMap");
 
     if (!m_argsMap.count(IAM_KEY_WEB_IDENTITY_TOKEN))
     {
@@ -52,7 +51,7 @@ void JwtIamAuthPlugin::ValidateArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string JwtIamAuthPlugin::GetJwtAssertion()
 {
-    RS_LOG(m_log)("JwtIamAuthPlugin::GetJwtAssertion");
+    RS_LOG_DEBUG("IAMJWT", "JwtIamAuthPlugin::GetJwtAssertion");
     rs_string jwt = m_argsMap[IAM_KEY_WEB_IDENTITY_TOKEN];
     return jwt;
 }
@@ -60,6 +59,6 @@ rs_string JwtIamAuthPlugin::GetJwtAssertion()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 JwtIamAuthPlugin::~JwtIamAuthPlugin()
 {
-    RS_LOG(m_log)("JwtIamAuthPlugin::~JwtIamAuthPlugin");
+    RS_LOG_DEBUG("IAMJWT", "JwtIamAuthPlugin::~JwtIamAuthPlugin");
     /* Do nothing */
 }

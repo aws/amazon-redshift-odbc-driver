@@ -9,26 +9,25 @@ namespace
 }
 
 NativePluginCredentialsProvider::NativePluginCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("NativePluginCredentialsProvider::NativePluginCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "NativePluginCredentialsProvider::NativePluginCredentialsProvider");
 }
 
 AWSCredentials NativePluginCredentialsProvider::GetAWSCredentials()
 {
-    RS_LOG(m_log)("NativePluginCredentialsProvider::GetAWSCredentials");
+    RS_LOG_DEBUG("IAMCRD", "NativePluginCredentialsProvider::GetAWSCredentials");
     return AWSCredentials();
 }
 
 void NativePluginCredentialsProvider::ValidateArgumentsMap()
 {
-    RS_LOG(m_log)("NativePluginCredentialsProvider::ValidateArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "NativePluginCredentialsProvider::ValidateArgumentsMap");
 }
 
 NativePluginCredentialsProvider::~NativePluginCredentialsProvider()
 {
-    RS_LOG(m_log)("NativePluginCredentialsProvider::~NativePluginCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "NativePluginCredentialsProvider::~NativePluginCredentialsProvider");
 }

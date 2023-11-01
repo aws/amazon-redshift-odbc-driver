@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void Parser::ParseRequestLine(rs_string& str)
 {
-    RS_LOG(logger_)("Parser::ParseRequestLine");
+    RS_LOG_DEBUG("IAMHTTP", "Parser::ParseRequestLine");
 
     std::istringstream istr(str);
     std::vector<rs_string> command(
@@ -32,7 +32,7 @@ void Parser::ParseRequestLine(rs_string& str)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void Parser::ParseHeaderLine(rs_string& str)
 {
-    RS_LOG(logger_)("Parser::ParseHeaderLine");
+    RS_LOG_DEBUG("IAMHTTP", "Parser::ParseHeaderLine");
 
     if (str == "\r")
     {
@@ -60,7 +60,7 @@ void Parser::ParseHeaderLine(rs_string& str)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void Parser::ParseBodyLine(rs_string& str)
 {
-    RS_LOG(logger_)("Parser::ParseBodyLine");
+    RS_LOG_DEBUG("IAMHTTP", "Parser::ParseBodyLine");
 
     auto str_begin = str.begin();
     auto str_end = str.end();
@@ -96,9 +96,9 @@ void Parser::ParseBodyLine(rs_string& str)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void Parser::ParsePostRequest(rs_string& str)
 {
-    RS_LOG(logger_)("Parser::ParsePostRequest");
+    RS_LOG_DEBUG("IAMHTTP", "Parser::ParsePostRequest");
 
-    RS_LOG(logger_)("Parser::ParsePostRequest request line: %s", str.c_str());
+    RS_LOG_DEBUG("IAMHTTP", "Parser::ParsePostRequest request line: %s", str.c_str());
 
     switch (parser_state_)
     {
@@ -142,7 +142,7 @@ void Parser::ParsePostRequest(rs_string& str)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 STATUS Parser::Parse(std::istream &in)
 {
-    RS_LOG(logger_)("Parser::Parse");
+    RS_LOG_DEBUG("IAMHTTP", "Parser::Parse");
 
     rs_string str;
     bool parse_result = true;
@@ -158,7 +158,7 @@ STATUS Parser::Parse(std::istream &in)
         }
         catch (std::exception& e)
         {
-            RS_LOG(logger_)("Parser::Parse %s", e.what());
+            RS_LOG_DEBUG("IAMHTTP", "Parser::Parse %s", e.what());
 
             break;
         }

@@ -25,19 +25,18 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMOktaCredentialsProvider::IAMOktaCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMSamlPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMSamlPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("IAMOktaCredentialsProvider::IAMOktaCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::IAMOktaCredentialsProvider");
     InitArgumentsMap();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMOktaCredentialsProvider::InitArgumentsMap()
 {
-    RS_LOG(m_log)("IAMOktaCredentialsProvide::InitArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvide::InitArgumentsMap");
     IAMPluginCredentialsProvider::InitArgumentsMap();
 
     const rs_string appId = m_config.GetAppId();
@@ -54,7 +53,7 @@ void IAMOktaCredentialsProvider::InitArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMOktaCredentialsProvider::ValidateArgumentsMap()
 {
-    RS_LOG(m_log)("IAMOktaCredentialsProvider::ValidateArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::ValidateArgumentsMap");
 
     IAMSamlPluginCredentialsProvider::ValidateArgumentsMap();
 
@@ -69,12 +68,12 @@ void IAMOktaCredentialsProvider::ValidateArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
 {
-    RS_LOG(m_log)("IAMOktaCredentialsProvider", "GetSamlAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider", "GetSamlAssertion");
     /* By default we enable verifying server certificate, use argument ssl_insecure = true to disable
     verifying the server certificate (e.g., self-signed IDP server) */
     bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
 
-    RS_LOG(m_log)("IAMOktaCredentialsProvider::GetSamlAssertion ",
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetSamlAssertion ",
         + "verifySSL: %s",
         shouldVerifySSL ? "true" : "false");
 
@@ -84,7 +83,7 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
     config.m_caFile = m_config.GetCaFile();
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
-	RS_LOG(m_log)("IAMOktaCredentialsProvider", "GetSamlAssertion ",
+	RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider", "GetSamlAssertion ",
 		"HttpClientConfig.m_timeout: %ld",
 		config.m_timeout);
 
@@ -109,7 +108,7 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
         "?onetimetoken=" + 
         sessionToken;
 
-    RS_LOG(m_log)("IAMOktaCredentialsProvider::GetSamlAssertion ",
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetSamlAssertion ",
         + "Using URI: %s",
         uri.c_str());
 
@@ -117,7 +116,7 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
 	ValidateURL(uri);
 
     Redshift::IamSupport::HttpResponse response = client->MakeHttpRequest(uri);
-	RS_LOG(m_log)("IAMOktaCredentialsProvider::GetSamlAssertion: response %s\n", response.GetResponseBody().c_str());
+	RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetSamlAssertion: response %s\n", response.GetResponseBody().c_str());
 
     IAMHttpClient::CheckHttpResponseStatus(response,
         "Failed to retrieve SAML assertion from the Okta server. Please check App ID and App Name.");
@@ -136,7 +135,7 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
 rs_string IAMOktaCredentialsProvider::GetAuthSessionToken(
     const std::shared_ptr<IAMHttpClient>& in_httpClient)
 {
-    RS_LOG(m_log)("IAMOktaCredentialsProvider", "GetAuthSessionToken");
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider", "GetAuthSessionToken");
 
     if (!in_httpClient)
     {
@@ -145,7 +144,7 @@ rs_string IAMOktaCredentialsProvider::GetAuthSessionToken(
 
     const rs_string uri = "https://" + m_argsMap[IAM_KEY_IDP_HOST] + "/api/v1/authn";
 
-    RS_LOG(m_log)("IAMOktaCredentialsProvider::GetAuthSessionToken "
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetAuthSessionToken "
          "Using URI: %s",
         uri.c_str());
 
@@ -170,7 +169,7 @@ rs_string IAMOktaCredentialsProvider::GetAuthSessionToken(
     Redshift::IamSupport::HttpResponse response =
         in_httpClient->MakeHttpRequest(uri, HttpMethod::HTTP_POST, requestHeader, requestBody);
 
-    RS_LOG(m_log)("IAMOktaCredentialsProvider::GetAuthSessionToken "
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetAuthSessionToken "
          "Response Code: %d, Response Header: %s, Response Body: %s",
         response.GetStatusCode(),
         response.GetResponseHeader().c_str(),
@@ -199,6 +198,6 @@ rs_string IAMOktaCredentialsProvider::GetAuthSessionToken(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMOktaCredentialsProvider::~IAMOktaCredentialsProvider()
 {
-    RS_LOG(m_log)("IAMOktaCredentialsProvider::~IAMOktaCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::~IAMOktaCredentialsProvider");
     /* Do nothing */
 }

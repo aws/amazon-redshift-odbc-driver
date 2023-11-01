@@ -5,7 +5,7 @@
 #include "Socket.h"
 
 #include "rs_string.h"
-#include "RsLogger.h"
+#include "rslog.h"
 
 #include <thread>
 #include <atomic>
@@ -18,8 +18,7 @@
 class WEBServer
 {
     public:
-        WEBServer(RsLogger* in_log,
-            rs_string& state,
+        WEBServer(            rs_string& state,
             rs_string& port,
             rs_string& timeout);
         
@@ -82,7 +81,6 @@ class WEBServer
         */
         bool WEBServerInit();
 
-        RsLogger *logger_;
         rs_string state_;
         rs_string port_;
         int timeout_;
@@ -98,15 +96,14 @@ class WEBServer
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-inline WEBServer::WEBServer(RsLogger *in_log, rs_string& state,
+inline WEBServer::WEBServer( rs_string& state,
     rs_string& port, rs_string& timeout) :
-        logger_(in_log),
         state_(state),
         port_(port),
         timeout_(std::stoi(timeout)),
-        selector_(in_log),
-        parser_(in_log),
-        listen_socket_(in_log),
+        selector_(),
+        parser_(),
+        listen_socket_(),
         listen_port_(0),
         connections_counter_(0),
         listening_(false)
@@ -117,7 +114,7 @@ inline WEBServer::WEBServer(RsLogger *in_log, rs_string& state,
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline void WEBServer::LaunchServer()
 {
-  logger_->log("WEBServer::LaunchServer");
+  RS_LOG_DEBUG("IAM", "WEBServer::LaunchServer");
     
     // Create thread to launch the server to listen the incoming connection.
     // Waiting for the redirect response from the /oauth2/authorize.
@@ -127,7 +124,7 @@ inline void WEBServer::LaunchServer()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline void WEBServer::Join()
 {
-  logger_->log("WEBServer::Join");
+  RS_LOG_DEBUG("IAM", "WEBServer::Join");
 
     if (thread_.joinable())
     {
@@ -138,7 +135,7 @@ inline void WEBServer::Join()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline rs_string WEBServer::GetCode() const
 {
-  logger_->log("WEBServer::GetCode");
+  RS_LOG_DEBUG("IAM", "WEBServer::GetCode");
     
     return code_;
 }
@@ -146,7 +143,7 @@ inline rs_string WEBServer::GetCode() const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline int WEBServer::GetListenPort() const
 {
-  logger_->log("WEBServer::GetListenPort");
+  RS_LOG_DEBUG("IAM", "WEBServer::GetListenPort");
 
     return listen_port_;
 }
@@ -154,7 +151,7 @@ inline int WEBServer::GetListenPort() const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline rs_string WEBServer::GetSamlResponse() const
 {
-  logger_->log("WEBServer::GetSamlResponse");
+  RS_LOG_DEBUG("IAM", "WEBServer::GetSamlResponse");
     
     return saml_;
 }
@@ -162,7 +159,7 @@ inline rs_string WEBServer::GetSamlResponse() const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool WEBServer::IsListening() const
 {
-  logger_->log( "WEBServer::IsListening");
+  RS_LOG_DEBUG("IAM", "WEBServer::IsListening");
 
     return listening_.load();
 }
@@ -170,7 +167,7 @@ inline bool WEBServer::IsListening() const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool WEBServer::IsTimeout() const
 {
-  logger_->log("WEBServer::IsTimeout");
+  RS_LOG_DEBUG("IAM", "WEBServer::IsTimeout");
 
     return connections_counter_ > 0 ? false : true;
 }

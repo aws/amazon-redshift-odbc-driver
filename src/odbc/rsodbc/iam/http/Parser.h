@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rs_string.h"
-#include "RsLogger.h"
+#include "rslog.h"
 
 #include <vector>
 #include <unordered_map>
@@ -28,7 +28,7 @@ enum class STATUS
 class Parser {
     public:
 
-        Parser(RsLogger* in_log);
+        Parser();
 
         ~Parser() = default;
 
@@ -98,8 +98,6 @@ class Parser {
         const rs_string HTTP_VERSION = "HTTP/1.1";
         const int MAX_HEADER_SIZE = 8192;
                         
-        RsLogger* logger_;
-                        
         STATE parser_state_;
         size_t header_size_;
         std::unordered_map<rs_string, rs_string> header_;
@@ -108,9 +106,8 @@ class Parser {
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-inline Parser::Parser(RsLogger* in_log)
-    : logger_(in_log)
-    , parser_state_(STATE::PARSE_REQUEST)
+inline Parser::Parser()
+    : parser_state_(STATE::PARSE_REQUEST)
     , header_size_(0)
 {
     ; // Do nothing.
@@ -119,7 +116,7 @@ inline Parser::Parser(RsLogger* in_log)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline bool Parser::IsFinished() const
 {
-  logger_->log("Parser.IsFinished");
+  RS_LOG_DEBUG("IAM", "Parser.IsFinished");
 
     return parser_state_ == STATE::PARSE_FINISHED;
 }
@@ -127,7 +124,7 @@ inline bool Parser::IsFinished() const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline rs_string Parser::RetrieveAuthCode(rs_string& state)
  {
-  logger_->log("Parser.RetrieveAuthCode");
+  RS_LOG_DEBUG("IAM", "Parser.RetrieveAuthCode");
 
     if (body_.count("code") && body_.count("state") && (body_["state"] == state))
     {
@@ -140,7 +137,7 @@ inline rs_string Parser::RetrieveAuthCode(rs_string& state)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline rs_string Parser::RetrieveSamlResponse()
 {
-  logger_->log("Parser.RetrieveSamlResponse");
+  RS_LOG_DEBUG("IAM", "Parser.RetrieveSamlResponse");
 
     return body_.count("SAMLResponse") ? body_["SAMLResponse"] : "";
 }

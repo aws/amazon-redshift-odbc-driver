@@ -1,6 +1,6 @@
 #include "IAMSamlPluginCredentialsProvider.h"
 #include "IAMUtils.h"
-#include "RsLogger.h"
+#include "rslog.h"
 
 #include <regex>
 #include <aws/sts/STSClient.h>
@@ -42,18 +42,17 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMSamlPluginCredentialsProvider::IAMSamlPluginCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::IAMSamlPluginCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::IAMSamlPluginCredentialsProvider");
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 AWSCredentials IAMSamlPluginCredentialsProvider::GetAWSCredentials()
 {
-    RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::GetAWSCredentials");
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::GetAWSCredentials");
     /* return cached AWSCredentials from the IAMCredentialsHolder */
     if (CanUseCachedAwsCredentials())
     {
@@ -71,7 +70,7 @@ AWSCredentials IAMSamlPluginCredentialsProvider::GetAWSCredentials()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMSamlPluginCredentialsProvider::ValidateArgumentsMap()
 {
-    RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::ValidateArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::ValidateArgumentsMap");
 
     /* Set default port to 443 */
     if (!m_argsMap.count(IAM_KEY_IDP_PORT))
@@ -90,7 +89,7 @@ void IAMSamlPluginCredentialsProvider::ValidateArgumentsMap()
 AWSCredentials IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml(
     const rs_string& in_samlAssertion)
 {
-    RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml");
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml");
 
     if (in_samlAssertion.empty())
     {
@@ -98,7 +97,7 @@ AWSCredentials IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml(
             "Failed to retrieve SAML assertion. Please verify the connection settings.");
     }
 
-    RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml Saml Assertion: %s",
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml Saml Assertion: %s",
                     in_samlAssertion.c_str());
 
     Base64::Base64 base64;
@@ -179,7 +178,7 @@ AWSCredentials IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml(
     principalArn = IAMUtils::rs_trim(principalArn);
 
 
-    RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml "
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml "
            "Using RoleArn: %s, PrincipalArn: %s",
           roleArn.c_str(), principalArn.c_str());
 
@@ -195,7 +194,7 @@ AWSCredentials IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest(
     const rs_string& in_roleArn,
     const rs_string& in_principalArn)
 {
-    RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest");
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest");
 
     ClientConfiguration config;
     
@@ -231,7 +230,7 @@ AWSCredentials IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest(
 	config.connectTimeoutMs = m_config.GetStsConnectionTimeout();
 	config.requestTimeoutMs = m_config.GetStsConnectionTimeout();
 
-	RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest",
+	RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest",
 		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
 		config.httpRequestTimeoutMs, config.connectTimeoutMs, config.requestTimeoutMs);
 
@@ -287,7 +286,7 @@ rs_string IAMSamlPluginCredentialsProvider::ExtractSamlAssertion(
     const rs_string& in_content,
     const rs_string& in_pattern)
 {
-    RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::ExtractSamlAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::ExtractSamlAssertion");
 
     /* Extract samlAssertion from from the HTML content */
     std::smatch match;
@@ -307,7 +306,7 @@ rs_string IAMSamlPluginCredentialsProvider::ExtractSamlAssertion(
 void IAMSamlPluginCredentialsProvider::FilterDbGroups(
     std::vector<rs_string>& io_groups, const rs_string& in_reg_exp)
 {
-    RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::FilterDbGroups Filter %s", in_reg_exp.c_str());
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::FilterDbGroups Filter %s", in_reg_exp.c_str());
     
     if (in_reg_exp.empty() || io_groups.empty())
     {
@@ -320,7 +319,7 @@ void IAMSamlPluginCredentialsProvider::FilterDbGroups(
         bool is_excluded = regex_match(group, filter);
         if (is_excluded)
         {
-            RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::FilterDbGroups Exclude group %s", group.c_str());
+            RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::FilterDbGroups Exclude group %s", group.c_str());
         }
         return is_excluded;
     };
@@ -332,7 +331,7 @@ void IAMSamlPluginCredentialsProvider::FilterDbGroups(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMSamlPluginCredentialsProvider::ExtractArgsFromSamlAssertion(const Aws::Utils::Xml::XmlNode& in_rootNode)
 {
-    RS_LOG(m_log)( "IAMSamlPluginCredentialsProvider::ExtractArgsFromSamlAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::ExtractArgsFromSamlAssertion");
 
     std::vector<rs_string> response;
 
@@ -425,7 +424,7 @@ void IAMSamlPluginCredentialsProvider::GetSamlXmlAttributeValues(
     const rs_string& in_attrVal,
     std::vector<rs_string>& out_attrValues)
 {
-    RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::GetSamlXmlAttributeValues");
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::GetSamlXmlAttributeValues");
 
     GetXmlAttributeValues(in_rootNode, "Attribute", in_attrKey, in_attrVal, out_attrValues, true);
 }
@@ -433,6 +432,6 @@ void IAMSamlPluginCredentialsProvider::GetSamlXmlAttributeValues(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMSamlPluginCredentialsProvider::~IAMSamlPluginCredentialsProvider()
 {
-    RS_LOG(m_log)("IAMSamlPluginCredentialsProvider::~IAMSamlPluginCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::~IAMSamlPluginCredentialsProvider");
     /* Do nothing */
 }

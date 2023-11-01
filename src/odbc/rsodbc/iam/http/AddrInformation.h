@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RsLogger.h"
+#include "rslog.h"
 #include "rs_string.h"
 #include "SocketSupport.h"
 
@@ -43,7 +43,7 @@ private:
 class AddrInformation
 {
 public:
-    AddrInformation(RsLogger *in_log, const rs_string& port);
+    AddrInformation( const rs_string& port);
 
     ~AddrInformation();
 
@@ -56,7 +56,6 @@ public:
     AddrInformationIterator end() const;
 
 private:
-    RsLogger *logger_;
 
     addrinfo *addrinfo_;
 };
@@ -64,7 +63,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 inline AddrInformation::~AddrInformation()
 {
-   logger_->log( "AddrInformation::~AddrInformation");
+   RS_LOG_DEBUG("IAM", "AddrInformation::~AddrInformation");
 
    freeaddrinfo(addrinfo_);
 }

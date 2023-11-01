@@ -153,12 +153,11 @@ rs_string WindowsExecutable::Run()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMExternalCredentialsProvider::IAMExternalCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMSamlPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMSamlPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("IAMExternalCredentialsProvider::IAMExternalCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMExternalCredentialsProvider::IAMExternalCredentialsProvider");
 
     InitArgumentsMap();
 }
@@ -166,14 +165,14 @@ IAMExternalCredentialsProvider::IAMExternalCredentialsProvider(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMExternalCredentialsProvider::InitArgumentsMap()
 {
-    RS_LOG(m_log)("IAMExternalCredentialsProvider::InitArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMExternalCredentialsProvider::InitArgumentsMap");
     IAMPluginCredentialsProvider::InitArgumentsMap();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMExternalCredentialsProvider::ValidateArgumentsMap()
 {
-    RS_LOG(m_log)("IAMExternalCredentialsProvider::ValidateArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMExternalCredentialsProvider::ValidateArgumentsMap");
 
     return;
 }
@@ -181,7 +180,7 @@ void IAMExternalCredentialsProvider::ValidateArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMExternalCredentialsProvider::GetSamlAssertion()
 {
-    RS_LOG(m_log)("IAMExternalCredentialsProvider::GetSamlAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMExternalCredentialsProvider::GetSamlAssertion");
 
     return RunExecutable();
 }
@@ -189,7 +188,7 @@ rs_string IAMExternalCredentialsProvider::GetSamlAssertion()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMExternalCredentialsProvider::RunExecutable()
 {
-    RS_LOG(m_log)("IAMExternalCredentialsProvider::RunExecutable");
+    RS_LOG_DEBUG("IAMCRD", "IAMExternalCredentialsProvider::RunExecutable");
 #ifdef _WIN32
     rs_string pluginName = m_argsMap[IAM_KEY_PLUGIN_NAME];
     WindowsExecutable executable(IAMUtils::convertFromUTF8(pluginName));

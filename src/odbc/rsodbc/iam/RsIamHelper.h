@@ -13,7 +13,7 @@
 
 #include "RsCredentials.h"
 #include "RsSettings.h"
-#include "RsLogger.h"
+#include "rslog.h"
 #include "../rsiam.h"
 
 #define REDSHIFT_IAM
@@ -68,19 +68,18 @@ public:
     static void IamAuthentication(bool isIAMAuth,
                                     RS_IAM_CONN_PROPS_INFO *pIamProps,
                                     RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-                                    RsSettings& settings, RsLogger *logger);
+                                    RsSettings& settings);
 
 	// Entry point function from ODBC connection call for Native Auth
 	static void NativePluginAuthentication(bool isIAMAuth,
 		RS_IAM_CONN_PROPS_INFO *pIamProps,
 		RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-		RsSettings& settings, RsLogger *logger);
+		RsSettings& settings);
 
 	static char *  ReadAuthProfile(
 		bool isIAMAuth,
 		RS_IAM_CONN_PROPS_INFO *pIamProps,
-		RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-		RsLogger *logger);
+		RS_PROXY_CONN_PROPS_INFO *pHttpsProps);
 
 private:
     /// @brief Check whether if the cached IAM credentials are still valid
@@ -88,7 +87,7 @@ private:
     /// @param in_settings   Connection Settings
     ///
     /// @return  true if the cached IAM credentials are valid, else false
-    static bool IsValidIamCachedSettings(const RsSettings& in_settings, RsLogger *logger, bool isNativeAuth);
+    static bool IsValidIamCachedSettings(const RsSettings& in_settings, bool isNativeAuth);
 
     /// @brief Get cached IAM credentials (if valid) and store it.
     ///
@@ -99,7 +98,6 @@ private:
     static bool GetIamCachedSettings(
         RsCredentials& out_iamCredentials,
         const RsSettings& in_settings,
-		RsLogger *logger,
 		bool isNativeAuth);
 
     /// @brief Set cached IAM credentials (if valid) and store it.
@@ -108,8 +106,7 @@ private:
     /// @param in_settings      Connection Settings
     static void SetIamCachedSettings(
         const RsCredentials& in_iamCredentials,
-        const RsSettings& in_settings,
-		RsLogger *logger);
+        const RsSettings& in_settings);
 
     /// @brief Update the connection setting, giving the credentials retrieved from Iam authentication
     ///
@@ -127,8 +124,7 @@ private:
               bool isIAMAuth,
               RS_IAM_CONN_PROPS_INFO *pIamProps,
               RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-              RsSettings& settings,
-              RsLogger *logger);
+              RsSettings& settings);
 
     /// @brief Set the federated connection's common settings on PGOSettings
     ///
@@ -143,7 +139,7 @@ private:
 	/// @param in_settings              Connection Settings
 	///
 	/// @return The constucted key used to store and retrieve cached IAM credentials.
-	static rs_string GetCacheKey(const RsSettings& in_settings, RsLogger *logger);
+	static rs_string GetCacheKey(const RsSettings& in_settings);
 };
 
 

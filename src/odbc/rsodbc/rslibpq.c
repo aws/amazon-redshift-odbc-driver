@@ -16,7 +16,7 @@
 #ifdef LINUX
 #include <sys/utsname.h>
 #endif
-
+#include <rslog.h>
 
 #define MAX_CONNECT_PROPS 128
 
@@ -248,8 +248,8 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 #endif
 		if(IS_TRACE_LEVEL_DEBUG())
 		{
-			traceDebug("pConnectProps->szKerberosServiceName=%s", pConnectProps->szKerberosServiceName);
-			traceDebug("pConnectProps->szKerberosAPI=%s", pConnectProps->szKerberosAPI);
+			RS_LOG_DEBUG("RSLIBPQ", "pConnectProps->szKerberosServiceName=%s", pConnectProps->szKerberosServiceName);
+			RS_LOG_DEBUG("RSLIBPQ", "pConnectProps->szKerberosAPI=%s", pConnectProps->szKerberosAPI);
 		}
 
         if(pConnectProps->iStreamingCursorRows > 0)
@@ -342,7 +342,7 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 		ppKeywords[iCount] = "plugin_name";
 		ppValues[iCount++] = plugin_name;
 		if(IS_TRACE_LEVEL_DEBUG()) {
-			traceDebug("using plugin_name=%s", plugin_name);
+			RS_LOG_DEBUG("RSLIBPQ", "using plugin_name=%s", plugin_name);
 		}
 
 		// TCP Proxy
@@ -412,7 +412,7 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 			ppKeywords[iCount] = RS_IDENTITY_NAMESPACE;
 			ppValues[iCount++] = pConnectProps->pIamProps->szIdentityNamespace;
 			if(IS_TRACE_LEVEL_DEBUG()) {
-				traceDebug("using identity_namespace=%s", pConnectProps->pIamProps->szIdentityNamespace);
+				RS_LOG_DEBUG("RSLIBPQ", "using identity_namespace=%s", pConnectProps->pIamProps->szIdentityNamespace);
 			}
 		}
 
@@ -444,18 +444,31 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 		}
 
 		// This should be last parameter
-		if(IS_TRACE_LEVEL_DEBUG())
-		{
-			traceDebug("pConnectProps->iStreamingCursorRows=%d", pConnectProps->iStreamingCursorRows);
-			traceDebug("pConnectProps->iCscEnable=%d", pConnectProps->iCscEnable);
-			if(pConnectProps->iCscEnable)
-				traceDebug("Possible Cursor Mode (if rowset size exceed memory limit and may consume disk space): Client Side Cursor");
-			else
-			if(pConnectProps->iStreamingCursorRows > 0)
-				traceDebug("Possible Cursor Mode (if FWD only cursor): Streaming Cursor");
-			else
-				traceDebug("Possible Cursor Mode (may go OOM or slow down system depends on size of rows v/s actual physical memory): All-in-Memory Cursor");
-		}
+        if (IS_TRACE_LEVEL_DEBUG())
+        {
+            RS_LOG_DEBUG("RSLIBPQ",
+                            "pConnectProps->iStreamingCursorRows=%d",
+                            pConnectProps->iStreamingCursorRows);
+            RS_LOG_DEBUG("RSLIBPQ", "pConnectProps->iCscEnable=%d",
+                            pConnectProps->iCscEnable);
+            if (pConnectProps->iCscEnable) {
+                RS_LOG_DEBUG(
+                    "RSLIBPQ",
+                    "Possible Cursor Mode (if rowset size "
+                    "exceed memory limit and may consume disk "
+                    "space): Client Side Cursor");
+            } else if (pConnectProps->iStreamingCursorRows > 0) {
+                RS_LOG_DEBUG("RSLIBPQ", "Possible Cursor Mode (if FWD "
+                                         "only cursor): Streaming Cursor");
+            } else {
+                RS_LOG_DEBUG(
+                    "RSLIBPQ",
+                    "Possible Cursor Mode (may go OOM or slow "
+                    "down system depends on size of rows v/s "
+                    "actual physical memory): All-in-Memory "
+                    "Cursor");
+            }
+        }
 
 		szlibpqConnectionTraceFile[0] = '\0';
 		if(IS_TRACE_LEVEL_MSG_PROTOCOL())
@@ -487,19 +500,18 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
             pConn->pgConn = pgConn;
 
             // Enable libpq tracing
-            libpqTrace(pConn);
+            // libpqTrace(pConn); // Deprecated infavor of rslog
 
             pError = libpqErrorMsg(pConn);
 
             fail = (pError && *pError != '\0'); 
 
-			if(IS_TRACE_LEVEL_DEBUG())
-			{
-				if(pError)
-					traceDebug("pError=%s", pError);
-				else
-					traceDebug("No error after PQconnectdbParams");
-			}
+            if(pError) {
+                RS_LOG_ERROR("RSLIBPQ", "pError=%s", pError);
+            }
+            else {
+                RS_LOG_DEBUG("RSLIBPQ", "No error after PQconnectdbParams");
+            }
 
             if(fail && pError && strstr(pError, NETWORK_ERR_MSG_TEXT))
             {
@@ -1875,12 +1887,13 @@ void libpqReleasePrepare(RS_PREPARE_INFO *pPrepare)
 
 //---------------------------------------------------------------------------------------------------------igarish
 // Trace libpq calls.
-//
+// Deprecated infavor of rslog
 void libpqTrace(RS_CONN_INFO *pConn)
 {
+    return;
     if(IS_TRACE_LEVEL_MSG_PROTOCOL())
     {
-        PQtrace(pConn->pgConn, getTraceFileHandle());
+        PQtrace(pConn->pgConn, NULL);
     }
 }
 

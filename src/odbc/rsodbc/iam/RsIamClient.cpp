@@ -59,11 +59,10 @@ MUTEX_HANDLE RsIamClient::s_criticalSection = rsCreateMutex();
 
 // Public ==========================================================================================
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-RsIamClient::RsIamClient(const RsSettings& in_settings, RsLogger* in_logger) :
-m_settings(in_settings),
-m_log(in_logger)
+RsIamClient::RsIamClient(const RsSettings& in_settings) :
+m_settings(in_settings)
 {
-    RS_LOG(m_log)("RsIamClient::RsIamClient");
+    RS_LOG_DEBUG("IAMCLNT", "RsIamClient::RsIamClient");
 
     /**
     Initialize some static factories for client, e.g., Crypto, HttpClient
@@ -73,8 +72,9 @@ m_log(in_logger)
     if (s_iamClientCount == 0)
     {
         Aws::SDKOptions options;
-        if(in_logger->traceEnable)
-          options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Trace;
+        options.loggingOptions.crt_logger_create_fn =
+        [](){ return Aws::MakeShared<Aws::Utils::Logging::DefaultCRTLogSystem>("CRTLogSystem", Aws::Utils::Logging::LogLevel::Off); };
+
         Aws::InitAPI(options);
     }
     // Increase the static RsIamClient count, used to InitAPI and ShutdownAPI
@@ -108,13 +108,13 @@ rs_string RsIamClient::GetPluginName() {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void RsIamClient::Connect()
 {
-    RS_LOG(m_log)("RsIamClient::Connect");
+    RS_LOG_DEBUG("IAMCLNT", "RsIamClient::Connect");
 	bool isNativeAuth = false;
 
     const rs_string authType = InferCredentialsProvider();
     ValidateConnectionAttributes(authType);
 
-    RS_LOG(m_log)("RsIamClient::Connect IAM AuthType: %s",
+    RS_LOG_DEBUG("IAMCLNT", "RsIamClient::Connect IAM AuthType: %s",
         ((authType.empty()) ? (char *)"Default" : (char *)authType.c_str()));
 
     std::shared_ptr<AWSCredentialsProvider> credentialsProvider;
@@ -127,7 +127,7 @@ void RsIamClient::Connect()
                 "You can not use this authentication plugin with IAM enabled.");
         }
 
-        credentialsProvider = IAMFactory::CreatePluginCredentialsProvider(m_log, config);
+        credentialsProvider = IAMFactory::CreatePluginCredentialsProvider(config);
         if (credentialsProvider)
         {
             if (isIdcOrNativeIdpPlugin(config.GetPluginName())) {
@@ -142,7 +142,7 @@ void RsIamClient::Connect()
     }
     else if (authType == IAM_AUTH_TYPE_PROFILE)
     {
-        credentialsProvider = IAMFactory::CreateProfileCredentialsProvider(m_log, config);
+        credentialsProvider = IAMFactory::CreateProfileCredentialsProvider(config);
         if (credentialsProvider)
         {
             static_cast<IAMProfileCredentialsProvider&>(*credentialsProvider)
@@ -219,7 +219,7 @@ void RsIamClient::SetCredentials(const RsCredentials& in_credentials)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 RsIamClient::~RsIamClient()
 {
-    RS_LOG(m_log)("RsIamClient::~RsIamClient");
+    RS_LOG_DEBUG("IAMCLNT", "RsIamClient::~RsIamClient");
 
     rsLockMutex(s_criticalSection);
     s_iamClientCount--;
@@ -253,7 +253,7 @@ Model::Endpoint RsIamClient::DescribeCluster(
 
     if (clusters.empty())
     {
-		RS_LOG(m_log)("RsIamClient::DescribeCluster:Failed to describe cluster");
+		RS_LOG_ERROR("IAMCLNT", "RsIamClient::DescribeCluster:Failed to describe cluster");
 
         IAMUtils::ThrowConnectionExceptionWithInfo("Failed to describe cluster.");
     }
@@ -264,7 +264,7 @@ Model::Endpoint RsIamClient::DescribeCluster(
 
     if (endpoint.GetAddress().empty() || endpoint.GetPort() == 0)
     {
-		RS_LOG(m_log)("RsIamClient::DescribeCluster:Cluster is not fully created yet.");
+		RS_LOG_ERROR("IAMCLNT", "RsIamClient::DescribeCluster:Cluster is not fully created yet.");
 		IAMUtils::ThrowConnectionExceptionWithInfo("Cluster is not fully created yet.");
     }
 
@@ -303,7 +303,7 @@ Model::Endpoint RsIamClient::DescribeCluster(
 Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
     const std::shared_ptr<AWSCredentialsProvider>& in_credentialsProvider)
 {
-    RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest");
+    RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialRequest");
 
     ClientConfiguration config;
     
@@ -339,7 +339,7 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
 		config.requestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
 	}
 
-	RS_LOG(m_log)(
+	RS_LOG_DEBUG("IAMCLNT",
 		"RsIamClient::SendClusterCredentialRequest",
 		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
 		config.httpRequestTimeoutMs,
@@ -445,18 +445,18 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
                         tempClusterIdentifier = certificateAssociations[0].GetClusterIdentifier();
                     }
                     else{
-                        RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest:CNAME Feature: No certificateAssociations list Found!");
+                        RS_LOG_ERROR("IAMCLNT", "RsIamClient::SendClusterCredentialRequest:CNAME Feature: No certificateAssociations list Found!");
                        IAMUtils::ThrowConnectionExceptionWithInfo("CNAME FEATURE::No certificateAssociations list Found!");
                     }
                 }
                 else{
-                    RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest:CNAME Feature: No Associations list Found!");
+                    RS_LOG_ERROR("IAMCLNT", "RsIamClient::SendClusterCredentialRequest:CNAME Feature: No Associations list Found!");
                     IAMUtils::ThrowConnectionExceptionWithInfo("CNAME FEATURE::No Associations list Found!");
                 }
 
             } 
             else {
-                RS_LOG(m_log)("Failed to describe custom domain associations. Assuming cluster incorrectly classified as cname, setting cluster identifier directly.");
+                RS_LOG_DEBUG("IAMCLNT", "Failed to describe custom domain associations. Assuming cluster incorrectly classified as cname, setting cluster identifier directly.");
                 
                 request.SetCustomDomainName(""); // Clear the custom domain name
                 request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ? inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str()); // Set the cluster identifier instead
@@ -468,7 +468,7 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
         /* if host is empty describe cluster using cluster id */
         if (m_settings.m_host.empty() || m_settings.m_port == 0) {
             if (m_settings.m_clusterIdentifer.empty() && tempClusterIdentifier.empty()) {
-                RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest: Can not describe cluster: missing clusterId or region.");
+                RS_LOG_ERROR("IAMCLNT", "RsIamClient::SendClusterCredentialRequest: Can not describe cluster: missing clusterId or region.");
                 IAMUtils::ThrowConnectionExceptionWithInfo("Can not describe cluster: missing clusterId or region.");
             }
 
@@ -477,15 +477,15 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
             m_credentials.SetPort(static_cast<short>(endpoint.GetPort()));
         }
 
-        RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest: Before GetClusterCredentials()");
+        RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialRequest: Before GetClusterCredentials()");
 
         // Send the request using RedshiftClient
         outcome = client.GetClusterCredentials(request);
 
-        RS_LOG(m_log)("RsIamClient::SendClusterCredentialRequest: After GetClusterCredentials()");
+        RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialRequest: After GetClusterCredentials()");
     } 
     catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
-        RS_LOG(m_log)("Failed to call GetClusterCredentials. Exception: %s", ex);
+        RS_LOG_DEBUG("IAMCLNT", "Failed to call GetClusterCredentials. Exception: %s", ex);
         throw ex;
     }
 
@@ -496,7 +496,7 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
 Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWithIAMRequest(
 	const std::shared_ptr<AWSCredentialsProvider>& in_credentialsProvider)
 {
-	RS_LOG(m_log)("RsIamClient::SendClusterCredentialsWithIAMRequest");
+	RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialsWithIAMRequest");
 
 	ClientConfiguration config;
 
@@ -532,7 +532,7 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
 		config.requestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
 	}
 
-	RS_LOG(m_log)(
+	RS_LOG_DEBUG("IAMCLNT",
 		"RsIamClient::SendClusterCredentialsWithIAMRequest",
 		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
 		config.httpRequestTimeoutMs,
@@ -603,17 +603,17 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
                         tempClusterIdentifierIAM = certificateAssociations[0].GetClusterIdentifier();
                     }
                     else{
-                        RS_LOG(m_log)("RsIamClient::SendClusterCredentialWithIAMRequest:CNAME Feature: No certificateAssociations list Found!");
+                        RS_LOG_ERROR("IAMCLNT", "RsIamClient::SendClusterCredentialWithIAMRequest:CNAME Feature: No certificateAssociations list Found!");
                        IAMUtils::ThrowConnectionExceptionWithInfo("CNAME FEATURE::No certificateAssociations list Found!");
                     }
                 }
                 else{
-                        RS_LOG(m_log)("RsIamClient::SendClusterCredentialWithIAMRequest:CNAME Feature: No Associations list Found!");
+                        RS_LOG_ERROR("IAMCLNT", "RsIamClient::SendClusterCredentialWithIAMRequest:CNAME Feature: No Associations list Found!");
                        IAMUtils::ThrowConnectionExceptionWithInfo("CNAME FEATURE::No Associations list Found!");
                 }
             } 
             else {
-                RS_LOG(m_log)("Failed to describe custom domain associations. Assuming cluster incorrectly classified as cname, setting cluster identifier directly.");
+                RS_LOG_DEBUG("IAMCLNT", "Failed to describe custom domain associations. Assuming cluster incorrectly classified as cname, setting cluster identifier directly.");
 
                 request.SetCustomDomainName(""); // Clear the custom domain name
                 request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ? inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str()); // Set the cluster identifier instead
@@ -623,7 +623,7 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
         /* if host is empty describe cluster using cluster id */
         if (m_settings.m_host.empty() || m_settings.m_port==0) {
             if (m_settings.m_clusterIdentifer.empty() && tempClusterIdentifierIAM.empty()) {
-                RS_LOG(m_log)("RsIamClient::SendClusterCredentialsithIAMRequest: Can not describe cluster: missing clusterId or region.");
+                RS_LOG_ERROR("IAMCLNT", "RsIamClient::SendClusterCredentialsithIAMRequest: Can not describe cluster: missing clusterId or region.");
                 IAMUtils::ThrowConnectionExceptionWithInfo("Can not describe cluster: missing clusterId or region.");
             }
 
@@ -632,15 +632,15 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
             m_credentials.SetPort(static_cast<short>(endpoint.GetPort()));
         }
 
-        RS_LOG(m_log)("RsIamClient::SendClusterCredentialswithIAMRequest: Before GetClusterCredentialswithIAM()");
+        RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialswithIAMRequest: Before GetClusterCredentialswithIAM()");
 
         // Send the request using RedshiftClient
         outcome = client.GetClusterCredentialsWithIAM(request);
 
-        RS_LOG(m_log)("RsIamClient::SendClusterCredentialswithIAMRequest: After GetClusterCredentialswithIAM()");
+        RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialswithIAMRequest: After GetClusterCredentialswithIAM()");
     } 
     catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
-        RS_LOG(m_log)("Failed to call GetClusterCredentialsWithIAM. Exception:%s", ex);
+        RS_LOG_DEBUG("IAMCLNT", "Failed to call GetClusterCredentialsWithIAM. Exception:%s", ex);
         throw ex;
     }
 
@@ -651,7 +651,7 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
 Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentialsRequest(
 	const std::shared_ptr<AWSCredentialsProvider>& in_credentialsProvider)
 {
-	RS_LOG(m_log)("RsIamClient::SendCredentialsRequest");
+	RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendCredentialsRequest");
 
 	ClientConfiguration config;
 
@@ -680,7 +680,7 @@ Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentia
 		config.requestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
 	}
 
-	RS_LOG(m_log)(
+	RS_LOG_DEBUG("IAMCLNT",
 		"RsIamClient::SendCredentialRequest",
 		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
 		config.httpRequestTimeoutMs,
@@ -718,7 +718,7 @@ Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentia
 #if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)
     if(m_settings.m_isCname){
 
-        RS_LOG(m_log)("Custom cluster names are not supported for Redshift Serverless");
+        RS_LOG_DEBUG("IAMCLNT", "Custom cluster names are not supported for Redshift Serverless");
 
     }         
 #endif
@@ -748,7 +748,7 @@ Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentia
 void RsIamClient::ProcessClusterCredentialsOutcome(
     const Model::GetClusterCredentialsOutcome& in_outcome)
 {
-    RS_LOG(m_log)("RsIamClient::ProcessClusterCredentialsOutcome");
+    RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ProcessClusterCredentialsOutcome");
 
     if (in_outcome.IsSuccess())
     {
@@ -760,7 +760,7 @@ void RsIamClient::ProcessClusterCredentialsOutcome(
 
         long currentTime = Aws::Utils::DateTime::Now().Millis();
 
-        RS_LOG(m_log)("RsIamClient::ProcessClusterCredentialsOutcome Expiration time (in milli):%d", (result.GetExpiration().Millis() - currentTime));
+        RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ProcessClusterCredentialsOutcome Expiration time (in milli):%d", (result.GetExpiration().Millis() - currentTime));
     }
     else
     {
@@ -772,7 +772,7 @@ void RsIamClient::ProcessClusterCredentialsOutcome(
 void RsIamClient::ProcessClusterCredentialsWithIAMOutcome(
 	const Model::GetClusterCredentialsWithIAMOutcome& in_outcome)
 {
-	RS_LOG(m_log)("RsIamClient::ProcessClusterCredentialsWithIAMOutcome");
+	RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ProcessClusterCredentialsWithIAMOutcome");
 
 	if (in_outcome.IsSuccess())
 	{
@@ -784,7 +784,7 @@ void RsIamClient::ProcessClusterCredentialsWithIAMOutcome(
 
 		long currentTime = Aws::Utils::DateTime::Now().Millis();
 
-		RS_LOG(m_log)("RsIamClient::ProcessClusterCredentialsWithIAMOutcome Expiration time (in milli):%d", (result.GetExpiration().Millis() - currentTime));
+		RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ProcessClusterCredentialsWithIAMOutcome Expiration time (in milli):%d", (result.GetExpiration().Millis() - currentTime));
 	}
 	else
 	{
@@ -796,7 +796,7 @@ void RsIamClient::ProcessClusterCredentialsWithIAMOutcome(
 void RsIamClient::ProcessServerlessCredentialsOutcome(
 	const Aws::RedshiftServerless::Model::GetCredentialsOutcome& in_outcome)
 {
-	RS_LOG(m_log)("RsIamClient::ProcessServerlessCredentialsOutcome");
+	RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ProcessServerlessCredentialsOutcome");
 
 	if (in_outcome.IsSuccess())
 	{
@@ -818,7 +818,7 @@ void RsIamClient::ProcessServerlessCredentialsOutcome(
 void RsIamClient::GetClusterCredentials(
     const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& in_credentialsProvider)
 {
-    RS_LOG(m_log)("RsIamClient::GetClusterCredentials");
+    RS_LOG_DEBUG("IAMCLNT", "RsIamClient::GetClusterCredentials");
     if (!in_credentialsProvider)
     {
         IAMUtils::ThrowConnectionExceptionWithInfo(
@@ -831,7 +831,7 @@ void RsIamClient::GetClusterCredentials(
 void RsIamClient::GetClusterCredentialsWithIAM(
 	const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& in_credentialsProvider)
 {
-	RS_LOG(m_log)("RsIamClient::GetClusterCredentialsWithIAM");
+	RS_LOG_DEBUG("IAMCLNT", "RsIamClient::GetClusterCredentialsWithIAM");
 	if (!in_credentialsProvider)
 	{
 		IAMUtils::ThrowConnectionExceptionWithInfo(
@@ -845,7 +845,7 @@ void RsIamClient::GetClusterCredentialsWithIAM(
 void RsIamClient::GetServerlessCredentials(
 	const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& in_credentialsProvider)
 {
-	RS_LOG(m_log)("RsIamClient::GetServerlessCredentials");
+	RS_LOG_DEBUG("IAMCLNT", "RsIamClient::GetServerlessCredentials");
 	if (!in_credentialsProvider)
 	{
 		IAMUtils::ThrowConnectionExceptionWithInfo(
@@ -858,7 +858,7 @@ void RsIamClient::GetServerlessCredentials(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void RsIamClient::ValidateConnectionAttributes(const rs_string &in_authType)
 {
-    RS_LOG(m_log)("RsIamClient::ValidateConnectionAttributes");
+    RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ValidateConnectionAttributes");
 
     const rs_string& sslMode = m_settings.m_sslMode;
 
@@ -881,14 +881,14 @@ void RsIamClient::ValidateConnectionAttributes(const rs_string &in_authType)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void RsIamClient::ThrowExceptionWithError(const Aws::Client::AWSError<RedshiftErrors>& in_error)
 {
-    RS_LOG(m_log)("RsIamClient::ThrowExceptionWithError");
+    RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ThrowExceptionWithError");
 
     const rs_string& exceptionName = in_error.GetExceptionName();
     const rs_string& errorMessage = in_error.GetMessage();
 
     rs_string fullErrorMsg = exceptionName + ": " + errorMessage;
 
-	RS_LOG(m_log)("RsIamClient::ThrowExceptionWithError:Error %s", (char *)fullErrorMsg.c_str());
+	RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ThrowExceptionWithError:Error %s", (char *)fullErrorMsg.c_str());
 
     IAMUtils::ThrowConnectionExceptionWithInfo(fullErrorMsg);
 }

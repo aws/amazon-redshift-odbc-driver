@@ -20,12 +20,10 @@ namespace Redshift
             public:
                 /// @brief Constructor          Construct credentials provider using argument map
                 ///
-                /// @param in_log               The logger. (NOT OWN)
                 /// @param in_config            The IAM Connection Configuration
                 /// @param in_argsMap           Optional arguments map passed to the credentials provider
                 explicit IAMBrowserAzureCredentialsProvider(
-                    RsLogger* in_log,
-                    const IAMConfiguration& in_config = IAMConfiguration(),
+                                        const IAMConfiguration& in_config = IAMConfiguration(),
                     const std::map<rs_string, rs_string>& in_argsMap
                         = std::map<rs_string, rs_string>());
                 

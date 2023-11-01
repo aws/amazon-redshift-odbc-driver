@@ -2,7 +2,7 @@
 #define _RS_IAM_ENTRY_H_
 
 #include "RsSettings.h"
-#include "RsLogger.h"
+#include "rslog.h"
 #include "../rsiam.h"
 
 
@@ -14,19 +14,18 @@ public:
     static void IamAuthentication(bool isIAMAuth,
                                     RS_IAM_CONN_PROPS_INFO *pIamProps,
                                     RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-                                    RsSettings& settings, RsLogger *logger);
+                                    RsSettings& settings);
 
 	// Entry point function from ODBC connection call for Native Auth
 	static void NativePluginAuthentication(bool isIAMAuth,
 		RS_IAM_CONN_PROPS_INFO *pIamProps,
 		RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-		RsSettings& settings, RsLogger *logger);
+		RsSettings& settings);
 
 	static char *ReadAuthProfile(
 		bool isIAMAuth,
 		RS_IAM_CONN_PROPS_INFO *pIamProps,
-		RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-		RsLogger *logger);
+		RS_PROXY_CONN_PROPS_INFO *pHttpsProps);
 
 };
 

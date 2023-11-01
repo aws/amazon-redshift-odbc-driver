@@ -8,10 +8,9 @@ using namespace Aws::Auth;
 // Public Static ===================================================================================
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<Aws::Auth::AWSCredentialsProvider> IAMFactory::CreateCredentialsProvider(
-    const IamSettings& in_settings,
-    RsLogger& in_log)
+    const IamSettings& in_settings)
 {
-  in_log.log(
+  RS_LOG_DEBUG(
         "Redshift::IamSupport::%s::%s()",
         "IAMFactory",
         "CreateCredentialsProvider");
@@ -70,14 +69,14 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> IAMFactory::CreateCredentials
         config.SetDuration(in_settings.m_duration);
         config.SetRoleSessionName(in_settings.m_role_session_name);
 
-        credentialsProvider = CreatePluginCredentialsProvider(&in_log, config);
+        credentialsProvider = CreatePluginCredentialsProvider(config);
     }
     else if (PROFILE == in_settings.m_authType)
     {
         // Profile AuthType specific connection attributes.
         config.SetProfileName(in_settings.m_awsProfile);
 
-        credentialsProvider = CreateProfileCredentialsProvider(&in_log, config);
+        credentialsProvider = CreateProfileCredentialsProvider(config);
     }
     else if (STATIC == in_settings.m_authType)
     {
@@ -126,142 +125,132 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> IAMFactory::CreateInstancePro
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<IAMProfileCredentialsProvider> IAMFactory::CreateProfileCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config)
+        const IAMConfiguration& in_config)
 {
-  in_log->log(
+  RS_LOG_DEBUG(
         "Redshift:IamSupport",
         "IAMFactory",
         "CreateProfileCredentialsProvider");
 
-    return std::make_shared<IAMProfileCredentialsProvider>(in_log, in_config);
+    return std::make_shared<IAMProfileCredentialsProvider>( in_config);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<IAMPluginCredentialsProvider> IAMFactory::CreatePluginCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config)
+        const IAMConfiguration& in_config)
 {
   std::map<rs_string, rs_string> argsMap;
-  in_log->log(
+  RS_LOG_DEBUG(
         "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreatePluginCredentialsProvider");
 
     return std::shared_ptr<IAMPluginCredentialsProvider>(
-        IAMPluginFactory::CreatePlugin(IAMUtils::convertStringToWstring(in_config.GetPluginName()), in_log, in_config, argsMap));//.Detach());
+        IAMPluginFactory::CreatePlugin(IAMUtils::convertStringToWstring(in_config.GetPluginName()), in_config, argsMap));//.Detach());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<IAMAdfsCredentialsProvider> IAMFactory::CreateAdfsCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config)
+        const IAMConfiguration& in_config)
 {
-  in_log->log(
+  RS_LOG_DEBUG(
         "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreateAdfsCredentialsProvider");
 
     return std::shared_ptr<IAMAdfsCredentialsProvider>(
-        IAMPluginFactory::CreateAdfsPlugin(in_log, in_config));//.Detach());
+        IAMPluginFactory::CreateAdfsPlugin( in_config));//.Detach());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<IAMAzureCredentialsProvider> IAMFactory::CreateAzureCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config)
+        const IAMConfiguration& in_config)
 {
-  in_log->log(
+  RS_LOG_DEBUG(
         "Redshift:IamSupport::%s:%s()",
         "IAMFactory",
         "CreateAzureCredentialsProvider");
 
     return std::shared_ptr<IAMAzureCredentialsProvider>(
-        IAMPluginFactory::CreateAzurePlugin(in_log, in_config));//.Detach());
+        IAMPluginFactory::CreateAzurePlugin( in_config));//.Detach());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<IAMBrowserAzureCredentialsProvider> IAMFactory::CreateBrowserAzureCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config)
+        const IAMConfiguration& in_config)
 {
-  in_log->log(
+  RS_LOG_DEBUG(
         "Redshift:IamSupport::%s:%s()",
         "IAMFactory",
         "CreateBrowserAzureCredentialsProvider");
 
     return std::shared_ptr<IAMBrowserAzureCredentialsProvider>(
-        IAMPluginFactory::CreateBrowserAzurePlugin(in_log, in_config));//.Detach());
+        IAMPluginFactory::CreateBrowserAzurePlugin( in_config));//.Detach());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<IAMJwtBasicCredentialsProvider> IAMFactory::CreateJwtCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config)
+        const IAMConfiguration& in_config)
 {
-  in_log->log(
+  RS_LOG_DEBUG(
         "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreateJwtCredentialsProvider");
 
     return std::shared_ptr<IAMJwtBasicCredentialsProvider>(
-        IAMPluginFactory::CreateJwtPlugin(in_log, in_config));//.Detach());
+        IAMPluginFactory::CreateJwtPlugin( in_config));//.Detach());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<IAMBrowserSamlCredentialsProvider> IAMFactory::CreateBrowserSamlCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config)
+        const IAMConfiguration& in_config)
 {
-  in_log->log(
+  RS_LOG_DEBUG(
         "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreateBrowserSamlCredentialsProvider");
 
     return std::shared_ptr<IAMBrowserSamlCredentialsProvider>(
-        IAMPluginFactory::CreateBrowserSamlPlugin(in_log, in_config));//.Detach());
+        IAMPluginFactory::CreateBrowserSamlPlugin( in_config));//.Detach());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<IAMOktaCredentialsProvider> IAMFactory::CreateOktaCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config)
+        const IAMConfiguration& in_config)
 {
-  in_log->log(
+  RS_LOG_DEBUG(
         "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreateOktaCredentialsProvider");
 
     return std::shared_ptr<IAMOktaCredentialsProvider>(
-        IAMPluginFactory::CreateOktaPlugin(in_log, in_config));//.Detach());
+        IAMPluginFactory::CreateOktaPlugin( in_config));//.Detach());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<IAMPingCredentialsProvider> IAMFactory::CreatePingCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config)
+        const IAMConfiguration& in_config)
 {
-  in_log->log(
+  RS_LOG_DEBUG(
         "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreatePingCredentialsProvider");
 
     return std::shared_ptr<IAMPingCredentialsProvider>(
-        IAMPluginFactory::CreatePingPlugin(in_log, in_config)); // .Detach());
+        IAMPluginFactory::CreatePingPlugin( in_config)); // .Detach());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<IAMExternalCredentialsProvider> IAMFactory::CreateExternalCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config)
+        const IAMConfiguration& in_config)
 {
-  in_log->log(
+  RS_LOG_DEBUG(
         "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreateExternalCredentialsProvider");
 
     return std::shared_ptr<IAMExternalCredentialsProvider>(
-        IAMPluginFactory::CreateExternalPlugin(in_log, in_config));//.Detach());
+        IAMPluginFactory::CreateExternalPlugin( in_config));//.Detach());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

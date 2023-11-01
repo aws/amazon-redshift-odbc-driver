@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RsLogger.h"
+#include "rslog.h"
 #include "SocketSupport.h"
 
 #include <algorithm>
@@ -12,7 +12,7 @@
 class Selector
 {
     public:
-        Selector(RsLogger* in_log);
+        Selector();
         
         ~Selector() = default;
         
@@ -33,14 +33,13 @@ class Selector
         bool Select(struct timeval* tv);
         
     private:
-        RsLogger* logger_;
 
         SOCKET max_fd_;
         fd_set master_fds_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-inline Selector::Selector(RsLogger *in_log) : logger_(in_log), max_fd_(0)
+inline Selector::Selector() : max_fd_(0)
 {
     FD_ZERO(&master_fds_);
 }

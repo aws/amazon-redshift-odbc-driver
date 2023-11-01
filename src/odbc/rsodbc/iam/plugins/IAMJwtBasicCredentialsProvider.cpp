@@ -10,26 +10,25 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMJwtBasicCredentialsProvider::IAMJwtBasicCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMJwtPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMJwtPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("IAMJwtBasicCredentialsProvider::IAMJwtBasicCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtBasicCredentialsProvider::IAMJwtBasicCredentialsProvider");
     InitArgumentsMap();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMJwtBasicCredentialsProvider::InitArgumentsMap()
 {
-    RS_LOG(m_log)( "IAMJwtBasicCredentialsProvider", "InitArgumentsMap");
+    RS_LOG_DEBUG( "IAMJwtBasicCredentialsProvider", "InitArgumentsMap");
     IAMPluginCredentialsProvider::InitArgumentsMap();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMJwtBasicCredentialsProvider::ValidateArgumentsMap()
 {
-    RS_LOG(m_log)("IAMJwtBasicCredentialsProvider::ValidateArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtBasicCredentialsProvider::ValidateArgumentsMap");
 
     if (!m_argsMap.count(IAM_KEY_WEB_IDENTITY_TOKEN))
     {
@@ -52,11 +51,11 @@ void IAMJwtBasicCredentialsProvider::ValidateArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMJwtBasicCredentialsProvider::GetJwtAssertion()
 {
-    RS_LOG(m_log)("IAMJwtBasicCredentialsProvider::GetJwtAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtBasicCredentialsProvider::GetJwtAssertion");
 
     rs_string jwt = m_argsMap[IAM_KEY_WEB_IDENTITY_TOKEN];
 
-    RS_LOG(m_log)("IAMJwtBasicCredentialsProvider::GetJwtAssertion JWT Assertion: %s", jwt.c_str());
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtBasicCredentialsProvider::GetJwtAssertion JWT Assertion: %s", jwt.c_str());
 
     return jwt;
 }
@@ -64,6 +63,6 @@ rs_string IAMJwtBasicCredentialsProvider::GetJwtAssertion()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMJwtBasicCredentialsProvider::~IAMJwtBasicCredentialsProvider()
 {
-    RS_LOG(m_log)("IAMJwtBasicCredentialsProvider::~IAMJwtBasicCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtBasicCredentialsProvider::~IAMJwtBasicCredentialsProvider");
     /* Do nothing */
 }

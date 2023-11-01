@@ -94,7 +94,7 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>
-        ..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+        ..\..\logging;..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>
         WIN32;_DEBUG;_WINDOWS;_USRDLL;ODBCVER=0x0352;SQL_NOUNICODEMAP;_CRT_SECURE_NO_WARNINGS;USE_SSL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
@@ -127,7 +127,7 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>
-        ..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+        ..\..\logging;..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;ODBCVER=0x0352;SQL_NOUNICODEMAP;_WIN64;
         _CRT_SECURE_NO_WARNINGS;USE_SSL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
@@ -161,7 +161,7 @@
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <AdditionalIncludeDirectories>
-        ..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+        ..\..\logging;..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;ODBCVER=0x0352;SQL_NOUNICODEMAP;
         _CRT_SECURE_NO_WARNINGS;USE_SSL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -194,7 +194,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>./;./iam/http;./iam/plugins;./iam/windows/aws-cpp-sdk/1.11.111/include;./iam/core;./iam;..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;.\iam\windows\cares\include;.\iam\windows\openssl\1.1.1\w2012r2\vs2015\release64mt\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./;..\..\logging;./iam/http;./iam/plugins;./iam/windows/aws-cpp-sdk/1.11.111/include;./iam/core;./iam;..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;.\iam\windows\cares\include;.\iam\windows\openssl\1.1.1\w2012r2\vs2015\release64mt\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;ODBCVER=0x0352;SQL_NOUNICODEMAP;_WIN64;_CRT_SECURE_NO_WARNINGS;USE_SSL;CARES_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -271,7 +271,6 @@
     <ClCompile Include="iam\RsIamClient.cpp" />
     <ClCompile Include="iam\RsIamEntry.cpp" />
     <ClCompile Include="iam\RsIamHelper.cpp" />
-    <ClCompile Include="iam\RsLogger.cpp" />
     <ClCompile Include="iam\rs_string.cpp" />
     <ClCompile Include="rscatalog.cpp" />
     <ClCompile Include="rsconnect.cpp" />
@@ -289,6 +288,7 @@
     <ClCompile Include="rsunicode.c" />
     <ClCompile Include="rsutil.c" />
     <ClCompile Include="win_port.c" />
+    <ClCompile Include="..\..\logging\rslog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="iam\core\IAMConfiguration.h" />
@@ -334,7 +334,6 @@
     <ClInclude Include="iam\RsIamClient.h" />
     <ClInclude Include="iam\RsIamEntry.h" />
     <ClInclude Include="iam\RsIamHelper.h" />
-    <ClInclude Include="iam\RsLogger.h" />
     <ClInclude Include="iam\RsSettings.h" />
     <ClInclude Include="iam\RsUidPwdProperties.h" />
     <ClInclude Include="iam\RsUidPwdSettings.h" />

@@ -5,10 +5,9 @@ void RsIamEntry::IamAuthentication(
                   bool isIAMAuth,
                   RS_IAM_CONN_PROPS_INFO *pIamProps,
                   RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-                  RsSettings& settings,
-                  RsLogger *logger)
+                  RsSettings& settings)
 {
-  RsIamHelper::IamAuthentication(isIAMAuth, pIamProps, pHttpsProps, settings, logger);
+  RsIamHelper::IamAuthentication(isIAMAuth, pIamProps, pHttpsProps, settings);
 }
 
 /*================================================================================================*/
@@ -17,10 +16,9 @@ void RsIamEntry::NativePluginAuthentication(
     bool isIAMAuth,
     RS_IAM_CONN_PROPS_INFO *pIamProps,
     RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-    RsSettings& settings,
-    RsLogger *logger)
+    RsSettings& settings)
 {
-    RsIamHelper::NativePluginAuthentication(isIAMAuth, pIamProps, pHttpsProps, settings, logger);
+    RsIamHelper::NativePluginAuthentication(isIAMAuth, pIamProps, pHttpsProps, settings);
 }
 
 /*================================================================================================*/
@@ -28,8 +26,7 @@ void RsIamEntry::NativePluginAuthentication(
 char * RsIamEntry::ReadAuthProfile(
 	bool isIAMAuth,
 	RS_IAM_CONN_PROPS_INFO *pIamProps,
-	RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-	RsLogger *logger)
+	RS_PROXY_CONN_PROPS_INFO *pHttpsProps)
 {
-	return RsIamHelper::ReadAuthProfile(isIAMAuth, pIamProps, pHttpsProps, logger);
+	return RsIamHelper::ReadAuthProfile(isIAMAuth, pIamProps, pHttpsProps);
 }

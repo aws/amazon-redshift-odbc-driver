@@ -2,7 +2,7 @@
 #include "RsIamClient.h"
 #include "IAMUtils.h"
 #include "rslock.h"
-#include "RsLogger.h"
+#include <rslog.h>
 #include <regex>
 
 #include <string>
@@ -41,22 +41,21 @@ void RsIamHelper::IamAuthentication(
                   bool isIAMAuth,
                   RS_IAM_CONN_PROPS_INFO *pIamProps,
                   RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-                  RsSettings& settings,
-                  RsLogger *logger)
+                  RsSettings& settings)
 {
     RsCredentials credentials;
 
     // Set connection props from RS_CONN_INFO to settings
-    SetIamSettings(isIAMAuth, pIamProps, pHttpsProps, settings, logger);
+    SetIamSettings(isIAMAuth, pIamProps, pHttpsProps, settings);
 
-    if (!GetIamCachedSettings(credentials, settings, logger, false))
+    if (!GetIamCachedSettings(credentials, settings, false))
     {
-        RsIamClient iamClient(settings, logger);
+        RsIamClient iamClient(settings);
 
         // Connect to retrieve dbUser and dbPassword using AWS credentials
         iamClient.Connect();
         credentials = iamClient.GetCredentials();
-        SetIamCachedSettings(credentials, settings, logger);
+        SetIamCachedSettings(credentials, settings);
     }
 
     /* update the corresponding connection attributes using
@@ -69,28 +68,27 @@ void RsIamHelper::NativePluginAuthentication(
     bool isIAMAuth,
     RS_IAM_CONN_PROPS_INFO *pIamProps,
     RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-    RsSettings& settings,
-    RsLogger *logger)
+    RsSettings& settings)
 {
     RsCredentials credentials;
 
     // Set connection props from RS_CONN_INFO to settings
-    SetIamSettings(isIAMAuth, pIamProps, pHttpsProps, settings, logger);
+    SetIamSettings(isIAMAuth, pIamProps, pHttpsProps, settings);
 
-    if (!GetIamCachedSettings(credentials, settings, logger, true))
+    if (!GetIamCachedSettings(credentials, settings, true))
     {
-        RsIamClient iamClient(settings, logger);
+        RsIamClient iamClient(settings);
 
-        RS_LOG(logger)("RsIamHelper::NativePluginAuthentication not from cache");
+        RS_LOG_DEBUG("IAMHLP", "RsIamHelper::NativePluginAuthentication not from cache");
 
         // Connect to retrieve idp token credentials
         iamClient.Connect();
         credentials = iamClient.GetCredentials();
-        SetIamCachedSettings(credentials, settings, logger);
+        SetIamCachedSettings(credentials, settings);
     }
     else
     {
-        RS_LOG(logger)("RsIamHelper::NativePluginAuthentication from cache\n");
+        RS_LOG_DEBUG("IAMHLP", "RsIamHelper::NativePluginAuthentication from cache\n");
     }
 
     /* update the corresponding connection attributes using
@@ -103,20 +101,19 @@ void RsIamHelper::NativePluginAuthentication(
 bool RsIamHelper::GetIamCachedSettings(
     RsCredentials& out_iamCredentials,
     const RsSettings& in_settings,
-    RsLogger *logger,
     bool isNativeAuth)
 {
    bool rc;
 
    rsLockMutex(s_iam_helper_criticalSection);
 
-    if (in_settings.m_disableCache || !IsValidIamCachedSettings(in_settings, logger, isNativeAuth))
+    if (in_settings.m_disableCache || !IsValidIamCachedSettings(in_settings, isNativeAuth))
     {
         rc = false;
     }
     else
     {
-        rs_string cacheKey = GetCacheKey(in_settings, logger);
+        rs_string cacheKey = GetCacheKey(in_settings);
         out_iamCredentials = s_iamCredentialsCache[cacheKey];
 
         rc = true;
@@ -128,7 +125,7 @@ bool RsIamHelper::GetIamCachedSettings(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, RsLogger *logger, bool isNativeAuth)
+bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, bool isNativeAuth)
 {
     bool rc;
 
@@ -145,7 +142,7 @@ bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, RsLogg
     }
     else
     {
-        rs_string cacheKey = GetCacheKey(in_settings, logger);
+        rs_string cacheKey = GetCacheKey(in_settings);
         std::unordered_map<rs_string, RsCredentials>::iterator credentialItr = s_iamCredentialsCache.find(cacheKey);
         if (credentialItr == s_iamCredentialsCache.end())
         {
@@ -174,7 +171,7 @@ bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, RsLogg
                     cachedCredentials.GetExpirationTime() == 0 ||
                     currentTime > cachedCredentials.GetExpirationTime()))
             {
-                RS_LOG(logger)("RsIamHelper::IsValidIamCachedSettings not from cache: currentTime:%ld GetExpirationTime():%ld no token:%d", 
+                RS_LOG_DEBUG("IAMHLP", "RsIamHelper::IsValidIamCachedSettings not from cache: currentTime:%ld GetExpirationTime():%ld no token:%d", 
                     currentTime, cachedCredentials.GetExpirationTime(), cachedCredentials.GetIdpToken().empty());
 
                 // remove invalid cached credentials
@@ -243,13 +240,12 @@ bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, RsLogg
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void RsIamHelper::SetIamCachedSettings(
     const RsCredentials& in_iamCredentials,
-    const RsSettings& in_settings,
-    RsLogger *logger)
+    const RsSettings& in_settings)
 {
     if(!in_settings.m_disableCache) {
         rsLockMutex(s_iam_helper_criticalSection);
 
-        rs_string cacheKey = GetCacheKey(in_settings, logger);
+        rs_string cacheKey = GetCacheKey(in_settings);
         s_iamCredentialsCache[cacheKey] = in_iamCredentials;
 
         s_rsSettings = in_settings;
@@ -294,10 +290,9 @@ void RsIamHelper::SetIamSettings(
     bool isIAMAuth,
     RS_IAM_CONN_PROPS_INFO *pIamProps,
     RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-    RsSettings& settings,
-    RsLogger *logger)
+    RsSettings& settings)
 {
-    RS_LOG(logger)("RsIamHelper::SetIamSettings");
+    RS_LOG_DEBUG("IAMHLP", "RsIamHelper::SetIamSettings");
     rs_string temp;
 
     settings.m_iamAuth = isIAMAuth;
@@ -340,13 +335,13 @@ void RsIamHelper::SetIamSettings(
         rs_string userInputClusterId = pIamProps->szClusterId;
 
         if(provisionedMatches){
-            RS_LOG(logger)("Code flow for regular provisioned cluster");
+            RS_LOG_DEBUG("IAMHLP", "Code flow for regular provisioned cluster");
             clusterId = requiredClusterId;
         }
         else if(serverlessMatches){
             // serverless vanilla
             // do nothing, regular serverless logic flow
-            RS_LOG(logger)("Code flow for regular serverless cluster");
+            RS_LOG_DEBUG("IAMHLP", "Code flow for regular serverless cluster");
         }
         else if(settings.m_isServerless){
             // hostname doesn't match serverless regex but serverless set to true explicitly by user
@@ -357,19 +352,19 @@ void RsIamHelper::SetIamSettings(
                 // workgroup specified by user - serverless nlb call
                 // check for serverlessAcctId to enter serverless NLB logic flow, for when we implement this for serverless after server side is ready
                 // currently do nothing as regular code flow is sufficient
-                RS_LOG(logger)("Code flow for nlb serverless cluster");
+                RS_LOG_DEBUG("IAMHLP", "Code flow for nlb serverless cluster");
             }
             else{
                 // attempt serverless cname call - currently not supported by server
                 // currently sets isCname to true which will be asserted on later, as cname for serverless is not supported yet
-                RS_LOG(logger)("Code flow for cname serverless cluster");
+                RS_LOG_DEBUG("IAMHLP", "Code flow for cname serverless cluster");
                 settings.m_isCname = true;
             }
         }
         else {
             // clusterID specified by user - provisioned nlb call
             // regular logic flow, no change needed
-            RS_LOG(logger)("Code flow for nlb/cname provisioned cluster");
+            RS_LOG_DEBUG("IAMHLP", "Code flow for nlb/cname provisioned cluster");
             clusterId = pIamProps->szClusterId;
             // attempt provisioned cname call
             // cluster id will be fetched upon describing custom domain name
@@ -387,12 +382,12 @@ void RsIamHelper::SetIamSettings(
             settings.m_accessDuration = 900;
 
         settings.m_clusterIdentifer = clusterId;
-        RS_LOG(logger)("Cluster Identifier:%s", settings.m_clusterIdentifer );
+        RS_LOG_DEBUG("IAMHLP", "Cluster Identifier:%s", settings.m_clusterIdentifer );
         //settings.m_clusterIdentifer = pIamProps->szClusterId;
 
 
         if(!settings.m_isServerless && !settings.m_isCname && (settings.m_clusterIdentifer.empty())){
-            RS_LOG(logger)( "Invalid connection property setting. cluster_identifier must be provided when IAM is enabled");
+            RS_LOG_DEBUG("IAMHLP", "Invalid connection property setting. cluster_identifier must be provided when IAM is enabled");
         }
 
         settings.m_dbUser = pIamProps->szDbUser;
@@ -479,7 +474,7 @@ void RsIamHelper::SetCommonFederatedAuthSettings(RS_IAM_CONN_PROPS_INFO *pIamPro
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-rs_string RsIamHelper::GetCacheKey(const RsSettings& in_settings, RsLogger *logger)
+rs_string RsIamHelper::GetCacheKey(const RsSettings& in_settings)
 {
     rs_string cacheKey("");
 
@@ -489,7 +484,7 @@ rs_string RsIamHelper::GetCacheKey(const RsSettings& in_settings, RsLogger *logg
     if (GetUserNameA(uname, &unameLength) == 0)
     {
         rs_string errMsg = "Failed to retrieve Windows username, error: " + std::to_string(GetLastError());
-        RS_LOG(logger)(	"RsIamHelper::GetCacheKey %s",	errMsg.c_str()); 
+        RS_LOG_DEBUG("IAMHLP", "RsIamHelper::GetCacheKey %s",	errMsg.c_str()); 
     }
     else
     {
@@ -509,8 +504,7 @@ rs_string RsIamHelper::GetCacheKey(const RsSettings& in_settings, RsLogger *logg
 char * RsIamHelper::ReadAuthProfile(
     bool isIAMAuth,
     RS_IAM_CONN_PROPS_INFO *pIamProps,
-    RS_PROXY_CONN_PROPS_INFO *pHttpsProps,
-    RsLogger *logger)
+    RS_PROXY_CONN_PROPS_INFO *pHttpsProps)
 {
     // The contents of the Auth Profile as JSON object
     Aws::Utils::Json::JsonValue profileValue;
@@ -524,11 +518,12 @@ char * RsIamHelper::ReadAuthProfile(
          || pIamProps->szSecretAccessKey[0] == '\0')
     {
         rs_string errorMsg = "Missing AccessKeyID or SecretAccessKey for AuthProfile.";
+        RS_LOG_ERROR("IAMH", errorMsg.c_str());
         IAMUtils::ThrowConnectionExceptionWithInfo(errorMsg);
     }
 
     RsSettings settings;
-    RsIamClient iamClient(settings, logger);
+    RsIamClient iamClient(settings);
 
     profileValue = Aws::Utils::Json::JsonValue(iamClient.ReadAuthProfile(auth_profile_name, accessKey, secretKey, host, region));
 

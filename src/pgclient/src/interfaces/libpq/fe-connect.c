@@ -740,7 +740,7 @@ PQconnectStartParams(const char **keywords,
 		return NULL;
 
 	if(fp != NULL)
-		PQtrace(conn,fp);
+		PQtrace(conn,NULL);
 
 	/*
 	 * Parse the conninfo arrays
@@ -5287,7 +5287,6 @@ PQtrace(PGconn *conn, FILE *debug_port)
 	if (conn == NULL)
 		return;
 	PQuntrace(conn);
-	conn->Pfdebug = debug_port;
 }
 
 void

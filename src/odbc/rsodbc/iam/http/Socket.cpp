@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 int Socket::Receive(char *buffer, int length, int flags) const
 {
-    RS_LOG(logger_)("Socket::Receive");
+    RS_LOG_DEBUG("IAMHTTP", "Socket::Receive");
     
     int nbytes = 0, filled = 0;
     auto start = std::chrono::system_clock::now();
@@ -35,7 +35,7 @@ int Socket::Receive(char *buffer, int length, int flags) const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 int Socket::Send(const char *buffer, int length, int flags) const
  {
-    RS_LOG(logger_)("Socket::Send");
+    RS_LOG_DEBUG("IAMHTTP", "Socket::Send");
 
     int nbytes = 0, sent = 0;
 
@@ -50,9 +50,9 @@ int Socket::Send(const char *buffer, int length, int flags) const
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void Socket::PrepareListenSocket(const rs_string& port)
 {
-    RS_LOG(logger_)("Socket::PrepareListenSocket");
+    RS_LOG_DEBUG("IAMHTTP", "Socket::PrepareListenSocket");
 
-    AddrInformation addrInfo(logger_, port);
+    AddrInformation addrInfo(port);
 
     for (const auto& ptr : addrInfo)
     {
@@ -94,7 +94,7 @@ void Socket::PrepareListenSocket(const rs_string& port)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool Socket::Close()
 {
-    RS_LOG(logger_)("Socket::Close");
+    RS_LOG_DEBUG("IAMHTTP", "Socket::Close");
 
     if (socket_fd_ == -1)
         return false;

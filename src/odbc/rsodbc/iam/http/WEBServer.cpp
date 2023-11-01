@@ -12,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool WEBServer::WEBServerInit()
 {
-    RS_LOG(logger_)("WEBServer::WEBServerInit");
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::WEBServerInit");
     
     // Prepare the environment for get the socket description.
     try
@@ -23,7 +23,7 @@ bool WEBServer::WEBServerInit()
     }
     catch (std::exception& e)
     {
-        RS_LOG(logger_)("WEBServer::WEBServerInit %s", e.what());
+        RS_LOG_DEBUG("IAMHTTP", "WEBServer::WEBServerInit %s", e.what());
 
         return false;
     }
@@ -34,7 +34,7 @@ bool WEBServer::WEBServerInit()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void WEBServer::HandleConnection()
 {
-    RS_LOG(logger_)("WEBServer::HandleConnection");
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection");
     
     /* Trying to accept the pending incoming connection. */
     Socket ssck(listen_socket_.Accept());
@@ -67,7 +67,7 @@ void WEBServer::HandleConnection()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void WEBServer::Listen()
 {
-    RS_LOG(logger_)("WEBServer::Listen");
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::Listen");
     
     // Set timeout for non-blocking socket to 1 sec to pass it to Select.
     struct timeval tv = { 1, 0 };
@@ -81,7 +81,7 @@ void WEBServer::Listen()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void WEBServer::ListenerThread()
 {
-    RS_LOG(logger_)("WEBServer::ListenerThread");
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread");
 
     if (!WEBServerInit())
     {

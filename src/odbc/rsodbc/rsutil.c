@@ -513,7 +513,7 @@ void addError(RS_ERROR_INFO **ppErrorList, char *pSqlState, char *pMsg, long nat
 void initGlobals(HMODULE hModule)
 {
     gRsGlobalVars.hModule = hModule;
-    gRsGlobalVars.iTraceLevel = DEFAULT_TRACE_LEVEL;
+    getGlobalLogVars()->iTraceLevel = DEFAULT_TRACE_LEVEL;
     gRsGlobalVars.hApiMutex = rsCreateMutex();
 }
 
@@ -525,7 +525,7 @@ void initGlobals(HMODULE hModule)
 void releaseGlobals()
 {
     gRsGlobalVars.hModule = NULL;
-    gRsGlobalVars.iTraceLevel = 0;
+    getGlobalLogVars()->iTraceLevel = 0;
     rsDestroyMutex(gRsGlobalVars.hApiMutex);
     gRsGlobalVars.hApiMutex = NULL;
 }
@@ -2033,7 +2033,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                             // time.
                             *cbLenOffset += limit;
                         }
-                        traceDebug(
+                        RS_LOG_DEBUG("RSUTIL", 
                             "SQL_C_WCHAR->SQL_VARCHAR "
                             "iColDataLen=%d, cbLen=%d, "
                             "wchar16Size=%d, "
@@ -5832,7 +5832,7 @@ void readAndSetTraceInfo()
 	iTraceLevel = atoi(szTraceLevel);
 	szTraceFile[0] = '\0';
 
-	if (iTraceLevel != TRACE_OFF)
+	if (iTraceLevel != LOG_LEVEL_OFF)
 	{
 		// Read the LogPath from TRACE_KEY_NAME in HKEY_CURRENT_USER
 
@@ -5850,13 +5850,13 @@ void readAndSetTraceInfo()
 	}
 
 
-    if(iTraceLevel == TRACE_OFF)
+    if(iTraceLevel == LOG_LEVEL_OFF)
     {
         szTraceLevel[0] = '\0';
 		szTraceFile[0] = '\0';
 
 
-        if(iTraceLevel == TRACE_OFF)
+        if(iTraceLevel == LOG_LEVEL_OFF)
         {
 			// Read LogLevel from INI file
             int readOptions = readTraceOptionsFromIniFile(szTraceLevel, MAX_NUMBER_BUF_LEN, NULL, 0);
@@ -5869,7 +5869,7 @@ void readAndSetTraceInfo()
 			readTraceOptionsFromIniFile(NULL, 0, szTraceFile, MAX_PATH);
         }
 
-		if (iTraceLevel == TRACE_OFF)
+		if (iTraceLevel == LOG_LEVEL_OFF)
 		{
 			// Read the Trace from TRACE_KEY_NAME in HKEY_CURRENT_USER
 			szTraceLevel[0] = '\0';
@@ -9368,7 +9368,7 @@ void releaseResult(RS_RESULT_INFO *pResult, int iAtHeadResult, RS_STMT_INFO *pSt
 
 			if(IS_TRACE_ON())
 			{
-				traceInfo("Skiping current result for streaming cursor...");
+				RS_LOG_INFO("RSUTIL", "Skiping current result for streaming cursor...");
 			}
 
 			iSocketError = libpqSkipCurrentResultOfStreamingCursor(pStmt, pStmt->pCscStatementContext, pResult->pgResult, pStmt->phdbc->pgConn, TRUE);
@@ -9378,7 +9378,7 @@ void releaseResult(RS_RESULT_INFO *pResult, int iAtHeadResult, RS_STMT_INFO *pSt
 
 			if(IS_TRACE_ON())
 			{
-				traceInfo("Skiping current result for streaming cursor done.iSocketError=%d", iSocketError);
+				RS_LOG_INFO("RSUTIL", "Skiping current result for streaming cursor done.iSocketError=%d", iSocketError);
 			}
 		}
 
@@ -9940,8 +9940,11 @@ const char *mapODBCSQLTypeToPadbSQLTypeName(char *pODBCSQLTypeName, int iTokenLe
 void initODBC(HMODULE hModule)
 {
     initGlobals(hModule);
+    // Read reg settings
+    readAndSetTraceInfo();
+    //Logger
     initTrace();
-    initLibpq(gRsGlobalVars.fpTrace);
+    initLibpq(NULL);
 }
 
 /*=====================================================================================*/
@@ -9952,7 +9955,7 @@ void initODBC(HMODULE hModule)
 void uninitODBC()
 {
     uninitLibpq();
-    closeTraceFile();
+    uninitTrace();
     releaseGlobals();
 }
 
@@ -11221,7 +11224,7 @@ int getTotalMultiTuples(int numOfParamMarkers, long lArraySize, int *piLastBatch
 
     if(IS_TRACE_ON())
     {
-        traceInfo("iTotalMultiTuples=%d, numOfParamMarkers=%d, lArraySize=%ld, iLastBatchTotalMultiTuples=%d", 
+        RS_LOG_INFO("RSUTIL", "iTotalMultiTuples=%d, numOfParamMarkers=%d, lArraySize=%ld, iLastBatchTotalMultiTuples=%d", 
                         iTotalMultiTuples, numOfParamMarkers,lArraySize, iLastBatchTotalMultiTuples);
     }
 
@@ -11611,7 +11614,7 @@ void checkAndSkipAllResultsOfStreamingCursor(RS_STMT_INFO *pStmt)
 	{
 		if(IS_TRACE_ON())
 		{
-			traceInfo("Skiping results for streaming cursor...");
+			RS_LOG_INFO("RSUTIL", "Skiping results for streaming cursor...");
 		}
 
 		// If user didn't fetch all result(s), fetch it
@@ -11619,7 +11622,7 @@ void checkAndSkipAllResultsOfStreamingCursor(RS_STMT_INFO *pStmt)
 
 		if(IS_TRACE_ON())
 		{
-			traceInfo("Skiping results for streaming cursor done");
+			RS_LOG_INFO("RSUTIL", "Skiping results for streaming cursor done");
 		}
 	}
 	else
@@ -11661,7 +11664,7 @@ void skipAllResultsOfStreamingRowsUsingConnection(RS_CONN_INFO *pConn)
 			{
 				if(IS_TRACE_ON())
 				{
-					traceInfo("Skiping results for streaming cursor...");
+					RS_LOG_INFO("RSUTIL", "Skiping results for streaming cursor...");
 				}
 
 				// If user didn't fetch all result(s), fetch it
@@ -11669,7 +11672,7 @@ void skipAllResultsOfStreamingRowsUsingConnection(RS_CONN_INFO *pConn)
 
 				if(IS_TRACE_ON())
 				{
-					traceInfo("Skiping results for streaming cursor done");
+					RS_LOG_INFO("RSUTIL", "Skiping results for streaming cursor done");
 				}
 
 				break; // Only one statement active
@@ -11694,7 +11697,7 @@ void skipAllResultsOfStreamingRowsUsingConnection(RS_CONN_INFO *pConn)
 					{
 						if(IS_TRACE_ON())
 						{
-							traceInfo("Skiping results for streaming cursor...");
+							RS_LOG_INFO("RSUTIL", "Skiping results for streaming cursor...");
 						}
 
 						// If user didn't fetch all result(s), fetch it
@@ -11702,7 +11705,7 @@ void skipAllResultsOfStreamingRowsUsingConnection(RS_CONN_INFO *pConn)
 
 						if(IS_TRACE_ON())
 						{
-							traceInfo("Skiping results for streaming cursor done");
+							RS_LOG_INFO("RSUTIL", "Skiping results for streaming cursor done");
 						}
 
 						break;

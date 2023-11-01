@@ -22,19 +22,18 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMAdfsCredentialsProvider::IAMAdfsCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMSamlPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMSamlPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("IAMAdfsCredentialsProvider::IAMAdfsCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::IAMAdfsCredentialsProvider");
     InitArgumentsMap();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMAdfsCredentialsProvider::InitArgumentsMap()
 {
-    RS_LOG(m_log)("IAMAdfsCredentialsProvider::InitArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::InitArgumentsMap");
     IAMPluginCredentialsProvider::InitArgumentsMap();
 
     const rs_string loginToRp = m_config.GetLoginToRp();
@@ -44,7 +43,7 @@ void IAMAdfsCredentialsProvider::InitArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMAdfsCredentialsProvider::GetSamlAssertion()
 {
-    RS_LOG(m_log)("IAMAdfsCredentialsProvider::GetSamlAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::GetSamlAssertion");
 
     if (m_argsMap[IAM_KEY_USER].empty() || m_argsMap[IAM_KEY_PASSWORD].empty())
     {
@@ -56,7 +55,7 @@ rs_string IAMAdfsCredentialsProvider::GetSamlAssertion()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMAdfsCredentialsProvider::WindowsIntegratedAuthentication()
 {
-  RS_LOG(m_log)("IAMAdfsCredentialsProvider::WindowsIntegratedAuthentication");
+  RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::WindowsIntegratedAuthentication");
 
 #ifndef _WIN32
     /* ADFS Integrated Authentication is supported on Windows, throw an exception on other platforms */
@@ -70,7 +69,7 @@ rs_string IAMAdfsCredentialsProvider::WindowsIntegratedAuthentication()
     verifying the server certificate (e.g., self-signed IDP server) */
     bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
 
-    RS_LOG(m_log)(
+    RS_LOG_DEBUG("IAMCRD", 
         "IAMAdfsCredentialsProvider::WindowsIntegratedAuthentication ",
         + "verifySSL: %s",
         shouldVerifySSL ? "true" : "false");
@@ -95,13 +94,13 @@ rs_string IAMAdfsCredentialsProvider::WindowsIntegratedAuthentication()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
 {
-    RS_LOG(m_log)("IAMAdfsCredentialsProvider::FormBasedAuhentication");
+    RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuhentication");
 
     /* By default we enable verifying server certificate, use argument ssl_insecure = true to disable
        verifying the server certificate (e.g., self-signed IDP server) */
     bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
 
-    RS_LOG(m_log)("IAMAdfsCredentialsProvider::FormBasedAuthentication "
+    RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuthentication "
          "verifySSL: %s",
         (shouldVerifySSL ? "true" : "false"));
 
@@ -110,7 +109,7 @@ rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
     config.m_caFile = m_config.GetCaFile();
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
-	RS_LOG(m_log)("IAMAdfsCredentialsProvider::FormBasedAuthentication ",
+	RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuthentication ",
 		"HttpClientConfig.m_timeout: %ld",
 		config.m_timeout);
 
@@ -128,7 +127,7 @@ rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
     rs_string uri = "https://" + m_argsMap[IAM_KEY_IDP_HOST] + ":" + m_argsMap[IAM_KEY_IDP_PORT] +
         "/adfs/ls/IdpInitiatedSignOn.aspx?loginToRp=" + m_argsMap[IAM_KEY_LOGINTORP];
 
-    RS_LOG(m_log)(
+    RS_LOG_DEBUG("IAMCRD", 
         "IAMAdfsCredentialsProvider::FormBasedAuthentication ",
         + "Using URI: %s",
         uri.c_str());
@@ -139,7 +138,7 @@ rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
     /* Test the availability of the server by sending a simple GET request */
     Redshift::IamSupport::HttpResponse response = client->MakeHttpRequest(uri);
 	
-	RS_LOG(m_log)("IAMAdfsCredentialsProvider::FormBasedAuthentication: response %s\n", response.GetResponseBody().c_str());
+	RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuthentication: response %s\n", response.GetResponseBody().c_str());
 	
 	IAMHttpClient::CheckHttpResponseStatus(response,
         "Connection to the AD FS server failed. Please check the IdP Host and IdP Port.");
@@ -168,7 +167,7 @@ rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
 
     const rs_string requestBody = IAMHttpClient::CreateHttpFormRequestBody(paramMap);
     response = client->MakeHttpRequest(uri, HttpMethod::HTTP_POST, requestHeader, requestBody);
-	RS_LOG(m_log)("IAMAdfsCredentialsProvider::FormBasedAuthentication: response2 %s\n", response.GetResponseBody().c_str());
+	RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuthentication: response2 %s\n", response.GetResponseBody().c_str());
 
     IAMHttpClient::CheckHttpResponseStatus(response,
         "Authentication failed on the AD FS server. Please check the user, password, or Login To RP.");

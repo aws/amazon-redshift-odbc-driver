@@ -17,7 +17,7 @@
 #include "RsIamClient.h"
 #include "IAMUtils.h"
 #include "RsSettings.h"
-#include "../RsLogger.h"
+#include "rslog.h"
 
 #include <ares.h>
 #include <ares_dns.h>
@@ -306,11 +306,11 @@ struct cares_async_context {
     int status;
 };
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
-void IAMUtils::AresCallBack(void* arg, int status, int timeouts, struct hostent* hostent_result, RsLogger* m_log) {
+void IAMUtils::AresCallBack(void* arg, int status, int timeouts, struct hostent* hostent_result) {
     cares_async_context* callbackContext = static_cast<cares_async_context*>(arg);
     try {
         if (status == ARES_SUCCESS && hostent_result) {
-            RS_LOG(m_log) ("ares_call successful!");
+            RS_LOG_DEBUG("IAM", "ares_call successful!");
            rs_string fqdn = hostent_result->h_name;
            std::vector<rs_string> fqdnTokens = IAMUtils::TokenizeSetting(fqdn, ".");
             if (fqdnTokens.size() >= 6) {
@@ -319,11 +319,11 @@ void IAMUtils::AresCallBack(void* arg, int status, int timeouts, struct hostent*
         }       
         else {
             callbackContext->error = rs_string(ares_strerror(status));
-            RS_LOG(m_log)("ares_call failed! Error: %s", ares_strerror(status));
+            RS_LOG_DEBUG("IAM", "ares_call failed! Error: %s", ares_strerror(status));
         }
     }     
     catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
-        RS_LOG(m_log)("Exception thrown during AresCallBack execution. Exception: %s", ex);
+        RS_LOG_DEBUG("IAM", "Exception thrown during AresCallBack execution. Exception: %s", ex);
         throw ex;
     }
 }
@@ -335,13 +335,13 @@ rs_string IAMUtils::GetAwsRegionFromCname(const std::string& cnameEndpoint) {
         // Initialize c-ares library
         status = ares_library_init(ARES_LIB_INIT_ALL);
         if (status != ARES_SUCCESS) {
-            RS_LOG(m_log)("ares_library_init failed:, %s ", ares_strerror(status));    
+            RS_LOG_DEBUG("IAM", "ares_library_init failed:, %s ", ares_strerror(status));    
             return "";
         }
         // Create the c-ares channel
         status = ares_init(&channel);
         if (status != ARES_SUCCESS) {
-            RS_LOG(m_log)("ares_init failed: %s", ares_strerror(status));
+            RS_LOG_DEBUG("IAM", "ares_init failed: %s", ares_strerror(status));
             ares_library_cleanup();
             return "";
         }
@@ -372,10 +372,10 @@ rs_string IAMUtils::GetAwsRegionFromCname(const std::string& cnameEndpoint) {
             return callbackContext.aws_region;
         }
         else{
-            RS_LOG(m_log)("Cannot fetch the aws region. Exception: %s", callbackContext.error.c_str());
+            RS_LOG_DEBUG("IAM", "Cannot fetch the aws region. Exception: %s", callbackContext.error.c_str());
         }
     } catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
-        RS_LOG(m_log)("Cannot fetch the aws region. Exception: %s", ex);
+        RS_LOG_DEBUG("IAM", "Cannot fetch the aws region. Exception: %s", ex);
         throw ex;
     }
     return "";

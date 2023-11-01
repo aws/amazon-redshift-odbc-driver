@@ -108,9 +108,6 @@
     <ClCompile Include="iam\RsIamHelper.cpp">
       <Filter>Source Files\iam</Filter>
     </ClCompile>
-    <ClCompile Include="iam\RsLogger.cpp">
-      <Filter>Source Files\iam</Filter>
-    </ClCompile>
     <ClCompile Include="iam\core\IAMConfiguration.cpp">
       <Filter>Source Files\iam\core</Filter>
     </ClCompile>
@@ -267,9 +264,6 @@
       <Filter>Header Files\iam</Filter>
     </ClInclude>
     <ClInclude Include="iam\RsIamHelper.h">
-      <Filter>Header Files\iam</Filter>
-    </ClInclude>
-    <ClInclude Include="iam\RsLogger.h">
       <Filter>Header Files\iam</Filter>
     </ClInclude>
     <ClInclude Include="iam\RsSettings.h">

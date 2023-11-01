@@ -18,7 +18,7 @@ ifneq ($(strip $(C_DEPS)),)
 endif
 endif
 
-LIBS_PATH := -L../../../pgclient/src/interfaces/libpq/Release -L../../../pgclient/src/port/Release -L$(OPENSSL_LIB_DIR) -L$(AWS_SDK_LIB_DIR) -L$(CURL_LIB_DIR)
+LIBS_PATH := -L${ROOT_DIR}/src/logging -L../../../pgclient/src/interfaces/libpq/Release -L../../../pgclient/src/port/Release -L$(OPENSSL_LIB_DIR) -L$(AWS_SDK_LIB_DIR) -L$(CURL_LIB_DIR)
 
 # Add inputs and outputs from these tool invocations to the build variables 
 

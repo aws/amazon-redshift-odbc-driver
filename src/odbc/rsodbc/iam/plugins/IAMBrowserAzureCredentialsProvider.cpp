@@ -38,19 +38,18 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMBrowserAzureCredentialsProvider::IAMBrowserAzureCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMSamlPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMSamlPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::IAMBrowserAzureCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::IAMBrowserAzureCredentialsProvider");
     InitArgumentsMap();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserAzureCredentialsProvider::InitArgumentsMap()
 {
-    RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::InitArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::InitArgumentsMap");
     
     /* We grab the parameters needed to get the SAML Assertion and get the temporary IAM Credentials.
     We are using the base class implementation but we override for logging purposes. */
@@ -60,7 +59,7 @@ void IAMBrowserAzureCredentialsProvider::InitArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserAzureCredentialsProvider::ValidateArgumentsMap()
 {
-    RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::ValidateArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::ValidateArgumentsMap");
     
     /* We validate the parameters passed in and make sure we have the required fields. */
     if (!m_argsMap.count(IAM_KEY_IDP_TENANT))
@@ -82,7 +81,7 @@ void IAMBrowserAzureCredentialsProvider::ValidateArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserAzureCredentialsProvider::GetSamlAssertion()
 {
-    RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::GetSamlAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::GetSamlAssertion");
     
     /* All plugins must have this method implemented. We need to return the SAML Response back to base class.
     It is also good to make an entrance log to this method. */
@@ -92,7 +91,7 @@ rs_string IAMBrowserAzureCredentialsProvider::GetSamlAssertion()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 int IAMBrowserAzureCredentialsProvider::GenerateRandomInteger(int low, int high)
 {
-    RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::GenerateLength");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::GenerateLength");
 
     std::random_device rd;
     std::mt19937 generator(rd());
@@ -104,7 +103,7 @@ int IAMBrowserAzureCredentialsProvider::GenerateRandomInteger(int low, int high)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserAzureCredentialsProvider::GenerateState()
 {
-    RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::GenerateState");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::GenerateState");
 
     const char chars[] = "0123456789abcdefghijklmnopqrstuvwxyz";
     const int chars_size = (sizeof(chars) / sizeof(*chars)) - 1;
@@ -124,7 +123,7 @@ rs_string IAMBrowserAzureCredentialsProvider::GenerateState()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserAzureCredentialsProvider::LaunchBrowser(const rs_string& uri)
 {
-    RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::LaunchBrowser");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::LaunchBrowser");
 
 	//  Avoid system calls where possible for LOGIN_URL to help avoid possible remote code execution
 #if (defined(_WIN32) || defined(_WIN64))
@@ -165,7 +164,7 @@ void IAMBrowserAzureCredentialsProvider::LaunchBrowser(const rs_string& uri)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserAzureCredentialsProvider::WaitForServer(WEBServer& srv)
 {
-    RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::WaitForServer");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::WaitForServer");
 
     auto start = std::chrono::system_clock::now();
 
@@ -183,7 +182,7 @@ void IAMBrowserAzureCredentialsProvider::WaitForServer(WEBServer& srv)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserAzureCredentialsProvider::RequestAuthorizationCode()
 {
-   RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::RequestAuthorizationCode");
+   RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RequestAuthorizationCode");
     
     /*  Generate state to include in URI to prevent the cross-site request forgery attacks.
     This state will be verified in the token response.  */
@@ -192,7 +191,7 @@ rs_string IAMBrowserAzureCredentialsProvider::RequestAuthorizationCode()
     /* Let the server to listen on the random free port on the system. */
     rs_string random_port = "0";
 
-    WEBServer srv(m_log, state, random_port, m_argsMap[IAM_KEY_IDP_RESPONSE_TIMEOUT]);
+    WEBServer srv(state, random_port, m_argsMap[IAM_KEY_IDP_RESPONSE_TIMEOUT]);
     
     /* Launch WEB Server to wait the response with the authorization code from /oauth2/authorize/. */
     srv.LaunchServer();
@@ -242,7 +241,7 @@ rs_string IAMBrowserAzureCredentialsProvider::RequestAuthorizationCode()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserAzureCredentialsProvider::RequestAccessToken(const rs_string& authCode)
 {
-    RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::RequestAccessToken");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RequestAccessToken");
     
     /* By default we enable verifying server certificate, use argument ssl_insecure = true to disable
     verifying the server certificate (e.g., self-signed IDP server) */
@@ -270,7 +269,7 @@ rs_string IAMBrowserAzureCredentialsProvider::RequestAccessToken(const rs_string
     config.m_caFile = m_config.GetCaFile();
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
-	RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::RequestAccessToken ",
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RequestAccessToken ",
 		"HttpClientConfig.m_timeout: %ld",
 		config.m_timeout);
 
@@ -300,7 +299,7 @@ rs_string IAMBrowserAzureCredentialsProvider::RequestAccessToken(const rs_string
         requestHeader,
         requestBody);
     
-	RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::RequestAccessToken: response %s\n", response.GetResponseBody().c_str());
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RequestAccessToken: response %s\n", response.GetResponseBody().c_str());
 
     IAMHttpClient::CheckHttpResponseStatus(response,
         "Authentication failed on the Browser server. Please check the IdP Tenant and Client ID.");
@@ -314,7 +313,7 @@ rs_string IAMBrowserAzureCredentialsProvider::RequestAccessToken(const rs_string
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken(const rs_string& accessToken)
 {
-    RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken");
     
     /* accessToken formated as UTF8 string. As browser encodes it differently, we should replace:
     and / with - and _, respectively;
@@ -350,7 +349,7 @@ rs_string IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken(const 
     samlByteBuffer.GetUnderlyingData()),
     samlByteBuffer.GetLength());
     
-	RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken: samlContent %s\n", samlContent.c_str());
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken: samlContent %s\n", samlContent.c_str());
 
     /* What we get back from Browser is only the SAML Assertion. THe base class requires we pass in the full SAML
     Response. So we append the extra tags to the SAML Assertion to turn it into a SAML Response.*/
@@ -374,7 +373,7 @@ rs_string IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken(const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMBrowserAzureCredentialsProvider::BrowserOauthBasedAuthentication()
 {
-    RS_LOG(m_log)("IAMBrowserAzureCredentialsProvider::BrowserOauthBasedAuthentication");
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::BrowserOauthBasedAuthentication");
 
     const rs_string authCode = RequestAuthorizationCode();
 

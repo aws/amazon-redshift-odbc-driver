@@ -564,7 +564,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 
 		if (IS_TRACE_ON())
 		{
-			traceInfo("schemaPatternType=%d", schemaPatternType);
+			RS_LOG_INFO("RSCATALOG", "schemaPatternType=%d", schemaPatternType);
 		}
 
 		if (schemaPatternType == LOCAL_SCHEMA_QUERY)
@@ -743,7 +743,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
 
 	if (IS_TRACE_ON())
 	{
-		traceInfo("schemaPatternType=%d", schemaPatternType);
+		RS_LOG_INFO("RSCATALOG", "schemaPatternType=%d", schemaPatternType);
 	}
 
 	if (schemaPatternType == LOCAL_SCHEMA_QUERY)
@@ -2985,6 +2985,10 @@ static void addTypeRow(char *szCatalogQuery, RS_TYPE_INFO *pTypeInfo)
 //
 static int checkForValidCatalogName(RS_STMT_INFO *pStmt, SQLCHAR *pCatalogName)
 {
+    RS_LOG_DEBUG("RSCAT",
+        "Discarding deprecated catalog name validity check. Catalog name: %s",
+        ((pCatalogName && *pCatalogName != '\0') ? (const char *)pCatalogName
+                                                 : "'Not Supplied'"));
     int iValid;
 
     if(pCatalogName && *pCatalogName != '\0')

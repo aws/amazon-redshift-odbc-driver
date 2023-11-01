@@ -131,14 +131,13 @@
 #define RS_LOG_LEVEL_OPTION_NAME "LogLevel"
 #define RS_LOG_PATH_OPTION_NAME  "LogPath"
 
-#define TRACE_OFF			0
-#define TRACE_ERROR			1
-#define TRACE_API_CALL		2
-#define TRACE_INFO			3
-#define TRACE_MSG_PROTOCOL  4
-#define TRACE_DEBUG			5
-#define TRACE_DEBUG_APPEND_MODE        6
-
+#define LOG_LEVEL_OFF 0
+#define LOG_LEVEL_FATAL 1
+#define LOG_LEVEL_ERROR 2
+#define LOG_LEVEL_WARN 3
+#define LOG_LEVEL_INFO 4
+#define LOG_LEVEL_DEBUG 5
+#define LOG_LEVEL_TRACE 6
 
 #define DFLT_ASVR ""
 //#define DFLT_AUT "1"
@@ -656,12 +655,12 @@ static char *szAuthTypes[] = {
 
 static char *szLogLevels[] = {
 	"OFF",
+	"FATAL",
 	"ERROR",
-	"API_CALL",
+	"WARN",
 	"INFO",
-	"MESSAGE_PROTOCOL",
 	"DEBUG",
-	"DEBUG_APPEND",
+	"TRACE",
 	""
 };
 

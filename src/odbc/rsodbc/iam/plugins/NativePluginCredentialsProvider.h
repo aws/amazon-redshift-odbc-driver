@@ -14,8 +14,7 @@ namespace Redshift
         {
         public:
             explicit NativePluginCredentialsProvider(
-                RsLogger* in_log,
-                const IAMConfiguration& in_config = IAMConfiguration(),
+                                const IAMConfiguration& in_config = IAMConfiguration(),
                 const std::map<rs_string, rs_string>& in_argsMap
                     = std::map<rs_string, rs_string>());
 

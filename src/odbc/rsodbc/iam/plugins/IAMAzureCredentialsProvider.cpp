@@ -28,19 +28,18 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMAzureCredentialsProvider::IAMAzureCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMSamlPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMSamlPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("IAMAzureCredentialsProvider::IAMAzureCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMAzureCredentialsProvider::IAMAzureCredentialsProvider");
     InitArgumentsMap();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMAzureCredentialsProvider::InitArgumentsMap()
 {
-    RS_LOG(m_log)("IAMAzureCredentialsProvider::InitArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMAzureCredentialsProvider::InitArgumentsMap");
     /* We grab the parameters needed to get the SAML Assertion and get the temporary IAM Credentials.
        We are using the base class implementation but we override for logging purposes. */
     IAMPluginCredentialsProvider::InitArgumentsMap();
@@ -49,7 +48,7 @@ void IAMAzureCredentialsProvider::InitArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMAzureCredentialsProvider::ValidateArgumentsMap()
 {
-    RS_LOG(m_log)("IAMAzureCredentialsProvider::ValidateArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMAzureCredentialsProvider::ValidateArgumentsMap");
 
     /* We validate the parameters passed in and make sure we have the required fields. */
     if (!m_argsMap.count(IAM_KEY_IDP_TENANT))
@@ -77,7 +76,7 @@ void IAMAzureCredentialsProvider::ValidateArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMAzureCredentialsProvider::GetSamlAssertion()
 {
-    RS_LOG(m_log)("IAMAzureCredentialsProvider::GetSamlAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMAzureCredentialsProvider::GetSamlAssertion");
 
     /* All plugins must have this method implemented. We need to return the SAML Response back to base class.
        It is also good to make an entrance log to this method. */
@@ -87,13 +86,13 @@ rs_string IAMAzureCredentialsProvider::GetSamlAssertion()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
 {
-    RS_LOG(m_log)("IAMAzureCredentialsProvider::AzureOauthBasedAuthentication");
+    RS_LOG_DEBUG("IAMCRD", "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication");
 
     /* By default we enable verifying server certificate, use argument ssl_insecure = true to disable
        verifying the server certificate (e.g., self-signed IDP server) */
     bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
 
-    RS_LOG(m_log)(
+    RS_LOG_DEBUG("IAMCRD", 
         "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication ",
         + "verifySSL: %s",
         shouldVerifySSL ? "true" : "false");
@@ -103,7 +102,7 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
     config.m_caFile = m_config.GetCaFile();
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
-	RS_LOG(m_log)("IAMAzureCredentialsProvider::AzureOauthBasedAuthentication ",
+	RS_LOG_DEBUG("IAMCRD", "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication ",
 		"HttpClientConfig.m_timeout: %ld",
 		config.m_timeout);
 
@@ -124,7 +123,7 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
         m_argsMap[IAM_KEY_IDP_TENANT] +
         "/oauth2/token";
 
-    RS_LOG(m_log)(
+    RS_LOG_DEBUG("IAMCRD", 
        "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication ",
         + "Using URI: %s",
         uri.c_str());
@@ -159,7 +158,7 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
         requestHeader,
         requestBody);
 
-	RS_LOG(m_log)("IAMAzureCredentialsProvider::AzureOauthBasedAuthentication: response %s\n", response.GetResponseBody().c_str());
+	RS_LOG_DEBUG("IAMCRD", "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication: response %s\n", response.GetResponseBody().c_str());
 
     /* Check the response to see if we get a 200 back. If it fails, we throw an error and tell the user to
        double check their parameters. */
@@ -211,7 +210,7 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
     Base64::Base64 base64;
     rs_string samlAssertion = IAMUtils::convertToUTF8(in_samlAssertion);
 
-	RS_LOG(m_log)(
+	RS_LOG_DEBUG("IAMCRD", 
 		"IAMAzureCredentialsProvider::AzureOauthBasedAuthentication ",
 		+"samlAssertion: %s",
 		samlAssertion.c_str());

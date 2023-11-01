@@ -8,12 +8,10 @@ using namespace Aws::Auth;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMCredentialsProvider::IAMCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config) :
-    m_log(in_log),
+        const IAMConfiguration& in_config) :
     m_config(in_config)
 {
-    m_log->log("Redshift::IamSupport::%s::%s()", "IAMCredentialsProvider", "IAMCredentialsProvider");
+    RS_LOG_DEBUG("Redshift::IamSupport::%s::%s()", "IAMCredentialsProvider", "IAMCredentialsProvider");
 }
 
 
@@ -104,5 +102,5 @@ void IAMCredentialsProvider::ValidateURL(const rs_string & in_url)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMCredentialsProvider::~IAMCredentialsProvider()
 {
-    m_log->log("Redshift::IamSupport::%s::%s()", "IAMCredentialsProvider", "~IAMCredentialsProvider");
+    RS_LOG_DEBUG("Redshift::IamSupport::%s::%s()", "IAMCredentialsProvider", "~IAMCredentialsProvider");
 }

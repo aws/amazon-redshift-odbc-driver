@@ -4,7 +4,7 @@
 #include "IAMProfileConfigLoader.h"
 #include "IAMCredentials.h"
 #include "IAMConfiguration.h"
-#include "RsLogger.h"
+#include "rslog.h"
 
 #include <set>
 #include <aws/core/auth/AWSCredentialsProvider.h>
@@ -21,11 +21,10 @@ namespace IamSupport
     public:
         /// @brief Constructor.
         ///
-        /// @param in_log            The log. (NOT OWN)
+        
         /// @param in_config         The IAM Connection Configuration
         explicit IAMProfileCredentialsProvider(
-            RsLogger* in_log,
-            const IAMConfiguration& in_config = IAMConfiguration());
+                        const IAMConfiguration& in_config = IAMConfiguration());
 
         /// @brief Get the AWS credentials for ProfileCredentialsProvider
         /// 
@@ -88,7 +87,6 @@ namespace IamSupport
 
     private:
         // The connection log. (NOT OWN)
-        RsLogger* m_log;
 
         // The IAM related connection configurations (NOT OWN).
         const IAMConfiguration& m_config;

@@ -38,7 +38,7 @@
 
 #include "rsiam.h"
 #include "RsSettings.h"
-#include "RsLogger.h"
+#include <rslog.h>
 
 // Handle checking macros
 #define VALID_HENV(henv)    (henv != SQL_NULL_HENV)
@@ -302,7 +302,6 @@ public:
 
     // IAM stuff
     RsSettings iamSettings;
-    RsLogger   iamLogger;
 
 
     // Next element
@@ -587,9 +586,6 @@ public:
 typedef struct _RS_GLOBAL_VARS
 {
     HMODULE hModule; // DLL hinstance
-    int        iTraceLevel; // Trace level
-    char    szTraceFile[MAX_PATH + 1]; // Trace file name
-    FILE    *fpTrace; // Trace file handle
     MUTEX_HANDLE hApiMutex; // Thread safe API mutex
 }RS_GLOBAL_VARS;
 
@@ -1557,7 +1553,7 @@ void *
 libpqPrepareThreadProc(void *pArg);
 
 void libpqReleasePrepare(RS_PREPARE_INFO *pPrepare);
-void libpqTrace(RS_CONN_INFO *pConn);
+void libpqTrace(RS_CONN_INFO *pConn); // Deprecated
 SQLRETURN libpqDescribeParams(RS_STMT_INFO *pStmt, RS_PREPARE_INFO *pPrepare, PGresult *pgResult);
 SQLRETURN libpqExecuteDeallocateCommand(RS_STMT_INFO *pStmt, int iLockRequired, int calledFromDrop);
 void initLibpq(FILE    *fpTrace);

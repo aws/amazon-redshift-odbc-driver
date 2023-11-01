@@ -21,19 +21,18 @@ namespace
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMPingCredentialsProvider::IAMPingCredentialsProvider(
-    RsLogger* in_log,
-    const IAMConfiguration& in_config,
+        const IAMConfiguration& in_config,
     const std::map<rs_string, rs_string>& in_argsMap) :
-    IAMSamlPluginCredentialsProvider(in_log, in_config, in_argsMap)
+    IAMSamlPluginCredentialsProvider( in_config, in_argsMap)
 {
-    RS_LOG(m_log)("IAMPingCredentialsProvider::IAMPingCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::IAMPingCredentialsProvider");
     InitArgumentsMap();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMPingCredentialsProvider::InitArgumentsMap()
 {
-    RS_LOG(m_log)("IAMPingCredentialsProvider::InitArgumentsMap");
+    RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::InitArgumentsMap");
 
     IAMPluginCredentialsProvider::InitArgumentsMap();
 
@@ -44,14 +43,14 @@ void IAMPingCredentialsProvider::InitArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMPingCredentialsProvider::GetSamlAssertion()
 {
-    RS_LOG(m_log)("IAMPingCredentialsProvider::GetSamlAssertion");
+    RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::GetSamlAssertion");
 
     /* By default we enable verifying server certificate, use argument ssl_insecure = true to
     disable verifying the server certificate (e.g., self-signed IDP server). */
     
     bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
 
-    RS_LOG(m_log)("IAMPingCredentialsProvider::GetSamlAssertion "
+    RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::GetSamlAssertion "
          "verifySSL: %s",
         shouldVerifySSL ? "true" : "false");
 
@@ -61,7 +60,7 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
     config.m_caFile = m_config.GetCaFile();
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
-	RS_LOG(m_log)("IAMPingCredentialsProvider::GetSamlAssertion",
+	RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::GetSamlAssertion",
 		"HttpClientConfig.m_timeout: %ld",
 		config.m_timeout);
 
@@ -80,7 +79,7 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
         m_argsMap[IAM_KEY_PARTNER_SPID];
         
 
-    RS_LOG(m_log)("IAMPingCredentialsProvider::GetSamlAssertion "
+    RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::GetSamlAssertion "
          "Using URI: %s",
         uri.c_str());
 
@@ -89,7 +88,7 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
 
     Redshift::IamSupport::HttpResponse response = client->MakeHttpRequest(uri);
 
-	RS_LOG(m_log)("IAMPingCredentialsProvider::GetSamlAssertion: response %s\n", response.GetResponseBody().c_str());
+	RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::GetSamlAssertion: response %s\n", response.GetResponseBody().c_str());
 
     IAMHttpClient::CheckHttpResponseStatus(
         response,
@@ -113,8 +112,8 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
   response = client->MakeHttpRequest(uri_post, HttpMethod::HTTP_POST,
                                      requestHeader, requestBody);
 
-  RS_LOG(m_log)
-  ("IAMPingCredentialsProvider::PostSamlAssertion "
+  RS_LOG_DEBUG("IAMCRD",
+  "IAMPingCredentialsProvider::PostSamlAssertion "
    "Using URI: %s",
    uri_post.c_str());
     IAMHttpClient::CheckHttpResponseStatus(response,
@@ -126,7 +125,7 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
 std::map<rs_string, rs_string> IAMPingCredentialsProvider::GetNameValuePairFromInputTag(
     const std::vector<rs_string>& in_inputTags)
 {
-    RS_LOG(m_log)("IAMPingCredentialsProvider::GetNameValuePairFromInputTag");
+    RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::GetNameValuePairFromInputTag");
 
     std::map<rs_string, rs_string> paramMap;
     std::pair<rs_string, rs_string> username;
@@ -153,7 +152,7 @@ std::map<rs_string, rs_string> IAMPingCredentialsProvider::GetNameValuePairFromI
         {
             if (isPasswordFound)
             {
-                RS_LOG(m_log)("IAMPingCredentialsProvider::GetNameValuePairFromInputTag "
+                RS_LOG_ERROR("IAMCRD", "IAMPingCredentialsProvider::GetNameValuePairFromInputTag "
                      "pass field: %s, has conflict with field: %s",
                     password_tag.c_str(), name.c_str());
                 
@@ -191,7 +190,7 @@ std::map<rs_string, rs_string> IAMPingCredentialsProvider::GetNameValuePairFromI
     
     if (!isUsernameFound || !isPasswordFound)
     {
-        RS_LOG(m_log)("IAMPingCredentialsProvider::GetNameValuePairFromInputTag "
+        RS_LOG_ERROR("IAMCRD", "IAMPingCredentialsProvider::GetNameValuePairFromInputTag "
              "username found: %s, password found: %s",
             std::to_string(isUsernameFound).c_str(),
             std::to_string(isPasswordFound).c_str());
@@ -204,6 +203,6 @@ std::map<rs_string, rs_string> IAMPingCredentialsProvider::GetNameValuePairFromI
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMPingCredentialsProvider::~IAMPingCredentialsProvider()
 {
-    RS_LOG(m_log)("IAMPingCredentialsProvider::~IAMPingCredentialsProvider");
+    RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::~IAMPingCredentialsProvider");
     /* Do nothing */
 }

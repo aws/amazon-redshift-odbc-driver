@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void Selector::Register(SOCKET sfd)
 {
-    RS_LOG(logger_)("Selector::Register");
+    RS_LOG_DEBUG("IAMHTTP", "Selector::Register");
 
     if (sfd == -1)
     {
@@ -22,7 +22,7 @@ void Selector::Register(SOCKET sfd)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void Selector::Unregister(SOCKET sfd)
 {
-    RS_LOG(logger_)("Selector::Unregister");
+    RS_LOG_DEBUG("IAMHTTP", "Selector::Unregister");
 
     FD_CLR(sfd, &master_fds_);
 }
@@ -30,7 +30,7 @@ void Selector::Unregister(SOCKET sfd)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool Selector::Select(struct timeval *tv)
 {
-    RS_LOG(logger_)("Selector::Select");
+    RS_LOG_DEBUG("IAMHTTP", "Selector::Select");
     
     // As select will modify the file descriptior set we should keep temporary set to reflect the ready fd.
     fd_set read_fds_ = master_fds_;
