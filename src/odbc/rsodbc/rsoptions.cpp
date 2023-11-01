@@ -1245,6 +1245,12 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
         }
 
         case SQL_ATTR_ANSI_APP:
+        /*
+        Since we can handle both unicode as well as ANSI, we'll return SQL_ERROR as per
+        https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/unicode-drivers?view=sql-server-ver16
+        */
+            rc = SQL_ERROR;
+            break;
         default:
         {
             rc = SQL_ERROR;
