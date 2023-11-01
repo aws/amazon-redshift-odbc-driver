@@ -9,7 +9,8 @@
 #include "rsoptions.h"
 #include "rsdesc.h"
 #include "rstransaction.h"
-
+#include <map>
+#include <set>
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
@@ -219,6 +220,76 @@ error:
 
 /*====================================================================================================================================================*/
 
+/*
+Search in supported attributes If the need be, also search in mappings
+between supported attributes Verify that you find something (else error
+out), and then send it to the main implementation(RS_SQLGetStmtAttr). Note:
+If nothing found in the RS_SQLGetStmtAttr, it will fail in the switch
+case.then you'd better go back to your supported list and fix things there
+in order to error out early.
+*/
+
+SQLRETURN getSupportedAttribute(SQLINTEGER &iAttribute, SQLUSMALLINT hOption) {
+    // The following sets are as per UnixOdbc's sql.h and sqlext.h. 
+    // They should be consistent with the MS version.
+
+    static const std::map<SQLINTEGER, SQLINTEGER> supportedAttributeMappings = {
+        {SQL_ROWSET_SIZE, SQL_ATTR_ROW_ARRAY_SIZE},
+    };
+
+    static const std::set<SQLINTEGER> supportedAttributes = {
+        SQL_ASYNC_ENABLE, // sqlext 14
+        SQL_CONCURRENCY,  // sqlext 7
+        SQL_CURSOR_TYPE,  // sqlext 6
+        SQL_KEYSET_SIZE,  // sqlext 8
+        /* statement attributes for ODBC 3.0 */
+        SQL_ATTR_APP_ROW_DESC,          // sql 10010
+        SQL_ATTR_APP_PARAM_DESC,        // sql 10011
+        SQL_ATTR_IMP_ROW_DESC,          // sql, get 10012
+        SQL_ATTR_IMP_PARAM_DESC,        // sql, get 10013
+        SQL_ATTR_CURSOR_SCROLLABLE,     // sql, get (-1)
+        SQL_ATTR_CURSOR_SENSITIVITY,    // sql, get (-2)
+        SQL_ATTR_ASYNC_ENABLE,          // SQL_ASYNC_ENABLE 4
+        SQL_ATTR_CONCURRENCY,           // SQL_CONCURRENCY 7
+        SQL_ATTR_CURSOR_TYPE,           // SQL_CURSOR_TYPE 6
+        SQL_ATTR_KEYSET_SIZE,           // SQL_KEYSET_SIZE 8
+        SQL_ATTR_MAX_LENGTH,            // SQL_MAX_LENGTH 3
+        SQL_ATTR_MAX_ROWS,              // SQL_MAX_ROWS 1
+        SQL_ATTR_NOSCAN,                // SQL_NOSCAN 2
+        SQL_ATTR_QUERY_TIMEOUT,         // SQL_QUERY_TIMEOUT 0
+        SQL_ATTR_RETRIEVE_DATA,         // SQL_RETRIEVE_DATA 11
+        SQL_ATTR_ROW_ARRAY_SIZE,        // SQL_ROWSET_SIZE 27, 9 (map)
+        SQL_ATTR_ROW_BIND_TYPE,         // SQL_BIND_TYPE 5
+        SQL_ATTR_ROW_NUMBER,            // SQL_ROW_NUMBER, get 14
+        SQL_ATTR_SIMULATE_CURSOR,       // SQL_SIMULATE_CURSOR 10
+        SQL_ATTR_USE_BOOKMARKS,         // SQL_USE_BOOKMARKS 12
+        SQL_ATTR_FETCH_BOOKMARK_PTR,    //  sqlext 16
+        SQL_ATTR_PARAM_BIND_OFFSET_PTR, // sqlext 17
+        SQL_ATTR_PARAM_BIND_TYPE,       // sqlext 18
+        SQL_ATTR_PARAM_OPERATION_PTR,   // sqlext 19
+        SQL_ATTR_PARAM_STATUS_PTR,      // sqlext 20
+        SQL_ATTR_PARAMS_PROCESSED_PTR,  // sqlext 21
+        SQL_ATTR_PARAMSET_SIZE,         // sqlext 22
+        SQL_ATTR_ROW_BIND_OFFSET_PTR,   // sqlext 23
+        SQL_ATTR_ROW_OPERATION_PTR,     // sqlext 24
+        SQL_ATTR_ROW_STATUS_PTR,        // sqlext 25
+        SQL_ATTR_ROWS_FETCHED_PTR       // sqlext 26
+    };
+
+    auto it = supportedAttributes.find(hOption);
+    if (it != supportedAttributes.end()) {
+        iAttribute = *it;
+    } else {
+        auto itm = supportedAttributeMappings.find(hOption);
+        if (itm != supportedAttributeMappings.end()) {
+            iAttribute = itm->second;
+        } else {
+            return SQL_ERROR;
+        }
+    }
+    return SQL_SUCCESS;
+}
+
 //---------------------------------------------------------------------------------------------------------igarish
 // In ODBC 3.x, the ODBC 2.0 function SQLSetStmtOption has been replaced by SQLSetStmtAttr.
 //
@@ -251,27 +322,12 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetStmtOption(SQLHSTMT phstmt,
     SQLRETURN rc = SQL_SUCCESS;
     SQLINTEGER    iAttribute;
 
-    // Map the option to SQLSetStmtAttr.
-    switch (hOption) 
-    {
-        case SQL_ASYNC_ENABLE: iAttribute = SQL_ATTR_ASYNC_ENABLE; break;
-        case SQL_CONCURRENCY: iAttribute = SQL_ATTR_CONCURRENCY; break;
-        case SQL_CURSOR_TYPE: iAttribute = SQL_ATTR_CURSOR_TYPE; break;
-        case SQL_KEYSET_SIZE: iAttribute = SQL_ATTR_KEYSET_SIZE; break;
-        case SQL_MAX_LENGTH: iAttribute = SQL_ATTR_MAX_LENGTH; break;
-        case SQL_MAX_ROWS: iAttribute = SQL_ATTR_MAX_ROWS; break;
-        case SQL_NOSCAN: iAttribute = SQL_ATTR_NOSCAN; break;
-        case SQL_QUERY_TIMEOUT: iAttribute = SQL_ATTR_QUERY_TIMEOUT; break;
-        case SQL_RETRIEVE_DATA: iAttribute = SQL_ATTR_RETRIEVE_DATA; break;
-        case SQL_ROWSET_SIZE: iAttribute = SQL_ATTR_ROW_ARRAY_SIZE; break;
-        case SQL_BIND_TYPE: iAttribute = SQL_ATTR_ROW_BIND_TYPE; break;
-        case SQL_ROW_NUMBER: iAttribute = SQL_ATTR_ROW_NUMBER; break;
-        case SQL_SIMULATE_CURSOR: iAttribute = SQL_ATTR_SIMULATE_CURSOR; break;
-        case SQL_USE_BOOKMARKS: iAttribute = SQL_ATTR_USE_BOOKMARKS; break;
-        default: rc = checkHstmtHandleAndAddError(phstmt,SQL_ERROR,"HYC00", "Optional feature not implemented"); goto error;
-    } // Switch
-
-    // All of the above options are integer, so buffer length as such ignore.
+    if (SQL_ERROR == getSupportedAttribute(iAttribute, hOption)) {
+        rc = checkHstmtHandleAndAddError(
+            phstmt, SQL_ERROR, "HYC00",
+            "Optional feature not implemented:RS_SQLSetStmtOption");
+        goto error;
+    }
     rc = RsOptions::RS_SQLSetStmtAttr(phstmt, iAttribute, (SQLPOINTER) Value, SQL_NTS);
 
 error:
@@ -294,24 +350,12 @@ SQLRETURN  SQL_API SQLGetStmtOption(SQLHSTMT phstmt,
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLGetStmtOption(FUNC_CALL, 0, phstmt, hOption, pValue);
 
-    switch (hOption) 
-    {
-        case SQL_ASYNC_ENABLE: iAttribute = SQL_ATTR_ASYNC_ENABLE; break;
-        case SQL_CONCURRENCY: iAttribute = SQL_ATTR_CONCURRENCY; break;
-        case SQL_CURSOR_TYPE: iAttribute = SQL_ATTR_CURSOR_TYPE; break;
-        case SQL_KEYSET_SIZE: iAttribute = SQL_ATTR_KEYSET_SIZE; break;
-        case SQL_MAX_LENGTH: iAttribute = SQL_ATTR_MAX_LENGTH; break;
-        case SQL_MAX_ROWS: iAttribute = SQL_ATTR_MAX_ROWS; break;
-        case SQL_NOSCAN: iAttribute = SQL_ATTR_NOSCAN; break;
-        case SQL_QUERY_TIMEOUT: iAttribute = SQL_ATTR_QUERY_TIMEOUT; break;
-        case SQL_RETRIEVE_DATA: iAttribute = SQL_ATTR_RETRIEVE_DATA; break;
-        case SQL_ROWSET_SIZE: iAttribute = SQL_ATTR_ROW_ARRAY_SIZE; break;
-        case SQL_BIND_TYPE: iAttribute = SQL_ATTR_ROW_BIND_TYPE; break;
-        case SQL_ROW_NUMBER: iAttribute = SQL_ATTR_ROW_NUMBER; break;
-        case SQL_SIMULATE_CURSOR: iAttribute = SQL_ATTR_SIMULATE_CURSOR; break;
-        case SQL_USE_BOOKMARKS: iAttribute = SQL_ATTR_USE_BOOKMARKS; break;
-        default: rc = checkHstmtHandleAndAddError(phstmt,SQL_ERROR,"HYC00", "Optional feature not implemented"); goto error;
-    } // Switch
+    if (SQL_ERROR == getSupportedAttribute(iAttribute, hOption)) {
+        rc = checkHstmtHandleAndAddError(
+            phstmt, SQL_ERROR, "HYC00",
+            "Optional feature not implemented:SQLGetStmtOption");
+        goto error;
+    }
 
     rc = RsOptions::RS_SQLGetStmtAttr(phstmt, iAttribute, pValue, SQL_MAX_OPTION_STRING_LENGTH, NULL);
 
