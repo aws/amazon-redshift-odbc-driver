@@ -329,7 +329,7 @@ static void addTableTypeFilterCondition(char *filterClause, char *pVal, SQLSMALL
 static void addOrderByClause(char *szCatalogQuery, char *pOrderByCols);
 static void addTypeRow(char *szCatalogQuery, RS_TYPE_INFO *pTypeInfo);
 static void addEqualFilterCondition(RS_STMT_INFO *pStmt, char *szCatalogQuery, int bufLen, char *pFilterColumn, char *pVal, SQLSMALLINT cbLen);
-static int checkForValidCatalogName(RS_STMT_INFO *pStmt, SQLCHAR *pCatalogName);
+static int checkForValidCatalogName(RS_STMT_INFO *pStmt, SQLCHAR *pCatalogName); // Deprecated
 static bool isSingleDatabaseMetaData(RS_STMT_INFO *pStmt);
 static int getExtSchemaPatternMatch(RS_STMT_INFO *pStmt, SQLCHAR *pSchemaName, SQLSMALLINT cbSchemaName);
 static void getTableFilterClause(
@@ -2982,13 +2982,14 @@ static void addTypeRow(char *szCatalogQuery, RS_TYPE_INFO *pTypeInfo)
 //---------------------------------------------------------------------------------------------------------igarish
 // Check whether catalog name is valid or not for catalog functions.
 // Return TRUE when it's valid otherwise FALSE.
-//
+// Deprecated: Returns TRUE all the time and will be removed in future releases
 static int checkForValidCatalogName(RS_STMT_INFO *pStmt, SQLCHAR *pCatalogName)
 {
     RS_LOG_DEBUG("RSCAT",
         "Discarding deprecated catalog name validity check. Catalog name: %s",
         ((pCatalogName && *pCatalogName != '\0') ? (const char *)pCatalogName
                                                  : "'Not Supplied'"));
+    return TRUE;
     int iValid;
 
     if(pCatalogName && *pCatalogName != '\0')
