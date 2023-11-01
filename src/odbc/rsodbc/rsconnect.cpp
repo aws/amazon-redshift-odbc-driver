@@ -25,6 +25,8 @@
 #include "resource.h"
 #endif
 
+const bool CAN_OVERRIDE_DSN = true;
+
 RS_GLOBAL_VARS gRsGlobalVars;
 
 #ifdef WIN32
@@ -1977,8 +1979,6 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
           1, sizeof(RS_TCP_PROXY_CONN_PROPS_INFO));
 		pTcpProxyProps = pConnectProps->pTcpProxyProps;
 	}
-    const std::string DRIVER_STR("DRIVER");
-    const std::string DSN_STR("DSN");
 
     // Internal lambda function applied to each extracted key-value
     auto processKeyVal = [&](const char *pname, const char *pval) {
@@ -1999,56 +1999,66 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
           pConnectProps->iHostNameKeyWordType =
               (_stricmp(pname, RS_HOST_NAME) == 0) ? LONG_NAME_KEYWORD
                                                    : SHORT_NAME_KEYWORD;
-          if (pConnectProps->szHost[0] == '\0') {
-                            strncpy(pConnectProps->szHost, pval, MAX_IDEN_LEN - 1);
-                            pConnectProps->szHost[MAX_IDEN_LEN - 1] = '\0';
-                        }
-        } else if (_stricmp(pname, RS_PORT_NUMBER) == 0 ||
-                   _stricmp(pname, RS_PORT) == 0) {
-          pConnectProps->iPortKeyWordType =
-              (_stricmp(pname, RS_PORT_NUMBER) == 0) ? LONG_NAME_KEYWORD
-                                                     : SHORT_NAME_KEYWORD;
-          if (pConnectProps->szPort[0] == '\0') {
-                            strncpy(pConnectProps->szPort, pval, MAX_IDEN_LEN - 1);
-                            pConnectProps->szPort[MAX_IDEN_LEN - 1] = '\0';
-                        }
-        } else if (_stricmp(pname, RS_DATABASE) == 0 ||
-                   _stricmp(pname, RS_DB) == 0) {
-          pConnectProps->iDatabaseKeyWordType =
-              (_stricmp(pname, RS_DATABASE) == 0) ? LONG_NAME_KEYWORD
-                                                  : SHORT_NAME_KEYWORD;
-          if (pConnectProps->szDatabase[0] == '\0') {
-                            strncpy(pConnectProps->szDatabase, pval, MAX_IDEN_LEN - 1);
-                            pConnectProps->szDatabase[MAX_IDEN_LEN - 1] = '\0';
-                        }
-        } else if (_stricmp(pname, RS_LOGON_ID) == 0 ||
-                   _stricmp(pname, RS_UID) == 0) {
-          pConnectProps->iUserKeyWordType = (_stricmp(pname, RS_LOGON_ID) == 0)
-                                                ? LONG_NAME_KEYWORD
-                                                : SHORT_NAME_KEYWORD;
-          if (pConnectProps->szUser[0] == '\0') {
-                            strncpy(pConnectProps->szUser, pval, MAX_IDEN_LEN - 1);
-                            pConnectProps->szUser[MAX_IDEN_LEN - 1] = '\0';
-                        }
-        } else if (_stricmp(pname, RS_PASSWORD) == 0 ||
-                   _stricmp(pname, RS_PWD) == 0) {
-          pConnectProps->iPasswordKeyWordType =
-              (_stricmp(pname, RS_PASSWORD) == 0) ? LONG_NAME_KEYWORD
-                                                  : SHORT_NAME_KEYWORD;
-          if (pConnectProps->szPassword[0] == '\0') {
-                            strncpy(pConnectProps->szPassword, pval, MAX_IDEN_LEN - 1);
-                            pConnectProps->szPassword[MAX_IDEN_LEN - 1] = '\0';
-                        }
-        } else if (_stricmp(pname, RS_DSN) == 0) {
-          if (pConnectProps->szDSN[0] == '\0') {
-                            strncpy(pConnectProps->szDSN, pval, MAX_IDEN_LEN - 1);
-                            pConnectProps->szDSN[MAX_IDEN_LEN - 1] = '\0';
-                        }
-        } else if (_stricmp(pname, RS_DRIVER) == 0) {
-          if (pConnectProps->szDriver[0] == '\0') {
-                            strncpy(pConnectProps->szDriver, pval, MAX_IDEN_LEN - 1);
-                            pConnectProps->szDriver[MAX_IDEN_LEN - 1] = '\0';
-                        }
+                if (CAN_OVERRIDE_DSN || pConnectProps->szHost[0] == '\0') {
+                    strncpy(pConnectProps->szHost, pval, MAX_IDEN_LEN - 1);
+                    pConnectProps->szHost[MAX_IDEN_LEN - 1] = '\0';
+                }
+            } else if (_stricmp(pname, RS_PORT_NUMBER) == 0 ||
+                        _stricmp(pname, RS_PORT) == 0) {
+                pConnectProps->iPortKeyWordType =
+                    (_stricmp(pname, RS_PORT_NUMBER) == 0)
+                        ? LONG_NAME_KEYWORD
+                        : SHORT_NAME_KEYWORD;
+                if (CAN_OVERRIDE_DSN || pConnectProps->szPort[0] == '\0') {
+                    strncpy(pConnectProps->szPort, pval, MAX_IDEN_LEN - 1);
+                    pConnectProps->szPort[MAX_IDEN_LEN - 1] = '\0';
+                }
+            } else if (_stricmp(pname, RS_DATABASE) == 0 ||
+                        _stricmp(pname, RS_DB) == 0) {
+                pConnectProps->iDatabaseKeyWordType =
+                    (_stricmp(pname, RS_DATABASE) == 0)
+                        ? LONG_NAME_KEYWORD
+                        : SHORT_NAME_KEYWORD;
+                if (CAN_OVERRIDE_DSN ||
+                    pConnectProps->szDatabase[0] == '\0') {
+                    strncpy(pConnectProps->szDatabase, pval,
+                            MAX_IDEN_LEN - 1);
+                    pConnectProps->szDatabase[MAX_IDEN_LEN - 1] = '\0';
+                }
+            } else if (_stricmp(pname, RS_LOGON_ID) == 0 ||
+                        _stricmp(pname, RS_UID) == 0) {
+                pConnectProps->iUserKeyWordType =
+                    (_stricmp(pname, RS_LOGON_ID) == 0)
+                        ? LONG_NAME_KEYWORD
+                        : SHORT_NAME_KEYWORD;
+                if (CAN_OVERRIDE_DSN || pConnectProps->szUser[0] == '\0') {
+                    strncpy(pConnectProps->szUser, pval, MAX_IDEN_LEN - 1);
+                    pConnectProps->szUser[MAX_IDEN_LEN - 1] = '\0';
+                }
+            } else if (_stricmp(pname, RS_PASSWORD) == 0 ||
+                        _stricmp(pname, RS_PWD) == 0) {
+                pConnectProps->iPasswordKeyWordType =
+                    (_stricmp(pname, RS_PASSWORD) == 0)
+                        ? LONG_NAME_KEYWORD
+                        : SHORT_NAME_KEYWORD;
+                if (CAN_OVERRIDE_DSN ||
+                    pConnectProps->szPassword[0] == '\0') {
+                    strncpy(pConnectProps->szPassword, pval,
+                            MAX_IDEN_LEN - 1);
+                    pConnectProps->szPassword[MAX_IDEN_LEN - 1] = '\0';
+                }
+            } else if (_stricmp(pname, RS_DSN) == 0) {
+                if (CAN_OVERRIDE_DSN || pConnectProps->szDSN[0] == '\0') {
+                    strncpy(pConnectProps->szDSN, pval, MAX_IDEN_LEN - 1);
+                    pConnectProps->szDSN[MAX_IDEN_LEN - 1] = '\0';
+                }
+            } else if (_stricmp(pname, RS_DRIVER) == 0) {
+                if (CAN_OVERRIDE_DSN ||
+                    pConnectProps->szDriver[0] == '\0') {
+                    strncpy(pConnectProps->szDriver, pval,
+                            MAX_IDEN_LEN - 1);
+                    pConnectProps->szDriver[MAX_IDEN_LEN - 1] = '\0';
+                }
 
 						// Read DSN-less connection info from amazon.redshiftodbc.ini
 						readCscOptionsForDsnlessConnection(pConnectProps);
@@ -2356,7 +2366,6 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
                               : std::string(szConnStrIn, cbConnStrIn);
     auto connectionSettingsMap = parseConnectionString(connStr);
     for (auto &kv : connectionSettingsMap) {
-      // std::cout << kv.first.c_str() << " -> " << kv.second.c_str() << std::endl;
       processKeyVal(kv.first.c_str(), kv.second.c_str());
     }
 
