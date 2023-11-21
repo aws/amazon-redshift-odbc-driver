@@ -159,9 +159,6 @@
     <ClCompile Include="iam\plugins\IdpTokenAuthPlugin.cpp">
       <Filter>Source Files\iam\plugins</Filter>
     </ClCompile>
-    <ClCompile Include="iam\plugins\BrowserIdcAuthPlugin.cpp">
-      <Filter>Source Files\iam\plugins</Filter>
-    </ClCompile>
     <ClCompile Include="iam\plugins\IAMAdfsCredentialsProvider.cpp">
       <Filter>Source Files\iam\plugins</Filter>
     </ClCompile>
@@ -333,9 +330,6 @@
       <Filter>Header Files\iam\http</Filter>
     </ClInclude>
     <ClInclude Include="iam\plugins\IdpTokenAuthPlugin.h">
-      <Filter>Header Files\iam\plugins</Filter>
-    </ClInclude>
-    <ClInclude Include="iam\plugins\BrowserIdcAuthPlugin.h">
       <Filter>Header Files\iam\plugins</Filter>
     </ClInclude>
     <ClInclude Include="iam\plugins\IAMAdfsCredentialsProvider.h">

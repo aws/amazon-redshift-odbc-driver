@@ -14,7 +14,6 @@
 #include "IAMBrowserAzureOAuth2CredentialsProvider.h"
 #include "JwtIamAuthPlugin.h"
 #include "IdpTokenAuthPlugin.h"
-#include "BrowserIdcAuthPlugin.h"
 
 #include <map>
 #include <memory>
@@ -152,16 +151,6 @@ namespace IamSupport
             const std::map<rs_string, rs_string>& in_argsMap
             = std::map<rs_string, rs_string>());
         
-        /// @brief Constructor           Construct IdC Browser credentials provider using argument map
-        ///
-        /// @param in_config             The IAM Connection Configuration
-        /// @param in_argsMap            Optional arguments map passed to the credentials provider
-        /// 
-        /// @return Browser IdC credentials provider wrapped using smart pointer
-        static std::unique_ptr<BrowserIdcAuthPlugin> CreateBrowserIdcAuthPlugin(
-                        const IAMConfiguration& in_config = IAMConfiguration(),
-            const std::map<rs_string, rs_string>& in_argsMap
-            = std::map<rs_string, rs_string>());
 
         /// @brief Constructor           Construct credentials provider using argument map
         ///

@@ -439,16 +439,11 @@ void RsIamHelper::SetIamSettings(
         settings.m_groupFederation = pIamProps->isGroupFederation;
     } else { // non-IAM
         settings.m_clusterIdentifer = pIamProps->szClusterId;
-        if (pIamProps->szPluginName[0] != '\0' && (_stricmp(pIamProps->szPluginName, PLUGIN_IDP_TOKEN_AUTH) == 0 ||
-            _stricmp(pIamProps->szPluginName, PLUGIN_BROWSER_IDC_AUTH) == 0)) {
+        if (pIamProps->szPluginName[0] != '\0' && (_stricmp(pIamProps->szPluginName, PLUGIN_IDP_TOKEN_AUTH) == 0)) {
             SetCommonFederatedAuthSettings(pIamProps, settings);
             settings.m_idpAuthToken = pIamProps->szBasicAuthToken;
             settings.m_idpAuthTokenType = pIamProps->szTokenType;
-            settings.m_startUrl = pIamProps->szStartUrl;
-            settings.m_idcRegion = pIamProps->szIdcRegion;
             settings.m_disableCache = true; // explicitly disable caching for idc plugins
-            settings.m_idcResponseTimeout = pIamProps->lIdcResponseTimeout;
-            settings.m_idcClientDisplayName = pIamProps->szIdcClientDisplayName;
         } 
     }
 }

@@ -457,40 +457,6 @@ namespace IamSupport
         /// @param in_idpAuthTokenType token type used in IdP Auth Token plugin
         void SetIdpAuthTokenType(const rs_string& in_idpAuthTokenType);
 
-        /// @brief Returns the start url used in Browser IdC plugin
-        rs_string GetStartUrl() const;
-
-        /// @brief Sets the startUrl
-        ///
-        /// @param in_startUrl     Start url used in Browser IdC plugin
-        void SetStartUrl(const rs_string& in_startUrl);
-
-        /// @brief Returns the IdC region used in Browser IdC plugin
-        rs_string GetIdcRegion() const;
-
-        /// @brief Sets the idcRegion
-        ///
-        /// @param in_idcRegion     IdC region used in Browser IdC plugin
-        void SetIdcRegion(const rs_string& in_idcRegion);
-
-        /// @brief Returns the display name of the client that is using the IdC browser auth plugin
-        rs_string GetIdcClientDisplayName() const;
-
-        /// @brief Sets the display name of the client that is using the IdC browser auth plugin
-        ///
-        /// @param in_idcClientDisplayName     Client display name
-        void SetIdcClientDisplayName(const rs_string& in_idcClientDisplayName);
-
-        /// @brief Returns the IdC browser auth response timeout (in seconds) of the IAMConfiguration
-        ///
-        /// @return Timeout of the IdC browser auth
-        short GetIdcResponseTimeout() const;
-
-        /// @brief Sets the IdC browser auth response timeout (in seconds) of the IAMConfiguration
-        ///
-        /// @param in_idc_response_timeout      in_idc_response_timeout of the IAMConfiguration
-        void SetIdcResponseTimeout(short in_idc_response_timeout);
-
         /// @brief Gets the in_key setting of the IAMConfiguration
         ///
         /// @param in_key      Key setting of the IAMConfiguration

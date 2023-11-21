@@ -56,15 +56,11 @@ struct RS_IAM_CONN_PROPS_INFO {
   char szDatabase[MAX_IDEN_LEN];
   char szAuthProfile[MAX_IAM_BUF_VAL];
   char szBasicAuthToken[MAX_BASIC_AUTH_TOKEN_LEN];
-  char szStartUrl[MAX_IAM_BUF_VAL];
-  char szIdcRegion[MAX_IDEN_LEN];
   char szIdentityNamespace[MAX_IAM_BUF_VAL];
   char szTokenType[MAX_IDEN_LEN];
   bool isDisableCache; 
   int iStsConnectionTimeout; 
   bool isGroupFederation;
-  long lIdcResponseTimeout; // idc_response_timeout
-  char szIdcClientDisplayName[MAX_IAM_BUF_VAL]; // idc_client_display_name
 };
 
 struct RS_PROXY_CONN_PROPS_INFO {

@@ -86,16 +86,12 @@ bool static isIdcOrNativeIdpPlugin(const rs_string &pluginName) {
     return IAMUtils::isEqual(IAMUtils::convertStringToWstring(pluginName),
                              IAMUtils::convertCharStringToWstring(IAM_PLUGIN_BROWSER_AZURE_OAUTH2), false) ||
            IAMUtils::isEqual(IAMUtils::convertStringToWstring(pluginName),
-                             IAMUtils::convertCharStringToWstring(PLUGIN_IDP_TOKEN_AUTH), false) ||
-           IAMUtils::isEqual(IAMUtils::convertStringToWstring(pluginName),
-                             IAMUtils::convertCharStringToWstring(PLUGIN_BROWSER_IDC_AUTH), false);
+                             IAMUtils::convertCharStringToWstring(PLUGIN_IDP_TOKEN_AUTH), false);
 }
 
 bool static isIdcPlugin(const rs_string &pluginName) {
     return IAMUtils::isEqual(IAMUtils::convertStringToWstring(pluginName),
-                             IAMUtils::convertCharStringToWstring(PLUGIN_IDP_TOKEN_AUTH), false) ||
-           IAMUtils::isEqual(IAMUtils::convertStringToWstring(pluginName),
-                             IAMUtils::convertCharStringToWstring(PLUGIN_BROWSER_IDC_AUTH), false);
+                             IAMUtils::convertCharStringToWstring(PLUGIN_IDP_TOKEN_AUTH), false);
 }
 
 rs_string RsIamClient::GetPluginName() {
@@ -995,10 +991,6 @@ IAMConfiguration RsIamClient::CreateIAMConfiguration(const rs_string& in_authTyp
         config.SetIdpAuthToken(m_settings.m_idpAuthToken);
         config.SetIdpAuthTokenType(m_settings.m_idpAuthTokenType);
         config.SetRegion(m_settings.m_awsRegion);
-        config.SetStartUrl(m_settings.m_startUrl);
-        config.SetIdcRegion(m_settings.m_idcRegion);
-        config.SetIdcResponseTimeout(m_settings.m_idcResponseTimeout);
-        config.SetIdcClientDisplayName(m_settings.m_idcClientDisplayName);
     }
     else if (in_authType == IAM_AUTH_TYPE_PROFILE)
     {

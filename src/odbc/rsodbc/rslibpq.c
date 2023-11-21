@@ -395,10 +395,6 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 		}
 
 		if(pConnectProps->pIamProps) {
-			if(_stricmp(plugin_name, PLUGIN_BROWSER_IDC_AUTH) == 0) {
-				ppKeywords[iCount] = RS_TOKEN_TYPE;
-				ppValues[iCount++] = RS_TOKEN_TYPE_ACCESS_TOKEN;
-			}
 			if(_stricmp(plugin_name, PLUGIN_IDP_TOKEN_AUTH) == 0 && pConnectProps->pIamProps->szTokenType[0] != '\0') {
 				ppKeywords[iCount] = RS_TOKEN_TYPE;
 				ppValues[iCount++] = pConnectProps->pIamProps->szTokenType;
@@ -406,20 +402,13 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 		}
 
 		if (pConnectProps->pIamProps &&
-			 (_stricmp(plugin_name, PLUGIN_IDP_TOKEN_AUTH) == 0 ||
-			 _stricmp(plugin_name, PLUGIN_BROWSER_IDC_AUTH) == 0) &&
+			 (_stricmp(plugin_name, PLUGIN_IDP_TOKEN_AUTH) == 0) &&
 			pConnectProps->pIamProps->szIdentityNamespace[0] != '\0') {
 			ppKeywords[iCount] = RS_IDENTITY_NAMESPACE;
 			ppValues[iCount++] = pConnectProps->pIamProps->szIdentityNamespace;
 			if(IS_TRACE_LEVEL_DEBUG()) {
 				RS_LOG_DEBUG("RSLIBPQ", "using identity_namespace=%s", pConnectProps->pIamProps->szIdentityNamespace);
 			}
-		}
-
-		if (pConnectProps->pIamProps
-			 && pConnectProps->pIamProps->szIdcClientDisplayName[0] != '\0') {
-			ppKeywords[iCount] = RS_IDC_CLIENT_DISPLAY_NAME;
-			ppValues[iCount++] = pConnectProps->pIamProps->szIdcClientDisplayName;
 		}
 
 		if (pConnectProps->szProviderName[0] != '\0')

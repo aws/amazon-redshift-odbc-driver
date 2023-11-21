@@ -945,13 +945,8 @@ public:
 #define RS_IAM_STS_CONNECTION_TIMEOUT  "StsConnectionTimeout"
 #define RS_SCOPE                       "scope"
 #define RS_BASIC_AUTH_TOKEN            "token"
-#define RS_START_URL                   "start_url"
-#define RS_IDC_REGION                  "idc_region"
 #define RS_IDENTITY_NAMESPACE          "identity_namespace" 
 #define RS_TOKEN_TYPE                  "token_type"
-#define RS_IDC_RESPONSE_TIMEOUT        "idc_response_timeout"
-#define RS_IDC_CLIENT_DISPLAY_NAME     "idc_client_display_name"
-
 
 
 #define RS_NATIVE_KEY_PROVIDER_NAME	"provider_name"
@@ -963,7 +958,6 @@ public:
 #define RS_AUTH_TYPE_PROFILE  "Profile"
 #define RS_AUTH_TYPE_PLUGIN   "Plugin"
 #define RS_IDP_TYPE_AWS_IDC   "AwsIdc"
-#define RS_TOKEN_TYPE_ACCESS_TOKEN  "ACCESS_TOKEN"
 
 
 /* Predefined external plug-in */
@@ -977,8 +971,6 @@ public:
 #define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"   // used for federated native IdP auth
 #define JWT_IAM_AUTH_PLUGIN         "JwtIamAuthPlugin"   // used for federated Jwt IAM auth
 #define PLUGIN_IDP_TOKEN_AUTH              "IdpTokenAuthPlugin"
-#define PLUGIN_BROWSER_IDC_AUTH            "BrowserIdcAuthPlugin"
-
 
 
 struct RS_TCP_PROXY_CONN_PROPS_INFO {

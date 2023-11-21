@@ -86,10 +86,6 @@
 #define RS_TOKEN                  "token"	
 #define RS_TOKEN_TYPE             "token_type"
 #define RS_IDENTITY_NAMESPACE     "identity_namespace"
-#define RS_IDC_REGION             "idc_region"
-#define RS_START_URL              "start_url"
-#define RS_IDC_RESPONSE_TIMEOUT   "idc_response_timeout"
-#define RS_IDC_CLIENT_DISPLAY_NAME    "idc_client_display_name"
 
 
  // Connection options value
@@ -108,7 +104,6 @@
 #define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"
 #define PLUGIN_JWT_IAM_AUTH         "JwtIamAuthPlugin"    // used for federated IAM auth
 #define PLUGIN_IDP_TOKEN_AUTH              "IdpTokenAuthPlugin"
-#define PLUGIN_BROWSER_IDC_AUTH            "BrowserIdcAuthPlugin"
 
 
 #define MAX_JWT					(16 * 1024)
@@ -230,10 +225,6 @@
 #define DFLT_TOKEN ""
 #define DFLT_TOKEN_TYPE ""
 #define DFLT_IDENTITY_NAMESPACE ""
-#define DFLT_IDC_REGION ""
-#define DFLT_START_URL ""
-#define DFLT_IDC_RESPONSE_TIMEOUT ""
-#define DFLT_IDC_CLIENT_DISPLAY_NAME ""
 
 #define DFLT_DATABASE_METADATA_CURRENT_DB_ONLY "1"
 #define DFLT_READ_ONLY "0"
@@ -263,7 +254,7 @@
 /* 2 Advanced */ 
 /* 9 Proxy */
 
-#define DD_DSN_ATTR_COUNT 99
+#define DD_DSN_ATTR_COUNT 95
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -456,10 +447,6 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_TOKEN , DFLT_TOKEN },
 { RS_TOKEN_TYPE , DFLT_TOKEN_TYPE },
 { RS_IDENTITY_NAMESPACE , DFLT_IDENTITY_NAMESPACE },
-{ RS_IDC_REGION , DFLT_IDC_REGION },
-{ RS_START_URL , DFLT_START_URL },
-{ RS_IDC_RESPONSE_TIMEOUT , DFLT_IDC_RESPONSE_TIMEOUT },
-{ RS_IDC_CLIENT_DISPLAY_NAME , DFLT_IDC_CLIENT_DISPLAY_NAME },
 { "", "" }
 };
 
@@ -579,10 +566,6 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { RS_TOKEN , RS_TOKEN },
 { RS_TOKEN_TYPE , RS_TOKEN_TYPE },
 { RS_IDENTITY_NAMESPACE , RS_IDENTITY_NAMESPACE },
-{ RS_IDC_REGION , RS_IDC_REGION },
-{ RS_START_URL , RS_START_URL },
-{ RS_IDC_RESPONSE_TIMEOUT , RS_IDC_RESPONSE_TIMEOUT },
-{ RS_IDC_CLIENT_DISPLAY_NAME , RS_IDC_CLIENT_DISPLAY_NAME },
 { "", "" }
 };
 
@@ -633,7 +616,6 @@ static int rs_pooling_items[5] = {
 #define AUTH_BROWSER_AZURE_OAUTH2	10
 #define AUTH_JWT_IAM		11
 #define AUTH_IDP_TOKEN      12
-#define AUTH_BROWSER_IDC    13
 
 static char *szAuthTypes[] = {
 	"Standard",
@@ -649,7 +631,6 @@ static char *szAuthTypes[] = {
 	"Identity Provider: Browser Azure AD OAUTH2",
 	"Identity Provider: JWT IAM Auth Plugin",
 	"IdP Token Auth Plugin",
-	"Browser IdC Auth Plugin",
 	""
 };
 
@@ -744,14 +725,6 @@ static int rs_idp_controls[] =
 	IDC_TOKEN_TYPE,
 	IDC_IDENTITY_NAMESPACE_STATIC,
 	IDC_IDENTITY_NAMESPACE,
-	IDC_IDC_REGION_STATIC, // Identity Center region
-	IDC_IDC_REGION,
-	IDC_START_URL_STATIC,
-	IDC_START_URL,
-	IDC_IDC_RESPONSE_TIMEOUT_STATIC, // Identity Center (IdC) response timeout
-	IDC_IDC_RESPONSE_TIMEOUT,
-	IDC_IDC_CLIENT_DISPLAY_NAME_STATIC, // Display name of client using IdC browser auth plugin 
-	IDC_IDC_CLIENT_DISPLAY_NAME,
 	0
 };
 
@@ -1244,26 +1217,14 @@ static rs_dialog_controls rs_idp_token_auth_val_controls[] =
 
 static int rs_idc_browser_auth_controls[] =
 {
-	IDC_IDC_REGION_STATIC, // Identity Center region
-	IDC_IDC_REGION,
-	IDC_START_URL_STATIC,
-	IDC_START_URL,
 	IDC_IDENTITY_NAMESPACE_STATIC,
 	IDC_IDENTITY_NAMESPACE,
-	IDC_IDC_RESPONSE_TIMEOUT_STATIC,
-	IDC_IDC_RESPONSE_TIMEOUT,
-	IDC_IDC_CLIENT_DISPLAY_NAME_STATIC, 
-	IDC_IDC_CLIENT_DISPLAY_NAME,
 	0
 };
 
 static rs_dialog_controls rs_idc_browser_auth_val_controls[] =
 {
-	{ IDC_IDC_REGION, RS_TEXT_CONTROL, RS_IDC_REGION },
-	{ IDC_START_URL, RS_TEXT_CONTROL, RS_START_URL },
 	{ IDC_IDENTITY_NAMESPACE, RS_TEXT_CONTROL, RS_IDENTITY_NAMESPACE },
-	{ IDC_IDC_RESPONSE_TIMEOUT, RS_TEXT_CONTROL, RS_IDC_RESPONSE_TIMEOUT },
-	{ IDC_IDC_CLIENT_DISPLAY_NAME, RS_TEXT_CONTROL, RS_IDC_CLIENT_DISPLAY_NAME },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -2511,11 +2472,7 @@ static void rs_hide_show_authtype_controls(HWND hwndDlg, char *curAuthType)
 		// Basic Programmatic plugin 
 		rs_show_controls(hwndDlg, rs_idp_token_auth_controls);
 	}
-	else
-	if (strcmp(curAuthType, szAuthTypes[AUTH_BROWSER_IDC]) == 0) {
-		// IdC Browser. 
-		rs_show_controls(hwndDlg, rs_idc_browser_auth_controls);
-	}
+
 }
 
 static void rs_hide_controls(HWND hwndDlg, int controlId[])
@@ -2639,9 +2596,6 @@ static int get_auth_type_for_control(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 				else
 				if (strcmp(plugin, PLUGIN_IDP_TOKEN_AUTH) == 0)
 					rc = AUTH_IDP_TOKEN;
-				else
-				if (strcmp(plugin, PLUGIN_BROWSER_IDC_AUTH) == 0)
-					rc = AUTH_BROWSER_IDC;
 			}
 		}
 	}
@@ -2731,11 +2685,6 @@ static void set_dlg_items_based_on_auth_type(int curAuthType, HWND hwndDlg, rs_d
 	if (curAuthType == AUTH_IDP_TOKEN)
 	{
 		set_idp_dlg_items(rs_idp_token_auth_val_controls, hwndDlg, rs_dsn_setup_ctxt);
-	}
-	else
-	if (curAuthType == AUTH_BROWSER_IDC)
-	{
-		set_idp_dlg_items(rs_idc_browser_auth_val_controls, hwndDlg, rs_dsn_setup_ctxt);
 	}
 }
 
@@ -2832,12 +2781,6 @@ static void rs_dsn_read_idp_items(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctx
 		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_AUTH_TYPE, RS_AUTH_TYPE_PLUGIN);
 		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_PLUGIN_NAME, PLUGIN_IDP_TOKEN_AUTH);
 		rs_dsn_read_auth_type_items(rs_idp_token_auth_val_controls, hdlg, rs_dsn_setup_ctxt);
-	}
-	else
-	if (strcmp(curAuthType, szAuthTypes[AUTH_BROWSER_IDC]) == 0) {
-		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_AUTH_TYPE, RS_AUTH_TYPE_PLUGIN);
-		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_PLUGIN_NAME, PLUGIN_BROWSER_IDC_AUTH);
-		rs_dsn_read_auth_type_items(rs_idc_browser_auth_val_controls, hdlg, rs_dsn_setup_ctxt);
 	}
 }
 

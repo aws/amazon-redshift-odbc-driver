@@ -505,7 +505,6 @@ struct pg_conn
 	// Redshift IdC auth
 	char	   *token_type;
 	char	   *identity_namespace;
-	char	   *idc_client_display_name;
 
     struct _ClientSideCursorExecutor *m_pCscExecutor;
 };

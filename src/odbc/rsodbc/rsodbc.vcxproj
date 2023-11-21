@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -250,7 +250,6 @@
     <ClCompile Include="iam\http\Socket.cpp" />
     <ClCompile Include="iam\http\WEBServer.cpp" />
     <ClCompile Include="iam\plugins\IdpTokenAuthPlugin.cpp" />
-    <ClCompile Include="iam\plugins\BrowserIdcAuthPlugin.cpp" />
     <ClCompile Include="iam\plugins\IAMAdfsCredentialsProvider.cpp" />
     <ClCompile Include="iam\plugins\IAMAzureCredentialsProvider.cpp" />
     <ClCompile Include="iam\plugins\IAMBrowserAzureCredentialsProvider.cpp" />
@@ -311,7 +310,6 @@
     <ClInclude Include="iam\http\SocketSupport.h" />
     <ClInclude Include="iam\http\WEBServer.h" />
     <ClInclude Include="iam\plugins\IdpTokenAuthPlugin.h" />
-    <ClInclude Include="iam\plugins\BrowserIdcAuthPlugin.h" />
     <ClInclude Include="iam\plugins\IAMAdfsCredentialsProvider.h" />
     <ClInclude Include="iam\plugins\IAMAzureCredentialsProvider.h" />
     <ClInclude Include="iam\plugins\IAMBrowserAzureCredentialsProvider.h" />

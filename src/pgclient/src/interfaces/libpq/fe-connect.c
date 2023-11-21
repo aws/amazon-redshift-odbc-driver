@@ -310,9 +310,6 @@ static const PQconninfoOption PQconninfoOptions[] = {
 	{"identity_namespace", NULL, NULL, NULL,
 	  "Redshift IdC Auth Identity Namespace", "", 64},
 
-	{"idc_client_display_name", NULL, NULL, NULL,
-	  "Redshift IdC client display name", "", 64},
-
 	{"provider_name", NULL, NULL, NULL,
 	  "Redshift Native Auth Provider Name", "", 64},
 
@@ -1004,8 +1001,6 @@ fillPGconn(PGconn *conn, PQconninfoOption *connOptions)
 	conn->token_type = tmp ? strdup(tmp) : NULL;
 	tmp = conninfo_getval(connOptions, "identity_namespace");
 	conn->identity_namespace = tmp ? strdup(tmp) : NULL;
-	tmp = conninfo_getval(connOptions, "idc_client_display_name");
-	conn->idc_client_display_name = tmp ? strdup(tmp) : NULL;
 }
 
 /*
@@ -3242,8 +3237,6 @@ freePGconn(PGconn *conn)
 		free(conn->token_type);
 	if (conn->identity_namespace)
 		free(conn->identity_namespace);
-	if (conn->idc_client_display_name)
-		free(conn->idc_client_display_name);
 
 	/* Note that conn->Pfdebug is not ours to close or free */
 	if (conn->last_query)
