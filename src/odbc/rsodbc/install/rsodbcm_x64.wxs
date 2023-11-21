@@ -22,8 +22,8 @@
           <!-- Redshift -->
           <File Id="rsodbc.dll" Name="rsodbc.dll" Source="../x64/Release/rsodbc.dll" />
           <File Id="root.crt" Name="root.crt" Source="../root.crt" />
-          <File Id="libcrypto_1_1_x64.dll" Name="libcrypto-1_1-x64.dll" Source="../iam/windows/openssl/1.1.1/w2012r2/vs2015/release64mt/bin/libcrypto-1_1-x64.dll" />
-          <File Id="libssl_1_1_x64.dll" Name="libssl-1_1-x64.dll" Source="../iam/windows/openssl/1.1.1/w2012r2/vs2015/release64mt/bin/libssl-1_1-x64.dll" />
+          <File Id="libcrypto_1_1_x64.dll" Name="libcrypto-1_1-x64.dll" Source="../iam/windows/openssl/1.1/bin/libcrypto-1_1-x64.dll" />
+          <File Id="libssl_1_1_x64.dll" Name="libssl-1_1-x64.dll" Source="../iam/windows/openssl/1.1/bin/libssl-1_1-x64.dll" />
           <File Id="rsodbcsetup.dll" Name="rsodbcsetup.dll" Source="../rsodbc_setup/x64/Release/rsodbcsetup.dll" />
           <File Id="gssapi64.dll" Name="gssapi64.dll" Source="../../../pgclient/kfw-3-2-2-final/bin/Win64/gssapi64.dll" />
           <File Id="krb5_64.dll" Name="krb5_64.dll" Source="../../../pgclient/kfw-3-2-2-final/bin/Win64/krb5_64.dll" />

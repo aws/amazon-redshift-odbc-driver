@@ -155,7 +155,7 @@
       <ProgramDataBaseFileName>$(IntDir)</ProgramDataBaseFileName>
       <WarningLevel>Level3</WarningLevel>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <AdditionalIncludeDirectories>..\iam\windows\openssl\1.1.1\w2012r2\vs2015\release64mt\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\iam\windows\openssl\1.1\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <ResourceCompile>
@@ -176,7 +176,7 @@
       <DataExecutionPrevention />
       <ImportLibrary>rsodbcsetup.lib</ImportLibrary>
       <TargetMachine>MachineX64</TargetMachine>
-      <AdditionalLibraryDirectories>..\iam\windows\openssl\1.1.1\w2012r2\vs2015\release64mt\lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\iam\windows\openssl\1.1\lib</AdditionalLibraryDirectories>
     </Link>
     <Bscmake>
       <SuppressStartupBanner>true</SuppressStartupBanner>

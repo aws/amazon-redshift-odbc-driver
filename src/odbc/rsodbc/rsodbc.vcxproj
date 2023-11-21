@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -194,7 +194,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>./;..\..\logging;./iam/http;./iam/plugins;./iam/windows/aws-cpp-sdk/1.11.111/include;./iam/core;./iam;..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;.\iam\windows\cares\include;.\iam\windows\openssl\1.1.1\w2012r2\vs2015\release64mt\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./;..\..\logging;./iam/http;./iam/plugins;./iam/windows/aws-cpp-sdk/1.11.111/include;./iam/core;./iam;..\..\pgclient\src\interfaces\libpq;..\..\pgclient\src\include;..\..\openssl\inc32;.\iam\windows\cares\include;.\iam\windows\openssl\1.1\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;ODBCVER=0x0352;SQL_NOUNICODEMAP;_WIN64;_CRT_SECURE_NO_WARNINGS;USE_SSL;CARES_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -207,7 +207,7 @@
     </ClCompile>
     <Link>
       <AdditionalDependencies>shell32.lib;odbccp32.lib;libcrypto.lib;libssl.lib;ws2_32.lib;comdlg32.lib;wldap32.lib;Ncrypt.lib;User32.lib;UserEnv.lib;bcrypt.lib;RpcRT4.Lib;winhttp.lib;WinInet.Lib;Version.Lib;aws-cpp-sdk-core.lib;aws-cpp-sdk-redshift.lib;aws-cpp-sdk-sso-oidc.lib;aws-cpp-sdk-sts.lib;aws-cpp-sdk-redshift-serverless.lib;aws-c-auth.lib;aws-c-cal.lib;aws-c-common.lib;aws-c-compression.lib;aws-c-event-stream.lib;aws-checksums.lib;aws-c-http.lib;aws-c-io.lib;aws-c-mqtt.lib;aws-crt-cpp.lib;aws-c-s3.lib;aws-c-sdkutils.lib;legacy_stdio_definitions.lib;libpq.lib;wsock32.lib;secur32.lib;libpgport.lib;gssapi64.lib;crypt32.lib;shlwapi.lib;cares_static.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>.\iam\windows\aws-cpp-sdk\1.11.111\w11\vs2022\release64mt\lib;..\..\pgclient\Release\libpq;..\..\pgclient\Release\libpgport;.\iam\windows\openssl\1.1.1\w2012r2\vs2015\release64mt\lib;..\..\openssl\libs\Windows\x64;.\iam\windows\cares\lib\Release;..\..\pgclient\kfw-3-2-2-final\lib\Win64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>.\iam\windows\aws-cpp-sdk\1.11.111\w11\vs2022\release64mt\lib;..\..\pgclient\Release\libpq;..\..\pgclient\Release\libpgport;.\iam\windows\openssl\1.1\lib;..\..\openssl\libs\Windows\x64;.\iam\windows\cares\lib\Release;..\..\pgclient\kfw-3-2-2-final\lib\Win64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <ModuleDefinitionFile>rsodbc.def</ModuleDefinitionFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>

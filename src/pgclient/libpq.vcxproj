@@ -148,7 +148,7 @@
     <ClCompile>
       <AdditionalOptions>/MP %(AdditionalOptions)</AdditionalOptions>
       <Optimization>Full</Optimization>
-      <AdditionalIncludeDirectories>../logging;src/include;src/include/port/win32;src/include/port/win32_msvc;src\port;..\odbc\rsodbc\iam\windows\openssl\1.1.1\w2012r2\vs2015\release64mt\include;..\openssl\inc32;.\kfw-3-2-2-final\inc\krb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../logging;src/include;src/include/port/win32;src/include/port/win32_msvc;src\port;..\odbc\rsodbc\iam\windows\openssl\1.1\include;..\openssl\inc32;.\kfw-3-2-2-final\inc\krb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_WINDOWS;__WINDOWS__;__WIN32__;EXEC_BACKEND;WIN32_STACK_RLIMIT=4194304;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;FRONTEND;UNSAFE_STAT_OK;_WIN64;USE_SSL;ENABLE_GSS;ENABLE_SSPI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
