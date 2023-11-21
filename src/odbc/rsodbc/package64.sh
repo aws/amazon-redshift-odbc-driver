@@ -16,13 +16,13 @@ odbc_version=$1
 svn_rev=$2
 
 # The following routine set environment variable for compilation
-# Those variables in exports.sh link include paths to dependnecies
+# Those variables in exports.sh link include paths to different dependnecies
 # build64.sh has the same routines
 RS_ROOT_DIR="../../.." #Technically RS_ROOT_DIR is same as ROOT_DIR unless folders change
 pushd ${RS_ROOT_DIR}
-source ${ROOT_DIR}/exports_basic.sh
-if test -f "${ROOT_DIR}/exports.sh"; then
-    source ${ROOT_DIR}/exports.sh
+source ./exports_basic.sh
+if test -f "./exports.sh"; then
+    source ./exports.sh
 fi
 popd
 
