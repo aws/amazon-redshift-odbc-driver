@@ -1,5 +1,24 @@
 Changelog
 =========
+v2.0.0.11 (2023-11-21)
+------------------------
+1. Upgraded openssl (v1.1.1w) and removed redundant libcURL build dependencies for Windows.
+2. Removed outdated Linux build dependencies.
+3. Added ability to connect to datashare databases for clusters and serverless workgroups running the PREVIEW_2023 track
+4. Removed BrowserIdcAuthPlugin.
+
+v2.0.0.10 (2023-11-01)
+------------------------
+1. Disabled the rudimentary check in SQLColumns, SQLStatistics and SQLSpecialColumns APIs, for equality of catalog name and database name.
+2. Improved ODBC Error messages for unsupported metadata features.
+3. Allowed overriding DSN config options in connection string.
+4. Fixed memory issue in Statement Descriptors and Query Parameter types by using stack memory vs heap allocation.
+5. Add new logging module based on aws-sdk-cpp. It has standard logging levels from FATAL to TRACE, plus OFF mode.
+6. Upgraded SQLGetStmtOption  and SQLSetStmtOption APIs to be compatible with their new versions in ODBC standard 3: SQLGetStmtAttr, SQLSetStmtAttr
+7. Fixed SQLSetConnectAttr to return SQL_ERROR for SQL_ATTR_ANSI_APP as per standard.
+8. Minor adjustments in build scripts (windows and linux) and windows’s config page.
+9. Note: This version was recalled. The changes will be available in the next version.
+
 v2.0.0.9 (2023-09-11)
 ==================
 
