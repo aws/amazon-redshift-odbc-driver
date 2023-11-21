@@ -8,6 +8,7 @@
 
 #include "rscatalog.h"
 #include "rsexecute.h"
+#include "rsutil.h"
 
 #define MAX_CATALOG_QUERY_LEN (16*1024)
 #define MAX_CATALOG_QUERY_FILTER_LEN (4*1024)
@@ -3014,21 +3015,15 @@ static int checkForValidCatalogName(RS_STMT_INFO *pStmt, SQLCHAR *pCatalogName)
 
 /*====================================================================================================================================================*/
 
-static bool isSingleDatabaseMetaData(RS_STMT_INFO *pStmt) 
-{
-	RS_CONN_INFO *pConn = pStmt->phdbc;
-	int iDatabaseMetadaCurrentOnly = 1;
-	bool bDatashareEnabled = FALSE;
-	char *pTemp;
-
-	if (pConn->pConnectProps)
-		iDatabaseMetadaCurrentOnly = pConn->pConnectProps->iDatabaseMetadataCurrentDbOnly;
-
-	pTemp = libpqParameterStatus(pConn, "datashare_enabled"); 
-	if(pTemp)
-		bDatashareEnabled = (strcmp(pTemp, "on") == 0);
-
-	return (iDatabaseMetadaCurrentOnly || !bDatashareEnabled);
+static bool isSingleDatabaseMetaData(RS_STMT_INFO *pStmt) {
+    bool isDatabaseMetadaCurrentOnly_ = isDatabaseMetadaCurrentOnly(pStmt);
+    bool isDsEnabled = getLibpqParameterStatus(pStmt, "datashare_enabled");
+    bool isExtDbEnabled = getLibpqParameterStatus(pStmt, "external_database");
+    
+    if (isExtDbEnabled)
+      return false;
+    else
+      return (isDatabaseMetadaCurrentOnly_ || !isDsEnabled);
 }
 
 /*====================================================================================================================================================*/

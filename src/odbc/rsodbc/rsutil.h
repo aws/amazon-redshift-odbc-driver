@@ -19,6 +19,9 @@
 #include <functional>
 #include <algorithm>
 #include <vector>
+#include <iostream>
+#include <stdexcept>
+
 //#include <strsafe.h>
 
 #include "rsodbc.h"
@@ -499,4 +502,29 @@ inline bool isStrNoCaseEequal(const std::string& a, const std::string& b)
                           return tolower(a) == tolower(b);
                       });
 }
+
+// Check DatabaseMetadaCurrentOnly option
+bool isDatabaseMetadaCurrentOnly(RS_STMT_INFO *pStmt);
+
+/*
+    Checks if the server parameters matches and expected value.
+
+   - The function returns true if a valid value for the given param is
+   available AND matches the 'trueValue'.
+   - The function returns false if a valid value for the given param is
+   available AND does not matche the 'trueValue'.
+    - A parameter value is considered invalid if it is not null but is not
+   included in the list of 'validValues'. In such cases, the function throws
+   ExceptionInvalidParameter.
+*/
+bool getLibpqParameterStatus(
+    RS_STMT_INFO *pStmt, const std::string &param,
+    const std::string &trueValue = "on",
+    const std::vector<std::string> &validValues = {"on", "off"},
+    const bool defaultStatus = false);
+class ExceptionInvalidParameter : public std::invalid_argument {
+  public:
+    // Constructor that takes a std::string message
+    ExceptionInvalidParameter(const std::string &message);
+};
 #endif /* C++ */

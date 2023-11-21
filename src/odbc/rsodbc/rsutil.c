@@ -12526,4 +12526,53 @@ unsigned char *decode64Password(const char *input, int length) {
 	return output;
 }
 #endif // WIN32
+/*====================================================================================================================================================*/
 
+bool isDatabaseMetadaCurrentOnly(RS_STMT_INFO *pStmt) {
+    bool res = true; // true by default
+    RS_CONN_INFO *pConn = pStmt->phdbc;
+    if (pConn->pConnectProps) {
+        res = (0 != pConn->pConnectProps->iDatabaseMetadataCurrentDbOnly);
+    }
+    return res;
+}
+
+bool getLibpqParameterStatus(RS_STMT_INFO *pStmt, const std::string &param,
+                             const std::string &trueValue,
+                             const std::vector<std::string> &validValues,
+                             const bool defaultStatus) {
+
+    RS_CONN_INFO *pConn = pStmt->phdbc;
+
+    // sanity check
+    auto it = std::find(validValues.begin(), validValues.end(), trueValue);
+    if (it == validValues.end()) {
+        throw ExceptionInvalidParameter(
+            "Invalid expected parameter value for '" + param +
+            "':" + trueValue);
+    }
+
+    // Try to get the param value
+    char *paramValueStr = libpqParameterStatus(pConn, param.c_str());
+
+    // param not available, return early
+    if (!paramValueStr) {
+        return defaultStatus;
+    }
+
+    // Is the value valid
+    it = std::find(validValues.begin(), validValues.end(),
+                   std::string(paramValueStr));
+    if (it == validValues.end()) {
+        throw ExceptionInvalidParameter("Invalid server parameter value for '" +
+                                        param +
+                                        "':" + std::string(paramValueStr));
+    }
+    // check and return the 'true'/'false' condition
+    return *it == trueValue;
+}
+
+ExceptionInvalidParameter::ExceptionInvalidParameter(const std::string &message)
+    : std::invalid_argument(message) {
+    RS_LOG_ERROR("%s", message.c_str());
+}
