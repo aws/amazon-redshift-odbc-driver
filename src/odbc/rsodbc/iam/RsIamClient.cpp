@@ -168,11 +168,7 @@ void RsIamClient::Connect()
 			// serverless connection
 			GetServerlessCredentials(credentialsProvider);
 		}
-		else if (
-			(m_settings.m_groupFederation) &&
-			((authType == IAM_AUTH_TYPE_PROFILE) ||
-			(authType == IAM_AUTH_TYPE_INSTANCE_PROFILE) ||
-				(authType == IAM_AUTH_TYPE_STATIC)))
+		else if (m_settings.m_groupFederation)
 		{
 			GetClusterCredentialsWithIAM(credentialsProvider);
 		}
@@ -568,7 +564,8 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
 	
 
 	request.SetDbName(m_settings.m_database);
-	request.SetDurationSeconds(m_settings.m_duration);
+	// m_accessDuration setting corresponds to IAMDuration option
+	request.SetDurationSeconds(m_settings.m_accessDuration);
 
      /*
      If we know this is a custom cluster name, we need to fetch the clusterId associated with it
@@ -627,7 +624,7 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
         RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialswithIAMRequest: After GetClusterCredentialswithIAM()");
     } 
     catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
-        RS_LOG_DEBUG("IAMCLNT", "Failed to call GetClusterCredentialsWithIAM. Exception:%s", ex);
+        RS_LOG_DEBUG("IAMCLNT", "Failed to call GetClusterCredentialsWithIAM. Exception:%s", ex.GetMessage().c_str());
         throw ex;
     }
 
