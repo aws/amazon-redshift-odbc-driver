@@ -330,7 +330,7 @@ void IAMUtils::AresCallBack(void* arg, int status, int timeouts, struct hostent*
         }
     }     
     catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
-        RS_LOG_DEBUG("IAM", "Exception thrown during AresCallBack execution. Exception: %s", ex);
+        RS_LOG_DEBUG("IAM", "Exception thrown during AresCallBack execution. Exception: %s", ex.GetMessage().c_str());
         throw ex;
     }
 }
@@ -382,7 +382,7 @@ rs_string IAMUtils::GetAwsRegionFromCname(const std::string& cnameEndpoint) {
             RS_LOG_DEBUG("IAM", "Cannot fetch the aws region. Exception: %s", callbackContext.error.c_str());
         }
     } catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
-        RS_LOG_DEBUG("IAM", "Cannot fetch the aws region. Exception: %s", ex);
+        RS_LOG_DEBUG("IAM", "Cannot fetch the aws region. Exception: %s", ex.GetMessage().c_str());
         throw ex;
     }
     return "";

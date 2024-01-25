@@ -73,9 +73,9 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
     verifying the server certificate (e.g., self-signed IDP server) */
     bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
 
-    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetSamlAssertion ",
-        + "verifySSL: %s",
-        shouldVerifySSL ? "true" : "false");
+    RS_LOG_DEBUG("IAMCRD",
+                 "IAMOktaCredentialsProvider::GetSamlAssertion verifySSL: %s",
+                 shouldVerifySSL ? "true" : "false");
 
     HttpClientConfig config;
     
@@ -83,9 +83,10 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
     config.m_caFile = m_config.GetCaFile();
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
-	RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider", "GetSamlAssertion ",
-		"HttpClientConfig.m_timeout: %ld",
-		config.m_timeout);
+	RS_LOG_DEBUG("IAMCRD",
+                     "IAMOktaCredentialsProvider::GetSamlAssertion "
+                     "HttpClientConfig.m_timeout: %ld",
+                     config.m_timeout);
 
     if (m_config.GetUsingHTTPSProxy() && m_config.GetUseProxyIdpAuth())
     {

@@ -1,6 +1,6 @@
 #include "IAMHttpClient.h"
 #include "IAMUtils.h"
-
+#include <rslog.h>
 #include <aws/core/utils/StringUtils.h>
 
 /* Json::JsonValue class contains a member function: GetObject. There is a predefined
@@ -40,6 +40,7 @@ Redshift::IamSupport::HttpResponse IAMHttpClient::MakeHttpRequest(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ClientConfiguration IAMHttpClient::GetClientConfiguration(const HttpClientConfig& in_config) 
 {
+    RS_LOG_DEBUG("IAM_HTTP_CLNT", "IAMHttpClient::GetClientConfiguration");
     ClientConfiguration clientConfig;
 
     if (!in_config.m_userAgent.empty())

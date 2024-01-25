@@ -11,7 +11,7 @@ IAMCredentialsProvider::IAMCredentialsProvider(
         const IAMConfiguration& in_config) :
     m_config(in_config)
 {
-    RS_LOG_DEBUG("Redshift::IamSupport::%s::%s()", "IAMCredentialsProvider", "IAMCredentialsProvider");
+    RS_LOG_DEBUG("IAM", "IAMCredentialsProvider::IAMCredentialsProvider");
 }
 
 

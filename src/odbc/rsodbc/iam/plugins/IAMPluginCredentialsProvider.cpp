@@ -223,7 +223,7 @@ void IAMPluginCredentialsProvider::SaveSettings(const Aws::Auth::AWSCredentials&
 std::shared_ptr<IAMHttpClient> IAMPluginCredentialsProvider::GetHttpClient(
     const HttpClientConfig& in_config)
 {
-    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider", "GetHttpClient");
+    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider::GetHttpClient");
 #ifdef _WIN32
     return Aws::MakeShared<IAMWinHttpClientDelegate>(LOG_TAG, in_config);
 #else
