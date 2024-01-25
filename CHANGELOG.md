@@ -1,5 +1,15 @@
 Changelog
 =========
+v2.0.1.0 (2024-01-25)
+------------------------
+1. Added support for Serverless Custom Name. Upgraded windows aws-sdk-cpp to 1.11.218 accordingly. 
+2. Added support for interval data types: SQL_INTERVAL_YEAR_TO_MONTH and SQL_INTERVAL_DAY_TO_SECOND. They can be retrieved as text or using the C structures SQL_YEAR_MONTH_STRUCT and SQL_DAY_SECOND_STRUCT.
+3. Migrated Linux to cmake build system.
+4. Build base libraries statically into librsodbc64.so including libgcc and libstdc++.
+5. Fixed CaFile and CaPath connection options and default root certificate name for IAM and non-IAM connections.
+6. Fixed support for group_federation connection parameter that allows customers to use getClusterCredentialsWithIAM in provisioned clusters.
+7. Removed ssooidc dependencies from build system.
+
 v2.0.0.11 (2023-11-21)
 ------------------------
 1. Upgraded openssl (v1.1.1w) and removed redundant libcURL build dependencies for Windows.
