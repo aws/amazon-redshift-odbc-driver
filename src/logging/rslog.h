@@ -13,6 +13,7 @@
 struct RS_LOG_VARS {
     int iTraceLevel;                // Trace level
     char szTraceFile[300];          // Trace file name
+    int isInitialized;
     //Deprecated
     FILE *fpTrace;                  // Trace file handle
 };
@@ -21,8 +22,8 @@ struct RS_LOG_VARS {
 #ifdef __cplusplus
 extern "C" {
 #endif
-void initTrace();
-void uninitTrace();
+void initializeLogging();
+void shutdownLogging();
 int getRsLoglevel();
 void setRsLogLevel(int level);
 struct RS_LOG_VARS *getGlobalLogVars();
@@ -65,7 +66,7 @@ This function is only provided for backward compatibility. It is expensive and t
 // Legacy macros and mapping
 #define DEFAULT_TRACE_LEVEL LOG_LEVEL_OFF
 #define TRACE_FILE_NAME "redshift_odbc.log"
-#define IS_TRACE_ON() (getRsLoglevel() != LOG_LEVEL_OFF)
+#define IS_TRACE_ON() (getRsLoglevel() > LOG_LEVEL_OFF)
 #define IS_TRACE_LEVEL_ERROR() (getRsLoglevel() >= LOG_LEVEL_ERROR)
 #define IS_TRACE_LEVEL_API_CALL() (getRsLoglevel() >= LOG_LEVEL_INFO)
 #define IS_TRACE_LEVEL_INFO() (getRsLoglevel() >= LOG_LEVEL_INFO)

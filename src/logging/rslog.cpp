@@ -13,107 +13,127 @@
 #include <aws/core/utils/memory/stl/AWSString.h>
 
 namespace AwsLogging = Aws::Utils::Logging;
+namespace internal {
 
-RS_LOG_VARS *getGlobalLogVars() {
-    static RS_LOG_VARS gRslogSettings;
-    return &gRslogSettings;
-}
+// Logger system manager. Its scope is local to ODBC log lines only.
+struct RsLogManager {
+    typedef std::shared_ptr<AwsLogging::LogSystemInterface> LogInterfacePtr;
 
-// Override filename and stream creation of the Logger.
-// The original logic we are overriding is in AWS SDK.
-std::shared_ptr<Aws::OFStream> MakeDefaultLogFile(const Aws::String &filename) {
+  private:
+    LogInterfacePtr logSystem = nullptr;
 
-    auto createOFStream =
-        [&](const Aws::String &filename) -> std::shared_ptr<Aws::OFStream> {
-        auto res = Aws::MakeShared<Aws::OFStream>(
-            "DefaultLogSystem", filename.c_str(),
-            Aws::OFStream::out | Aws::OFStream::app);
-        if (false == (res && res->good())) {
-            std::cerr << "Attempt to create file stream from " << filename
-                      << " failed." << std::endl;
+  protected:
+    // Override filename and stream creation of the Logger.
+    // The original logic we are overriding is in AWS SDK.
+    std::shared_ptr<Aws::OFStream>
+    MakeDefaultLogFile(const Aws::String &filename) {
+
+        auto createOFStream =
+            [&](const Aws::String &filename) -> std::shared_ptr<Aws::OFStream> {
+            auto res = Aws::MakeShared<Aws::OFStream>(
+                "DefaultLogSystem", filename.c_str(),
+                Aws::OFStream::out | Aws::OFStream::app);
+            if (false == (res && res->good())) {
+                std::cerr << "Attempt to create file stream from " << filename
+                          << " failed." << std::endl;
+            }
+            return res;
+        };
+
+        auto findFileFromPath =
+            [&](const Aws::String &path) -> const Aws::String {
+            auto res =
+                Aws::Utils::PathUtils::GetFileNameFromPathWithExt(filename);
+            if (res.empty()) {
+                std::cerr << "Attempt to extract file name from path "
+                          << filename << " failed." << std::endl;
+            }
+            return res;
+        };
+
+        auto getTempPath = [&]() -> const Aws::String {
+            const char *pPath = std::getenv("TMPDIR");
+            return std::string((!pPath || *pPath == '\0') ? "/tmp" : pPath);
+        };
+
+        // begin
+        auto res = createOFStream(filename);
+
+        if (res && res->good()) {
+            return res;
         }
-        return res;
-    };
-
-    auto findFileFromPath = [&](const Aws::String &path) -> const Aws::String {
-        auto res = Aws::Utils::PathUtils::GetFileNameFromPathWithExt(filename);
-        if (res.empty()) {
-            std::cerr << "Attempt to extract file name from path " << filename
-                      << " failed." << std::endl;
-        }
-        return res;
-    };
-
-    auto getTempPath = [&]() -> const Aws::String {
-        const char *pPath = std::getenv("TMPDIR");
-        return std::string((!pPath || *pPath == '\0') ? "/tmp" : pPath);
-    };
-
-    // begin
-    auto res = createOFStream(filename);
-
-    if (res && res->good()) {
-        return res;
+        // retry
+        auto newFilename = getTempPath() + findFileFromPath(filename);
+        return createOFStream(newFilename);
     }
-    // retry
-    auto newFilename = getTempPath() + findFileFromPath(filename);
-    return createOFStream(newFilename);
+    LogInterfacePtr initLogInterface(int iTraceLevel, const char *szTraceFile) {
+        return Aws::MakeShared<AwsLogging::DefaultLogSystem>(
+            "ODBC2LOG", (AwsLogging::LogLevel)(iTraceLevel),
+            MakeDefaultLogFile(Aws::String(szTraceFile ? szTraceFile : "")));
+    }
+
+  public:
+    virtual void initializeAWSLogging() {
+        logSystem = initLogInterface(getGlobalLogVars()->iTraceLevel,
+                                     getGlobalLogVars()->szTraceFile);
+    }
+
+    virtual void ShutdownAWSLogging() { logSystem.reset(); }
+    virtual AwsLogging::LogSystemInterface *GetLogSystem() {
+        return logSystem.get();
+    }
+};
+// Use this if you'd like to connect to universal AWSLogsystem
+struct AwsLogManager : public RsLogManager {
+    virtual void initializeAWSLogging() {
+        AwsLogging::InitializeAWSLogging(initLogInterface(
+            getGlobalLogVars()->iTraceLevel, getGlobalLogVars()->szTraceFile));
+    }
+
+    virtual void ShutdownAWSLogging() { AwsLogging::ShutdownAWSLogging(); }
+    virtual AwsLogging::LogSystemInterface *GetLogSystem() {
+        return AwsLogging::GetLogSystem();
+    }
+};
+
+typedef RsLogManager LogManagerType;
+static LogManagerType rsLogManager;
+
+/*
+Initialize the logging system. Logs can be wrrtten to the file after successful
+completion of this command
+*/
+void initializeAWSLogging() { rsLogManager.initializeAWSLogging(); }
+
+/*
+Finalize the logging system. No more Logs can be wrrtten to the file after this
+step
+*/
+void ShutdownAWSLogging() { rsLogManager.ShutdownAWSLogging(); }
+
+/*
+Returns the AWS Log system interface
+*/
+AwsLogging::LogSystemInterface *GetLogSystem() {
+    return rsLogManager.GetLogSystem();
 }
 
-void initializeAWSLogging() {
-    AwsLogging::InitializeAWSLogging(
-        Aws::MakeShared<AwsLogging::DefaultLogSystem>(
-            "ODBC2LOG", (AwsLogging::LogLevel)(getGlobalLogVars()->iTraceLevel),
-            MakeDefaultLogFile(Aws::String(getGlobalLogVars()->szTraceFile
-                                               ? getGlobalLogVars()->szTraceFile
-                                               : ""))));
-}
-
-void initTrace() {
-    // By this time, we assume respective settings are initialized
-    // Initialize the AWS SDK for C++
-    initializeAWSLogging();
-}
-
-void uninitTrace() { AwsLogging::ShutdownAWSLogging(); }
-
-// Legacy mapping
-int getRsLoglevel() { return (int)AwsLogging::GetLogSystem()->GetLogLevel(); }
- 
 void processLogLine(AwsLogging::LogLevel level, const char *filename,
                     const int line, const char *func, const char *tag1,
                     const char *msg) {
     static const std::string open = "[", close = "]", colon = ":";
     const std::string tag2 =
-        (open + Aws::Utils::PathUtils::GetFileNameFromPathWithExt(filename) +
-         colon + std::to_string(line) + close);
+        (open + tag1 + colon +
+         Aws::Utils::PathUtils::GetFileNameFromPathWithExt(filename) + colon +
+         std::to_string(line) + close);
     const char *tag = tag2.c_str();
-        switch (level) {
-    case AwsLogging::LogLevel::Fatal:
-                AWS_LOG_FATAL(tag, msg);
-        break;
-    case AwsLogging::LogLevel::Error:
-                AWS_LOG_ERROR(tag, msg);
-        break;
-    case AwsLogging::LogLevel::Warn:
-                AWS_LOG_WARN(tag, msg);
-        break;
-    case AwsLogging::LogLevel::Info:
-                AWS_LOG_INFO(tag, msg);
-        break;
-    case AwsLogging::LogLevel::Debug:
-                AWS_LOG_DEBUG(tag, msg);
-        break;
-    case AwsLogging::LogLevel::Trace:
-                AWS_LOG_TRACE(tag, msg);
-        break;
-    default:
-        break;
-    }
+    internal::GetLogSystem()->Log(level, tag, msg);
 }
+} // namespace internal
 
 #define RS_LOG_MACRO(LEVEL)                                                    \
-    if ((AwsLogging::LogLevel)getRsLoglevel() < LEVEL)                         \
+    if (!internal::GetLogSystem() ||                                           \
+        internal::GetLogSystem()->GetLogLevel() < LEVEL)                       \
         return;                                                                \
     va_list args;                                                              \
     va_start(args, fmt);                                                       \
@@ -125,7 +145,7 @@ void processLogLine(AwsLogging::LogLevel level, const char *filename,
     vsnprintf(&buffer[0], size, fmt, args);                                    \
     buffer.pop_back();                                                         \
     va_end(args);                                                              \
-    processLogLine(LEVEL, file, line, func, tag, buffer.c_str());
+    internal::processLogLine(LEVEL, file, line, func, tag, buffer.c_str());
 
 void RS_LOG_FATAL_(const char *file, const int line, const char *func,
                    const char *tag, const char *fmt, ...) {
@@ -159,7 +179,7 @@ void RS_LOG_TRACE_(const char *file, const int line, const char *func,
 
 void RS_STREAM_LOG_TRACE_(const char *file, const int line, const char *func,
                           const char *tag, const char *s, long long len) {
-    AwsLogging::LogSystemInterface *logSystem = AwsLogging::GetLogSystem();
+    AwsLogging::LogSystemInterface *logSystem = internal::GetLogSystem();
     if (logSystem && logSystem->GetLogLevel() >= AwsLogging::LogLevel::Trace) {
         Aws::OStringStream logStream;
         if (len < 0) {
@@ -171,4 +191,32 @@ void RS_STREAM_LOG_TRACE_(const char *file, const int line, const char *func,
         logSystem->LogStream(AwsLogging::LogLevel::Trace, tag, logStream);
         logSystem->Flush();
     }
+}
+
+RS_LOG_VARS *getGlobalLogVars() {
+    static std::shared_ptr<RS_LOG_VARS> gRslogSettings;
+    static RS_LOG_VARS *gRslogSettingsPtr = nullptr;
+    if (!gRslogSettingsPtr) {
+        gRslogSettings = std::make_shared<RS_LOG_VARS>();
+        gRslogSettings->iTraceLevel = 0;
+        gRslogSettings->szTraceFile[0] = '\0';
+        gRslogSettings->isInitialized = 0;
+        gRslogSettingsPtr = gRslogSettings.get();
+    }
+    return gRslogSettingsPtr;
+}
+
+void initializeLogging() {
+    internal::initializeAWSLogging();
+}
+
+void shutdownLogging() {
+    internal::ShutdownAWSLogging();
+}
+
+// Legacy mapping
+int getRsLoglevel() {
+    return internal::GetLogSystem()
+               ? (int)internal::GetLogSystem()->GetLogLevel()
+               : (int)LOG_LEVEL_OFF;
 }

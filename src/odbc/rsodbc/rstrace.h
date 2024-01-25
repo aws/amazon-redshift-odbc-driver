@@ -46,8 +46,6 @@ namespace AwsLogging = Aws::Utils::Logging;
 
 #define TRACE_MAX_STR_VAL_LEN 1024
 
-void setTraceLevelAndFile(int iTracelLevel, char *pTraceFile);
-void initTrace();
 void createTraceFile();
 void closeTraceFile();
 FILE *getTraceFileHandle();

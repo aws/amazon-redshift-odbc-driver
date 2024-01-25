@@ -38,8 +38,6 @@
 
 #define RSODBC_INI_FILE          "amazon.redshiftodbc.ini"
 #define DRIVER_SECTION_NAME      "DRIVER"
-#define RS_LOG_LEVEL_OPTION_NAME "LogLevel"
-#define RS_LOG_PATH_OPTION_NAME  "LogPath"
 #define MAX_OPTION_VAL_LEN		 512
 
 #define PARAM_MARKER    '?'
@@ -259,6 +257,22 @@ void initGlobals(HMODULE hModule);
 void releaseGlobals();
 void initODBC(HMODULE hModule);
 void uninitODBC();
+
+// Initialize tracing with option to override previous tracing system
+void initTrace(int canOverride);
+
+// Close and Cleanup tracing system.
+void uninitTrace();
+
+// Set trace level and trace file info.
+void setTraceLevelAndFile(int iTracelLevel, char *pTraceFile);
+
+// Set trace level and trace file info from connection string properties.
+// Return 0 if respective properties exist and processed, 1 otherwise.
+int readAndSetLogInfoFromConnectionString(RS_CONNECT_PROPS_INFO *pConnectProps);
+
+// Initialize tracing system from connection string properties.
+void initTraceFromConnectionString(RS_CONNECT_PROPS_INFO *pConnectProps);
 
 std::string& rtrim(std::string& s);
 // trim from beginning of string (left)

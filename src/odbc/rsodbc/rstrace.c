@@ -15,32 +15,6 @@
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
-// Set trace level and trace file info.
-//
-void setTraceLevelAndFile(int iTracelLevel, char *pTraceFile)
-{
-    getGlobalLogVars()->iTraceLevel = iTracelLevel;
-
-    if(pTraceFile && *pTraceFile != '\0')
-        rs_strncpy(getGlobalLogVars()->szTraceFile, pTraceFile, sizeof(getGlobalLogVars()->szTraceFile));
-    else
-    {
-        DWORD dwRetVal = 0;
-        char  szTempPath[MAX_PATH + 1];
-
-        dwRetVal = GetTempPath(MAX_PATH, szTempPath); 
-        if (dwRetVal > MAX_PATH || (dwRetVal == 0))
-        {
-            szTempPath[0] = '\0';
-        }
-
-        snprintf(getGlobalLogVars()->szTraceFile,sizeof(getGlobalLogVars()->szTraceFile),"%s%s%s", szTempPath, (szTempPath[0] != '\0') ? PATH_SEPARATOR : "", TRACE_FILE_NAME);
-    }
-}
-
-/*====================================================================================================================================================*/
-
-//---------------------------------------------------------------------------------------------------------igarish
 // Create trace file.
 // Deprecated
 //

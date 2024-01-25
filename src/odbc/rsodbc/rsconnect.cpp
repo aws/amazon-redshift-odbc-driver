@@ -576,6 +576,7 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
 
         // Parse the input string for all
         pConn->parseConnectString((char *)szConnStrIn, cbConnStrIn, TRUE , FALSE);
+        initTraceFromConnectionString(pConn->pConnectProps);
 
         if(hDriverCompletion == SQL_DRIVER_NOPROMPT) 
             iPrompt = FALSE;
@@ -972,6 +973,7 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLBrowseConnect(SQLHDBC          phdbc,
 
         // Parse the input string for all
         pConn->parseConnectString(pConnStr, SQL_NTS, TRUE, FALSE);
+        initTraceFromConnectionString(pConn->pConnectProps);
 
         if (pConnectProps->szDSN[0] != '\0')
         {
@@ -2328,6 +2330,15 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
           if (pval)
             strncpy(pConnectProps->szStringType, pval,
                     sizeof(pConnectProps->szStringType));
+        } else if (_stricmp(pname, RS_LOG_LEVEL_OPTION_NAME) == 0) {
+          if (pval) {
+            sscanf(pval, "%d", &pConnectProps->iLogLevel);
+          }
+        } else if (_stricmp(pname, RS_LOG_PATH_OPTION_NAME) == 0) {
+          if (pval) {
+            strncpy(pConnectProps->szLogPath, pval,
+                    sizeof(pConnectProps->szLogPath));
+          }
         }
 #ifdef WIN32
         else if (_stricmp(pname, RS_KERBEROS_API) == 0 ||

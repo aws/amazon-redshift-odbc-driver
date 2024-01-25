@@ -978,6 +978,9 @@ public:
 #define JWT_IAM_AUTH_PLUGIN         "JwtIamAuthPlugin"   // used for federated Jwt IAM auth
 #define PLUGIN_IDP_TOKEN_AUTH              "IdpTokenAuthPlugin"
 
+#define RS_LOG_LEVEL_OPTION_NAME "LogLevel"
+#define RS_LOG_PATH_OPTION_NAME  "LogPath"
+
 
 struct RS_TCP_PROXY_CONN_PROPS_INFO {
 	char szHost[MAX_IAM_BUF_VAL]; // proxy host
@@ -1133,6 +1136,8 @@ public:
     char *pInitializationString;    // On connect execute commands. Default is empty or NULL means no command on connect.
 
     int     iTraceLevel; // Trace level
+    int iLogLevel = -1; // Log level. -1 to mark as Not Set! Good for overriding DSN and/or registry
+    char szLogPath[MAX_IDEN_LEN * 10] = {0};
 
 /* Enables or disables the client side cursor. To enable the client side cursor, you must
    set both cscenable and PreloadReader to true. Default is false. 

@@ -6142,7 +6142,78 @@ void releasePrepares(RS_STMT_INFO *pStmt)
 
 /*====================================================================================================================================================*/
 
+// Set trace level and trace file info.
+//
+void setTraceLevelAndFile(int iTracelLevel, char *pTraceFile) {
+    getGlobalLogVars()->iTraceLevel = iTracelLevel;
+
+    if (pTraceFile && *pTraceFile != '\0')
+        rs_strncpy(getGlobalLogVars()->szTraceFile, pTraceFile,
+                   sizeof(getGlobalLogVars()->szTraceFile));
+    else {
+        DWORD dwRetVal = 0;
+        char szTempPath[MAX_PATH + 1];
+
+        dwRetVal = GetTempPath(MAX_PATH, szTempPath);
+        if (dwRetVal > MAX_PATH || (dwRetVal == 0)) {
+            szTempPath[0] = '\0';
+        }
+
+        snprintf(getGlobalLogVars()->szTraceFile,
+                 sizeof(getGlobalLogVars()->szTraceFile), "%s%s%s", szTempPath,
+                 (szTempPath[0] != '\0') ? PATH_SEPARATOR : "",
+                 TRACE_FILE_NAME);
+    }
+}
+
+// Set trace level and trace file info from connection string properties
+int readAndSetLogInfoFromConnectionString(
+    RS_CONNECT_PROPS_INFO *pConnectProps) {
+    int rc = 1;
+    if (pConnectProps->iLogLevel > -1 &&
+        getGlobalLogVars()->iTraceLevel != pConnectProps->iLogLevel) {
+        getGlobalLogVars()->iTraceLevel = pConnectProps->iLogLevel;
+        rc = 0;
+    }
+
+    if (pConnectProps->szLogPath[0] != '\0' &&
+        (strcmp(getGlobalLogVars()->szTraceFile, pConnectProps->szLogPath) !=
+         0)) {
+        snprintf(getGlobalLogVars()->szTraceFile,
+                 sizeof(getGlobalLogVars()->szTraceFile), "%s%s%s",
+                 pConnectProps->szLogPath, PATH_SEPARATOR, TRACE_FILE_NAME);
+        rc = 0;
+    }
+    return rc;
+}
+
+void initTraceFromConnectionString(RS_CONNECT_PROPS_INFO *pConnectProps) {
+    if (0 == readAndSetLogInfoFromConnectionString(pConnectProps)) {
+        // Anything useful? Then override
+        initTrace(true);
+    }
+}
+
+void initTrace(int canOverride) {
 //---------------------------------------------------------------------------------------------------------igarish
+    if (false == canOverride) {
+        if (getGlobalLogVars()->isInitialized ||
+            getGlobalLogVars()->iTraceLevel <= LOG_LEVEL_OFF) {
+            return;
+        }
+    }
+    // By this time, we assume respective settings are initialized
+    initializeLogging();
+    getGlobalLogVars()->isInitialized = 1;
+}
+
+void uninitTrace() {
+    if (!getGlobalLogVars()->isInitialized) {
+        return;
+    }
+    shutdownLogging();
+    getGlobalLogVars()->isInitialized = 0;
+}
 // Read resgitry or odbc.ini for trace options and set trace variables.
 //
 void readAndSetTraceInfo()
@@ -10454,7 +10525,7 @@ void initODBC(HMODULE hModule)
     // Read reg settings
     readAndSetTraceInfo();
     //Logger
-    initTrace();
+    initTrace(false);
     initLibpq(NULL);
 }
 
