@@ -6,6 +6,7 @@
 #include "RsIamClient.h"
 #include "IAMUtils.h"
 #include "RsSettings.h"
+#include <rslog.h>
 
 #include <ares.h>
 #include <ares_dns.h>
@@ -23,10 +24,9 @@
 //#include <aws/RedshiftServerless/model/DescribeConfigurationRequest.h>
 #include <aws/redshift/model/DescribeAuthenticationProfilesRequest.h>
 #include <aws/redshift/model/AuthenticationProfile.h>
-#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)
 #include <aws/redshift/model/DescribeCustomDomainAssociationsRequest.h>
 #include <aws/redshift/model/DescribeCustomDomainAssociationsResult.h>
-#endif
+#include <aws/redshift-serverless/model/GetCredentialsRequest.h>
 
 
 using namespace RedshiftODBC;
@@ -163,7 +163,7 @@ void RsIamClient::Connect()
 	{
 		// Support serverless Redshift end point
 		std::vector<rs_string> hostnameTokens = IAMUtils::TokenizeSetting(m_settings.m_host, ".");
-		if ((hostnameTokens.size() >= 6) && (hostnameTokens[3].find("serverless") != rs_string::npos))
+		if (((hostnameTokens.size() >= 6) && (hostnameTokens[3].find("serverless") != rs_string::npos)) || (m_settings.m_isServerless))
 		{
 			// serverless connection
 			GetServerlessCredentials(credentialsProvider);
@@ -369,13 +369,10 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
 
     // Compose the ClusterCredentialRequest object
     Model::GetClusterCredentialsRequest request;
-#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)
-    if(m_settings.m_isCname){
+    if(m_settings.m_isCname) {
         request.SetCustomDomainName(m_settings.m_host.c_str());
     }
-    else
-#endif
-    {
+    else {
         request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ? 
         inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str());
     }
@@ -428,7 +425,6 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
     rs_string tempClusterIdentifier;
 
     try {
-#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)       
         if (m_settings.m_isCname) {
             Model::DescribeCustomDomainAssociationsRequest describeRequest;
             describeRequest.SetCustomDomainName(m_settings.m_host);
@@ -460,8 +456,6 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
                 request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ? inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str()); // Set the cluster identifier instead
             }
         }
-
-#endif  
     
         /* if host is empty describe cluster using cluster id */
         if (m_settings.m_host.empty() || m_settings.m_port == 0) {
@@ -483,7 +477,7 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
         RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialRequest: After GetClusterCredentials()");
     } 
     catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
-        RS_LOG_DEBUG("IAMCLNT", "Failed to call GetClusterCredentials. Exception: %s", ex);
+        RS_LOG_DEBUG("IAMCLNT", "Failed to call GetClusterCredentials. Exception: %s", ex.GetMessage().c_str());
         throw ex;
     }
 
@@ -562,15 +556,12 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
 
 	// Compose the ClusterCredentialRequest object
 	Model::GetClusterCredentialsWithIAMRequest request;
-#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)
-    if(m_settings.m_isCname){
+    if(m_settings.m_isCname) {
         //suppose to call the request.SetCustomDomainName() API but its not available.
         //request.SetCustomDomainName();
         request.SetCustomDomainName(m_settings.m_host.c_str());
     }
-    else
-#endif
-    {
+    else {
         request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ?
 		inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str());
     }
@@ -586,7 +577,6 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
     rs_string tempClusterIdentifierIAM;
 
     try {
-#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)        
         if (m_settings.m_isCname) {
             Model::DescribeCustomDomainAssociationsRequest describeRequest;
             describeRequest.SetCustomDomainName(m_settings.m_host);
@@ -617,7 +607,6 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
                 request.SetClusterIdentifier(m_settings.m_clusterIdentifer.empty() ? inferredClusterId.c_str() : m_settings.m_clusterIdentifer.c_str()); // Set the cluster identifier instead
             }
         }
-#endif        
         /* if host is empty describe cluster using cluster id */
         if (m_settings.m_host.empty() || m_settings.m_port==0) {
             if (m_settings.m_clusterIdentifer.empty() && tempClusterIdentifierIAM.empty()) {
@@ -669,8 +658,16 @@ Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentia
 	}
 
 	config.region = m_settings.m_awsRegion.empty() ? inferredAwsRegion : m_settings.m_awsRegion;
+    RS_LOG_DEBUG("IAMCLNT",
+    "configured region=%s inferredAwsRegion=%s => config.region=%s", 
+    m_settings.m_awsRegion.c_str(), inferredAwsRegion.c_str(), config.region.c_str());
+    
+    if(m_settings.m_isCname && config.region.empty()){
+        config.region = IAMUtils().GetAwsRegionFromCname(m_settings.m_host);
+        RS_LOG_DEBUG("IAMCLNT", "GetAwsRegionFromCname->%s", config.region.c_str());
+    }
 	config.endpointOverride = IAMUtils::convertToUTF8(m_settings.m_endpointUrl);
-
+    
 	if (m_settings.m_stsConnectionTimeout > 0)
 	{
 		config.httpRequestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
@@ -710,16 +707,18 @@ Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentia
 
 	// Compose the ClusterCredentialRequest object
 	Aws::RedshiftServerless::Model::GetCredentialsRequest request;
+    
+    if(m_settings.m_isCname){
+        request.SetCustomDomainName(m_settings.m_host.c_str());
+        const Aws::String& customDomainName = request.GetCustomDomainName();
+        RS_LOG_DEBUG("IAMCLNT", "Custom Domain Name: %s", customDomainName.c_str());
+    }         
 
 	request.SetDbName(m_settings.m_database);
-	request.SetWorkgroupName(inferredWorkgroup);
-#if (defined(ENABLE_CNAME) && (ENABLE_CNAME == 1)) || defined(WIN32)
-    if(m_settings.m_isCname){
-
-        RS_LOG_DEBUG("IAMCLNT", "Custom cluster names are not supported for Redshift Serverless");
-
-    }         
-#endif
+    if(m_settings.m_workGroup.length()){
+        request.SetWorkgroupName(m_settings.m_workGroup);
+    }
+   
 	/* if port is 0 describe configuration to get host and port*/
 	if (m_settings.m_port == 0)
 	{

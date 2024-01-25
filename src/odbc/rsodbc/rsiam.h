@@ -61,6 +61,10 @@ struct RS_IAM_CONN_PROPS_INFO {
   bool isDisableCache; 
   int iStsConnectionTimeout; 
   bool isGroupFederation;
+  long lIdcResponseTimeout; // idc_response_timeout
+  char szIdcClientDisplayName[MAX_IAM_BUF_VAL]; // idc_client_display_name
+  bool isServerless;
+  char szWorkGroup[MAX_IDEN_LEN];
 };
 
 struct RS_PROXY_CONN_PROPS_INFO {

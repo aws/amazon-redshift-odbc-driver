@@ -326,6 +326,8 @@ void RsIamHelper::SetIamSettings(
                 requiredAwsRegion = hostnameTokens[2];
             }
 
+        settings.m_isServerless = pIamProps->isServerless;
+        settings.m_workGroup = pIamProps->szWorkGroup;
         std::smatch mProvisioned;
         std::smatch mServerless;
 
@@ -342,6 +344,7 @@ void RsIamHelper::SetIamSettings(
             // serverless vanilla
             // do nothing, regular serverless logic flow
             RS_LOG_DEBUG("IAMHLP", "Code flow for regular serverless cluster");
+            settings.m_isServerless=true;
         }
         else if(settings.m_isServerless){
             // hostname doesn't match serverless regex but serverless set to true explicitly by user
@@ -382,7 +385,8 @@ void RsIamHelper::SetIamSettings(
             settings.m_accessDuration = 900;
 
         settings.m_clusterIdentifer = clusterId;
-        RS_LOG_DEBUG("IAMHLP", "Cluster Identifier:%s", settings.m_clusterIdentifer );
+        RS_LOG_DEBUG("IAMHLP", "Cluster Identifier:%s",
+                     settings.m_clusterIdentifer.c_str());
         //settings.m_clusterIdentifer = pIamProps->szClusterId;
 
 

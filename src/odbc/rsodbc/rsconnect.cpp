@@ -2225,6 +2225,11 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
                      sizeof(pIamProps->szDbGroupsFilter));
         } else if (_stricmp(pname, RS_AUTO_CREATE) == 0) {
                       pIamProps->isAutoCreate = convertToBoolVal(pval);
+        } else if (_stricmp(pname, RS_SERVERLESS) == 0) {
+                      pIamProps->isServerless = convertToBoolVal(pval);
+        } else if (_stricmp(pname, RS_WORKGROUP) == 0) {
+          rs_strncpy(pIamProps->szSecretAccessKey, pval,
+                     sizeof(pIamProps->szWorkGroup));
         } else if (_stricmp(pname, RS_FORCE_LOWER_CASE) == 0) {
                       pIamProps->isForceLowercase = convertToBoolVal(pval);
         } else if (_stricmp(pname, RS_IDP_RESPONSE_TIMEOUT) == 0) {
@@ -3055,6 +3060,7 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_DB_GROUPS_FILTER, "", pIamProps->szDbGroupsFilter, MAX_IAM_DBGROUPS_LEN, ODBC_INI);
 
         RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_AUTO_CREATE, &(pIamProps->isAutoCreate));
+        RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_SERVERLESS, &(pIamProps->isServerless));
         RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_FORCE_LOWER_CASE, &(pIamProps->isForceLowercase));
 
         RS_CONN_INFO::readLongValFromDsn(pConnectProps->szDSN, RS_IDP_RESPONSE_TIMEOUT, &(pIamProps->lIdpResponseTimeout));
@@ -3074,6 +3080,7 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
 
         // Read plugin_name and all other related params to plugin
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_PLUGIN_NAME, "", pIamProps->szPluginName, MAX_IDEN_LEN, ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_WORKGROUP, "", pIamProps->szWorkGroup, MAX_IDEN_LEN, ODBC_INI);
 
         // Common properties of any plugin
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_PREFERRED_ROLE, "", pIamProps->szPreferredRole, MAX_IAM_BUF_VAL, ODBC_INI);

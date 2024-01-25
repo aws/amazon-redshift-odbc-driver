@@ -914,6 +914,8 @@ public:
 #define RS_DB_GROUPS              "DbGroups"
 #define RS_DB_GROUPS_FILTER       "dbgroups_filter"
 #define RS_AUTO_CREATE            "AutoCreate"
+#define RS_SERVERLESS             "Serverless"
+#define RS_WORKGROUP              "Workgroup"
 #define RS_FORCE_LOWER_CASE       "ForceLowercase"
 #define RS_IDP_RESPONSE_TIMEOUT   "idp_response_timeout"
 #define RS_IAM_DURATION           "IAMDuration"

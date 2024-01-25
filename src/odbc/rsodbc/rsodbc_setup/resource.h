@@ -226,6 +226,15 @@
 #define IDC_TOKEN_STATIC                1217
 #define IDC_TOKEN_TYPE_STATIC           1218
 #define IDC_IDENTITY_NAMESPACE_STATIC   1219
+#define IDC_CHECK1                      1224
+#define IDC_COMBO_KSA                   1224
+#define IDC_SERVERLESS                  1224
+#define IDC_CHECK1                      1225
+#define IDC_COMBO_KSA                   1225
+#define IDC_SERVERLESS_IDP_TOKEN        1225
+#define IDC_WORKGROUP_STATIC            1226
+#define IDC_WORKGROUP                   1227
+#define IDC_GROUP_FEDERATION            1228
 
 // Next default values for new objects
 // 
