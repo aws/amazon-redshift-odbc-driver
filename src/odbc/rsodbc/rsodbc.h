@@ -49,7 +49,9 @@
 // Max limit macros
 #define MAX_SQL_STATE_LEN    6
 #define MAX_ERR_MSG_LEN        (256 + MAX_SQL_STATE_LEN + 1 + 64) // +1 for : after native sqlstate, 64: ODBC Error prefix
+#ifndef MAX_IDEN_LEN
 #define MAX_IDEN_LEN        (NAMEDATALEN + 1)
+#endif
 #define MAX_TEMP_BUF_LEN        256
 #define MAX_NUMBER_BUF_LEN        64
 #define MAX_REQUIRED_CONNECT_KEYWORDS 5

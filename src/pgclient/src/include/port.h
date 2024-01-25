@@ -17,6 +17,7 @@
 #include <netdb.h>
 #include <pwd.h>
 
+#include <pg_config.h>
 /* socket has a different definition on WIN32 */
 #ifndef WIN32
 typedef int pgsocket;

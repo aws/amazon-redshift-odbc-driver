@@ -40,8 +40,6 @@ typedef long off_t;
 #define rs_fseeko fseeko
 #define rs_ftello ftello
 
-extern FILE *fopen64 (__const char *__restrict __filename,
-		      	  	  __const char *__restrict __modes);
 #endif
 
 #ifdef __cplusplus

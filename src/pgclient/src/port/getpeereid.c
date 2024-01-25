@@ -23,7 +23,7 @@
 #ifdef HAVE_UCRED_H
 #include <ucred.h>
 #endif
-#ifdef HAVE_SYS_UCRED_H
+#if defined (HAVE_SYS_UCRED_H)
 #include <sys/ucred.h>
 #endif
 

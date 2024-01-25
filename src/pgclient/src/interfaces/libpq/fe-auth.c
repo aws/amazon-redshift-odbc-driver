@@ -20,8 +20,11 @@
  *								of the authentication system
  */
 
-#include "postgres_fe.h"
+#ifdef LINUX
+#include <openssl/rand.h>
+#endif
 
+#include "postgres_fe.h"
 #ifdef WIN32
 #include "win32.h"
 #else
@@ -868,6 +871,11 @@ pg_password_sendauth(PGconn *conn, const char *password, AuthRequest areq)
 				int serverNonceLen = 0;
 				char* serverSalt = NULL;
 				char* serverNonce = NULL;
+				size_t passwordLen;
+				unsigned char passwordDigest[SHA256_DIGEST_LENGTH];
+				SHA256_CTX passwordDigestCtx;
+				unsigned char finalDigest[SHA256_DIGEST_LENGTH];
+				SHA256_CTX finalDigestCtx;
 
 				// Get salt length
 				if (pqGetInt(&serverSaltLen, 4, conn))
@@ -923,18 +931,14 @@ pg_password_sendauth(PGconn *conn, const char *password, AuthRequest areq)
 				}
 
 				// Create the password digest: SHA256(password + salt)
-				size_t passwordLen = strlen(password);
-
-				unsigned char passwordDigest[SHA256_DIGEST_LENGTH];
-				SHA256_CTX passwordDigestCtx;
+				passwordLen = strlen(password);
+				
 				SHA256_Init(&passwordDigestCtx);
 				SHA256_Update(&passwordDigestCtx, password, passwordLen);
 				SHA256_Update(&passwordDigestCtx, serverSalt, serverSaltLen);
 				SHA256_Final(passwordDigest, &passwordDigestCtx);
 
 				// Create final digest: SHA256(passwordDigest + server nonce + client nonce)
-				unsigned char finalDigest[SHA256_DIGEST_LENGTH];
-				SHA256_CTX finalDigestCtx;
 				SHA256_Init(&finalDigestCtx);
 				SHA256_Update(&finalDigestCtx, passwordDigest, SHA256_DIGEST_LENGTH);
 				SHA256_Update(&finalDigestCtx, serverNonce, serverNonceLen);

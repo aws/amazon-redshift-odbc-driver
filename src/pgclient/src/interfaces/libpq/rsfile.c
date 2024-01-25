@@ -7,7 +7,11 @@
 */
 
 #include <time.h>
-
+#if defined LINUX 
+#if defined LINUX32 
+#include <stdio.h>
+#endif
+#endif
 #include "rsfile.h"
 
 /*====================================================================================================================================================*/
@@ -17,19 +21,7 @@
 //
 FILE *rs_fopen(const char * _Filename, const char * _Mode)
 {
-#ifdef WIN32
     return fopen(_Filename, _Mode);
-#endif
-
-#if defined LINUX 
-#if defined LINUX32 
-    return fopen(_Filename, _Mode);
-#else
-    return fopen64(_Filename, _Mode); // fopen64
-#endif
-#endif
-
-    return NULL;
 }
 
 /*====================================================================================================================================================*/

@@ -496,11 +496,12 @@ Note: Not unicode compatible
 */
 inline bool isStrNoCaseEequal(const std::string& a, const std::string& b)
 {
+    auto fn = [](char a, char b) -> bool {
+                return tolower(a) == tolower(b);
+            };
     return std::equal(a.begin(), a.end(),
                       b.begin(), b.end(),
-                      [](char a, char b) {
-                          return tolower(a) == tolower(b);
-                      });
+                      fn);
 }
 
 // Check DatabaseMetadaCurrentOnly option
