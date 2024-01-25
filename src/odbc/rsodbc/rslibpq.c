@@ -1468,6 +1468,18 @@ short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType)
 			break;
 		}
 
+		case INTERVALY2MOID:
+		{
+			sqlType = SQL_INTERVAL_YEAR_TO_MONTH;
+			break;
+		}
+
+		case INTERVALD2SOID:
+		{
+			sqlType = SQL_INTERVAL_DAY_TO_SECOND;
+			break;
+		}
+
 		case SUPER:
 		{
 			if (phRsSpecialType)
@@ -2042,6 +2054,12 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
             else
             if(pgType == TIMESTAMPTZOID)
                 pDescRec->iSize = MAX_TIMESTAMPTZOID_SIZE;
+            else
+            if(pgType == INTERVALY2MOID)
+                pDescRec->iSize = MAX_INTERVALY2MOID_SIZE;
+            else
+            if(pgType == INTERVALD2SOID)
+                pDescRec->iSize = MAX_INTERVALD2SOID_SIZE;
             else
             if(pgType == SUPER)
                 pDescRec->iSize = MAX_SUPER_SIZE;

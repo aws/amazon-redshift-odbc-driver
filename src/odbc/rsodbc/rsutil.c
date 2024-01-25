@@ -156,6 +156,8 @@ static const RS_MAP_SQL_TYPE_NAME gMapToPadbSQLTypeName[] =
     { "SQL_TYPE_TIME", "TIME"},
     { "SQL_TIME", "TIME"},
     { "SQL_VARCHAR", "VARCHAR"},
+    { "SQL_INTERVAL_YEAR_TO_MONTH", "INTERVALY2M"},
+    { "SQL_INTERVAL_DAY_TO_SECOND", "INTERVALD2S"},
     {NULL,NULL}
 };
 
@@ -169,9 +171,14 @@ int isEndOfStreamingCursorQuery(void *_pCscStatementContext);
 int getStreamingCursorBatchNumber(void *_pCscStatementContext);
 void resetStreamingCursorBatchNumber(void *_pCscStatementContext);
 unsigned char hex_to_binary(char in_hex);
-
 #ifdef __cplusplus
 }
+#endif
+
+#ifdef WIN32
+int intervald2s_out_wchar(INTERVALD2S_STRUCT* d2s, WCHAR *buf, int buf_len);
+int intervaly2m_out_wchar(INTERVALY2M_STRUCT* y2m, WCHAR *buf, int buf_len);
+int intervaly2m_out_wchar(INTERVALD2S_STRUCT* d2s, WCHAR *buf, int buf_len);
 #endif
 
 /*====================================================================================================================================================*/
@@ -1904,6 +1911,29 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					break;
 				}
 
+				case SQL_INTERVAL_YEAR_TO_MONTH:
+				case SQL_INTERVAL_DAY_TO_SECOND:
+				{
+					if (IS_TEXT_FORMAT(format)) {
+						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+					}
+					else
+					{
+						if (iColDataLen > 0)
+							if (hSQLType == SQL_INTERVAL_YEAR_TO_MONTH)
+								len = intervaly2m_out(&(rsVal.y2mVal), (char *)pBuf, cbLen);
+							else
+								len = intervald2s_out(&(rsVal.d2sVal), (char *)pBuf, cbLen);
+						else
+							len = 0;
+
+						if (pcbLenInd)
+							*pcbLenInd = len;
+					}
+
+					break;
+				}
+
 				case SQL_NUMERIC:
 				case SQL_DECIMAL:
 				{
@@ -2391,6 +2421,48 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 
 				}
 
+				case SQL_INTERVAL_YEAR_TO_MONTH:
+				case SQL_INTERVAL_DAY_TO_SECOND:
+				{
+					if (IS_TEXT_FORMAT(format))
+						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+					else
+					{
+#ifdef WIN32
+						if (iColDataLen > 0)
+							if (hSQLType == SQL_INTERVAL_YEAR_TO_MONTH)
+								len = intervaly2m_out_wchar(&(rsVal.y2mVal), (WCHAR *)pBuf, cbLen);
+							else
+								len = intervald2s_out_wchar(&(rsVal.d2sVal), (WCHAR *)pBuf, cbLen);
+						else
+							len = 0;
+
+						if (pcbLenInd)
+							*pcbLenInd = len;
+#endif
+#if defined LINUX 
+						if (iColDataLen > 0) {
+							char tempBuf[MAX_TEMP_BUF_LEN];
+
+							if (hSQLType == SQL_INTERVAL_YEAR_TO_MONTH)
+								len = intervaly2m_out(&(rsVal.y2mVal), (char *)tempBuf, sizeof(tempBuf));
+							else
+								len = intervald2s_out(&(rsVal.d2sVal), (char *)tempBuf, sizeof(tempBuf));
+							rc = copyWStrDataBigLen(tempBuf, len, (WCHAR *)pBuf, cbLen, pcbLenInd);
+						}
+						else
+						{
+							len = 0;
+
+							if (pcbLenInd)
+								*pcbLenInd = len;
+						}
+#endif
+					}
+
+					break;
+				}
+
 				case SQL_NUMERIC:
 				case SQL_DECIMAL:
 				{
@@ -2576,6 +2648,8 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DATE:
                 case SQL_TIMESTAMP:
                 case SQL_TIME:
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                case SQL_INTERVAL_DAY_TO_SECOND:
                 {
                     iConversionError = TRUE;
                     break;
@@ -2707,6 +2781,8 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DATE:
                 case SQL_TIMESTAMP:
                 case SQL_TIME:
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                case SQL_INTERVAL_DAY_TO_SECOND:
                 {
                     iConversionError = TRUE;
                     break;
@@ -2819,6 +2895,8 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_TYPE_TIME:
                 case SQL_DATE:
                 case SQL_TIMESTAMP:
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                case SQL_INTERVAL_DAY_TO_SECOND:
                 case SQL_TIME:
                 {
                     iConversionError = TRUE;
@@ -2932,6 +3010,8 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DATE:
                 case SQL_TIMESTAMP:
                 case SQL_TIME:
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                case SQL_INTERVAL_DAY_TO_SECOND:
                 {
                     iConversionError = TRUE;
                     break;
@@ -3042,6 +3122,8 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DATE:
                 case SQL_TIMESTAMP:
                 case SQL_TIME:
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                case SQL_INTERVAL_DAY_TO_SECOND:
                 {
                     iConversionError = TRUE;
                     break;
@@ -3155,6 +3237,8 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DATE:
                 case SQL_TIMESTAMP:
                 case SQL_TIME:
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                case SQL_INTERVAL_DAY_TO_SECOND:
                 {
                     iConversionError = TRUE;
                     break;
@@ -3209,6 +3293,8 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DOUBLE:
                 case SQL_TYPE_TIME:
                 case SQL_TIME:
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                case SQL_INTERVAL_DAY_TO_SECOND:
                 {
                     iConversionError = TRUE;
                     break;
@@ -3310,6 +3396,8 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DOUBLE:
                 case SQL_TYPE_TIME:
                 case SQL_TIME:
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                case SQL_INTERVAL_DAY_TO_SECOND:
                 {
                     iConversionError = TRUE;
                     break;
@@ -3325,6 +3413,44 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 
             break;
         } // SQL_C_TYPE_TIMESTAMP
+
+        case SQL_C_INTERVAL_YEAR_TO_MONTH:
+        {
+            switch(hSQLType)
+            {
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                {
+                    rc = getIntervalY2MData(&(rsVal.y2mVal), pBuf, pcbLenInd);
+                    break;
+                }
+                default:
+                {
+                    iConversionError = TRUE;
+                    break;
+                }
+            }
+
+            break;
+        } // SQL_C_INTERVAL_YEAR_TO_MONTH
+
+        case SQL_C_INTERVAL_DAY_TO_SECOND:
+        {
+            switch(hSQLType)
+            {
+                case SQL_INTERVAL_DAY_TO_SECOND:
+                {
+                    rc = getIntervalD2SData(&(rsVal.d2sVal), pBuf, pcbLenInd);
+                    break;
+                }
+                default:
+                {
+                    iConversionError = TRUE;
+                    break;
+                }
+            }
+
+            break;
+        } // SQL_C_INTERVAL_DAY_TO_SECOND
 
         case SQL_C_TYPE_TIME:
         case SQL_C_TIME:
@@ -3420,6 +3546,8 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DOUBLE:
                 case SQL_TYPE_DATE:
                 case SQL_DATE:
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                case SQL_INTERVAL_DAY_TO_SECOND:
                 {
                     iConversionError = TRUE;
                     break;
@@ -3616,6 +3744,8 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DATE:
                 case SQL_TIMESTAMP:
                 case SQL_TIME:
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                case SQL_INTERVAL_DAY_TO_SECOND:
                 {
                     iConversionError = TRUE;
                     break;
@@ -3733,6 +3863,17 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                     break;
                 }
 
+                case SQL_INTERVAL_YEAR_TO_MONTH:
+                {
+                    rc = getIntervalY2MData(&(rsVal.y2mVal), pBuf, pcbLenInd);
+                    break;
+                }
+                case SQL_INTERVAL_DAY_TO_SECOND:
+                {
+                    rc = getIntervalD2SData(&(rsVal.d2sVal), pBuf, pcbLenInd);
+                    break;
+                }
+
                 case SQL_TYPE_TIME:
                 case SQL_TIME:
                 {
@@ -3810,6 +3951,8 @@ int getRsVal(char *pColData, int iColDataLen, short hSQLType, RS_VALUE  *pRsVal,
 			|| hSQLType == SQL_TIME
 			|| hSQLType == SQL_NUMERIC
 			|| hSQLType == SQL_DECIMAL
+			|| hSQLType == SQL_INTERVAL_YEAR_TO_MONTH
+			|| hSQLType == SQL_INTERVAL_DAY_TO_SECOND
 			|| hRsSpecialType == TIMETZOID
 			|| hRsSpecialType == TIMESTAMPTZOID
 			)
@@ -3838,6 +3981,8 @@ int getRsVal(char *pColData, int iColDataLen, short hSQLType, RS_VALUE  *pRsVal,
 				case SQL_TIME:
 				case SQL_NUMERIC:
 				case SQL_DECIMAL:
+				case SQL_INTERVAL_YEAR_TO_MONTH:
+				case SQL_INTERVAL_DAY_TO_SECOND:
 				{
 					break; // There is a switch below, it will take care of it.
 				}
@@ -4186,6 +4331,75 @@ int getRsVal(char *pColData, int iColDataLen, short hSQLType, RS_VALUE  *pRsVal,
                 else
                 {
                     memset(&(pRsVal->tsVal), '\0', sizeof(TIMESTAMP_STRUCT));
+                }
+
+                break;
+            }
+
+            case SQL_INTERVAL_YEAR_TO_MONTH:
+            {
+                if(iColDataLen > 0)
+                {
+                    if (IS_TEXT_FORMAT(format) || isTextData)
+                    {
+                        if (pColData[iColDataLen - 1] == '\0')
+                        {
+                            pRsVal->y2mVal = parse_intervaly2m(pColData, iColDataLen);
+                        }
+                        else
+                        {
+                            makeNullTerminateIntVal(pColData, iColDataLen, szNumBuf, MAX_NUMBER_BUF_LEN + 1);
+                            pRsVal->y2mVal = parse_intervaly2m(szNumBuf, strlen(szNumBuf));
+                        }
+                    }
+                    else
+                    {
+                        int month = getInt32FromBinary(pColData, 0);
+                        struct pg_tm tm = {0};
+                        long long fsec = 0;
+                        interval2tm(0, month, &tm, &fsec);
+                        pRsVal->y2mVal = {(SQLUINTEGER)tm.tm_year,
+                                          (SQLUINTEGER)tm.tm_mon};
+                    }
+                }
+                else
+                {
+                    memset(&(pRsVal->y2mVal), '\0', sizeof(INTERVALY2M_STRUCT));
+                }
+
+                break;
+            }
+            case SQL_INTERVAL_DAY_TO_SECOND:
+            {
+                if(iColDataLen > 0)
+                {
+                    if (IS_TEXT_FORMAT(format) || isTextData)
+                    {
+                        if (pColData[iColDataLen - 1] == '\0')
+                        {
+                            pRsVal->d2sVal = parse_intervald2s(pColData, iColDataLen);
+                    }
+                    else
+                    {
+                        makeNullTerminateIntVal(pColData, iColDataLen, szNumBuf, MAX_NUMBER_BUF_LEN + 1);
+                            pRsVal->d2sVal = parse_intervald2s(szNumBuf, strlen(szNumBuf));
+                        }
+                    }
+                    else
+                    {
+                        long long time = getInt64FromBinary(pColData, 0);
+                        struct pg_tm tm = {0};
+                        long long fsec = 0;
+                        interval2tm(time, 0, &tm, &fsec);
+                        pRsVal->d2sVal = {
+                            (SQLUINTEGER)tm.tm_mday, (SQLUINTEGER)tm.tm_hour,
+                            (SQLUINTEGER)tm.tm_min, (SQLUINTEGER)tm.tm_sec,
+                            (SQLUINTEGER)fsec};
+                    }
+                }
+                else
+                {
+                    memset(&(pRsVal->d2sVal), '\0', sizeof(INTERVALD2S_STRUCT));
                 }
 
                 break;
@@ -4551,6 +4765,52 @@ SQLRETURN getTimeStampData(TIMESTAMP_STRUCT *ptsVal, void *pBuf,  SQLLEN *pcbLen
 
 /*====================================================================================================================================================*/
 
+//---------------------------------------------------------------------------------------------------------lkumayus
+// Get interval year to month data.
+//
+SQLRETURN getIntervalY2MData(INTERVALY2M_STRUCT *py2mVal, void *pBuf,  SQLLEN *pcbLenInd)
+{
+    SQLRETURN rc;
+
+    if(pBuf)
+    {
+        *(INTERVALY2M_STRUCT *)pBuf = *py2mVal;
+        rc = SQL_SUCCESS;
+    }
+    else
+        rc = SQL_SUCCESS_WITH_INFO;
+
+    if(pcbLenInd)
+        *pcbLenInd = sizeof(INTERVALY2M_STRUCT);
+
+    return rc;
+}
+
+/*====================================================================================================================================================*/
+
+//---------------------------------------------------------------------------------------------------------lkumayus
+// Get interval day to second data.
+//
+SQLRETURN getIntervalD2SData(INTERVALD2S_STRUCT *pd2sVal, void *pBuf,  SQLLEN *pcbLenInd)
+{
+    SQLRETURN rc;
+
+    if(pBuf)
+    {
+        *(INTERVALD2S_STRUCT *)pBuf = *pd2sVal;
+        rc = SQL_SUCCESS;
+    }
+    else
+        rc = SQL_SUCCESS_WITH_INFO;
+
+    if(pcbLenInd)
+        *pcbLenInd = sizeof(INTERVALD2S_STRUCT);
+
+    return rc;
+}
+
+/*====================================================================================================================================================*/
+
 //---------------------------------------------------------------------------------------------------------igarish
 // Get time data.
 //
@@ -4669,6 +4929,17 @@ long getSize(short hType, int iSize)
             break;
         }
 
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        {
+            lSize = 32;
+            break;
+        }
+        case SQL_INTERVAL_DAY_TO_SECOND:
+        {
+            lSize = 64;
+            break;
+        }
+
         case SQL_TYPE_TIME:
         case SQL_TIME:
         {
@@ -4724,13 +4995,9 @@ short getScale(short hType, short hDecimalDigits)
 
         case SQL_TYPE_TIMESTAMP:
         case SQL_TIMESTAMP:
-        {
-            hScale = 6; // millionth of seconds (6)
-            break;
-        }
-
         case SQL_TYPE_TIME:
         case SQL_TIME:
+        case SQL_INTERVAL_DAY_TO_SECOND:
         {
             hScale = 6; // millionth of seconds (6)
             break;
@@ -4775,6 +5042,8 @@ int getCaseSensitive(short hType, short hRsSpecialType, int case_sensitive_bit)
         case SQL_TIMESTAMP:
         case SQL_TIME:
 		case SQL_LONGVARBINARY:
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        case SQL_INTERVAL_DAY_TO_SECOND:
 		{
             iCaseSensitive = FALSE;
             break;
@@ -4907,6 +5176,18 @@ int getDisplaySize(short hType, int iSize, short hRsSpecialType)
             break;
         }
 
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        {
+            iDisplaySize = 32;
+            break;
+        }
+
+        case SQL_INTERVAL_DAY_TO_SECOND:
+        {
+            iDisplaySize = 64;
+            break;
+        }
+
         case SQL_TYPE_TIME:
         case SQL_TIME:
         {
@@ -4950,6 +5231,8 @@ void getLiteralPrefix(short hType, char *pBuf, short hRsSpecialType)
         case SQL_DATE:
         case SQL_TIMESTAMP:
         case SQL_TIME:
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        case SQL_INTERVAL_DAY_TO_SECOND:
         {
             pBuf[0] = '\0';
             break;
@@ -5018,6 +5301,8 @@ void getLiteralSuffix(short hType, char *pBuf, short hRsSpecialType)
         case SQL_DATE:
         case SQL_TIMESTAMP:
         case SQL_TIME:
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        case SQL_INTERVAL_DAY_TO_SECOND:
         {
             pBuf[0] = '\0';
             break;
@@ -5134,6 +5419,17 @@ void getTypeName(short hType, char *pBuf, int bufLen, short hRsSpecialType)
             break;
         }
 
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        {
+            rs_strncpy(pBuf,"INTERVALY2M", bufLen);
+            break;    
+        }
+        case SQL_INTERVAL_DAY_TO_SECOND:
+        {
+            rs_strncpy(pBuf,"INTERVALD2S", bufLen);
+            break;   
+        }
+
         case SQL_TYPE_TIME:
         case SQL_TIME:
         {
@@ -5238,6 +5534,8 @@ int getNumPrecRadix(short hType)
         case SQL_TIMESTAMP:
         case SQL_TIME:
 		case SQL_LONGVARCHAR:
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        case SQL_INTERVAL_DAY_TO_SECOND:
 		{
             iNumPrexRadix = 0;
             break;
@@ -5346,6 +5644,17 @@ int getOctetLen(short hSQLType, int iSize, short hRsSpecialType)
             break;
         }
 
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        {
+            iOctetSize = 8; // size of SQL_INTERVALY2M_STRUCT
+            break;
+        }
+        case SQL_INTERVAL_DAY_TO_SECOND:
+        {
+            iOctetSize = 20; // size of SQL_INTERVALD2S_STRUCT
+            break;
+        }
+
         case SQL_TYPE_TIME:
         case SQL_TIME:
         {
@@ -5448,6 +5757,17 @@ int getOctetLenUsingCType(short hCType, int iSize)
         case SQL_C_TIMESTAMP:
         {
             iOctetSize = 16; // size of SQL_TIMESTAMP_STRUCT
+            break;
+        }
+
+        case SQL_C_INTERVAL_YEAR_TO_MONTH:
+        {
+            iOctetSize = 8; // size of SQL_INTERVALY2M_STRUCT
+            break;
+        }
+        case SQL_C_INTERVAL_DAY_TO_SECOND:
+        {
+            iOctetSize = 20; // size of SQL_INTERVALD2S_STRUCT
             break;
         }
 
@@ -5556,6 +5876,17 @@ int getPrecision(short hType, int iSize, short hRsSpecialType)
             break;
         }
 
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        {
+            iPrec = 32;
+            break;
+        }
+        case SQL_INTERVAL_DAY_TO_SECOND:
+        {
+            iPrec = 64;
+            break;
+        }
+
         case SQL_TYPE_TIME:
         case SQL_TIME:
         {
@@ -5600,6 +5931,8 @@ int getSearchable(short hType, short hRsSpecialType)
         case SQL_DATE:
         case SQL_TIMESTAMP:
         case SQL_TIME:
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        case SQL_INTERVAL_DAY_TO_SECOND:
         {
             iSearchable = SQL_PRED_BASIC;
             break;
@@ -5968,6 +6301,17 @@ int getParamSize(short hType)
             break;
         }
 
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        {
+            iSize = 32;
+            break;
+        }
+        case SQL_INTERVAL_DAY_TO_SECOND:
+        {
+            iSize = 64;
+            break;
+        }
+
         case SQL_TYPE_TIME:
         case SQL_TIME:
         {
@@ -6025,6 +6369,12 @@ short getParamScale(short hType)
         case SQL_TIMESTAMP:
         {
             hScale = 6; // millionth of seconds (6)
+            break;
+        }
+
+        case SQL_INTERVAL_DAY_TO_SECOND:
+        {
+            hScale = 6;
             break;
         }
 
@@ -6130,6 +6480,8 @@ char *convertCParamDataToSQLData(RS_STMT_INFO *pStmt, char *pParamData, int iPar
                 case SQL_C_TIMESTAMP:
                 case SQL_C_TIME:
                 case SQL_C_NUMERIC:
+                case SQL_C_INTERVAL_YEAR_TO_MONTH:
+                case SQL_C_INTERVAL_DAY_TO_SECOND:
                 {
                     // We already convert these types to string
                     break;
@@ -6744,6 +7096,86 @@ char *convertCParamDataToSQLData(RS_STMT_INFO *pStmt, char *pParamData, int iPar
             break;
         } // SQL_TYPE_TIMESTAMP
 
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        {
+            switch(hType)
+            {
+                case SQL_C_INTERVAL_YEAR_TO_MONTH:
+                {
+                    // We already convert these types to string
+                    break;
+                }
+
+                case SQL_C_CHAR:
+                case SQL_C_WCHAR:
+                {
+                    if(pcVal)
+                    {
+                        if(*pcVal == '{' && *(pcVal + 1) == 'i' && *(pcVal + 2) == 'v' && *(pcVal + 3) == 'l')
+                        {
+                            char *pTemp = strchr(pcVal, '}');
+
+                            if(pTemp)
+                            {
+                                pcVal += 4;
+                                *pTemp = ' ';
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                default:
+                {
+                    iConversionError = TRUE;
+                    break;
+                }
+
+            } // C Type
+
+            break;
+        } // SQL_TYPE_INTERVAL_YEAR_TO_MONTH
+
+        case SQL_INTERVAL_DAY_TO_SECOND:
+        {
+            switch(hType)
+            {
+                case SQL_C_INTERVAL_DAY_TO_SECOND:
+                {
+                    // We already convert these types to string
+                    break;
+                }
+
+                case SQL_C_CHAR:
+                case SQL_C_WCHAR:
+                {
+                    if(pcVal)
+                    {
+                        if(*pcVal == '{' && *(pcVal + 1) == 'i' && *(pcVal + 2) == 'v' && *(pcVal + 3) == 'l')
+                        {
+                            char *pTemp = strchr(pcVal, '}');
+
+                            if(pTemp)
+                            {
+                                pcVal += 4;
+                                *pTemp = ' ';
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                default:
+                {
+                    iConversionError = TRUE;
+                    break;
+                }
+
+            } // C Type
+
+            break;
+        } // SQL_TYPE_INTERVAL_DAY_TO_SECOND
+
         case SQL_TYPE_TIME:
         case SQL_TIME:
         {
@@ -7149,6 +7581,34 @@ char *getParamVal(char *pParamData, int iParamDataLen, SQLLEN *plParamDataStrLen
                 break;
             }
 
+            case SQL_C_INTERVAL_YEAR_TO_MONTH:
+            {
+                if(iIndicator != SQL_NULL_DATA)
+                {
+                    INTERVALY2M_STRUCT *pivlVal = (INTERVALY2M_STRUCT *)pParamData;
+                    intervaly2m_out(pivlVal, pBindParamStrBuf->buf, sizeof(pBindParamStrBuf->buf));
+                    pBindParamStrBuf->pBuf = pBindParamStrBuf->buf;
+                }
+                else
+                    pBindParamStrBuf->pBuf = NULL;
+
+                break;
+            }
+            case SQL_C_INTERVAL_DAY_TO_SECOND:
+            {
+                if(iIndicator != SQL_NULL_DATA)
+                {
+                    INTERVALD2S_STRUCT *pivlVal = (INTERVALD2S_STRUCT *)pParamData;
+
+                    intervald2s_out(pivlVal, pBindParamStrBuf->buf, sizeof(pBindParamStrBuf->buf));
+                    pBindParamStrBuf->pBuf = pBindParamStrBuf->buf;
+                }
+                else
+                    pBindParamStrBuf->pBuf = NULL;
+
+                break;
+            }
+
             case SQL_C_TYPE_TIME:
             case SQL_C_TIME:
             {
@@ -7299,6 +7759,18 @@ short getDefaultCTypeFromSQLType(short hSQLType, int *piConversionError)
         case SQL_TYPE_TIMESTAMP:
         {
             hCType = SQL_C_TYPE_TIMESTAMP;
+            break;
+        }
+
+        case SQL_INTERVAL_YEAR_TO_MONTH:
+        {
+            hCType = SQL_C_INTERVAL_YEAR_TO_MONTH;
+            break;
+        }
+
+        case SQL_INTERVAL_DAY_TO_SECOND:
+        {
+            hCType = SQL_C_INTERVAL_DAY_TO_SECOND;
             break;
         }
 
@@ -8644,6 +9116,7 @@ int replaceODBCEscapeClause(RS_STMT_INFO *pStmt, char **ppDest, char *pDestStart
         int iCallEscapeClause = FALSE;
         int iParenthesis = FALSE;
 		int occupied = (pDest - pDestStart);
+        char* pDestBegin = pDest;
 
         // Skip '{'
         pSrc++;
@@ -8675,6 +9148,27 @@ int replaceODBCEscapeClause(RS_STMT_INFO *pStmt, char **ppDest, char *pDestStart
                && _strnicmp(pToken, "ts", iTokenLen) == 0)
            {
                iTemp = snprintf(pDest, iDestBufLen - occupied, "%s", "TIMESTAMP");
+               pDest += iTemp;
+           }
+           else
+           if(iTokenLen == strlen("ivl")
+               && _strnicmp(pToken, "ivl", iTokenLen) == 0)
+           {
+               iTemp = snprintf(pDest, iDestBufLen - occupied, "%s", "INTERVAL");
+               pDest += iTemp;
+           }
+           else
+           if(iTokenLen == strlen("ym")
+               && _strnicmp(pToken, "ym", iTokenLen) == 0)
+           {
+               iTemp = snprintf(pDest, iDestBufLen - occupied, "%s", "YEAR TO MONTH");
+               pDest += iTemp;
+           }
+           else
+           if(iTokenLen == strlen("ds")
+               && _strnicmp(pToken, "ds", iTokenLen) == 0)
+           {
+               iTemp = snprintf(pDest, iDestBufLen - occupied, "%s", "DAY TO SECOND");
                pDest += iTemp;
            }
            else
@@ -8921,6 +9415,27 @@ int replaceODBCEscapeClause(RS_STMT_INFO *pStmt, char **ppDest, char *pDestStart
 
                             *pDest++ = *pSrc++;
                             break;
+                        }
+
+                        case 'y':
+                        {
+                            if (*(pSrc+1) == 'm') {
+                                iTemp = snprintf(pDest, iDestBufLen - occupied, "%s", "YEAR TO MONTH");
+                                pDest += iTemp;
+                                pSrc += 2;
+                                break;
+                            }
+                            // Fallthrough
+                        }
+                        case 'd':
+                        {
+                            if (*(pSrc+1) == 's') {
+                                iTemp = snprintf(pDest, iDestBufLen - occupied, "%s", "DAY TO SECOND");
+                                pDest += iTemp;
+                                pSrc += 2;
+                                break;
+                            }
+                            // Fallthrough
                         }
 
                         default:
@@ -12002,6 +12517,220 @@ int timestamp_out(long long timestamp, char *buf, int buf_len, char *session_tim
 
 /*====================================================================================================================================================*/
 
+/*
+ * intervaly2m_out()
+ * Convert an year-month interval to string.
+ */
+int intervaly2m_out(INTERVALY2M_STRUCT* y2m, char *buf, int buf_len) {
+    int len = 0;
+
+    assert(y2m != NULL);
+    len += snprintf(buf + len, buf_len - len, "%d years %d mons", y2m->year, y2m->month);
+
+    return len;
+}
+
+/*====================================================================================================================================================*/
+
+/*
+ * intervald2s_out()
+ * Convert a day-second interval to string.
+ */
+int intervald2s_out(INTERVALD2S_STRUCT* d2s, char *buf, int buf_len) {
+    int len = 0;
+
+    assert(d2s != NULL);
+    int second = (int)d2s->second;
+    int fraction = (int)d2s->fraction;
+    second += fraction/1000000;
+    fraction %= 1000000;
+    if (second > 0 && fraction < 0) {
+        second -= 1;
+        fraction += 1000000;
+    } else if (second < 0 && fraction > 0) {
+        second += 1;
+        fraction -= 1000000;
+    }
+    // At this stage it is guaranteed that second and fraction have the same sign.
+    d2s->second = second;
+    d2s->fraction = fraction;
+    len += snprintf(buf + len, buf_len - len, "%d days %d hours %d mins %s%d.%06d secs",
+                    d2s->day, d2s->hour, d2s->minute,
+                    (second == 0 && fraction < 0) ? "-" : "", second,
+                    fraction < 0 ? -fraction : fraction);
+
+    return len;
+}
+
+/*====================================================================================================================================================*/
+
+/*
+ * parse_intervaly2m()
+ * Parse an interval year to month string to extract year/month fields.
+ */
+INTERVALY2M_STRUCT parse_intervaly2m(const char *buf, int buf_len) {
+    int year = 0, month = 0;
+
+    bool is_sql_standard = true;
+    for (int i = 0; i < buf_len; i++) {
+        if (!isdigit(buf[i]) && buf[i] != '-') {
+            is_sql_standard = false;
+            break;
+        }
+    }
+    if (is_sql_standard) {
+        // Sql Standard
+        bool is_neg = (buf[0] == '-');
+        if (is_neg) buf++;
+        sscanf(buf, "%d-%d", &year, &month);
+        if (is_neg) {
+            year = -year;
+            month = -month;
+        }
+    } else {
+        // Postgres or Postgres Verbose
+        const char* search_pos = strstr(buf, "year");
+        if (search_pos != NULL) {
+            const char* c = search_pos-2;
+            for (; c >= buf; c--) {
+                if (!isdigit(*c) && *c != '-') break;
+            }
+            sscanf(c + 1, "%d", &year);
+        } else {
+            search_pos = buf;
+        }
+        search_pos = strstr(search_pos, "mon");
+        if (search_pos != NULL) {
+            const char* c = search_pos-2;
+            for (; c >= buf; c--) {
+                if (!isdigit(*c) && *c != '-') break;
+            }
+            sscanf(c + 1, "%d", &month);
+        }
+    }
+
+    return {(SQLUINTEGER)year, (SQLUINTEGER)month};
+}
+
+/*====================================================================================================================================================*/
+
+/*
+ * parse_intervald2s()
+ * Parse an interval day to second string to extract day/hour/minute/second/microsecond fields.
+ */
+INTERVALD2S_STRUCT parse_intervald2s(const char *buf, int buf_len) {
+    int day = 0, hour = 0, min = 0, sec = 0;
+    char micr[] = "+000000000";
+    bool is_postgres_verbose = false;
+    bool has_spaces = false;
+    bool has_alphabets = false;
+    bool has_time = false;
+    for (int i = 0; i < buf_len; i++) {
+        if (buf[i] == '@') is_postgres_verbose = true;
+        else if (buf[i] == ' ') has_spaces = true;
+        else if (buf[i] == ':') has_time = true;
+        else if (!isdigit(buf[i]) && buf[i] != '-' && buf[i] != '.')
+          has_alphabets = true;
+    }
+    if (!has_alphabets) {
+        bool is_neg = (buf[0] == '-');
+        if (is_neg) buf++;
+        if (has_spaces) {
+            // Sql Standard
+            sscanf(buf, "%d %d:%d:%d.%s", &day, &hour, &min, &sec, micr+1);
+        } else {
+            // Postgres but no days.
+            sscanf(buf, "%d:%d:%d.%s", &hour, &min, &sec, micr+1);
+        }
+        if (is_neg) {
+            day = day > 0 ? -day : day;
+            hour = hour > 0 ? -hour : hour;
+            min = min > 0 ? -min : min;
+            sec = sec > 0 ? -sec : -sec;
+            micr[0] = '-';
+        }
+    } else {
+        // Postgres or Postgres Verbose.
+        const char* prev_search_pos = buf;
+        const char* search_pos = strstr(buf, "day");
+        if (search_pos != NULL) {
+            const char* c = search_pos-2;
+            for (; c >= buf; c--) {
+                if (!isdigit(*c) && *c != '-') break;
+            }
+            sscanf(c + 1, "%d", &day);
+        } else {
+            search_pos = prev_search_pos;
+        }
+        if (is_postgres_verbose) {
+            prev_search_pos = search_pos;
+            search_pos = strstr(search_pos, "hour");
+            if (search_pos != NULL) {
+                const char* c = search_pos-2;
+                for (; c >= buf; c--) {
+                    if (!isdigit(*c) && *c != '-') break;
+                }
+                sscanf(c + 1, "%d", &hour);
+            } else {
+                search_pos = prev_search_pos;
+            }
+            prev_search_pos = search_pos;
+            search_pos = strstr(search_pos, "min");
+            if (search_pos != NULL) {
+                const char* c = search_pos-2;
+                for (; c >= buf; c--) {
+                    if (!isdigit(*c) && *c != '-') break;
+                }
+                sscanf(c + 1, "%d", &min);
+            } else {
+                search_pos = prev_search_pos;
+            }
+            prev_search_pos = search_pos;
+            search_pos = strstr(search_pos, "sec");
+            if (search_pos != NULL) {
+                const char* c = search_pos-2;
+                for (; c >= buf; c--) {
+                    if (!isdigit(*c) && *c != '-' && *c != '.') break;
+                }
+                sscanf(c + 1, "%d.%s", &sec, micr+1);
+                if (sec < 0) micr[0] = '-';
+            } else {
+                search_pos = prev_search_pos;
+            }
+            search_pos = strstr(search_pos, "ago");
+            if (search_pos != NULL) {
+                // negate everything.
+                day = -day;
+                hour = -hour;
+                min = -min;
+                sec = -sec;
+                micr[0] = '-';
+            }
+        } else {
+            // Either scan something of the form "-%d:%d:%d" or scan nothing.
+            while (*search_pos != 0 && *search_pos != '-' && !isdigit(*search_pos))
+                search_pos++;
+            if (isdigit(*search_pos)) {
+                sscanf(search_pos, "%d:%d:%d.%s", &hour, &min, &sec, micr+1);
+            } else if (*search_pos == '-') {
+                sscanf(search_pos, "-%d:%d:%d.%s", &hour, &min, &sec, micr+1);
+                hour = -hour;
+                min = -min;
+                sec = -sec;
+                micr[0] = '-';
+            }
+        }
+    }
+
+    for (int i = strlen(micr); i < 7; i++) { micr[i] = '0'; }
+    micr[7] = 0;
+
+    return {(SQLUINTEGER)day, (SQLUINTEGER)hour, (SQLUINTEGER)min,
+            (SQLUINTEGER)sec, (SQLUINTEGER)atoi(micr)};
+}
+
+/*====================================================================================================================================================*/
+
 #ifdef WIN32
 
 int date_out_wchar(int date, WCHAR *buf, int buf_len)
@@ -12085,6 +12814,47 @@ int timestamp_out_wchar(long long timestamp, WCHAR *buf, int buf_len, char *sess
 	}
 
 	return len;
+}
+
+/*====================================================================================================================================================*/
+
+/*
+ * intervaly2m_out_wchar()
+ * Convert an year-month interval to string.
+ */
+int intervaly2m_out_wchar(INTERVALY2M_STRUCT* y2m, WCHAR *buf, int buf_len) {
+    int len = 0;
+
+    if (y2m->year != 0) {
+        len += swprintf(buf + len, buf_len, L"%d years", y2m->year);
+    }
+    if (y2m->month != 0 || y2m->year == 0) {
+        len += swprintf(buf + len, buf_len, L"%s%d mons",
+                        y2m->year != 0 ? " " : "", y2m->month);
+    }
+
+    return len;
+}
+
+/*====================================================================================================================================================*/
+
+/*
+ * intervald2s_out_wchar()
+ * Convert a day-second interval to string.
+ */
+int intervald2s_out_wchar(INTERVALD2S_STRUCT* d2s, WCHAR *buf, int buf_len) {
+    int len = 0;
+
+    if (d2s->day != 0) {
+        len += swprintf(buf + len, buf_len, L"%d days ", d2s->day);
+    }
+    len += swprintf(buf + len, buf_len, L"%02d:%02d:%02d",
+                    d2s->hour, d2s->minute, d2s->second);
+    if (d2s->fraction != 0) {
+        len += swprintf(buf + len, buf_len, L".%06d", d2s->fraction);
+    }
+
+    return len;
 }
 
 /*====================================================================================================================================================*/
@@ -12239,6 +13009,39 @@ int timestamp2tm(long long dt, int* tzp, struct pg_tm* tm, long long* fsec)
 	tm->tm_zone = NULL;
 
 	return 0;
+}
+
+/*====================================================================================================================================================*/
+
+/*
+* timestamp2tm() - Convert timestamp data type to POSIX time structure.
+*
+* Note that year is _not_ 1900-based, but is an explicit full value.
+* Also, month is one-based, _not_ zero-based.
+* Returns:
+*   0 on success
+*  -1 on out of range
+*/
+
+/*
+ * interval2tm()
+ * Convert a interval data type to a tm structure.
+ */
+int interval2tm(long long time, int months, struct pg_tm * tm, long long *fsec)
+{
+  tm->tm_year = months / 12;
+  tm->tm_mon = months % 12;
+
+  tm->tm_mday = (time / INT64CONST(86400000000));
+  time -= (tm->tm_mday * INT64CONST(86400000000));
+  tm->tm_hour = (time / INT64CONST(3600000000));
+  time -= (tm->tm_hour * INT64CONST(3600000000));
+  tm->tm_min = (time / INT64CONST(60000000));
+  time -= (tm->tm_min * INT64CONST(60000000));
+  tm->tm_sec = (time / INT64CONST(1000000));
+  *fsec = (time - (tm->tm_sec * INT64CONST(1000000)));
+
+  return 0;
 }
 
 /*====================================================================================================================================================*/

@@ -134,6 +134,8 @@
 // Copied from rslibpq.c
 #define TIMETZOID       1266
 #define TIMESTAMPTZOID  1184 
+#define INTERVALY2MOID  1188
+#define INTERVALD2SOID  1190
 #define GEOMETRY		3000
 #define GEOMETRYHEX		3999
 #define SUPER			4000
@@ -150,6 +152,8 @@
 // Redshift specific data type(s)
 #define MAX_TIMETZOID_SIZE		21 
 #define MAX_TIMESTAMPTZOID_SIZE 32
+#define MAX_INTERVALY2MOID_SIZE 32
+#define MAX_INTERVALD2SOID_SIZE 64
 #define MAX_SUPER_SIZE			4194304
 #define MAX_VARBYTE_SIZE		1024000 
 #define MAX_GEOMETRY_SIZE		1024000 

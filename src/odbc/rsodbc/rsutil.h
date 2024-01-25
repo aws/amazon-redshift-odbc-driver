@@ -103,14 +103,29 @@ typedef struct _RS_TIMETZ_STRUCT
 	int zone;   
 }RS_TIMETZ_STRUCT;
 
+typedef struct _INTERVALY2M_STRUCT
+{
+		SQLUINTEGER		year;
+		SQLUINTEGER		month;
+}INTERVALY2M_STRUCT;
+
+typedef struct _INTERVALD2S_STRUCT
+{
+		SQLUINTEGER		day;
+		SQLUINTEGER		hour;
+		SQLUINTEGER		minute;
+		SQLUINTEGER		second;
+		SQLUINTEGER		fraction;
+}INTERVALD2S_STRUCT;
+
 
 // Different types of column values supported by PADB
 typedef union _RS_VALUE
 {
     char *pcVal; // CHAR/VARCHAR
     short hVal;  // SMALLINT/INT2
-    int  iVal;  // INTEGER/INT4
-    long long llVal; // BIGINT/INT8
+    int  iVal;  // INTEGER/INT4/INTERVALY2M (as binary)
+    long long llVal; // BIGINT/INT8/INTERVALD2S (as binary)
     float fVal;  // REAL/FLOAT4
     double dVal; // DOUBLE PRECISION/FLOAT8
     char   bVal; // BOOLEAN
@@ -119,6 +134,8 @@ typedef union _RS_VALUE
     SQL_NUMERIC_STRUCT nVal; // DECIMAL/NUMERIC
     RS_TIME_STRUCT tVal; // TIME;
 	RS_TIMETZ_STRUCT tzVal; // TimeTZ val as BINARY
+    INTERVALY2M_STRUCT y2mVal; // INTERVALY2M (as text)
+    INTERVALD2S_STRUCT d2sVal; // INTERVALD2S (as text)
 }RS_VALUE;
 
 // Convert C type to char * when pass it to libpq
@@ -296,6 +313,8 @@ SQLRETURN getDoubleData(double dVal, void *pBuf,  SQLLEN *pcbLenInd);
 SQLRETURN getBooleanData(char bVal, void *pBuf,  SQLLEN *pcbLenInd);
 SQLRETURN getDateData(DATE_STRUCT *pdtVal, void *pBuf,  SQLLEN *pcbLenInd);
 SQLRETURN getTimeStampData(TIMESTAMP_STRUCT *ptsVal, void *pBuf,  SQLLEN *pcbLenInd);
+SQLRETURN getIntervalY2MData(INTERVALY2M_STRUCT *py2mVal, void *pBuf,  SQLLEN *pcbLenInd);
+SQLRETURN getIntervalD2SData(INTERVALD2S_STRUCT *pd2sVal, void *pBuf,  SQLLEN *pcbLenInd);
 SQLRETURN getNumericData(SQL_NUMERIC_STRUCT *pnVal, void *pBuf,  SQLLEN *pcbLenInd);
 SQLRETURN getTimeData(RS_TIME_STRUCT *ptVal, void *pBuf,  SQLLEN *pcbLenInd);
 
@@ -472,6 +491,11 @@ int date_out(int date, char *buf, int buf_len);
 void j2date(int jd, int *year, int *month, int *day);
 int timestamp_out(long long timestamp, char *buf, int buf_len, char *session_timezone);
 int timestamp2tm(long long dt, int* tzp, struct pg_tm* tm, long long* fsec);
+int intervaly2m_out(INTERVALY2M_STRUCT* y2m, char *buf, int buf_len);
+int intervald2s_out(INTERVALD2S_STRUCT* d2s, char *buf, int buf_len);
+int interval2tm(long long time, int months, struct pg_tm * tm, long long *fsec);
+INTERVALY2M_STRUCT parse_intervaly2m(const char *buf, int buf_len);
+INTERVALD2S_STRUCT parse_intervald2s(const char *buf, int buf_len);
 void dt2time(long long jd, int *hour, int *min, int *sec, long long *fsec);
 void TrimTrailingZeros(char *str, int *plen);
 int time_out(long long time, char *buf, int buf_len, int *tzp);
@@ -481,6 +505,12 @@ int getInt32FromBinary(char *pColData, int idx);
 long long getInt64FromBinary(char *pColData, int idx);
 #ifdef __cplusplus
 }
+
+#ifdef WIN32
+int intervald2s_out_wchar(INTERVALD2S_STRUCT* d2s, WCHAR *buf, int buf_len);
+int intervaly2m_out_wchar(INTERVALY2M_STRUCT* y2m, WCHAR *buf, int buf_len);
+int intervaly2m_out_wchar(INTERVALD2S_STRUCT* d2s, WCHAR *buf, int buf_len);
+#endif
 
 std::vector<Oid> getParamTypes(int iNoOfBindParams, RS_DESC_REC *pDescRecHead, RS_CONNECT_PROPS_INFO *pConnectProps);
 

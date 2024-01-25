@@ -22,7 +22,7 @@
 #define EXTERNAL_SCHEMA_QUERY		2
 
 
-#define MAX_TYPES 19
+#define MAX_TYPES 21
 
 #define SQLTABLES_BASE_QUERY " SELECT CAST(current_database() AS VARCHAR(124)) as TABLE_CAT,n.nspname as TABLE_SCHEM,c.relname as TABLE_NAME," \
                                  " CASE n.nspname ~ '^pg_' OR n.nspname = 'information_schema' " \
@@ -1276,6 +1276,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'super' THEN -1 "
 		 " WHEN 'varbyte' THEN -4 "
 		 " WHEN 'geography' THEN -4 "
+		 " WHEN 'intervaly2m' THEN 107 "
+		 " WHEN 'intervald2s' THEN 110 "
 		 " ELSE 0 "
 		 " END AS SMALLINT) AS DATA_TYPE, "
 		 " pg_catalog.format_type(p.prorettype, NULL) AS TYPE_NAME, "
@@ -1314,6 +1316,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'super' THEN 4194304 "
 		 " WHEN 'varbyte' THEN NULL "
 		 " WHEN 'geography' THEN NULL "
+		 " WHEN 'intervaly2m' THEN 32 "
+		 " WHEN 'intervald2s' THEN 64 "
 		 " ELSE 2147483647 " 
 		 " END AS COLUMN_SIZE, "
 		 " CASE pg_catalog.format_type(p.prorettype, NULL) "
@@ -1351,6 +1355,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'super' THEN 4194304 "
 		 " WHEN 'varbyte' THEN NULL "
 		 " WHEN 'geography' THEN NULL "
+		 " WHEN 'intervaly2m' THEN 32 "
+		 " WHEN 'intervald2s' THEN 64 "
 		 " END AS LENGTH, "
 		 " CAST(CASE pg_catalog.format_type(p.prorettype, NULL) "
 		 " WHEN 'smallint' THEN 0 "
@@ -1374,6 +1380,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'timestamp without time zone' THEN 6 "
 		 " WHEN 'timestamptz' THEN 6 "
 		 " WHEN 'timestamp with time zone' THEN 6 "
+		 " WHEN 'intervaly2m' THEN 0 "
+		 " WHEN 'intervald2s' THEN 6 "
 		 " ELSE NULL END AS SMALLINT) AS DECIMAL_DIGITS, "
 		 " 10 AS NUM_PREC_RADIX, "
 		 " CAST(2 AS SMALLINT) AS NULLABLE, "
@@ -1423,6 +1431,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'super' THEN -1 "
 		 " WHEN 'varbyte' THEN -4 "
 		 " WHEN 'geography' THEN -4 "
+		 " WHEN 'intervaly2m' THEN 107 "
+		 " WHEN 'intervald2s' THEN 110 "
 		 " END AS SMALLINT) AS SQL_DATA_TYPE, "
 		 " CAST(NULL AS SMALLINT) AS SQL_DATETIME_SUB, "
 		 " CAST(NULL AS SMALLINT) AS CHAR_OCTET_LENGTH, "
@@ -1498,6 +1508,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'super' THEN -1 "
 		 " WHEN 'varbyte' THEN -4 "
 		 " WHEN 'geography' THEN -4 "
+		 " WHEN 'intervaly2m' THEN 107 "
+		 " WHEN 'intervald2s' THEN 110 "
 		 " ELSE 0 "
 		 " END AS SMALLINT) AS DATA_TYPE, "
 		 " TYPE_NAME, "
@@ -1537,6 +1549,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'super' THEN 4194304 "
 		 " WHEN 'varbyte' THEN NULL "
 		 " WHEN 'geography' THEN NULL "
+		 " WHEN 'intervaly2m' THEN 32 "
+		 " WHEN 'intervald2s' THEN 64 "
 		 " ELSE 2147483647 "
 		 " END AS COLUMN_SIZE, "
 		 " CASE LENGTH "
@@ -1574,6 +1588,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'super' THEN 4194304 "
 		 " WHEN 'varbyte' THEN NULL "
 		 " WHEN 'geography' THEN NULL "
+		 " WHEN 'intervaly2m' THEN 32 "
+		 " WHEN 'intervald2s' THEN 64 "
 		 " END AS LENGTH, "
 		 " CAST(CASE DECIMAL_DIGITS "
 		 " WHEN 'smallint' THEN 0 "
@@ -1598,6 +1614,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'timestamp without time zone' THEN 6 "
 		 " WHEN 'timestamptz' THEN 6 "
 		 " WHEN 'timestamp with time zone' THEN 6 "
+		 " WHEN 'intervaly2m' THEN 0 "
+		 " WHEN 'intervald2s' THEN 6 "
 		 " ELSE NULL END AS SMALLINT) AS DECIMAL_DIGITS, "
 		 " 10 AS NUM_PREC_RADIX, "
 		 " CAST(2 AS SMALLINT) AS NULLABLE, "
@@ -1647,6 +1665,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'super' THEN -1 "
 		 " WHEN 'varbyte' THEN -4 "
 		 " WHEN 'geography' THEN -4 "
+		 " WHEN 'intervaly2m' THEN 107 "
+		 " WHEN 'intervald2s' THEN 110 "
 		 " END AS SMALLINT) AS SQL_DATA_TYPE, "
 		 " CAST(NULL AS SMALLINT) AS SQL_DATETIME_SUB, "
 		 " CAST(NULL AS SMALLINT) AS CHAR_OCTET_LENGTH, "
@@ -2311,6 +2331,14 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
 		{
 			"geography", SQL_LONGVARBINARY , 1000000, "\\'", "\\'", "max length", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "geography",
 			SQL_NULL_DATA, SQL_NULL_DATA, SQL_LONGVARBINARY, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
+		},
+		{
+			"intervaly2m", SQL_INTERVAL_YEAR_TO_MONTH, 32, "\\'", "\\'", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "intervaly2m",
+			0, 0, SQL_CODE_YEAR_TO_MONTH, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
+		},
+		{
+			"intervald2s", SQL_INTERVAL_DAY_TO_SECOND, 64, "\\'", "\\'", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "intervald2s",
+			0, 0, SQL_CODE_DAY_TO_SECOND, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
 		}
     };
 
@@ -3375,6 +3403,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'super' THEN -1 ");
 	result.append("when 'varbyte' THEN -4 ");
 	result.append("when 'geography' THEN -4 ");
+	result.append("when 'intervaly2m' THEN 107 ");
+	result.append("when 'intervald2s' THEN 110 ");
 	result.append("else 0 END as SMALLINT) AS DATA_TYPE, ");
 	result.append("t.typname as TYPE_NAME, ");
 	result.append("case typname ");
@@ -3419,6 +3449,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'super' THEN NULL ");
 	result.append("when 'varbyte' THEN NULL ");
 	result.append("when 'geography' THEN NULL ");
+	result.append("when 'intervaly2m' THEN 32 ");
+	result.append("when 'intervald2s' THEN 64 ");
 	//      if (connSettings.m_unknownLength == null)
 	{
 		result.append("else 2147483647 end as COLUMN_SIZE , ");
@@ -3443,6 +3475,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'super' then NULL ");
 	result.append("when 'varbyte' then NULL ");
 	result.append("when 'geography' then NULL ");
+	result.append("when 'intervaly2m' THEN 0 ");
+	result.append("when 'intervald2s' THEN 6 ");
 	result.append("else 0 end as DECIMAL_DIGITS, ");
 	result.append("case typname ");
 	result.append("when 'varbyte' then 2 ");
@@ -3511,6 +3545,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'super' THEN -1 ");
 	result.append("when 'varbyte' THEN -4 ");
 	result.append("when 'geography' THEN -4 ");
+	result.append("when 'intervaly2m' THEN 107 ");
+	result.append("when 'intervald2s' THEN 110 ");
 	result.append("else 0 END as SMALLINT) AS SQL_DATA_TYPE, ");
 	result.append("CAST(NULL AS SMALLINT) as SQL_DATETIME_SUB , ");
 	result.append("case typname ");
@@ -3555,6 +3591,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'super' THEN NULL ");
 	result.append("when 'varbyte' THEN NULL ");
 	result.append("when 'geography' THEN NULL ");
+	result.append("when 'intervaly2m' THEN 32 ");
+	result.append("when 'intervald2s' THEN 64 ");
 	//      if (connSettings.m_unknownLength == null)
 //	{
 		result.append("else 2147483647 end as CHAR_OCTET_LENGTH , ");
@@ -3651,6 +3689,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("WHEN 'super' THEN -1 ");
 	result.append("WHEN 'varbyte' THEN -4 ");
 	result.append("WHEN 'geography' THEN -4 ");
+	result.append("when 'intervaly2m' THEN 107 ");
+	result.append("when 'intervald2s' THEN 110 ");
 	result.append("ELSE 0 END AS SMALLINT) AS DATA_TYPE, ");
 	result.append("COALESCE(NULL,CASE columntype WHEN 'boolean' THEN 'bool' ");
 	result.append("WHEN 'character varying' THEN 'varchar' ");
@@ -3708,6 +3748,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("WHEN 'super' THEN NULL ");
 	result.append("WHEN 'varbyte' THEN NULL ");
 	result.append("WHEN 'geography' THEN NULL ");
+	result.append("WHEN 'intervaly2m' THEN 32 ");
+	result.append("WHEN 'intervald2s' THEN 64 ");
 	result.append("ELSE 2147483647 END AS COLUMN_SIZE, ");
 	result.append("NULL AS BUFFER_LENGTH, ");
 	result.append("CASE REGEXP_REPLACE(columntype,'[()0-9,]') ");
@@ -3722,6 +3764,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("WHEN 'numeric' THEN regexp_substr (columntype,'[0-9]+',charindex (',',columntype))::INTEGER ");
 	result.append("WHEN 'varbyte' THEN NULL ");
 	result.append("WHEN 'geography' THEN NULL ");
+	result.append("WHEN 'intervaly2m' THEN 0 ");
+	result.append("WHEN 'intervald2s' THEN 6 ");
 	result.append("ELSE 0 END AS DECIMAL_DIGITS, ");
 	result.append("CASE columntype ");
 	result.append("WHEN 'varbyte' THEN 2 ");
@@ -3779,6 +3823,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("WHEN 'super' THEN -1 ");
 	result.append("WHEN 'varbyte' THEN -4 ");
 	result.append("WHEN 'geography' THEN -4 ");
+	result.append("WHEN 'intervaly2m' THEN 107 ");
+	result.append("WHEN 'intervald2s' THEN 110 ");
 	result.append("ELSE 0 END AS SMALLINT) AS SQL_DATA_TYPE, ");
 	result.append("CAST(NULL AS SMALLINT) AS SQL_DATETIME_SUB, CASE ");
 	result.append("WHEN LEFT (columntype,7) = 'varchar' THEN isnull(nullif(regexp_substr (columntype,'[0-9]+',7),''),'0')::INTEGER ");
@@ -3885,6 +3931,8 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'super' THEN -1 "
 		 " WHEN 'varbyte' THEN -4 "
 		 " WHEN 'geography' THEN -4 "
+		 " WHEN 'intervaly2m' THEN 107 "
+		 " WHEN 'intervald2s' THEN 110 "
 		 " ELSE 0 END AS SMALLINT) AS DATA_TYPE,"
 		 " COALESCE("
 		 " domain_name,"
@@ -3946,6 +3994,8 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'super' THEN NULL"
 		 " WHEN 'varbyte' THEN NULL"
 		 " WHEN 'geography' THEN NULL"
+		 " WHEN 'intervaly2m' THEN 32"
+		 " WHEN 'intervald2s' THEN 64"
 		 " ELSE 2147483647" 
 		 " END AS COLUMN_SIZE,"
 		 " NULL AS BUFFER_LENGTH,"
@@ -3967,6 +4017,8 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'super' THEN NULL"
 		 " WHEN 'varbyte' THEN NULL"
 		 " WHEN 'geography' THEN NULL"
+		 " WHEN 'intervaly2m' THEN 0"
+		 " WHEN 'intervald2s' THEN 6"
 		 " ELSE 0"
 		 " END AS DECIMAL_DIGITS,"
 		 " CASE data_type"
@@ -4030,6 +4082,8 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'super' THEN -1"
 		 " WHEN 'varbyte' THEN -4"
 		 " WHEN 'geography' THEN -4"
+		 " WHEN 'intervaly2m' THEN 107 "
+		 " WHEN 'intervald2s' THEN 110 "
 		 " ELSE 0 END AS SMALLINT) AS SQL_DATA_TYPE,"
 		 " CAST(NULL AS SMALLINT) AS SQL_DATETIME_SUB,"
 		 " CASE data_type"
@@ -4075,6 +4129,8 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'super' THEN NULL"
 		 " WHEN 'varbyte' THEN NULL"
 		 " WHEN 'geography' THEN NULL"
+		 " WHEN 'intervaly2m' THEN 32"
+		 " WHEN 'intervald2s' THEN 64"
 		 " ELSE 2147483647 " 
 		 " END AS CHAR_OCTET_LENGTH,"
 		 " ordinal_position AS ORDINAL_POSITION,"
@@ -4165,6 +4221,8 @@ static void buildUniversalAllSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'super' THEN -1 "
 		 " WHEN 'varbyte' THEN -4 "
 		 " WHEN 'geography' THEN -4 "
+		 " WHEN 'intervaly2m' THEN 107 "
+		 " WHEN 'intervald2s' THEN 110 "
 		 " ELSE 0 END AS SMALLINT) AS DATA_TYPE, "
 		 " CASE data_type "
 		 " WHEN 'boolean' THEN 'bool' "
@@ -4224,6 +4282,8 @@ static void buildUniversalAllSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'super' THEN NULL "
 		 " WHEN 'varbyte' THEN NULL "
 		 " WHEN 'geography' THEN NULL "
+		 " WHEN 'intervaly2m' THEN 32 "
+		 " WHEN 'intervald2s' THEN 64 "
 		 " ELSE   2147483647 "
 		 " END AS COLUMN_SIZE, "
 		 " NULL AS BUFFER_LENGTH, "
@@ -4245,6 +4305,8 @@ static void buildUniversalAllSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'super' THEN NULL "
 		 " WHEN 'varbyte' THEN NULL "
 		 " WHEN 'geography' THEN NULL "
+		 " WHEN 'intervaly2m' THEN 0 "
+		 " WHEN 'intervald2s' THEN 6 "
 		 " ELSE 0 "
 		 " END AS DECIMAL_DIGITS, "
 		 " CASE data_type "
@@ -4308,6 +4370,8 @@ static void buildUniversalAllSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'super' THEN -1 "
 		 " WHEN 'varbyte' THEN -4 "
 		 " WHEN 'geography' THEN -4 "
+		 " WHEN 'intervaly2m' THEN 107 "
+		 " WHEN 'intervald2s' THEN 110 "
 		 " ELSE 0 END AS SMALLINT) AS SQL_DATA_TYPE, "
 		 " CAST(NULL AS SMALLINT) AS SQL_DATETIME_SUB, "
 		 " CASE data_type "
@@ -4353,6 +4417,8 @@ static void buildUniversalAllSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'super' THEN NULL "
 		 " WHEN 'varbyte' THEN NULL "
 		 " WHEN 'geography' THEN NULL "
+		 " WHEN 'intervaly2m' THEN 32 "
+		 " WHEN 'intervald2s' THEN 64 "
 		 " ELSE   2147483647 "
 		 " END AS CHAR_OCTET_LENGTH, "
 		 " ordinal_position AS ORDINAL_POSITION, "
@@ -4449,6 +4515,8 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN external_type = 'super' THEN -1"
 		 " WHEN external_type = 'varbyte' THEN -4"
 		 " WHEN external_type = 'geography' THEN -4"
+		 " WHEN external_type = 'intervaly2m' THEN 107"
+		 " WHEN external_type = 'intervald2s' THEN 110"
 		 " ELSE 0 END AS SMALLINT) AS DATA_TYPE,"
 		 " CASE WHEN left(external_type, 17) = 'character varying' THEN 'varchar'"
 		 " WHEN left(external_type, 7) = 'varchar' THEN 'varchar'"
@@ -4534,6 +4602,8 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN external_type = 'super' THEN NULL"
 		 " WHEN external_type = 'varbyte' THEN NULL"
 		 " WHEN external_type = 'geography' THEN NULL"
+		 " WHEN external_type = 'intervaly2m' THEN 32"
+		 " WHEN external_type = 'intervald2s' THEN 64"
 		 " ELSE 2147483647 END AS COLUMN_SIZE,"
 		 " NULL AS BUFFER_LENGTH,"
 		 " CASE WHEN external_type = 'real'THEN 8"
@@ -4555,6 +4625,8 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN external_type = 'super' THEN NULL"
 		 " WHEN external_type = 'varbyte' THEN NULL"
 		 " WHEN external_type = 'geography' THEN NULL"
+		 " WHEN external_type = 'intervaly2m' THEN 0"
+		 " WHEN external_type = 'intervald2s' THEN 6"
 		 " ELSE 0 END AS DECIMAL_DIGITS,"
 		 " CASE WHEN external_type = 'varbyte' THEN 2"
 		 " WHEN external_type = 'geography' THEN 2"
@@ -4618,6 +4690,8 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN external_type = 'super' THEN -1"
 		 " WHEN external_type = 'varbyte' THEN -4"
 		 " WHEN external_type = 'geography' THEN -4"
+		 " WHEN external_type = 'intervaly2m' THEN 107"
+		 " WHEN external_type = 'intervald2s' THEN 110"
 		 " ELSE 0 END AS SMALLINT) AS SQL_DATA_TYPE,"
 		 " CAST(NULL AS SMALLINT) AS SQL_DATETIME_SUB,"
 		 " CASE WHEN left(external_type, 7) = 'varchar' "
