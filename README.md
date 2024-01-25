@@ -16,23 +16,26 @@ Amazon Redshift provides 64-bit ODBC drivers for Linux, and Windows operating sy
 * https://git-lfs.com/ (for correctly cloning this repository)
 * Visual Stuido 2022 Community Edition (For Windows)
 * g++ (For Linux)
-* cmake 
-* Redshift instance connect to.
+* cmake >= 3.12 (For Linux)
+* Dependencies: To see a list of Linux dependencies, please look into src/odbc/rsodbc/CMakeLists.txt (windows: Dependencies are already included).
 
 ### Build Artifacts
 On Windows system run:
 ```
 build64.bat n.n.n n 
-e.g. build64.bat 2.0.0 0
+e.g. build64.bat 2.0.1 0
 
 ```
 It builds **rsodbc.dll** file under **src\odbc\rsodbc\x64\Release** directory. 
 
 
-On Unix system run:
+export DEPENDENCY_DIR=
+On Unix system you should provide dependencie folder. To do that, please set `DEPENDENCY_DIR` in `exports_basic.sh` file.
+For more information, please refer to BUILD.CMAKE.md file.
+Then run:
 ```
 build64.sh n.n.n n
-e.g. build64.sh 2.0.0 0
+e.g. build64.sh 2.0.1 0
 ```
 
 It builds **librsodbc64.so** file under **src/odbc/rsodbc/Release** directory. 
