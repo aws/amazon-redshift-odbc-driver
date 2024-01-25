@@ -1168,6 +1168,8 @@ public:
  *
  */
     char szSslMode[MAX_IDEN_LEN] = {0};
+    char szCaPath[2*MAX_IDEN_LEN] = {0};
+    char szCaFile[2*MAX_IDEN_LEN] = {0};
 
 
 /*  The method the driver uses to encrypt data sent between the driver and the database server. 

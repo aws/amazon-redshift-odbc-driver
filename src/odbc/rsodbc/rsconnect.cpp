@@ -2326,6 +2326,20 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
         } else if (_stricmp(pname, RS_IDENTITY_NAMESPACE) == 0) {
           rs_strncpy(pIamProps->szIdentityNamespace, pval,
                      sizeof(pIamProps->szIdentityNamespace));
+        } else if (_stricmp(pname, RS_IAM_CA_FILE) == 0) {
+          if (pval) {
+            strncpy(pIamProps->szCaFile, pval,
+                    sizeof(pIamProps->szCaFile));
+            strncpy(pConnectProps->szCaFile, pval,
+                    sizeof(pConnectProps->szCaFile));
+          }
+        } else if (_stricmp(pname, RS_IAM_CA_PATH) == 0) {
+          if (pval) {
+            strncpy(pIamProps->szCaPath, pval,
+                    sizeof(pIamProps->szCaPath));
+            strncpy(pConnectProps->szCaPath, pval,
+                    sizeof(pConnectProps->szCaPath));
+          }
         } else if (_stricmp(pname, RS_STRING_TYPE) == 0) {
           if (pval)
             strncpy(pConnectProps->szStringType, pval,
@@ -2927,6 +2941,10 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
         RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_VALIDATE_SERVER_CERTIFICATE, &(pConnectProps->iValidateServerCertificate));
 //        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_HOST_NAME_IN_CERTIFICATE, "", pConnectProps->szHostNameInCertificate, MAX_IDEN_LEN, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_TRUST_STORE, "", pConnectProps->szTrustStore, MAX_PATH, ODBC_INI);
+        // moving cafile and capath from iam props to conection props
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IAM_CA_PATH, "", pConnectProps->szCaPath, sizeof(pConnectProps->szCaPath), ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IAM_CA_FILE, "", pConnectProps->szCaFile, sizeof(pConnectProps->szCaFile), ODBC_INI);
+        
 
         // Read Multi-Insert command conversion
         RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_MULTI_INSERT_CMD_CONVERT_ENABLE, &(pConnectProps->iMultiInsertCmdConvertEnable));
@@ -3094,10 +3112,6 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
         RS_CONN_INFO::readLongValFromDsn(pConnectProps->szDSN, RS_DURATION, &(pIamProps->lDuration));
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_ROLE_SESSION_NAME, "", pIamProps->szRoleSessionName, MAX_IAM_BUF_VAL, ODBC_INI);
 		RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_IAM_STS_CONNECTION_TIMEOUT, &(pIamProps->iStsConnectionTimeout));
-
-        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IAM_CA_PATH, "", pIamProps->szCaPath, MAX_IAM_BUF_VAL, ODBC_INI);
-        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IAM_CA_FILE, "", pIamProps->szCaFile, MAX_IAM_BUF_VAL, ODBC_INI);
-
 		RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IAM_AUTH_PROFILE, "", pIamProps->szAuthProfile, MAX_IAM_BUF_VAL, ODBC_INI);
 
 #ifndef WIN32
@@ -3198,11 +3212,26 @@ bool RS_CONN_INFO::convertToBoolVal(const char *pVal)
 
 /*====================================================================================================================================================*/
 
-static void copyCommonConnectionProperties(RS_IAM_CONN_PROPS_INFO* pIamProps, RS_CONNECT_PROPS_INFO* pConnectProps) {
-    rs_strncpy(pIamProps->szSslMode, pConnectProps->szSslMode, sizeof(pIamProps->szSslMode));
-    rs_strncpy(pIamProps->szHost, pConnectProps->szHost, sizeof(pIamProps->szHost));
-    rs_strncpy(pIamProps->szPort, pConnectProps->szPort, sizeof(pIamProps->szPort));
-    rs_strncpy(pIamProps->szDatabase, pConnectProps->szDatabase, sizeof(pIamProps->szDatabase));
+static void
+copyCommonConnectionProperties(RS_IAM_CONN_PROPS_INFO *pIamProps,
+                               RS_CONNECT_PROPS_INFO *pConnectProps) {
+    rs_strncpy(pIamProps->szSslMode, pConnectProps->szSslMode,
+               std::min<int>(sizeof(pIamProps->szSslMode), sizeof(pConnectProps->szSslMode)));
+    rs_strncpy(pIamProps->szHost, pConnectProps->szHost,
+               std::min<int>(sizeof(pIamProps->szHost), sizeof(pConnectProps->szHost)));
+    rs_strncpy(pIamProps->szPort, pConnectProps->szPort,
+               std::min<int>(sizeof(pIamProps->szPort), sizeof(pConnectProps->szPort)));
+    rs_strncpy(pIamProps->szDatabase, pConnectProps->szDatabase,
+               std::min<int>(sizeof(pIamProps->szDatabase), sizeof(pConnectProps->szDatabase)));
+    if (strlen(pConnectProps->szCaFile) > 0) { //overwrite
+    RS_LOG_DEBUG("RSCNN", "setting pIamProps->szCaPath from  '%s' to '%s'",
+                     pIamProps->szCaPath, pConnectProps->szCaPath);
+        rs_strncpy(pIamProps->szCaFile, pConnectProps->szCaFile,
+                std::min<int>(sizeof(pIamProps->szCaFile), sizeof(pConnectProps->szCaFile)));
+
+    }
+    rs_strncpy(pIamProps->szCaPath, pConnectProps->szCaPath,
+               std::min<int>(sizeof(pIamProps->szCaPath), sizeof(pConnectProps->szCaPath)));
 }
 
 

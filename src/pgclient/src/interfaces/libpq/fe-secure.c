@@ -32,6 +32,7 @@
 #include "fe-auth.h"
 #include "pqsignal.h"
 #include "libpq-int.h"
+#include <rslog.h>
 
 #ifdef WIN32
 #include "win32.h"
@@ -1036,11 +1037,11 @@ initialize_SSL(PGconn *conn)
       {
         SSL_CTX_load_verify_locations(SSL_context, defsslcertbuffer, NULL);
         have_rootcert = true;
-      }
-      else
-      {
-        printf("errno:%d\n", errno);
-        printf("rc:%d\n", rc);
+      } else {
+          RS_LOG_DEBUG(
+              "FESEC",
+              "default root certificate is not invalid. rc=%d errno:%d", rc,
+              errno);
       }
   }
 

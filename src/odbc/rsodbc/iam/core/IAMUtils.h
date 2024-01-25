@@ -56,6 +56,13 @@ namespace IamSupport
         /// @return the default ca certificate file path
         static rs_wstring GetDefaultCaFile();
 
+        /// @brief Gets the default ca certificate file path given directory
+        ///
+        /// @param in_str       The string to be converted 
+        ///
+        /// @return the default ca certificate file path
+        static rs_wstring GetDefaultCaFile(const rs_string& in_str);
+
         /// @brief Throw a PGOConnectError exception with error message
         ///
         /// @param in_errorMsg               Error message 

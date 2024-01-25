@@ -50,7 +50,7 @@ namespace IamSupport
     #define AWS_PROFILE_ENVIRONMENT_VARIABLE "AWS_DEFAULT_PROFILE"
 
     /* The default SSL root certificate name */
-    #define IAM_SSLROOTCERT_NAME    L"cacerts.pem"
+    #define IAM_SSLROOTCERT_NAME    L"root.crt"
 
     /* Keys used for reading attributes from profile files */
     #define IAM_KEY_PROFILE_NAME    "profile_name"

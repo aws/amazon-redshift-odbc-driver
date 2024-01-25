@@ -114,6 +114,13 @@ rs_wstring IAMUtils::GetDefaultCaFile()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+rs_wstring IAMUtils::GetDefaultCaFile(const rs_string& in_str)
+{
+    rs_wstring path(in_str.begin(), in_str.end());
+    return path + L"/" + IAM_SSLROOTCERT_NAME;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMUtils::ThrowConnectionExceptionWithInfo(
     const rs_wstring& in_errorMsg,
     const rs_string& in_messageKey)

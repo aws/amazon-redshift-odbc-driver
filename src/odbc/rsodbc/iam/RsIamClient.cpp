@@ -348,6 +348,8 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
     if (!m_settings.m_caFile.empty())
     {
         config.caFile = m_settings.m_caFile;
+    } else if (!m_settings.m_caPath.empty()) {
+        config.caFile = IAMUtils::convertToUTF8(IAMUtils::GetDefaultCaFile(m_settings.m_caPath));
     }
     else
     {

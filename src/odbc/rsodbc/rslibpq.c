@@ -199,6 +199,9 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 			  rs_strncpy(szSslMode,"require", sizeof(szSslMode));
         }
 
+        ppKeywords[iCount] = "sslmode";
+        ppValues[iCount++] = szSslMode;
+
         if(_stricmp(szSslMode,"disable") != 0)
         {
           char *driverPath = getDriverPath();
@@ -221,10 +224,19 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
               rs_strncpy(szSslRootCert, pConnectProps->szTrustStore,sizeof(szSslRootCert));
         }
 
-        ppKeywords[iCount] = "sslmode";
-        ppValues[iCount++] = szSslMode;
-
         // sslrootcrt
+        if (szSslRootCert[0] == '\0') {
+            // try setting using CaFile or CaPath
+            if (pConnectProps->szCaFile[0] != '\0') {
+                rs_strncpy(szSslRootCert, pConnectProps->szCaFile,
+                           sizeof(szSslRootCert));
+            } else if (pConnectProps->szCaPath[0] != '\0') {
+                snprintf(szSslRootCert, sizeof(szSslRootCert), "%s%c%s",
+                         pConnectProps->szCaPath, PATH_SEPARATOR_CHAR,
+                         REDSHIFT_ROOT_CERT_FILE);
+            }
+        }
+
         if(szSslRootCert[0] != '\0')
         {
             ppKeywords[iCount] = "sslrootcert";
