@@ -1,5 +1,6 @@
 #!/bin/sh
 #./build64.sh [n.n.n n]
+#CMAKE=/path-to/Cmake/bin/cmake ENABLE_TESTING=1 ./build64.sh [n.n.n n]
 
 function checkExitCode {
   retVal=$1;
@@ -11,38 +12,42 @@ function checkExitCode {
 
 echo Building 64 bit Linux Redshift ODBC Driver
 
-odbc_version=$1
-svn_rev=$2
+#Process package version
+cmake_arg_odbc_version=
+if [[ $# -eq 0 ]] || [[ $# -eq 2 ]]; then
+    odbc_version=$1
+    svn_rev=$2
+    if [[ $# -eq 2 ]]; then
+      cmake_arg_odbc_version="-DODBC_VERSION=$odbc_version.$svn_rev"
+    fi
+else
+  echo "Error: Either don't supply any version argument, or supply like the usage: ./build64.sh [n.n.n n]"
+  exit 1
+fi
+
 
 source ./exports_basic.sh
+#In case there is an additional setting script
 if test -f "./exports.sh"; then
     source ./exports.sh
 fi
 
-echo "OPENSSL_INC_DIR=${OPENSSL_INC_DIR}"
-echo "OPENSSL_LIB_DIR=${OPENSSL_LIB_DIR}"
-echo "AWS_SDK_LIB_DIR=${AWS_SDK_LIB_DIR}"
-echo "CURL_LIB_DIR=${CURL_LIB_DIR}"
-echo "ENABLE_CNAME=${ENABLE_CNAME}"
+#cmake options
+ENABLE_TESTING=${ENABLE_TESTING:=0}
+#build and install options
+RS_BUILD_DIR=${RS_BUILD_DIR:="$PWD/cmake-build"}
+INSTALL_DIR=${INSTALL_DIR:=${RS_BUILD_DIR}/install}
+RS_ROOT_DIR=${RS_ROOT_DIR:=$PWD}
+#Incase using a custom cmake installation
+CMAKE=${CMAKE:='cmake'}
 
-# Build logger
-pushd src/logging
-make clean
-checkExitCode $?
-make
-checkExitCode $?
+mkdir -p ${RS_BUILD_DIR}
+pushd ${RS_BUILD_DIR}
+${CMAKE} ${RS_ROOT_DIR} -DDEPS_DIRS=${DEPENDENCY_DIR} -DOPENSSL_DIR=${DEPENDENCY_DIR} \
+                        -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${cmake_arg_odbc_version} \
+                        -DENABLE_TESTING=${ENABLE_TESTING}
+make -j 5
+make install
 popd
-
-# Build libpq & libpgport
-cd ./src/pgclient
-./build64.sh
-checkExitCode $?
-
-# Build ODBC Driver Shared Object
-cd ../odbc/rsodbc
-./build64.sh $odbc_version $svn_rev
-checkExitCode $?
-
-cd ../../..
 
 exit $?

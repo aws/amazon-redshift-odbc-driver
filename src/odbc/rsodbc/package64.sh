@@ -11,57 +11,26 @@ function checkExitCode {
 
 echo Building and Packaging 64 bit Linux Redshift ODBC Driver
 
-# This routine packages the 64 bit rpm
-odbc_version=$1
-svn_rev=$2
-
 # The following routine set environment variable for compilation
-# Those variables in exports.sh link include paths to different dependnecies
+# Those variables in exports.sh link include paths to brazil dependnecies
 # build64.sh has the same routines
 RS_ROOT_DIR="../../.." #Technically RS_ROOT_DIR is same as ROOT_DIR unless folders change
-pushd ${RS_ROOT_DIR}
-source ./exports_basic.sh
-if test -f "./exports.sh"; then
-    source ./exports.sh
+if [[ $# -eq 2 ]]; then
+    odbc_version=$1
+    svn_rev=$2
+else
+   VERSION=$(cat ${RS_ROOT_DIR}/version.txt)
+   read -r odbc_version svn_rev <<< "${VERSION[0]}"
+   echo "version from version.txt: ${odbc_version} ${svn_rev}"
 fi
-popd
 
-# Build logger
-pushd ${RS_ROOT_DIR}/src/logging
-make clean
-checkExitCode $?
-make
-checkExitCode $?
-popd
-
-# Build libpq & libpgport
-pushd ${RS_ROOT_DIR}/src/pgclient
-./build64.sh
-checkExitCode $?
-popd
-
-# Build ODBC Driver Shared Object
-
-pushd ${RS_ROOT_DIR}/src/odbc/rsodbc
-./build64.sh $odbc_version $svn_rev
-checkExitCode $?
-popd
-
-# Build ODBC Driver Samples
-pushd ./samples
-./build64.sh
-checkExitCode $?
-popd
-
-# Build rsodbcsql
-pushd ./rsodbcsql
-./build64.sh
-checkExitCode $?
+pushd ${RS_ROOT_DIR}
+./build64.sh  ${odbc_version} ${svn_rev}
 popd
 
 
 # Now make the installer using RPM label provided
-./create64bit-rpm.sh ${odbc_version} ${svn_rev}
+RS_ROOT_DIR=${RS_ROOT_DIR} ./create64bit-rpm.sh ${odbc_version} ${svn_rev} ${ARCH}
 checkExitCode $?
 
 echo Please get RPM package under "./rpm" directory.

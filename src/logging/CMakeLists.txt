@@ -1,0 +1,5 @@
+set(RSLOG_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+file(GLOB SOURCE *.cpp)
+add_library(rslog ${SOURCE})
+target_include_directories(rslog PRIVATE ${CMAKE_INCLUDE_PATH})
+set_property(TARGET rslog PROPERTY POSITION_INDEPENDENT_CODE ON)

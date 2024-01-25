@@ -1,10 +1,13 @@
 #!/bin/sh
-#sudo ./create64bit-rpm.sh xyz
+#sudo ./create64bit-rpm.sh odbc_version svn_rev arch_name
 
 # This routine packages the 64 bit rpm
 odbc_version=$1
 svn_rev=$2
+arch_name=$3
 
+echo "RS_ROOT_DIR=${RS_ROOT_DIR}"
+INSTALL_DIR=${INSTALL_DIR:="${RS_ROOT_DIR}/cmake-build/install/"}
 
 if [ ! -d ./rpm ]
 then
@@ -12,7 +15,7 @@ then
 fi
 
 
-spec_file=rs-${odbc_version}-${svn_rev}-64.spec
+spec_file=rs-${odbc_version}-${svn_rev}-${arch_name}.spec
 
 # Create the stamped 64 bit spec file
 echo Creating the 64 bit stamped spec file..
@@ -39,7 +42,7 @@ fi
 mkdir -p /tmp/redshiftodbcx64
 mkdir -p /tmp/redshiftodbcx64/samples/connect
 
-cp ./Release/librsodbc64.so /tmp/redshiftodbcx64/
+cp ${INSTALL_DIR}/lib/librsodbc64.so /tmp/redshiftodbcx64/
 cp ./amazon.redshiftodbc.ini  /tmp/redshiftodbcx64/
 cp ./root.crt /tmp/redshiftodbcx64/
 cp ./odbc.ini.x64  /tmp/redshiftodbcx64/odbc.ini
@@ -49,23 +52,24 @@ cp ./odbc.sh.x64 /tmp/redshiftodbcx64/odbc.sh
 
 cp ./samples/connect/connect.c /tmp/redshiftodbcx64/samples/connect/
 cp ./samples/connect/connect.mak /tmp/redshiftodbcx64/samples/connect/connect.mak
-cp ./samples/connect/connect64 /tmp/redshiftodbcx64/samples/connect/connect
+cp ${INSTALL_DIR}/bin/connect64 /tmp/redshiftodbcx64/samples/connect/connect
 
-cp ./rsodbcsql/Release/rsodbcsql /tmp/redshiftodbcx64/
+cp ${INSTALL_DIR}/bin/rsodbcsql /tmp/redshiftodbcx64/
 
 # This is the directory used by RPMBUILD
+rm -rf /var/tmp/redshiftodbcx64/
 cp -avrf /tmp/redshiftodbcx64/ /var/tmp/redshiftodbcx64/ 
 
 # Set rpm_src for EL5
 #rpm_src=/usr/src/rpm/RPMS/x86_64/AmazonRedshiftODBC-64-bit-${odbc_version}-${svn_rev}.x86_64.rpm
 
 # Set rpm_src for EL7
-rpm_src=$HOME/rpmbuild/RPMS/x86_64/AmazonRedshiftODBC-64-bit-${odbc_version}-${svn_rev}.x86_64.rpm
-rpm_new_name=AmazonRedshiftODBC-64-bit-${odbc_version}.${svn_rev}.x86_64.rpm
+rpm_src=$HOME/rpmbuild/RPMS/${arch_name}/AmazonRedshiftODBC-64-bit-${odbc_version}-${svn_rev}.${arch_name}.rpm
+rpm_new_name=AmazonRedshiftODBC-64-bit-${odbc_version}.${svn_rev}.${arch_name}.rpm
 
 # Build the 64 bit rpm 
 echo Running the 64 bit rpm build using this spec file: $spec_file
-rpmbuild -v --target x86_64 -bb $spec_file
+rpmbuild -v --target ${arch_name} -bb $spec_file
 if [ $? -ne 0 ]
 then
     exit $?
@@ -73,7 +77,7 @@ fi
 
 rm -rf /var/tmp/redshiftodbcx64
 rm -rf /tmp/redshiftodbcx64
-rm rs-${odbc_version}-${svn_rev}-64.spec
+rm ${spec_file}
 
 # Move the 64 bit file to the current working directory
 echo Moving the 64 bit rpm to the rpm folder..
