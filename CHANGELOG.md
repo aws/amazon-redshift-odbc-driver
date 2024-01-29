@@ -8,7 +8,8 @@ v2.0.1.0 (2024-01-25)
 4. Build base libraries statically into librsodbc64.so including libgcc and libstdc++.
 5. Fixed CaFile and CaPath connection options and default root certificate name for IAM and non-IAM connections.
 6. Fixed support for group_federation connection parameter that allows customers to use getClusterCredentialsWithIAM in provisioned clusters.
-7. Removed ssooidc dependencies from build system.
+7. Refactor and extend Logging system to accept options from connection string.
+8. Removed ssooidc dependencies from build system.
 
 v2.0.0.11 (2023-11-21)
 ------------------------
