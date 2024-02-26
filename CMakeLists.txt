@@ -1,23 +1,25 @@
 # How to build: refer to BUILD.CMAKE.md
-
-# Set the minimum required version of CMake
+project(RSODBC LANGUAGES C CXX)
 cmake_minimum_required(VERSION 3.12)
+
 option(ODBC_VERSION "Specify version with format: MAJOR.MINOR.PATCH SVN" "")
 option(ENABLE_TESTING "Enable tests" OFF)
-option(ENABLE_TEST_BUILD "Enable building test directories, if available." ON)
+option(ENABLE_TEST_BUILD "Always build test directories, if available." ON)
 
 if (NOT "$ENV{ENABLE_TESTING}" STREQUAL "")
     set(ENABLE_TESTING "$ENV{ENABLE_TESTING}" CACHE INTERNAL "Copied from environment variable")
 endif()
-
-
-message(STATUS "ENABLE_TESTING=${ENABLE_TESTING}")
-if(ENABLE_TESTING)
-    enable_testing()
+if (NOT "$ENV{ENABLE_TEST_BUILD}" STREQUAL "")
+    set(ENABLE_TEST_BUILD "$ENV{ENABLE_TEST_BUILD}" CACHE INTERNAL "Copied from environment variable")
 endif()
 
-# Set the project name and language
-project(rsodbc LANGUAGES C CXX)
+
+
+if(ENABLE_TESTING)
+    enable_testing()
+    set(ENABLE_TEST_BUILD ON)
+endif()
+message(STATUS "ENABLE_TESTING=${ENABLE_TESTING} ENABLE_TEST_BUILD=${ENABLE_TEST_BUILD}")
 enable_language(CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -133,9 +135,14 @@ include_directories(src/logging)
 add_subdirectory(src/logging)
 add_subdirectory(src/pgclient/src)
 add_subdirectory(src/odbc/rsodbc)
+
+if (ENABLE_TESTING)
+    add_subdirectory(unittest)
+endif()
+
 if(ENABLE_TEST_BUILD AND EXISTS "${CMAKE_SOURCE_DIR}/cmake/Test.cmake")
     include(${CMAKE_SOURCE_DIR}/cmake/Test.cmake)
     add_test_subdirectories()
 elseif (ENABLE_TESTING)
-    message(WARNING "Test files are not available.")
+    message(WARNING "Some test files are not available.")
 endif()

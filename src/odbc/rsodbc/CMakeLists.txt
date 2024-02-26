@@ -1,8 +1,9 @@
-# Make the version file
+# Step-1: Make the version file
 configure_file(rsversion.h.in ${CMAKE_CURRENT_SOURCE_DIR}/rsversion.h @ONLY)
-# Bring files from various sources libpq subfolders here and build them.
+
+# Step-2: Collect the files into sources
 set(RSODBC_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-#Relative paths for unclusion
+
 set(IAM_DIR ${RSODBC_SRC_DIR}/iam)
 set(IAM_CORE_DIR ${RSODBC_SRC_DIR}/iam/core)
 set(IAM_PLUGINS_DIR ${RSODBC_SRC_DIR}/iam/plugins)
@@ -16,13 +17,13 @@ file(GLOB SOURCES
         ${IAM_HTTP_DIR}/*.cpp
         ${IAM_PLUGINS_DIR}/*.cpp
 )
+
+list(REMOVE_ITEM ${SOURCES} ${RSODBC_SRC_DIR}/dllmain.c)
 set_source_files_properties(${C_SOURCES} PROPERTIES LANGUAGE CXX )
-# Create the library target
-set(CMAKE_SHARED_LIBRARY_SUFFIX ".so")
-add_library(rsodbc64 SHARED ${SOURCES})
 
-set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-
+# Step-3: Handle dependencies.
+# look for static libs: .a or .lib
+set_deps_library_suffix()
 set (PACKAGES 
     ssl aws-cpp-sdk-redshift aws-cpp-sdk-redshift-serverless aws-cpp-sdk-sts 
     aws-cpp-sdk-core aws-crt-cpp aws-c-s3 aws-c-auth aws-c-event-stream
@@ -34,10 +35,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     list(REMOVE_ITEM PACKAGES s2n)
 endif()
 
-#only static libs
 foreach (PACKAGE ${PACKAGES})
     foreach(LIB_DIR ${CMAKE_LIBRARY_PATH})
-        set(LIB_FILE_PATH ${LIB_DIR}/lib${PACKAGE}${CMAKE_FIND_LIBRARY_SUFFIXES})
+        set(LIB_FILE_PATH "${LIB_DIR}/lib${PACKAGE}${CMAKE_FIND_LIBRARY_SUFFIXES}")
         if (EXISTS ${LIB_FILE_PATH})
             message("STATIC LIB lib${PACKAGE}${CMAKE_FIND_LIBRARY_SUFFIXES}")
             list(APPEND STATIC_LIBS "${LIB_FILE_PATH}")
@@ -50,34 +50,53 @@ foreach (PACKAGE ${PACKAGES})
     endif()
 endforeach()
 
-# Set include directories for the library
+# Helper function
+function(basic_settings TARGET_NAME)
+    if(OPENSSL_DIR)
+        target_include_directories(${TARGET_NAME} PRIVATE ${OPENSSL_DIR}/include)
+    endif()
 
-if(OPENSSL_DIR)
-    target_include_directories(rsodbc64 PRIVATE ${OPENSSL_DIR}/include)
+    target_include_directories(${TARGET_NAME} PRIVATE 
+        ${RSLOG_SRC_DIR}
+        ${RSODBC_SRC_DIR} 
+        ${IAM_DIR}  
+        ${IAM_CORE_DIR} 
+        ${IAM_PLUGINS_DIR} 
+        ${IAM_HTTP_DIR} 
+        ${PGCLIENT_SRC_INCLUDE_DIR} 
+        ${PGCLIENT_SRC_IFACE_LIBPQ_DIR}
+        ${CMAKE_INCLUDE_PATH}
+    )
+    target_compile_options_rsodbc(${TARGET_NAME})
+    target_compile_definitions_rsodbc(${TARGET_NAME})
+    target_link_options_rsodbc(${TARGET_NAME})
+endfunction()
+
+# Step-4: Build only Object files
+add_library(objects OBJECT ${SOURCES})
+basic_settings(objects)
+
+
+# Step-5:Build shared libraris one is the main lib and the other one used for testing
+set(CMAKE_SHARED_LIBRARY_SUFFIX ".so")
+# Building main library and test library (without export list)
+set(RSODBC_TARGETS rsodbc64)
+if (ENABLE_TEST_BUILD)
+    list(APPEND RSODBC_TARGETS rsodbc64-test)
 endif()
+foreach(TARGET_NAME ${RSODBC_TARGETS})
+    add_library(${TARGET_NAME} SHARED ${RSODBC_SRC_DIR}/dllmain.c $<TARGET_OBJECTS:objects>)
+    basic_settings(${TARGET_NAME})
+    target_link_libraries_rsodbc(${TARGET_NAME})
+    if (TARGET_NAME STREQUAL "rsodbc64") #skip test library
+        export_signatures(${TARGET_NAME})
+    endif()
 
-target_include_directories(rsodbc64 PRIVATE 
-    ${RSLOG_SRC_DIR}
-    ${RSODBC_SRC_DIR} 
-    ${IAM_DIR}  
-    ${IAM_CORE_DIR} 
-    ${IAM_PLUGINS_DIR} 
-    ${IAM_HTTP_DIR} 
-    ${PGCLIENT_SRC_INCLUDE_DIR} 
-    ${PGCLIENT_SRC_IFACE_LIBPQ_DIR}
-    ${CMAKE_INCLUDE_PATH}
-)
+    set_target_properties(${TARGET_NAME} PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-target_compile_options_rsodbc()
-target_compile_definitions_rsodbc()
-target_link_options_rsodbc()
-target_link_libraries_rsodbc()
-
-# Set the output directory for the library
-set_target_properties(rsodbc64 PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+    install(TARGETS ${TARGET_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+endforeach()
 
 add_subdirectory(rsodbcsql)
 add_subdirectory(samples/connect)
-
-install(TARGETS rsodbc64 DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
