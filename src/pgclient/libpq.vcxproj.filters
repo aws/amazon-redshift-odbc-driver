@@ -33,6 +33,18 @@
     <ClCompile Include="src\backend\libpq\md5.c">
       <Filter>src\backend\libpq</Filter>
     </ClCompile>
+    <ClCompile Include="src\backend\libpq\lz4.c">
+      <Filter>src\backend\libpq</Filter>
+    </ClCompile>
+    <ClCompile Include="src\backend\libpq\z_stream.c">
+      <Filter>src\backend\libpq</Filter>
+    </ClCompile>
+    <ClCompile Include="src\backend\libpq\zpq_stream.c">
+      <Filter>src\backend\libpq</Filter>
+    </ClCompile>
+    <ClCompile Include="src\backend\libpq\zstd-in.c">
+      <Filter>src\backend\libpq</Filter>
+    </ClCompile>
     <ClCompile Include="src\backend\utils\mb\encnames.c">
       <Filter>src\backend\utils\mb</Filter>
     </ClCompile>

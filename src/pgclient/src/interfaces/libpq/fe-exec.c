@@ -3487,6 +3487,11 @@ PQflush(PGconn *conn)
 	return pqFlush(conn);
 }
 
+int
+PQreadPending(PGconn *conn)
+{
+	return pqReadPending(conn);
+}
 
 /*
  *		PQfreemem - safely frees memory allocated

@@ -37,7 +37,7 @@
 #endif
 
 #include "rsiam.h"
-#include "RsSettings.h"
+#include "iam/RsSettings.h"
 #include <rslog.h>
 
 // Handle checking macros
@@ -880,6 +880,7 @@ public:
 #define RS_CLIENT_PROTOCOL_VERSION              "client_protocol_version"
 #define RS_STRING_TYPE							"StringType"
 #define RS_APPLICATION_NAME						"ApplicationName"
+#define RS_COMPRESSION						"Compression"
 
 
 
@@ -1283,6 +1284,7 @@ public:
       szOsUserName[0] = '\0';
       szClientHostName[0] = '\0';
       szClientDomainName[0] = '\0';
+      szCompression[0] = '\0';
     }
 
     int iAccessMode;
@@ -1304,6 +1306,7 @@ public:
 
     // Audit trail information
     char szApplicationName[MAX_TEMP_BUF_LEN];
+    char szCompression[MAX_TEMP_BUF_LEN];
     char szOsUserName[MAX_TEMP_BUF_LEN];
     char szClientHostName[MAX_TEMP_BUF_LEN];
     char szClientDomainName[MAX_TEMP_BUF_LEN];

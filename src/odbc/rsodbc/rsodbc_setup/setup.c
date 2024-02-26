@@ -126,6 +126,7 @@
 #define RS_HTTPS_PROXY_PASSWORD   "https_proxy_password"
 #define RS_IDP_USE_HTTPS_PROXY    "idp_use_https_proxy"
 
+#define RS_COMPRESSION_TYPE "Compression"
 #define RS_LOG_LEVEL_OPTION_NAME "LogLevel"
 #define RS_LOG_PATH_OPTION_NAME  "LogPath"
 
@@ -245,6 +246,7 @@
 #define DFLT_HTTPS_PROXY_PWD ""
 #define DFLT_IDP_USE_HTTPS_PROXY "0"
 
+#define DFLT_COMPRESSION "OFF"
 #define DFLT_LOG_LEVEL "0"
 #define DFLT_LOG_PATH  ""
 
@@ -261,8 +263,9 @@
 /* 9 Proxy */
 /* 1 Serverless*/
 /* 1 Workgroup*/
+/* 1 Compression */
 
-#define DD_DSN_ATTR_COUNT 98
+#define DD_DSN_ATTR_COUNT 99
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -458,6 +461,7 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_IDENTITY_NAMESPACE , DFLT_IDENTITY_NAMESPACE },
 { RS_SERVERLESS, DFLT_SERVERLESS},
 { RS_WORKGROUP, DFLT_WORKGROUP},
+{ RS_COMPRESSION_TYPE , DFLT_COMPRESSION },
 { "", "" }
 };
 
@@ -580,6 +584,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { RS_IDENTITY_NAMESPACE , RS_IDENTITY_NAMESPACE },
 { RS_SERVERLESS, RS_SERVERLESS},
 { RS_WORKGROUP, RS_WORKGROUP},
+{ RS_COMPRESSION_TYPE , RS_COMPRESSION_TYPE },
 { "", "" }
 };
 
@@ -656,6 +661,13 @@ static char *szLogLevels[] = {
 	"INFO",
 	"DEBUG",
 	"TRACE",
+	""
+};
+
+static char *szCompressions[] = {
+	"OFF",
+	"ZSTD",
+	"LZ4",
 	""
 };
 
@@ -1386,7 +1398,7 @@ rs_dsn_set_attr(rs_dsn_setup_ptr_t rs_setup_ctxt, const char *attr, char *val)
 		strcmp(attr, rs_dsn_code2name[i].attr_code) &&
 		strcmp(attr, rs_dsn_code2name[i].attr_val); i++);
 	if (0 == rs_dsn_code2name[i].attr_code[0]) {
-		// rs_dsn_log(__LINE__, "missing rs_dsn_code2name NOT set_attr: attr %s value %s", attr, val);
+		rs_dsn_log(__LINE__, "missing rs_dsn_code2name NOT set_attr: attr %s value %s", attr, val);
 		return FALSE;
 	}
 
@@ -1459,6 +1471,7 @@ rs_dsn_attr_name2code(const char *name) \
 	int i;
 	for (i = 0; rs_dsn_code2name[i].attr_val[0] &&
 		strcmp(name, rs_dsn_code2name[i].attr_val); i++);
+	rs_dsn_log(__LINE__, "%s == %s , rs_dsn_code2name[%d]  attr_code = %s", name , rs_dsn_code2name[i].attr_val,   i , rs_dsn_code2name[i].attr_code);
 	return rs_dsn_code2name[i].attr_code;
 }
 
@@ -1568,7 +1581,7 @@ ConfigDSN(
 		GlobalFree(rs_dsn_setup_handle);
 		return FALSE;
 	}
-    rs_dsn_log(__LINE__, "odbc_glb_attrs <- rs_odbc_glb (defaults) ", helpfile_url);
+	rs_dsn_log(__LINE__, "odbc_glb_attrs <- rs_odbc_glb (defaults) ", helpfile_url);
 	memcpy(&rs_dsn_setup_ctxt->odbc_glb_attrs, rs_odbc_glb_attrs, sizeof(rs_odbc_glb_attrs));
 
 	/* Save original data source name */
@@ -2034,8 +2047,8 @@ static LRESULT CALLBACK rs_dsn_advanced_sheet(HWND hwndDlg, UINT message, WPARAM
 			SetDlgItemText(hwndDlg, IDC_INI_SQL_EDIT, rs_dsn_get_attr(rs_dsn_setup_ctxt, "InitializationString"));
 			CheckDlgButton(hwndDlg, IDC_CURRENT_DB_ONLY, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_DATABASE_METADATA_CURRENT_DB_ONLY, TRUE));
 			CheckDlgButton(hwndDlg, IDC_READ_ONLY, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_READ_ONLY, FALSE));
-			// Already read from reg into local cache(rs_dsn_setup_ctxt); and now update the page
-			// Log Level
+ 			// Already read from reg into local cache(rs_dsn_setup_ctxt); and now update the page
+ 			// Log Level
 			for (i = 0;; i++)
 			{
 				if (szLogLevels[i][0] == '\0')
@@ -2046,6 +2059,16 @@ static LRESULT CALLBACK rs_dsn_advanced_sheet(HWND hwndDlg, UINT message, WPARAM
 			ComboBox_SetCurSel(GetDlgItem(hwndDlg, IDC_LOG_LEVEL_COMBO), rs_odbc_glb_int_attr(rs_dsn_setup_ctxt, "LogLevel"));
 
 			SetDlgItemText(hwndDlg, IDC_LOG_PATH_EDIT, rs_odbc_glb_get_attr(rs_dsn_setup_ctxt, RS_LOG_PATH_OPTION_NAME));
+			// Compression
+            // Add Combo box for compression algorith and Select the current compression type
+			for (i = 0;; i++)
+			{
+				if (szCompressions[i][0] == '\0')
+					break;
+				lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMPRESSION_COMBO), szCompressions[i]);
+			}
+			const char* compressionLevel = rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_COMPRESSION_TYPE);
+			ComboBox_SelectString(GetDlgItem(hwndDlg, IDC_COMPRESSION_COMBO),0, compressionLevel);
 
 
 			SetWindowLongPtr(hwndDlg, DWLP_USER, sheet->lParam);
@@ -2998,6 +3021,7 @@ rs_dsn_make_connect_str(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt, char *connectstr,i
 #else
 		strncpy(ptr, rs_dsn_attr_name2code(attrs[i].attr_code), buf_len);
 #endif
+		rs_dsn_log(__LINE__, "make_connect_str: returns %s", connectstr);
 		ptr += strlen(ptr);
 		*ptr++ = '=';
 		strncpy(ptr, get_attr_val(&attrs[i], FALSE), buf_len);
@@ -3194,6 +3218,10 @@ rs_dsn_read_advanced_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 
 		rs_odbc_glb_set_attr(rs_dsn_setup_ctxt, RS_LOG_LEVEL_OPTION_NAME, temp_buf);
 		rs_odbc_glb_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_LOG_PATH_EDIT, RS_LOG_PATH_OPTION_NAME);
+
+		lb = GetDlgItem(hdlg, IDC_COMPRESSION_COMBO);
+		n = ComboBox_GetCurSel(lb);
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_COMPRESSION_TYPE, szCompressions[n]);
 	}
 }
 

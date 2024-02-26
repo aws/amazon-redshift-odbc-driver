@@ -339,6 +339,22 @@
 						RelativePath="src\backend\libpq\md5.c"
 						>
 					</File>
+					<File
+						RelativePath="src\backend\libpq\lz4.c"
+						>
+					</File>
+					<File
+						RelativePath="src\backend\libpq\z_stream.c"
+						>
+					</File>
+					<File
+						RelativePath="src\backend\libpq\zpq_stream.c"
+						>
+					</File>
+					<File
+						RelativePath="src\backend\libpq\zstd-in.c"
+						>
+					</File>
 				</Filter>
 				<Filter
 					Name="utils"

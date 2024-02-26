@@ -17,7 +17,7 @@ foreach(FILE ${LIBPQ_PORT_SOURCE_NAMES})
 endforeach()
 
 # backend/libpq files
-list (APPEND LIBPQ_BACKEND_FILES ip.c md5.c)
+list (APPEND LIBPQ_BACKEND_FILES ip.c md5.c zpq_stream.c z_stream.c lz4.c zstd-in.c)
 foreach(FILE ${LIBPQ_BACKEND_FILES})
     list(APPEND LIBPQ_BACKEND_SOURCES "${PGCLIENT_SRC_DIR}/backend/libpq/${FILE}")
 endforeach()

@@ -241,6 +241,26 @@ LINK32_FLAGS = -Gn -L$(BCB)\lib;$(INTDIR); -x -Tpd -v
 	$(CPP_PROJ) ..\..\backend\libpq\md5.c
 <<
 
+"$(INTDIR)\md5.obj" : ..\..\backend\libpq\lz4.c
+	$(CPP) @<<
+	$(CPP_PROJ) ..\..\backend\libpq\lz4.c
+<<
+
+"$(INTDIR)\md5.obj" : ..\..\backend\libpq\z_stream.c
+	$(CPP) @<<
+	$(CPP_PROJ) ..\..\backend\libpq\z_stream.c
+<<
+
+"$(INTDIR)\md5.obj" : ..\..\backend\libpq\zstd-in.c
+	$(CPP) @<<
+	$(CPP_PROJ) ..\..\backend\libpq\zstd-in.c
+<<
+
+"$(INTDIR)\md5.obj" : ..\..\backend\libpq\zpq_stream.c
+	$(CPP) @<<
+	$(CPP_PROJ) ..\..\backend\libpq\zpq_stream.c
+<<
+
 "$(INTDIR)\ip.obj" : ..\..\backend\libpq\ip.c
 	$(CPP) @<<
 	$(CPP_PROJ) ..\..\backend\libpq\ip.c

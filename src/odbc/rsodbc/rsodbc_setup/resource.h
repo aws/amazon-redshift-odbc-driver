@@ -235,6 +235,8 @@
 #define IDC_WORKGROUP_STATIC            1226
 #define IDC_WORKGROUP                   1227
 #define IDC_GROUP_FEDERATION            1228
+#define IDC_COMPRESSION_COMBO           1229
+#define IDC_COMPRESSION_STATIC          1230
 
 // Next default values for new objects
 // 

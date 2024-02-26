@@ -444,6 +444,12 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 			ppValues[iCount++] = pConnAttr->szApplicationName;
 		}
 
+		if (pConnAttr->szCompression[0] != '\0')
+		{
+			ppKeywords[iCount] = "compression";
+			ppValues[iCount++] = pConnAttr->szCompression;
+		}
+
 		// This should be last parameter
         if (IS_TRACE_LEVEL_DEBUG())
         {

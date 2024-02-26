@@ -2163,18 +2163,25 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
             rs_strncpy(pConnAttr->szApplicationName, pval,
                        sizeof(pConnAttr->szApplicationName));
 					}
-        } else if (_stricmp(pname, RS_KEEP_ALIVE_IDLE) == 0) {
-          if (pval) {
-            strncpy(pConnectProps->szKeepAliveIdle, pval,
-                    MAX_NUMBER_BUF_LEN - 1);
-							pConnectProps->szKeepAliveIdle[MAX_NUMBER_BUF_LEN - 1] = '\0';
-						}
+        } else if (_stricmp(pname, RS_COMPRESSION) == 0) {
+		  if (pval) {
+                rs_strncpy(pConnAttr->szCompression, pval,
+                           sizeof(pConnAttr->szCompression));
+                if (getGlobalLogVars()->isInitialized) {
+                    RS_LOG_INFO("RSCNN", "Compression is set to: %s", pConnAttr->szCompression);
+                }
+          }
+		} else if (_stricmp(pname, RS_KEEP_ALIVE_IDLE) == 0) {
+		  if (pval) {
+			strncpy(pConnectProps->szKeepAliveIdle, pval, MAX_NUMBER_BUF_LEN - 1);
+		    pConnectProps->szKeepAliveIdle[MAX_NUMBER_BUF_LEN - 1] = '\0';
+			        }
         } else if (_stricmp(pname, RS_KEEP_ALIVE_COUNT) == 0) {
           if (pval) {
             strncpy(pConnectProps->szKeepAliveCount, pval,
                     MAX_NUMBER_BUF_LEN - 1);
 							pConnectProps->szKeepAliveCount[MAX_NUMBER_BUF_LEN - 1] = '\0';
-						}
+			        }
         } else if (_stricmp(pname, RS_KEEP_ALIVE_INTERVAL) == 0) {
           if (pval) {
             strncpy(pConnectProps->szKeepAliveInterval, pval,
@@ -2982,6 +2989,9 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
 
 	  // Read Application name
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_APPLICATION_NAME, "", pConnAttr->szApplicationName, sizeof(pConnAttr->szApplicationName), ODBC_INI);
+
+	  // Read Compression
+	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_COMPRESSION, "", pConnAttr->szCompression, sizeof(pConnAttr->szCompression), ODBC_INI);
 
 	  // Read Keep alive values
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_KEEP_ALIVE, "1", pConnectProps->szKeepAlive, MAX_NUMBER_BUF_LEN, ODBC_INI);

@@ -204,6 +204,10 @@
   <ItemGroup>
     <ClCompile Include="src\backend\libpq\ip.c" />
     <ClCompile Include="src\backend\libpq\md5.c" />
+    <ClCompile Include="src\backend\libpq\lz4.c" />
+    <ClCompile Include="src\backend\libpq\z_stream.c" />
+    <ClCompile Include="src\backend\libpq\zpq_stream.c" />
+    <ClCompile Include="src\backend\libpq\zstd-in.c" />
     <ClCompile Include="src\backend\utils\mb\encnames.c" />
     <ClCompile Include="src\backend\utils\mb\wchar.c" />
     <ClCompile Include="src\interfaces\libpq\ClientSideCursorExecutor.c" />

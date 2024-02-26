@@ -23,6 +23,7 @@
 /* We assume libpq-fe.h has already been included. */
 #include "postgres_fe.h"
 #include "libpq-events.h"
+#include "libpq/zpq_stream.h"
 
 #if defined LINUX 
 #define MAX_PATH 260
@@ -507,6 +508,19 @@ struct pg_conn
 	char	   *identity_namespace;
 
     struct _ClientSideCursorExecutor *m_pCscExecutor;
+
+	/*
+	 * stream compression (boolean value, "any" or
+	 * list of compression algorithms separated by
+	 * comma)
+	 */
+	char	   *compression;
+	/* descriptors of compression algorithms chosen by client */
+	zpq_compressor *compressors;
+	/* size of compressors array */
+	unsigned	n_compressors;
+	/* Compression stream */
+	ZpqStream  *zpqStream;
 };
 
 /* PGcancel stores all data necessary to cancel a connection. A copy of this
@@ -638,6 +652,7 @@ extern int pqWaitTimed(int forRead, int forWrite, PGconn *conn,
 			time_t finish_time);
 extern int	pqReadReady(PGconn *conn);
 extern int	pqWriteReady(PGconn *conn);
+extern int	pqReadPending(PGconn *conn);
 
 /* === in fe-secure.c === */
 

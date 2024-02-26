@@ -58,8 +58,17 @@
 #include "pqsignal.h"
 #include "mb/pg_wchar.h"
 #include "pg_config_paths.h"
-
 #include <rslog.h>
+
+/*
+ * Use zpq_read if compression is switched on
+ */
+#define pq_read_conn(conn)												\
+	(conn->zpqStream													\
+	 ? zpq_read(conn->zpqStream, conn->inBuffer + conn->inEnd,			\
+				conn->inBufSize - conn->inEnd, false)					\
+	 : pqsecure_read(conn, conn->inBuffer + conn->inEnd,				\
+					 conn->inBufSize - conn->inEnd))
 
 static int	pqPutMsgBytes(const void *buf, size_t len, PGconn *conn);
 static int	pqSendSome(PGconn *conn, int len);
@@ -186,7 +195,7 @@ pqPuts(const char *s, PGconn *conn)
 	if (pqPutMsgBytes(s, strlen(s) + 1, conn))
 		return EOF;
 
-	RS_LOG_TRACE("ODBCPQ", "To backend[S]> ...");
+	RS_LOG_TRACE("ODBCPQ", "To backend[S]> ...%u", strlen(s));
 	RS_STREAM_LOG_TRACE("ODBCPQ", s, -1);
 
 	return 0;
@@ -594,9 +603,9 @@ pqReadData(PGconn *conn)
 	 * enough for a TCP packet or Unix pipe bufferload.  8K is the usual pipe
 	 * buffer size, so...
 	 */
-	if (conn->inBufSize - conn->inEnd < 8192)
+	if (conn->inBufSize - conn->inEnd < 8192 * 2) // MESSAGE_MAX_BYTES + buffer for packet headers
 	{
-		if (pqCheckInBufferSpace(conn->inEnd + (size_t) 8192, conn))
+		if (pqCheckInBufferSpace(conn->inEnd + (size_t) 8192 * 2, conn))
 		{
 			/*
 			 * We don't insist that the enlarge worked, but we need some room
@@ -608,10 +617,23 @@ pqReadData(PGconn *conn)
 
 	/* OK, try to read some data */
 retry3:
-	nread = pqsecure_read(conn, conn->inBuffer + conn->inEnd,
-						  conn->inBufSize - conn->inEnd);
+		nread = pq_read_conn(conn);
+
 	if (nread < 0)
 	{
+		if (nread == ZS_DECOMPRESS_ERROR)
+		{
+			printfPQExpBuffer(&conn->errorMessage,
+							  libpq_gettext("decompress error: %s\n"),
+							  zpq_decompress_error(conn->zpqStream));
+			return -1;
+		}
+		if (nread == ZS_BUFFER_ERROR)
+		{
+			printfPQExpBuffer(&conn->errorMessage,
+							  libpq_gettext("decompress error: client-server buffer configration mismatch\n"));
+			return -1;
+		}
 		if (SOCK_ERRNO == EINTR)
 			goto retry3;
 		/* Some systems return EAGAIN/EWOULDBLOCK for no data */
@@ -648,7 +670,7 @@ retry3:
 		 * the message "long" once we have acquired 32k ...
 		 */
 		if (conn->inEnd > 32768 &&
-			(conn->inBufSize - conn->inEnd) >= 8192)
+			(conn->inBufSize - conn->inEnd) >= 8192 * 2)
 		{
 			someread = 1;
 			goto retry3;
@@ -701,10 +723,23 @@ retry3:
 	 * arrived.
 	 */
 retry4:
-	nread = pqsecure_read(conn, conn->inBuffer + conn->inEnd,
-						  conn->inBufSize - conn->inEnd);
+	nread = pq_read_conn(conn);
+
 	if (nread < 0)
 	{
+		if (nread == ZS_DECOMPRESS_ERROR)
+		{
+			printfPQExpBuffer(&conn->errorMessage,
+							  libpq_gettext("decompress error: %s\n"),
+							  zpq_decompress_error(conn->zpqStream));
+			return -1;
+		}
+		if (nread == ZS_BUFFER_ERROR)
+		{
+			printfPQExpBuffer(&conn->errorMessage,
+							  libpq_gettext("decompress error: client-server buffer configration mismatch\n"));
+			return -1;
+		}
 		if (SOCK_ERRNO == EINTR)
 			goto retry4;
 		/* Some systems return EAGAIN/EWOULDBLOCK for no data */
@@ -902,6 +937,8 @@ pqFlush(PGconn *conn)
 int
 pqWait(int forRead, int forWrite, PGconn *conn)
 {
+	if (forRead && conn->inCursor < conn->inEnd)
+		return 0;
 	return pqWaitTimed(forRead, forWrite, conn, (time_t) -1);
 }
 
@@ -978,7 +1015,8 @@ pqSocketCheck(PGconn *conn, int forRead, int forWrite, time_t end_time)
 
 #ifdef USE_SSL
 	/* Check for SSL library buffering read bytes */
-	if (forRead && conn->ssl && SSL_pending(conn->ssl) > 0)
+	/* If compression is enabled, pgReadPending validation is required. */
+	if (forRead && ( !conn->zpqStream ? (conn->ssl && SSL_pending(conn->ssl) > 0) : (pqReadPending(conn) > 0) ) )
 	{
 		/* short-circuit the select */
 		return 1;
@@ -1000,6 +1038,26 @@ pqSocketCheck(PGconn *conn, int forRead, int forWrite, time_t end_time)
 	}
 
 	return result;
+}
+
+/*
+ * Check if there is some data pending in ZPQ / SSL read buffers.
+ * Returns -1 on failure, 0 if no, 1 if yes.
+ */
+int
+pqReadPending(PGconn *conn)
+{
+	if (!conn)
+		return -1;
+
+	/* check for ZPQ stream buffered read bytes */
+	if (zpq_buffered_rx(conn->zpqStream))
+	{
+		/* short-circuit the select */
+		return 1;
+	}
+
+	return 0;
 }
 
 
