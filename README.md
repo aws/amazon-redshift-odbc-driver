@@ -15,7 +15,7 @@ Amazon Redshift provides 64-bit ODBC drivers for Linux, and Windows operating sy
 ### Prerequisites
 * https://git-lfs.com/ (for correctly cloning this repository)
 * Visual Stuido 2022 Community Edition (For Windows)
-* g++ (For Linux)
+* gcc (For Linux)
 * cmake >= 3.12 (For Linux)
 * Dependencies: To see a list of Linux dependencies, please look into src/odbc/rsodbc/CMakeLists.txt (windows: Dependencies are already included).
 
@@ -30,8 +30,7 @@ It builds **rsodbc.dll** file under **src\odbc\rsodbc\x64\Release** directory.
 
 
 export DEPENDENCY_DIR=
-On Unix system you should provide dependencie folder. To do that, please set `DEPENDENCY_DIR` in `exports_basic.sh` file.
-For more information, please refer to BUILD.CMAKE.md file.
+Ensure proper dependencies are provided on Unix systems by configuring the dependency variable: Set the `DEPENDENCY_DIR` variable in the `exports_basic.sh`` file. For further details, consult the `BUILD.CMAKE.md` file.
 Then run:
 ```
 build64.sh n.n.n n
@@ -51,8 +50,8 @@ Default Installation Directory:
 See [Amazon Redshift ODBC Driver Installation and Configuration Guide](https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install.html) for more information.
 
 Here are download links for the latest release:
-* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.1.0/AmazonRedshiftODBC64-2.0.1.0.msi (For Windows)
-* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.0.1.0/AmazonRedshiftODBC-64-bit-2.0.1.0.x86_64.rpm (For Linux)
+* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.1.0.0/AmazonRedshiftODBC64-2.1.0.0.msi (For Windows)
+* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.1.0.0/AmazonRedshiftODBC-64-bit-2.1.0.0.x86_64.rpm (For Linux)
 
 ## Report Bugs
 

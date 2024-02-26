@@ -1,5 +1,12 @@
 Changelog
 =========
+v2.1.0.0 (2024-02-28)
+------------------------
+1. Added support for LZ4 and ZSTD compression over wire protocol communication between Redshift server and the client/driver. Compression is turned off by default and can be set using a new connection parameter compression=off or lz4 or zstd.
+2. Added support for unit-testing using Google Test framework.
+3. Upgrade unixODBC dependency from v2.3.1 to v2.3.7 (Linux release).
+4. Fix handling of null termination during unicode processing in SQLDescribeColW API.
+
 v2.0.1.0 (2024-01-25)
 ------------------------
 1. Added support for Serverless Custom Name. Upgraded windows aws-sdk-cpp to 1.11.218 accordingly. 
