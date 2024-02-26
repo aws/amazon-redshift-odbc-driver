@@ -158,7 +158,7 @@ SQLRETURN  SQL_API RsExecute::RS_SQLExecDirect(SQLHSTMT phstmt,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char *pszCmd;
+    char *pszCmd = NULL;
     char *pszMultiInsertCmd = NULL;
     char *pLastBatchMultiInsertCmd = NULL;
 	RS_CONN_INFO *pConn = NULL;

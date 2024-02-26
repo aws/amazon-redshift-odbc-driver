@@ -12,7 +12,7 @@ function checkExitCode {
 echo Building and Packaging 64 bit Linux Redshift ODBC Driver
 
 # The following routine set environment variable for compilation
-# Those variables in exports.sh link include paths to dependnecies
+# Those variables in exports.sh link include paths to brazil dependnecies
 # build64.sh has the same routines
 RS_ROOT_DIR="../../.." #Technically RS_ROOT_DIR is same as ROOT_DIR unless folders change
 if [[ $# -eq 2 ]]; then

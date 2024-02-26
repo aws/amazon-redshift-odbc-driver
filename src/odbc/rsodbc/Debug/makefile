@@ -29,7 +29,7 @@ all: librsodbc.so
 librsodbc.so: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	g++ -L../../../pgclient/src/interfaces/libpq/Release -L../../../pgclient/src/port/Release -Wl,--version-script=../exports.list -shared -o "librsodbc.so" $(OBJS) $(USER_OBJS) $(LIBS)
+	g++ -L../../../pgclient/src/interfaces/libpq/Release -L../../../pgclient/src/port/Release -Wl,--version-script=../exports.linux.list -shared -o "librsodbc.so" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 

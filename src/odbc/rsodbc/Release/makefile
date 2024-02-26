@@ -29,7 +29,7 @@ all: librsodbc64.so
 librsodbc64.so: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	g++ -std=gnu++17 -Wl,--version-script=../exports.list -Wl,--no-undefined -shared -o "librsodbc64.so" $(OBJS) $(USER_OBJS) $(LIBS_PATH) $(LIBS)
+	g++ -std=gnu++17 -Wl,--version-script=../exports.linux.list -Wl,--no-undefined -shared -o "librsodbc64.so" $(OBJS) $(USER_OBJS) $(LIBS_PATH) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 

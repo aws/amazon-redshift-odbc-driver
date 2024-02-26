@@ -1684,7 +1684,14 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
     int iConversionError = FALSE;
 	int len;
 
-    int iConversion = getRsVal(pColData, iColDataLen, hSQLType, &rsVal, hCType, format, pDescRec, hRsSpecialType, FALSE);
+    int iConversion =
+        getRsVal(pColData, iColDataLen, hSQLType, &rsVal, hCType, format,
+                    pDescRec, hRsSpecialType, FALSE);
+
+    RS_LOG_DEBUG("RSUTIL",
+                    "convertSQLDataToCData hCType=%d hSQLType=%d "
+                    "format=%d iColDataLen%d iConversion=%d",
+                    hCType, hSQLType, format, iColDataLen, iConversion);
 
     switch(hCType)
     {
@@ -3910,6 +3917,11 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 
     if(iConversionError)
     {
+        RS_LOG_ERROR("RSUTIL",
+                     "Fetch data type conversion is not supported from "
+                     "hCType=%d hSQLType=%d "
+                     "format=%d iColDataLen%d iConversion=%d",
+                     hCType, hSQLType, format, iColDataLen, iConversion);
         char szErrMsg[MAX_ERR_MSG_LEN];
 
         snprintf(szErrMsg, sizeof(szErrMsg), "Fetch data type conversion is not supported from %hd SQL type to %hd C type.", hSQLType,hCType);
@@ -8709,8 +8721,10 @@ unsigned char *checkReplaceParamMarkerAndODBCEscapeClause(RS_STMT_INFO *pStmt, c
             szData = replaceParamMarkerAndODBCEscapeClause(pStmt, pData, cbLen, pPaStrBuf, numOfParamMarkers, numOfODBCEscapeClauses);
         } // Param marker found
     }
-    else
+    else 
+    {
         szData = NULL;
+    }
 
     return szData;
 }
