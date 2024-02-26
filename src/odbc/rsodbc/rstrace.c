@@ -2298,6 +2298,8 @@ void RsTrace::traceWStrValWithSmallLen(const char *pArgName, SQLWCHAR *pwVal, SQ
         {
             traceArg("\t%s=%.*S",pArgName,(cchLen > TRACE_MAX_STR_VAL_LEN) ? TRACE_MAX_STR_VAL_LEN : cchLen,
                                     pwVal);
+        } else {
+            traceArg("\tSKIPPED cchLen=%d", cchLen);
         }
 #endif
 #if defined LINUX 
@@ -2313,6 +2315,8 @@ void RsTrace::traceWStrValWithSmallLen(const char *pArgName, SQLWCHAR *pwVal, SQ
                 {
                     traceArg("\t%s=%.*s",pArgName,(cchLen > TRACE_MAX_STR_VAL_LEN) ? TRACE_MAX_STR_VAL_LEN : cchLen,
                                                 pTemp);
+                } else {
+                    traceArg("\tSKIPPED cchLen=%d", cchLen);
                 }
             }
 

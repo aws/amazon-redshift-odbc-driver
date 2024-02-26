@@ -43,20 +43,37 @@ int unix_utf8_to_wchar(const char *szStr, int cbLen, WCHAR *wszStr, int cchLen);
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
-// Convert WCHAR to UTF-8.
+// Convert SQLWCHAR to UTF-8.
 //
-#ifdef __cplusplus
-size_t wchar16_to_utf8_str(const WCHAR *wszStr, const int cchLen, std::string& szStr) {
-    std::u16string u16 = (cchLen == SQL_NTS) ?
-                                std::u16string((char16_t*)wszStr) :
-                                std::u16string((char16_t*)wszStr, cchLen);
+// cchLen : length of wszStr in characters (not bytes)
+// non null terminated wszStr with negative cchLen is undefined behavior
+size_t wchar16_to_utf8_str(const SQLWCHAR *wszStr, int cchLen,
+                           std::string &szStr) {
+    szStr.clear();
+    std::u16string u16 = (cchLen == SQL_NTS)
+                             ? std::u16string((char16_t *)wszStr)
+                             : std::u16string((char16_t *)wszStr, cchLen);
+        
+    /*
+    // Uncomment only for debugging
+    {
+        // Convert UTF-16 string to wide character string (wstring)
+        std::wstring_convert<std::codecvt_utf8<char16_t>, char16_t> converter;
+        std::cout << cchLen << ":" << u16.size() << " U16:" << converter.to_bytes(u16) << std::endl;
+    }
+    */
     std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> convert;
     szStr = convert.to_bytes(u16);
     return szStr.size();
 }
 
-size_t char_utf8_to_wchar16(const char* szStr, const int cchLen, std::u16string& utf16)  {
-    std::string utf8 = (cchLen == SQL_NTS) ? std::string(szStr) : std::string(szStr, cchLen);
+// non null terminated szStr is undefined behavior
+size_t char_utf8_to_str_utf16(const char *szStr, int cchLen,
+                              std::u16string &utf16) {
+    if (cchLen <= 0) return 0;
+    utf16.clear();
+    std::string utf8 = std::string(szStr);
+
     std::vector<unsigned long> unicode;
     size_t i = 0;
     while (i < utf8.size())
@@ -109,8 +126,8 @@ size_t char_utf8_to_wchar16(const char* szStr, const int cchLen, std::u16string&
             throw std::logic_error("not a UTF-8 string");
         unicode.push_back(uni);
     }
-    // std::wstring utf16;
-    for (size_t i = 0; i < unicode.size(); ++i)
+
+    for (size_t i = 0; utf16.size() < cchLen && i < unicode.size(); ++i)
     {
         unsigned long uni = unicode[i];
         if (uni <= 0xFFFF)
@@ -124,9 +141,41 @@ size_t char_utf8_to_wchar16(const char* szStr, const int cchLen, std::u16string&
             utf16 += (char16_t)((uni & 0x3FF) + 0xDC00);
         }
     }
+    /*
+    // Uncomment only for debugging
+    {
+        // Convert UTF-16 string to wide character string (wstring)
+        std::wstring_convert<std::codecvt_utf8<char16_t>, char16_t> converter;
+        std::cout << cchLen << ":" << utf16.size() << " U16:" << converter.to_bytes(utf16) << std::endl;
+    }
+    */
     return utf16.size();
 }
-#endif // __cplusplus
+
+// non null terminated szStr is undefined behavior
+size_t char_utf8_to_wchar_utf16(const char *szStr, int cchLen,
+                                SQLWCHAR *wszStr) {
+    if (cchLen <= 0) return 0;
+    std::u16string utf16;
+    int strLen = char_utf8_to_str_utf16(szStr, cchLen, utf16);
+
+    /*
+    // Uncomment only for debugging
+    {
+        std::wstring_convert<std::codecvt_utf8<char16_t>, char16_t> converter;
+        std::cout << "U16:" << converter.to_bytes(utf16) << std::endl;
+    }
+    */
+    int limit = std::min<int>(cchLen, strLen) * sizeof(SQLWCHAR);
+    limit = limit < 0 ? 0 : limit;
+    memcpy((char *)wszStr, utf16.c_str(), (size_t)limit);
+    memset(((char *)wszStr) + limit, 0, sizeof(SQLWCHAR)); // null termination
+    if ((size_t)limit != strLen * sizeof(SQLWCHAR)) {
+        RS_LOG_INFO("RSUNI", "Unicode conversion truncated %u/%u", limit,
+                    strLen * sizeof(SQLWCHAR));
+    }
+    return (size_t)limit/sizeof(SQLWCHAR);
+}
 
 size_t wchar_to_utf8(WCHAR *wszStr,size_t cchLen,char *szStr,size_t cbLen)
 {

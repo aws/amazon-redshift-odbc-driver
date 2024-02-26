@@ -223,7 +223,7 @@ SQLRETURN SQL_API SQLDescribeColW(SQLHSTMT            phstmt,
                                     SQLSMALLINT*    pNullable)
 {
     SQLRETURN rc;
-    char szColName[MAX_IDEN_LEN];
+    char szColName[MAX_IDEN_LEN] = {0};
     SQLSMALLINT hLen;
 
     if(IS_TRACE_LEVEL_API_CALL())
@@ -238,21 +238,13 @@ SQLRETURN SQL_API SQLDescribeColW(SQLHSTMT            phstmt,
 
     if (SQL_SUCCEEDED(rc) && pwColName) {
         // Convert to unicode
-      /*
-      This is a hotfix, as a replacement to
-            utf8_to_wchar(szColName, SQL_NTS, (WCHAR *)pwColName, cchLen);
-      The char_utf8_to_wchar16() must be later generalized to include memcpy.
-      For now, since copyStrDataSmallLen returns wrong pcchLen, we need
-      to do more than just generalizing char_utf8_to_wchar16().
-      Therefore we keep it as a hotfix, for now.
-      */
-      std::u16string wchar16;
-      int strLen = char_utf8_to_wchar16(szColName, SQL_NTS, wchar16);
-      int wStrLen =
-          std::min<SQLSMALLINT>(cchLen - 1, wchar16.size() * sizeof(WCHAR));
+      int strLen = char_utf8_to_wchar_utf16(szColName, cchLen, pwColName);
       *pcchLen = strLen;
-      memcpy(pwColName, wchar16.c_str(), wStrLen);
-      ((WCHAR *)pwColName)[wStrLen] = L'\0';
+      RS_LOG_TRACE("RSRES",
+                   "cchLen=%d sizeof(SQLWCHAR):%d strLen=%d *pcchLen=%d",
+                   (int)cchLen, sizeof(SQLWCHAR), strLen, *pcchLen);
+    } else {
+        RS_LOG_WARN("RSRES", "Possible failure:%d", SQL_SUCCEEDED(rc));
     }
 
     if(IS_TRACE_LEVEL_API_CALL())
