@@ -14,6 +14,7 @@
 #include "rsini.h"
 #include "rsexecute.h"
 #include "rsmin.h"
+#include <rsversion.h>
 #include <algorithm>
 #include <vector>
 
@@ -10528,6 +10529,7 @@ void initODBC(HMODULE hModule)
     //Logger
     initTrace(false);
     initLibpq(NULL);
+    logAllRsodbcVersions();
 }
 
 /*=====================================================================================*/

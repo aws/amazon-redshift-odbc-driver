@@ -284,6 +284,7 @@
     <ClCompile Include="rsresult.cpp" />
     <ClCompile Include="rstrace.c" />
     <ClCompile Include="rstransaction.cpp" />
+    <ClCompile Include="rsversion.cpp" />
     <ClCompile Include="rsunicode.c" />
     <ClCompile Include="rsutil.c" />
     <ClCompile Include="win_port.c" />
