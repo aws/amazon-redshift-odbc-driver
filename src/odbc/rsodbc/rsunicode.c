@@ -45,6 +45,24 @@ int unix_utf8_to_wchar(const char *szStr, int cbLen, WCHAR *wszStr, int cchLen);
 //---------------------------------------------------------------------------------------------------------igarish
 // Convert SQLWCHAR to UTF-8.
 //
+size_t wchar16_to_utf8_char(const SQLWCHAR *wszStr, int cchLen, char *szStr,
+                            int bufferSize) {
+    std::string utf8str;
+    size_t strLen = wchar16_to_utf8_str(wszStr, cchLen, utf8str);
+    int limitBytes = strLen * sizeof(char);
+    if (cchLen >= 0) {
+        limitBytes = std::min<int>(cchLen, strLen) * sizeof(char);
+    }
+    if (bufferSize >= 0) {
+        limitBytes = std::min<int>(limitBytes, (bufferSize - 1) * sizeof(char));
+    }
+    limitBytes = limitBytes < 0 ? 0 : limitBytes;
+    memcpy((char *)szStr, utf8str.c_str(), (size_t)limitBytes);
+    memset(((char *)szStr) + limitBytes, 0, sizeof(char)); // null termination
+
+    return (size_t)limitBytes / sizeof(char);
+}
+
 // cchLen : length of wszStr in characters (not bytes)
 // non null terminated wszStr with negative cchLen is undefined behavior
 size_t wchar16_to_utf8_str(const SQLWCHAR *wszStr, int cchLen,
@@ -154,7 +172,7 @@ size_t char_utf8_to_str_utf16(const char *szStr, int cchLen,
 
 // non null terminated szStr is undefined behavior
 size_t char_utf8_to_wchar_utf16(const char *szStr, int cchLen,
-                                SQLWCHAR *wszStr) {
+                                SQLWCHAR *wszStr, int bufferSize) {
     if (cchLen <= 0) return 0;
     std::u16string utf16;
     int strLen = char_utf8_to_str_utf16(szStr, cchLen, utf16);
@@ -166,15 +184,18 @@ size_t char_utf8_to_wchar_utf16(const char *szStr, int cchLen,
         std::cout << "U16:" << converter.to_bytes(utf16) << std::endl;
     }
     */
-    int limit = std::min<int>(cchLen, strLen) * sizeof(SQLWCHAR);
-    limit = limit < 0 ? 0 : limit;
-    memcpy((char *)wszStr, utf16.c_str(), (size_t)limit);
-    memset(((char *)wszStr) + limit, 0, sizeof(SQLWCHAR)); // null termination
-    if ((size_t)limit != strLen * sizeof(SQLWCHAR)) {
-        RS_LOG_INFO("RSUNI", "Unicode conversion truncated %u/%u", limit,
+    int limitBytes = std::min<int>(cchLen, strLen) * sizeof(SQLWCHAR);
+    if (bufferSize >= 0) {
+        limitBytes = std::min<int>(limitBytes, (bufferSize - 1) * sizeof(SQLWCHAR));
+    }
+    limitBytes = limitBytes < 0 ? 0 : limitBytes;
+    memcpy((char *)wszStr, utf16.c_str(), (size_t)limitBytes);
+    memset(((char *)wszStr) + limitBytes, 0, sizeof(SQLWCHAR)); // null termination
+    if ((size_t)limitBytes != strLen * sizeof(SQLWCHAR)) {
+        RS_LOG_INFO("RSUNI", "Unicode conversion truncated %u/%u", limitBytes,
                     strLen * sizeof(SQLWCHAR));
     }
-    return (size_t)limit/sizeof(SQLWCHAR);
+    return (size_t)limitBytes/sizeof(SQLWCHAR);
 }
 
 size_t wchar_to_utf8(WCHAR *wszStr,size_t cchLen,char *szStr,size_t cbLen)

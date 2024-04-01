@@ -34,6 +34,17 @@ char or SQLWCHAR.
 wszStr : input variable
 cchLen : Length of input (wszStr) in characters
 szStr  : Output buffer
+bufferSize : Output buffer size in bytes (it is in bytes since we don't know how
+many bytes will a wide string take) Note: Non null terminated wszStr with
+negative cchLen is undefined behavior
+*/
+
+size_t wchar16_to_utf8_char(const SQLWCHAR *wszStr, int cchLen, char *szStr,
+                            int bufferSize);
+/*
+wszStr : input variable
+cchLen : Length of input (wszStr) in characters
+szStr  : Output buffer
 Note: Non null terminated wszStr with negative cchLen is undefined behavior
 */
 size_t wchar16_to_utf8_str(const SQLWCHAR *wszStr, int cchLen,
@@ -52,10 +63,11 @@ size_t char_utf8_to_str_utf16(const char *szStr, int cchLen,
 szStr  : Input variable
 cchLen : Maximum length of output (wszStr) in characters
 wszStr : Output buffer
+bufferSize : Output buffer size in wide characters
 Note: Non null terminated szStr is undefined behavior
 */
 size_t char_utf8_to_wchar_utf16(const char *szStr, int cchLen,
-                                SQLWCHAR *wszStr);
+                                SQLWCHAR *wszStr, int bufferSize);
 
 size_t wchar_to_utf8(WCHAR *wszStr,size_t cchLen,char *szStr,size_t cbLen);
 size_t utf8_to_wchar(const char *szStr,size_t cbLen,WCHAR *wszStr,size_t cchLen);
