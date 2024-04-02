@@ -33,7 +33,7 @@
 #include <openssl/evp.h>
 
 #define ODBC_INI "ODBC.INI"
-
+#define TRACE_KEY_NAME            "SOFTWARE\\Amazon\\Amazon Redshift ODBC Driver (x64)\\Driver"
  // Copied from rsodbc.h
  // IAM connection options
 #define RS_IAM                    "IAM"
@@ -3431,7 +3431,7 @@ rs_odbc_glb_write_attrs(
 
 	rs_dsn_log(__LINE__, "rs_odbc_glb_write_attrs()");
 	//create an entry, if not exists
-	if (ERROR_SUCCESS == RegCreateKeyEx(HKEY_CURRENT_USER, "SOFTWARE\\ODBC\\ODBC.INI\\ODBC",
+	if (ERROR_SUCCESS == RegCreateKeyEx(HKEY_LOCAL_MACHINE, TRACE_KEY_NAME,
 	                                    0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL,
 										 &odbcKey, NULL))
 	{
@@ -3513,7 +3513,7 @@ rs_odbc_glb_read_attrs(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 
 	rs_dsn_log(__LINE__, "rs_odbc_glb_read_attrs()");
 
-	if (ERROR_SUCCESS == RegOpenKeyEx(HKEY_CURRENT_USER, "SOFTWARE\\ODBC\\ODBC.INI\\ODBC", 0, KEY_ALL_ACCESS, &odbcKey))
+	if (ERROR_SUCCESS == RegOpenKeyEx(HKEY_LOCAL_MACHINE, TRACE_KEY_NAME, 0, KEY_ALL_ACCESS, &odbcKey))
 	{
 		/*
 		*	note that the value in the input context is our default

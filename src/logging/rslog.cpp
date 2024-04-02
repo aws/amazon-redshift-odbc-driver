@@ -3,6 +3,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <typeinfo>
 #include <rslog.h>
 
 #include <aws/core/Aws.h>
@@ -14,6 +15,25 @@
 
 namespace AwsLogging = Aws::Utils::Logging;
 namespace internal {
+    
+static std::shared_ptr<RS_LOG_VARS> gRslogSettings;
+static RS_LOG_VARS *gRslogSettingsPtr = nullptr;
+
+void resetGlobalLogVars() {
+    gRslogSettings.reset();
+    gRslogSettingsPtr = nullptr;
+}
+
+RS_LOG_VARS *getGlobalLogVars() {
+    if (!gRslogSettingsPtr) {
+        gRslogSettings = std::make_shared<RS_LOG_VARS>();
+        gRslogSettings->iTraceLevel = 0;
+        gRslogSettings->szTraceFile[0] = '\0';
+        gRslogSettings->isInitialized = 0;
+        gRslogSettingsPtr = gRslogSettings.get();
+    }
+    return gRslogSettingsPtr;
+}
 
 // Logger system manager. Its scope is local to ODBC log lines only.
 struct RsLogManager {
@@ -23,6 +43,7 @@ struct RsLogManager {
     LogInterfacePtr logSystem = nullptr;
 
   protected:
+    RS_LOG_VARS *rsLogVars = nullptr;
     // Override filename and stream creation of the Logger.
     // The original logic we are overriding is in AWS SDK.
     std::shared_ptr<Aws::OFStream>
@@ -73,9 +94,15 @@ struct RsLogManager {
     }
 
   public:
-    virtual void initializeAWSLogging() {
-        logSystem = initLogInterface(getGlobalLogVars()->iTraceLevel,
-                                     getGlobalLogVars()->szTraceFile);
+    RsLogManager() { rsLogVars = getGlobalLogVars(); }
+
+    virtual void initializeAWSLogging(RS_LOG_VARS *rsLogVars_ = nullptr) {
+        rsLogVars_ = rsLogVars_ ? rsLogVars_ : rsLogVars;
+        if (!rsLogVars_) {
+            return;
+        }
+        logSystem =
+            initLogInterface(rsLogVars_->iTraceLevel, rsLogVars_->szTraceFile);
     }
 
     virtual void ShutdownAWSLogging() { logSystem.reset(); }
@@ -83,11 +110,16 @@ struct RsLogManager {
         return logSystem.get();
     }
 };
+
 // Use this if you'd like to connect to universal AWSLogsystem
 struct AwsLogManager : public RsLogManager {
-    virtual void initializeAWSLogging() {
-        AwsLogging::InitializeAWSLogging(initLogInterface(
-            getGlobalLogVars()->iTraceLevel, getGlobalLogVars()->szTraceFile));
+    virtual void initializeAWSLogging(RS_LOG_VARS *rsLogVars_ = nullptr) {
+        rsLogVars_ = rsLogVars_ ? rsLogVars_ : rsLogVars;
+        if (!rsLogVars_) {
+            return;
+        }
+        AwsLogging::InitializeAWSLogging(
+            initLogInterface(rsLogVars_->iTraceLevel, rsLogVars_->szTraceFile));
     }
 
     virtual void ShutdownAWSLogging() { AwsLogging::ShutdownAWSLogging(); }
@@ -104,6 +136,9 @@ Initialize the logging system. Logs can be wrrtten to the file after successful
 completion of this command
 */
 void initializeAWSLogging() { rsLogManager.initializeAWSLogging(); }
+void initializeLoggingWithGlobalLogVars(RS_LOG_VARS *rsLogVars) {
+    rsLogManager.initializeAWSLogging(rsLogVars);
+}
 
 /*
 Finalize the logging system. No more Logs can be wrrtten to the file after this
@@ -126,8 +161,9 @@ void processLogLine(AwsLogging::LogLevel level, const char *filename,
         (open + tag1 + colon +
          Aws::Utils::PathUtils::GetFileNameFromPathWithExt(filename) + colon +
          std::to_string(line) + close);
-    const char *tag = tag2.c_str();
-    internal::GetLogSystem()->Log(level, tag, msg);
+    const Aws::OStringStream messageStream(msg);
+    internal::GetLogSystem()->LogStream(level, tag2.c_str(), messageStream);
+    internal::GetLogSystem()->Flush();
 }
 } // namespace internal
 
@@ -179,6 +215,10 @@ void RS_LOG_TRACE_(const char *file, const int line, const char *func,
 
 void RS_STREAM_LOG_TRACE_(const char *file, const int line, const char *func,
                           const char *tag, const char *s, long long len) {
+    // Avoid noisy data
+    if (typeid(internal::rsLogManager) == typeid(internal::RsLogManager)) {
+        return;
+    }
     AwsLogging::LogSystemInterface *logSystem = internal::GetLogSystem();
     if (logSystem && logSystem->GetLogLevel() >= AwsLogging::LogLevel::Trace) {
         Aws::OStringStream logStream;
@@ -194,25 +234,16 @@ void RS_STREAM_LOG_TRACE_(const char *file, const int line, const char *func,
 }
 
 RS_LOG_VARS *getGlobalLogVars() {
-    static std::shared_ptr<RS_LOG_VARS> gRslogSettings;
-    static RS_LOG_VARS *gRslogSettingsPtr = nullptr;
-    if (!gRslogSettingsPtr) {
-        gRslogSettings = std::make_shared<RS_LOG_VARS>();
-        gRslogSettings->iTraceLevel = 0;
-        gRslogSettings->szTraceFile[0] = '\0';
-        gRslogSettings->isInitialized = 0;
-        gRslogSettingsPtr = gRslogSettings.get();
-    }
-    return gRslogSettingsPtr;
+    return internal::getGlobalLogVars();
 }
 
-void initializeLogging() {
-    internal::initializeAWSLogging();
+void initializeLogging() { internal::initializeAWSLogging(); }
+
+void initializeLoggingWithGlobalLogVars(RS_LOG_VARS *rsLogVars) {
+    internal::initializeLoggingWithGlobalLogVars(rsLogVars);
 }
 
-void shutdownLogging() {
-    internal::ShutdownAWSLogging();
-}
+void shutdownLogging() { internal::ShutdownAWSLogging(); }
 
 // Legacy mapping
 int getRsLoglevel() {

@@ -33,7 +33,7 @@
 #define MAX_ODBC_ESCAPE_CLAUSE_REPLACE_LEN 20
 #define MAX_AUDIT_CMDS_LEN 2048
 
-#define TRACE_KEY_NAME            "SOFTWARE\\ODBC\\ODBC.INI\\ODBC"
+#define TRACE_KEY_NAME            "SOFTWARE\\Amazon\\Amazon Redshift ODBC Driver (x64)\\Driver"
 #define DM_TRACE_VAL_NAME        "Trace"
 
 #define RSODBC_INI_FILE          "amazon.redshiftodbc.ini"

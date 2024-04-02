@@ -23,6 +23,7 @@ struct RS_LOG_VARS {
 extern "C" {
 #endif
 void initializeLogging();
+void initializeLoggingWithGlobalLogVars(struct RS_LOG_VARS *rsLogVars);
 void shutdownLogging();
 int getRsLoglevel();
 void setRsLogLevel(int level);

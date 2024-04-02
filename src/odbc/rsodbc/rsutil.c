@@ -6211,12 +6211,12 @@ void initTraceFromConnectionString(RS_CONNECT_PROPS_INFO *pConnectProps) {
 void initTrace(int canOverride) {
 //---------------------------------------------------------------------------------------------------------igarish
     if (false == canOverride) {
-        if (getGlobalLogVars()->isInitialized ||
-            getGlobalLogVars()->iTraceLevel <= LOG_LEVEL_OFF) {
+        if (getGlobalLogVars()->isInitialized) {
             return;
         }
     }
     // By this time, we assume respective settings are initialized
+    getGlobalLogVars()->isInitialized = 0;
     initializeLogging();
     getGlobalLogVars()->isInitialized = 1;
 }
@@ -6236,11 +6236,11 @@ void readAndSetTraceInfo()
     char  szTraceFile[MAX_PATH + 1];
     int   iTraceLevel;
 
-    // Read the LogLevel from TRACE_KEY_NAME in HKEY_CURRENT_USER
+    // Read the LogLevel from TRACE_KEY_NAME in HKEY_LOCAL_MACHINE
     szTraceLevel[0] = '\0';
 
 #ifdef WIN32
-    readRegistryKey(HKEY_CURRENT_USER, TRACE_KEY_NAME, RS_LOG_LEVEL_OPTION_NAME, szTraceLevel, MAX_NUMBER_BUF_LEN);
+    readRegistryKey(HKEY_LOCAL_MACHINE, TRACE_KEY_NAME, RS_LOG_LEVEL_OPTION_NAME, szTraceLevel, MAX_NUMBER_BUF_LEN);
 #endif
 #if defined LINUX 
     RsIni::getPrivateProfileString(ODBC_SECTION_NAME, RS_LOG_LEVEL_OPTION_NAME, "", szTraceLevel, MAX_NUMBER_BUF_LEN, ODBC_INI);
@@ -6251,10 +6251,10 @@ void readAndSetTraceInfo()
 
 	if (iTraceLevel != LOG_LEVEL_OFF)
 	{
-		// Read the LogPath from TRACE_KEY_NAME in HKEY_CURRENT_USER
+		// Read the LogPath from TRACE_KEY_NAME in HKEY_LOCAL_MACHINE
 
 #ifdef WIN32
-		readRegistryKey(HKEY_CURRENT_USER, TRACE_KEY_NAME, RS_LOG_PATH_OPTION_NAME, szTraceFile, MAX_PATH);
+		readRegistryKey(HKEY_LOCAL_MACHINE, TRACE_KEY_NAME, RS_LOG_PATH_OPTION_NAME, szTraceFile, MAX_PATH);
 #endif
 #if defined LINUX 
 		RsIni::getPrivateProfileString(ODBC_SECTION_NAME, RS_LOG_PATH_OPTION_NAME, "", szTraceFile, MAX_PATH, ODBC_INI);
@@ -6288,12 +6288,12 @@ void readAndSetTraceInfo()
 
 		if (iTraceLevel == LOG_LEVEL_OFF)
 		{
-			// Read the Trace from TRACE_KEY_NAME in HKEY_CURRENT_USER
+			// Read the Trace from TRACE_KEY_NAME in HKEY_LOCAL_MACHINE
 			szTraceLevel[0] = '\0';
 			szTraceFile[0] = '\0';
 
 #ifdef WIN32
-			readRegistryKey(HKEY_CURRENT_USER, TRACE_KEY_NAME, DM_TRACE_VAL_NAME, szTraceLevel, MAX_NUMBER_BUF_LEN);
+			readRegistryKey(HKEY_LOCAL_MACHINE, TRACE_KEY_NAME, DM_TRACE_VAL_NAME, szTraceLevel, MAX_NUMBER_BUF_LEN);
 #endif
 #if defined LINUX 
 			RsIni::getPrivateProfileString(ODBC_SECTION_NAME, DM_TRACE_VAL_NAME, "", szTraceLevel, MAX_NUMBER_BUF_LEN, ODBC_INI);
