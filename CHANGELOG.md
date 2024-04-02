@@ -1,51 +1,24 @@
 Changelog
 =========
 v2.1.1 (2024-04-01)
--------------------
+---------------------
+1. Corrected the data type of the bind offset pointer to SQLLEN from long for the plBindOffsetPtr variable in RS_DESC_HEADER to ensure compatibility
+2. Modified the default value for SQL_BOOKMARK_PERSISTENCE from SQL_BP_UPDATE | SQL_BP_SCROLL to SQL_BP_DROP
+3. Upgraded logging capabilities and streamlined the logging system to boost speed and transparency.
+4. Expanded unicode library capabilities by introducing wchar16_to_utf8_char() to convert 16-bit wide characters to UTF-8 char array. 
+5. Improved buffer safety checks in unicode function char_utf8_to_wchar_utf16() to make it more robust.
+6. Enhanced unicode conversion within SQLTablesW and SQLPrepareW for improved compatibility and accuracy.
+7. Resolved issues causing Power Query container crashes in Microsoft products.
+8. The catalog filter was updated to use 'LIKE' instead of '+' to allow filter patterns with '%' which impacted metadata ODBC APIs like SQLTables.
+9. In case the IAM authentication client cannot deduce the workgroup configuration from the serverless destination address, use the user-provided DSN setting as an alternative.
+10. Invoke both cmake.find_library() and cmake.find_package() functions to locate the Gtest library, so that if one method fails to find Gtest, the other can be used as a fallback option.
+11. Ensure that CaFile and CaPath connection settings are available to both IAM as well as Idp authentication plugins.
+12. The TCP Proxy implementation in the DSN GUI was improved by fixing issues related to saving and loading proxy settings. Additionally, the connection handling routines in lipbq's library were enhanced to better support connections made through proxies. Specifically, the connect_using_proxy, connectDBStart, PQconnectPoll, and internal_cancel functions were updated to properly handle proxy configurations.
+14. Updated the registry path that stores Windows DSN log settings for the ODBC driver, from "HKEY_CURRENT_USER\SOFTWARE\ODBC\ODBC.INI\ODBC" to "HKEY_LOCAL_MACHINE\SOFTWARE\Amazon\Amazon Redshift ODBC Driver (x64)\Driver".
 
-1. **Data Type Fixation:**
-
-    Corrected the data type of the bind offset pointer to SQLLEN from long for the plBindOffsetPtr variable in RS_DESC_HEADER to ensure compatibility
-
-2. **Default Value Adjustment:**
-
-    Modified the default value for SQL_BOOKMARK_PERSISTENCE from SQL_BP_UPDATE | SQL_BP_SCROLL to SQL_BP_DROP
-
-3. **Logging Enhancement:**
-
-    Upgraded logging capabilities and streamlined the logging system to boost speed and transparency.
-
-4. **Unicode Library Expansion:**
-
-    Expanded unicode library capabilities by:
-    
-      * Introducing wchar16_to_utf8_char() to convert 16-bit wide characters to UTF-8 char array.
-      * Improved buffer safety checks in the char_utf8_to_wchar_utf16() function to make it more robust.
-
-5. **Unicode Conversion Improvement:**
-
-    Enhanced unicode conversion within SQLTablesW and SQLPrepareW for improved compatibility and accuracy.
-
-6. **Bug Fixes:**
-
-    Resolved issues causing Power Query container crashes in Microsoft products.
-    
-      * The catalog filter was updated to use 'LIKE' instead of '+' to allow filter patterns with '%' which impacted metadata ODBC APIs like SQLTables.
-      * In case the IAM authentication client cannot deduce the workgroup configuration from the serverless destination address, use the user-provided DSN setting as an alternative.
-      * Invoke both cmake.find_library() and cmake.find_package() functions to locate the Gtest library, so that if one method fails to find Gtest, the other can be used as a fallback option.
-      * Ensure that CaFile and CaPath connection settings are available to both IAM as well as Idp authentication plugins.
-
-7. **TCP Proxy Enhancement and Fixes:**
-
-    The TCP Proxy implementation in the DSN GUI was improved by fixing issues related to saving and loading proxy settings. Additionally, the connection handling routines in lipbq's library were enhanced to better support connections made through proxies. Specifically, the connect_using_proxy, connectDBStart, PQconnectPoll, and internal_cancel functions were updated to properly handle proxy configurations.
-
-
-8. **Configuration Update:**
-
-    Updated the registry path that stores Windows DSN log settings for the ODBC driver, from HKEY_CURRENT_USER\SOFTWARE\ODBC\ODBC.INI\ODBC to HKEY_LOCAL_MACHINE\SOFTWARE\Amazon\Amazon Redshift ODBC Driver (x64)\Driver.
-Windows users should update the log settings for their DSNs to use this new registry path, if needed.
-
-**Note:** Going forward, this software will use Semantic Versioning (SemVer) for version numbering. SemVer versions consist of three numbers in the MAJOR.MINOR.PATCH format. For compatibility purposes, the build id (4th number) will continue to be included only in the package name.
+**Note:** 
+* Going forward, this software will use Semantic Versioning (SemVer) for version numbering. SemVer versions consist of three numbers in the MAJOR.MINOR.PATCH format. For compatibility purposes, the build id (4th number) will continue to be included only in the package name.
+* Windows users should update the log settings for their DSNs to use this new registry path, if needed.
 
 v2.1.0.0 (2024-02-28)
 ------------------------
