@@ -3188,8 +3188,7 @@ static void getCatalogFilterCondition(char *catalogFilter,
 		if (isSingleDatabaseMetaData(pStmt)
 			|| apiSupportedOnlyForConnectedDatabase) 
 		{
-			// Catalog parameter is not a pattern.
-			snprintf(catalogFilter, bufLen, " AND current_database() =  '%.*s' ", cbEscapedName, pEscapedName);
+			snprintf(catalogFilter, bufLen, " AND current_database() LIKE  '%.*s' ", cbEscapedName, pEscapedName);
 		}
 		else {
 			if (databaseColName == NULL)
