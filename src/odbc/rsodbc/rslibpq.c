@@ -892,7 +892,7 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
             long lParamsToBind = (pAPDDescHeader.lArraySize <= 0) ? 1 : pAPDDescHeader.lArraySize;
             long lParamProcessed = 0;
             int  iArrayBinding = (lParamsToBind > 1);
-            int  iBindOffset = (pAPDDescHeader.plBindOffsetPtr) ? *(pAPDDescHeader.plBindOffsetPtr) : 0;
+            SQLLEN  iBindOffset = (pAPDDescHeader.plBindOffsetPtr) ? *(pAPDDescHeader.plBindOffsetPtr) : 0;
             int  iMultiInsert = pStmt->iMultiInsert;
             int  iLastBatchMultiInsert = pStmt->iLastBatchMultiInsert;
             int  iOffset = 0;

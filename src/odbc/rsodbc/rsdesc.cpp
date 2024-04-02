@@ -805,8 +805,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
 
         case SQL_DESC_BIND_OFFSET_PTR:
         {
-            pDescHeader.plBindOffsetPtr = (long *)pValue;
-
+            pDescHeader.plBindOffsetPtr = (SQLLEN *)pValue;
             break;
         }
 

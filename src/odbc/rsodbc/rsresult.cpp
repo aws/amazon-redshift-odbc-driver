@@ -1272,7 +1272,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
         long lRowsToFetch = (pARDDescHeader.lArraySize <= 0) ? 1 : pARDDescHeader.lArraySize;
         long lRowFetched = 0;
         int  iBlockCursor = (lRowsToFetch > 1);
-        int  iBindOffset = (pARDDescHeader.plBindOffsetPtr) ? *(pARDDescHeader.plBindOffsetPtr) : 0;
+        SQLLEN  iBindOffset = (pARDDescHeader.plBindOffsetPtr) ? *(pARDDescHeader.plBindOffsetPtr) : 0;
 
 		// Reset previous hCol for SQLGetData
 		pResult->iPrevhCol = 0;
@@ -1558,7 +1558,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                     for(pDescRec = pStmt->pStmtAttr->pARD->pDescRecHead; pDescRec != NULL; pDescRec = pDescRec->pNext)
                     {
                         int iValOffset = 0;
-                        SQLLEN *pcbLenInd;
+                        SQLLEN *pcbLenInd = NULL;
 
                         if(iBlockCursor)
                         {
@@ -1589,18 +1589,20 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                                 else
                                 {
                                     // Different array should have length indicator
-                                    pcbLenInd  = (pDescRec->pcbLenInd) ? pDescRec->pcbLenInd + lRowFetched  : NULL;
+                                    pcbLenInd = (pDescRec->pcbLenInd) ? pDescRec->pcbLenInd + lRowFetched  : NULL;
                                 }
                             }
                         }
                         else
                             pcbLenInd = (pDescRec->pcbLenInd) ? pDescRec->pcbLenInd + lRowFetched  : NULL;
-
                         // Get data 
+                        char* pValueCharPtr_ = (char *) (pDescRec->pValue ? pDescRec->pValue : NULL);
+                        pValueCharPtr_ += (lRowFetched * iValOffset) + iBindOffset;
+                        pcbLenInd = (SQLLEN *)(pcbLenInd ? ((char *)pcbLenInd + iBindOffset) : NULL);
                         rc1 = RS_STMT_INFO::RS_SQLGetData(pStmt, pDescRec->hRecNumber, pDescRec->hType,
-                                            (pDescRec->pValue) ? ((char *)pDescRec->pValue + (lRowFetched * iValOffset) + iBindOffset) : NULL, 
+                                            (SQLPOINTER) pValueCharPtr_,
                                             pDescRec->cbLen, 
-                                            (SQLLEN *)((char *)pcbLenInd + iBindOffset),
+                                            pcbLenInd,
 											TRUE);
 
                         if(rc1 == SQL_ERROR)

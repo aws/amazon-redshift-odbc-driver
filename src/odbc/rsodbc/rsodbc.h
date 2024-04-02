@@ -656,7 +656,7 @@ public:
     short hAllocType; // SQL_DESC_ALLOC_AUTO or USER
     long  lArraySize; // ARD: Number of rows to return, APD: Number of values for each param.
     short *phArrayStatusPtr; // Status array
-    long  *plBindOffsetPtr; // Bind offset
+    SQLLEN *plBindOffsetPtr; // Bind offset
     long  lBindType; // Columnwise or Rowwise
     short hHighestCount; // Highest column bound
     long *plRowsProcessedPtr; // Rows returned
@@ -747,7 +747,7 @@ typedef struct _RS_DESC_REC
     int   iUpdatable;           // IRD: SQL_DESC_UPDATABLE, R.
 
     // BIND_COL/BIND_PARAM
-    SQLPOINTER pValue; // App buffer. ARD: SQL_DESC_DATA_PTR, R/W. APD: SQL_DESC_DATA_PTR, R/W.
+    SQLPOINTER pValue = NULL; // App buffer. ARD: SQL_DESC_DATA_PTR, R/W. APD: SQL_DESC_DATA_PTR, R/W.
     SQLLEN cbLen;      // Buffer length. ARD: SQL_DESC_LENGTH, R/W. APD: SQL_DESC_LENGTH, R/W.
     SQLLEN *pcbLenInd; // Actual data  len or indicator. ARD: SQL_DESC_INDICATOR_PTR, R/W. APD: SQL_DESC_INDICATOR_PTR, R/W.
 
