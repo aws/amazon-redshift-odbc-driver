@@ -219,8 +219,8 @@
 #define IDC_UIP                         1208
 #define IDC_SSL_INSECURE                1209
 #define IDC_VERSION_STATIC              1210
-#define IDC_PROXY_REDSHIFT_CONNECTION   1211
-#define IDC_PROXY_STS                   1213
+// #define IDC_PROXY_REDSHIFT_CONNECTION   1211
+// #define IDC_PROXY_STS                   1213
 #define IDC_PROXY_IDP                   1214
 #define IDC_LOG_LEVEL_COMBO             1216
 #define IDC_TOKEN_STATIC                1217
