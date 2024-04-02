@@ -712,10 +712,13 @@ Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentia
     }         
 
 	request.SetDbName(m_settings.m_database);
-    if(m_settings.m_workGroup.length()){
+    if(inferredWorkgroup.empty() && m_settings.m_workGroup.length()){
         request.SetWorkgroupName(m_settings.m_workGroup);
     }
-   
+    else
+    {
+        request.SetWorkgroupName(inferredWorkgroup);
+    }
 	/* if port is 0 describe configuration to get host and port*/
 	if (m_settings.m_port == 0)
 	{
