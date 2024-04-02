@@ -364,8 +364,7 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
 
         case SQL_BOOKMARK_PERSISTENCE:
         {
-            iVal = SQL_BP_UPDATE
-                    | SQL_BP_SCROLL;
+            iVal = SQL_BP_DROP;
             rc = integerInfoResponse(iVal, piVal, pcbLen, piRetType);
             break;
         }
