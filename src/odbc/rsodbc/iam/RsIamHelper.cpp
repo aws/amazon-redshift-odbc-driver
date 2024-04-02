@@ -454,6 +454,9 @@ void RsIamHelper::SetIamSettings(
             settings.m_disableCache = true; // explicitly disable caching for idc plugins
         } 
     }
+
+    settings.m_caPath = pIamProps->szCaPath;
+    settings.m_caFile = pIamProps->szCaFile;
 }
 
 void RsIamHelper::SetCommonFederatedAuthSettings(RS_IAM_CONN_PROPS_INFO *pIamProps, RsSettings &settings) {
@@ -471,9 +474,6 @@ void RsIamHelper::SetCommonFederatedAuthSettings(RS_IAM_CONN_PROPS_INFO *pIamPro
 
     settings.m_sslInsecure = pIamProps->isSslInsecure;
     settings.m_authType = pIamProps->szAuthType;
-
-    settings.m_caPath = pIamProps->szCaPath;
-    settings.m_caFile = pIamProps->szCaFile;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
