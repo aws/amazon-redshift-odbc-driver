@@ -26,7 +26,7 @@
 #include "libpq-int.h"
 #include "fe-auth.h"
 #include "pg_config_paths.h"
-
+#include <rslog.h>
 
 #ifdef WIN32
 #include "win32.h"
@@ -393,11 +393,20 @@ pgthreadlock_t pg_g_threadlock = default_threadlock;
 static
 int connect_using_proxy(int sock, PGconn* conn)
 {
+	RS_LOG_TRACE("FECNN", "%s", __func__);
 	char buffer[4096];
 	char *ptr = buffer;
 	int res;
 	int responseLen;
+	time_t now;
+    time_t finish_time;
+	/* Deprecated. 
+	   Generic connection/login timeout used in connectDBComplete and
+	   PQconnectPoll should not be used for proxy timeout.
 	int timeout = conn->connect_timeout ? atoi(conn->connect_timeout) : -1;
+	*/
+	static const PROXY_LOGIN_TIMEOUT_SECONDS = 5;
+	int timeout = PROXY_LOGIN_TIMEOUT_SECONDS;
 
 	// HTTP CONNECT method
 	const char* HTTP_CONNECT_REQUEST = "CONNECT ";
@@ -415,6 +424,7 @@ int connect_using_proxy(int sock, PGconn* conn)
 
 	// Port
 	const char* port = conn->pgport ? conn->pgport : "5439";
+	
 	size_t portlen = strlen(port);
 
 	// Proxy authentication type
@@ -425,12 +435,11 @@ int connect_using_proxy(int sock, PGconn* conn)
 	const char* credentials = conn->proxy_credentials ? conn->proxy_credentials : "";
 	size_t credentialslen = strlen(credentials);
 
-	if (!conn->proxy_host || !*conn->proxy_host)
-	{
-		return -1; 
-	}
-
-	res = connect(sock, (struct sockaddr *) &conn->raddr.addr, conn->raddr.salen);
+    if (!conn->proxy_host || !*conn->proxy_host)
+    {
+        return connect(sock, (struct sockaddr *) &conn->raddr.addr, conn->raddr.salen);
+    }
+    res = connect(sock, (struct sockaddr *) &conn->paddr.addr, conn->paddr.salen);
 	if (res < 0)
 	{
 		if (SOCK_ERRNO == EINPROGRESS ||
@@ -513,9 +522,13 @@ retry1:
 	/* 2. Get the response from the server.
 	Should be "HTTP/1.1 200 Connection established\r\n" */
 retry2:
-	/* Wait for data on the socket. */
-	if (pqWaitTimed(1, 0, conn, timeout) < 0)
+    // Get the current time
+    time(&now);
+    // Add 5 seconds to the current time
+    finish_time = now + timeout;
+	if (pqWaitTimed(1, 0, conn, finish_time) < 0)
 	{
+		RS_LOG_WARN("FECNN", "could not receive data from proxy server. SOCK_ERRNO:%d", SOCK_ERRNO);
 		appendPQExpBuffer(&conn->errorMessage,
 			libpq_gettext("could not receive data from proxy server."));
 		conn->status = CONNECTION_BAD;
@@ -532,6 +545,7 @@ retry2:
 			appendPQExpBuffer(&conn->errorMessage,
 				libpq_gettext("could not receive data from proxy server."));
 			conn->status = CONNECTION_BAD;
+			RS_LOG_WARN("FECNN", "could not receive data from proxy server.2");
 			return -1;
 		}
 	}
@@ -546,6 +560,7 @@ retry2:
 	{
 		appendPQExpBuffer(&conn->errorMessage,
 			libpq_gettext("Proxy returned error: %s"), buffer);
+			RS_LOG_ERROR("FECNN", "Proxy returned error: %s", buffer);
 		conn->status = CONNECTION_BAD;
 		return -1;
 	}
@@ -1751,6 +1766,48 @@ connectDBStart(PGconn *conn)
 	conn->send_appname = true;
 	conn->status = CONNECTION_NEEDED;
 
+
+	int useProxy = 0;
+	if (conn->proxy_host && conn->proxy_host[0] != '\0')
+	{
+		/* Extension - start */
+		struct addrinfo *proxyaddrs = NULL;
+		struct addrinfo proxyhint;
+		int proxyportnum;
+		char proxyportstr[MAXPGPATH];
+		const char* proxynode = NULL;
+		int useProxy = 0;
+    	/* Extension - end */
+		useProxy = 1;
+
+		/* Initialize proxy hint structure */
+		memset(&proxyhint, 0, sizeof(proxyhint));
+		proxyhint.ai_socktype = SOCK_STREAM;
+		proxyhint.ai_family = AF_UNSPEC;
+
+		if (conn->proxy_port != NULL && conn->proxy_port[0] != '\0')
+		{
+			proxyportnum = atoi(conn->proxy_port);
+		}
+
+		snprintf(proxyportstr, sizeof(proxyportstr), "%d", proxyportnum);
+		proxynode = conn->proxy_host;
+		ret = pg_getaddrinfo_all(proxynode, proxyportstr, &proxyhint, &proxyaddrs);
+
+		/* Copy the first destination address. Cannot use multiple with a proxy. */
+		if (1 || conn->addrlist) {
+			memcpy(&conn->raddr.addr, conn->addrlist->ai_addr, conn->addrlist->ai_addrlen);
+			conn->raddr.salen = conn->addrlist->ai_addrlen;
+		}
+
+		/* Release addresses. */
+		pg_freeaddrinfo_all(hint.ai_family, conn->addrlist);
+		conn->addrlist = NULL;
+
+		conn->addr_cur = proxyaddrs;
+		RS_LOG_TRACE("FECNN", "%s-> addr_cur <- proxyaddrs  %d", __func__, ret);
+	}
+
 	/*
 	 * The code for processing CONNECTION_NEEDED state is in PQconnectPoll(),
 	 * so that it can easily be re-executed if needed again during the
@@ -1952,38 +2009,10 @@ PQconnectPoll(PGconn *conn)
 											));
 			goto error_return;
 	}
+keep_going:
+	RS_LOG_TRACE("FECNN", "keep_going:");
 
-	if (conn->proxy_host && conn->proxy_host[0] != '\0')
-	{
-		useProxy = 1;
-
-		/* Initialize proxy hint structure */
-		memset(&proxyhint, 0, sizeof(proxyhint));
-		proxyhint.ai_socktype = SOCK_STREAM;
-		proxyhint.ai_family = AF_UNSPEC;
-
-		if (conn->proxy_port != NULL && conn->proxy_port[0] != '\0')
-		{
-			proxyportnum = atoi(conn->proxy_port);
-		}
-
-		snprintf(proxyportstr, sizeof(proxyportstr), "%d", proxyportnum);
-		proxynode = conn->proxy_host;
-		ret = pg_getaddrinfo_all(proxynode, proxyportstr, &proxyhint, &proxyaddrs);
-
-		/* Copy the first destination address. Cannot use multiple with a proxy. */
-		memcpy(&conn->raddr.addr, conn->addrlist->ai_addr, conn->addrlist->ai_addrlen);
-		conn->raddr.salen = conn->addrlist->ai_addrlen;
-
-		/* Release addresses. */
-/*		pg_freeaddrinfo_all(hint.ai_family, conn->addrlist); */
-		conn->addrlist = NULL;
-
-		conn->addr_cur = proxyaddrs;
-	}
-
-
-keep_going:						/* We will come back to here until there is
+						/* We will come back to here until there is
 								 * nothing left to do. */
 	switch (conn->status)
 	{
@@ -1999,10 +2028,19 @@ keep_going:						/* We will come back to here until there is
 				{
 					struct addrinfo *addr_cur = conn->addr_cur;
 
-					/* Remember current address for possible error msg */
-					memcpy(&conn->raddr.addr, addr_cur->ai_addr,
-						   addr_cur->ai_addrlen);
-					conn->raddr.salen = addr_cur->ai_addrlen;
+					/* Remember current address for possible error msg */                    
+                    if (!conn->proxy_host || !*conn->proxy_host)
+                    {
+                        memcpy(&conn->raddr.addr, addr_cur->ai_addr,
+                            addr_cur->ai_addrlen);
+                        conn->raddr.salen = addr_cur->ai_addrlen;
+                    }
+                    else
+                    {
+                        memcpy(&conn->paddr.addr, addr_cur->ai_addr,
+                            addr_cur->ai_addrlen);
+                        conn->paddr.salen = addr_cur->ai_addrlen;
+					}
 
 					/* Open a socket */
 					conn->sock = socket(addr_cur->ai_family, SOCK_STREAM, 0);
@@ -3678,6 +3716,7 @@ PQgetCancel(PGconn *conn)
 	memcpy(&cancel->raddr, &conn->raddr, sizeof(SockAddr));
 	cancel->be_pid = conn->be_pid;
 	cancel->be_key = conn->be_key;
+    cancel->conn = conn; // Redshift modified
 
 	return cancel;
 }
@@ -3713,7 +3752,7 @@ PQfreeCancel(PGcancel *cancel)
  */
 static int
 internal_cancel(SockAddr *raddr, int be_pid, int be_key,
-				char *errbuf, int errbufsize)
+				char *errbuf, int errbufsize, PGconn* conn)
 {
 	int			save_errno = SOCK_ERRNO;
 	int			tmpsock = -1;
@@ -3729,14 +3768,24 @@ internal_cancel(SockAddr *raddr, int be_pid, int be_key,
 	 * We need to open a temporary connection to the postmaster. Do this with
 	 * only kernel calls.
 	 */
-	if ((tmpsock = socket(raddr->addr.ss_family, SOCK_STREAM, 0)) < 0)
-	{
-		strlcpy(errbuf, "PQcancel() -- socket() failed: ", errbufsize);
-		goto cancel_errReturn;
-	}
+	if (conn->proxy_host && *conn->proxy_host)
+    {
+        if ((tmpsock = socket(conn->paddr.addr.ss_family, SOCK_STREAM, 0)) < 0)
+        {
+            strlcpy(errbuf, "PQcancel() -- socket() failed: ", errbufsize);
+            goto cancel_errReturn;
+        }
+    }
+    else
+    { // Redshift modified end
+        if ((tmpsock = socket(raddr->addr.ss_family, SOCK_STREAM, 0)) < 0)
+        {
+            strlcpy(errbuf, "PQcancel() -- socket() failed: ", errbufsize);
+            goto cancel_errReturn;
+        }
+    }
 retry3:
-	if (connect(tmpsock, (struct sockaddr *) & raddr->addr,
-				raddr->salen) < 0)
+	if (connect_using_proxy(tmpsock, conn) < 0) // Redshift modified
 	{
 		if (SOCK_ERRNO == EINTR)
 			/* Interrupted system call - we'll just try again */
@@ -3825,7 +3874,7 @@ PQcancel(PGcancel *cancel, char *errbuf, int errbufsize)
 	}
 
 	return internal_cancel(&cancel->raddr, cancel->be_pid, cancel->be_key,
-						   errbuf, errbufsize);
+						   errbuf, errbufsize, cancel->conn);
 }
 
 /*
@@ -3860,7 +3909,7 @@ PQrequestCancel(PGconn *conn)
 	}
 
 	r = internal_cancel(&conn->raddr, conn->be_pid, conn->be_key,
-						conn->errorMessage.data, conn->errorMessage.maxlen);
+						conn->errorMessage.data, conn->errorMessage.maxlen, conn);
 
 	if (!r)
 		conn->errorMessage.len = strlen(conn->errorMessage.data);

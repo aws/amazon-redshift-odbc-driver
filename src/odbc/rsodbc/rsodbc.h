@@ -986,10 +986,10 @@ public:
 
 
 struct RS_TCP_PROXY_CONN_PROPS_INFO {
-	char szHost[MAX_IAM_BUF_VAL]; // proxy host
-	char szPort[MAX_IDEN_LEN]; // proxy port
-	char szUser[MAX_IDEN_LEN];
-	char szPassword[MAX_IDEN_LEN];
+    char szHost[MAX_IAM_BUF_VAL] = {0}; // proxy host
+    char szPort[MAX_IDEN_LEN] = {0};    // proxy port
+    char szUser[MAX_IDEN_LEN] = {0};
+    char szPassword[MAX_IDEN_LEN] = {0};
 };
 
 /*

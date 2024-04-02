@@ -2279,36 +2279,19 @@ static LRESULT CALLBACK rs_dsn_proxy_sheet(HWND hwndDlg, UINT message, WPARAM wP
 	{
 	case WM_INITDIALOG:
 	{
-		char *pProxyHost;
-		char *pHttpsProxyHost;
 		rs_dsn_setup_ctxt = (rs_dsn_setup_ptr_t)sheet->lParam;
 		rs_dsn_log(__LINE__, "rs_proxy_tab(INIT) ctxt %p", rs_dsn_setup_ctxt);
 
-		pProxyHost = rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_TCP_PROXY_HOST);
-		if(pProxyHost && *pProxyHost != '\0')
-			CheckDlgButton(hwndDlg, IDC_PROXY_REDSHIFT_CONNECTION, TRUE);
-		else
-			CheckDlgButton(hwndDlg, IDC_PROXY_REDSHIFT_CONNECTION, FALSE);
-		SetDlgItemText(hwndDlg, IDC_PROXY_REDSHIFT_SERVER_EDIT, pProxyHost);
+		// Fill in Gui entries
+		SetDlgItemText(hwndDlg, IDC_PROXY_REDSHIFT_SERVER_EDIT, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_TCP_PROXY_HOST));
 		SetDlgItemText(hwndDlg, IDC_PROXY_REDSHIFT_PORT_EDIT, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_TCP_PROXY_PORT));
 		SetDlgItemText(hwndDlg, IDC_PROXY_REDSHIFT_UID_EDIT, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_TCP_PROXY_USER_NAME));
 		SetDlgItemText(hwndDlg, IDC_PROXY_REDSHIFT_PWD_EDIT, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_TCP_PROXY_PASSWORD));
-
-		pHttpsProxyHost = rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_HTTPS_PROXY_HOST);
-		if (pHttpsProxyHost && *pHttpsProxyHost != '\0')
-		{
-			CheckDlgButton(hwndDlg, IDC_PROXY_STS, TRUE);
-			CheckDlgButton(hwndDlg, IDC_PROXY_IDP, TRUE);
-		}
-		else
-		{
-			CheckDlgButton(hwndDlg, IDC_PROXY_STS, FALSE);
-			CheckDlgButton(hwndDlg, IDC_PROXY_IDP, FALSE);
-		}
-		SetDlgItemText(hwndDlg, IDC_PROXY_HTTPS_SERVER_EDIT, pHttpsProxyHost);
+		SetDlgItemText(hwndDlg, IDC_PROXY_HTTPS_SERVER_EDIT, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_HTTPS_PROXY_HOST));
 		SetDlgItemText(hwndDlg, IDC_PROXY_HTTPS_PORT_EDIT, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_HTTPS_PROXY_PORT));
 		SetDlgItemText(hwndDlg, IDC_PROXY_HTTPS_UID_EDIT, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_HTTPS_PROXY_USER_NAME));
 		SetDlgItemText(hwndDlg, IDC_PROXY_HTTPS_PWD_EDIT, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_HTTPS_PROXY_PASSWORD));
+		CheckDlgButton(hwndDlg, IDC_PROXY_IDP, rs_dsn_bool_attr(rs_dsn_setup_ctxt, RS_IDP_USE_HTTPS_PROXY));
 
 		
 		SetWindowLongPtr(hwndDlg, DWLP_USER, sheet->lParam);
@@ -3230,25 +3213,18 @@ rs_dsn_read_proxy_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 {
 	rs_dsn_log(__LINE__, "rs_dsn_read_proxy_tab");
 
+    // Read from Gui entries
 	if (rs_dsn_setup_ctxt->proxy_inited) {
 
-		UINT isProxyRedshift = IsDlgButtonChecked(hdlg, IDC_PROXY_REDSHIFT_CONNECTION);
-		UINT isHttpsProxy = IsDlgButtonChecked(hdlg, IDC_PROXY_STS);
-		if (isProxyRedshift)
-		{
-			rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_REDSHIFT_SERVER_EDIT, RS_TCP_PROXY_HOST);
-			rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_REDSHIFT_PORT_EDIT, RS_TCP_PROXY_PORT);
-			rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_REDSHIFT_UID_EDIT, RS_TCP_PROXY_USER_NAME);
-		}
-
-		if (isHttpsProxy)
-		{
-			rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_HTTPS_SERVER_EDIT, RS_HTTPS_PROXY_HOST);
-			rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_HTTPS_PORT_EDIT, RS_HTTPS_PROXY_PORT);
-			rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_HTTPS_UID_EDIT, RS_HTTPS_PROXY_USER_NAME);
-			rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_IDP, RS_IDP_USE_HTTPS_PROXY);
-		}
-
+		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_REDSHIFT_SERVER_EDIT, RS_TCP_PROXY_HOST);
+		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_REDSHIFT_PORT_EDIT, RS_TCP_PROXY_PORT);
+		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_REDSHIFT_UID_EDIT, RS_TCP_PROXY_USER_NAME);
+		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_REDSHIFT_PWD_EDIT, RS_TCP_PROXY_PASSWORD);
+		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_HTTPS_SERVER_EDIT, RS_HTTPS_PROXY_HOST);
+		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_HTTPS_PORT_EDIT, RS_HTTPS_PROXY_PORT);
+		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_HTTPS_UID_EDIT, RS_HTTPS_PROXY_USER_NAME);
+		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_HTTPS_PWD_EDIT, RS_HTTPS_PROXY_PASSWORD);
+		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_PROXY_IDP, RS_IDP_USE_HTTPS_PROXY);
 	}
 }
 

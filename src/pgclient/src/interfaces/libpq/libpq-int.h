@@ -371,6 +371,7 @@ struct pg_conn
 	int			sock;			/* Unix FD for socket, -1 if not connected */
 	SockAddr	laddr;			/* Local address */
 	SockAddr	raddr;			/* Remote address */
+    SockAddr    paddr;          /* Redshift Extension: Address of proxy */
 	ProtocolVersion pversion;	/* FE/BE protocol version in use */
 	int			sversion;		/* server version, e.g. 70401 for 7.4.1 */
 	bool		auth_req_received;		/* true if any type of auth req
@@ -530,6 +531,7 @@ struct pg_conn
 struct pg_cancel
 {
 	SockAddr	raddr;			/* Remote address */
+    PGconn*     conn;           /* Redshift Extension: Connection handle */
 	int			be_pid;			/* PID of backend --- needed for cancels */
 	int			be_key;			/* key of backend --- needed for cancels */
 };
