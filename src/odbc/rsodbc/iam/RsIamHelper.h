@@ -140,6 +140,7 @@ private:
 	///
 	/// @return The constucted key used to store and retrieve cached IAM credentials.
 	static rs_string GetCacheKey(const RsSettings& in_settings);
+    static rs_string printRsSettings(const RsSettings& in_settings);
 };
 
 

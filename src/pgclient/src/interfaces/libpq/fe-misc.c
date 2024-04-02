@@ -167,7 +167,7 @@ pqGets_internal(PQExpBuffer buf, PGconn *conn, bool resetbuffer)
 
 	conn->inCursor = ++inCursor;
 
-	RS_LOG_TRACE("ODBCPQ", "From backend[S]> ...");
+	RS_LOG_TRACE("ODBCPQ", "From backend[S]< ... %ul bytes", buf->len);
 	RS_STREAM_LOG_TRACE("ODBCPQ",  buf->data, buf->len);
 
 	return 0;
@@ -192,11 +192,11 @@ pqGets_append(PQExpBuffer buf, PGconn *conn)
 int
 pqPuts(const char *s, PGconn *conn)
 {
-	if (pqPutMsgBytes(s, strlen(s) + 1, conn))
+	unsigned long len = strlen(s);
+	if (pqPutMsgBytes(s, len + 1, conn))
 		return EOF;
-
-	RS_LOG_TRACE("ODBCPQ", "To backend[S]> ...%u", strlen(s));
-	RS_STREAM_LOG_TRACE("ODBCPQ", s, -1);
+	RS_LOG_TRACE("ODBCPQ", "To backend[S]> ...%ul bytes", len);
+	RS_STREAM_LOG_TRACE("ODBCPQ", s, len);
 
 	return 0;
 }
@@ -215,7 +215,7 @@ pqGetnchar(char *s, size_t len, PGconn *conn)
 	/* no terminating null */
 
 	conn->inCursor += len;
-	RS_LOG_TRACE("ODBCPQ", "From backend[S:%d]...", len);
+	RS_LOG_TRACE("ODBCPQ", "From backend[S]< ... %ul bytes", len);
 	RS_STREAM_LOG_TRACE("ODBCPQ", s, len);
 	return 0;
 }
@@ -229,7 +229,7 @@ pqPutnchar(const char *s, size_t len, PGconn *conn)
 {
 	if (pqPutMsgBytes(s, len, conn))
 		return EOF;
-	RS_LOG_TRACE("ODBCPQ", "To backend[S:%d]...", len);
+	RS_LOG_TRACE("ODBCPQ", "To backend[S]> ... %ul bytes", len);
 	RS_STREAM_LOG_TRACE("ODBCPQ", s, len);
 
 	return 0;
@@ -269,7 +269,7 @@ pqGetInt(int *result, size_t bytes, PGconn *conn)
 			return EOF;
 	}
 
-	RS_LOG_TRACE("ODBCPQ",  "From backend [I:%lu]> %d", (unsigned long) bytes, *result);
+	RS_LOG_TRACE("ODBCPQ",  "From backend [I:%lu]< %d", (unsigned long) bytes, *result);
 
 	return 0;
 }

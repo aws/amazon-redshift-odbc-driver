@@ -3241,8 +3241,8 @@ copyCommonConnectionProperties(RS_IAM_CONN_PROPS_INFO *pIamProps,
     rs_strncpy(pIamProps->szDatabase, pConnectProps->szDatabase,
                std::min<int>(sizeof(pIamProps->szDatabase), sizeof(pConnectProps->szDatabase)));
     if (strlen(pConnectProps->szCaFile) > 0) { //overwrite
-    RS_LOG_DEBUG("RSCNN", "setting pIamProps->szCaPath from  '%s' to '%s'",
-                     pIamProps->szCaPath, pConnectProps->szCaPath);
+        RS_LOG_DEBUG("RSCNN", "%s : setting pIamProps->szCaPath from  '%s' to '%s' of size:%d", __func__,
+                     pIamProps->szCaFile, pConnectProps->szCaFile, strlen(pConnectProps->szCaFile));
         rs_strncpy(pIamProps->szCaFile, pConnectProps->szCaFile,
                 std::min<int>(sizeof(pIamProps->szCaFile), sizeof(pConnectProps->szCaFile)));
 

@@ -3014,10 +3014,7 @@ static void addTypeRow(char *szCatalogQuery, RS_TYPE_INFO *pTypeInfo)
 // Deprecated: Returns TRUE all the time and will be removed in future releases
 static int checkForValidCatalogName(RS_STMT_INFO *pStmt, SQLCHAR *pCatalogName)
 {
-    RS_LOG_DEBUG("RSCAT",
-        "Discarding deprecated catalog name validity check. Catalog name: %s",
-        ((pCatalogName && *pCatalogName != '\0') ? (const char *)pCatalogName
-                                                 : "'Not Supplied'"));
+    RS_LOG_DEBUG("RSCAT", "Discarding deprecated catalog name validity check.");
     return TRUE;
     int iValid;
 

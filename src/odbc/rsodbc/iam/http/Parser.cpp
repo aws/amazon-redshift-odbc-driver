@@ -98,8 +98,6 @@ void Parser::ParsePostRequest(rs_string& str)
 {
     RS_LOG_DEBUG("IAMHTTP", "Parser::ParsePostRequest");
 
-    RS_LOG_DEBUG("IAMHTTP", "Parser::ParsePostRequest request line: %s", str.c_str());
-
     switch (parser_state_)
     {
         case STATE::PARSE_REQUEST:

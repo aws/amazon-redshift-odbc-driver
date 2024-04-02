@@ -2018,6 +2018,7 @@ keep_going:
 	{
 		case CONNECTION_NEEDED:
 			{
+				RS_LOG_TRACE("FECNN", "CONNECTION_NEEDED");
 				int rc;
 				/*
 				 * Try to initiate a connection to one of the addresses
@@ -3105,6 +3106,7 @@ keep_going:
 			return PGRES_POLLING_OK;
 
 		default:
+			RS_LOG_WARN("FECNN", "Invalid connection state.");
 			appendPQExpBuffer(&conn->errorMessage,
 							  libpq_gettext("invalid connection state %d, "
 							   "probably indicative of memory corruption\n"),
@@ -3126,6 +3128,7 @@ error_return:
 	 * the connection structure must be freed).
 	 */
 	conn->status = CONNECTION_BAD;
+	RS_LOG_INFO("FECNN", "status:CONNECTION_BAD. returning PGRES_POLLING_FAILED");
 	return PGRES_POLLING_FAILED;
 }
 

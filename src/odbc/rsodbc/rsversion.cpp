@@ -3,8 +3,8 @@
 
 #include <aws/core/VersionConfig.h> // For AWS SDK version
 #include <openssl/opensslv.h>       // For OpenSSL version
+#include <ares.h>                   // For c-ares version
 #ifdef LINUX
-#include <ares.h>               // For c-ares version
 #include <curl/curl.h>          // For libcurl version
 #include <krb5.h>               // For Kerberos version
 #include <nghttp2/nghttp2ver.h> // For nghttp2 version
@@ -13,7 +13,7 @@
 #endif
 #include <algorithm>
 #include <map>
-#include <string>
+
 
 namespace {
 const char *LOG_CAT = "RSVER";
@@ -21,10 +21,13 @@ const char *LOG_CAT = "RSVER";
 
 namespace rsodbc {
 static const std::map<std::string, std::string> dependencyVersions = {
-    {"openssl", OPENSSL_VERSION_TEXT}, {"aws-sdk-cpp", AWS_SDK_VERSION_STRING},
+    {"openssl", OPENSSL_VERSION_TEXT},
+    {"aws-sdk-cpp", AWS_SDK_VERSION_STRING},
+    {"c-ares", ares_version(NULL)},
 #ifdef LINUX
-    {"c-ares", ares_version(NULL)},    {"curl", curl_version()},
-    {"nghttp2", NGHTTP2_VERSION},      {"zlib", ZLIB_VERSION},
+    {"curl", curl_version()},
+    {"nghttp2", NGHTTP2_VERSION},
+    {"zlib", ZLIB_VERSION},
 /* TODO: S2N, kerberos */
 #endif
 };

@@ -4,8 +4,12 @@
 #include "rslock.h"
 #include <rslog.h>
 #include <regex>
-
+#include <iostream>
+#include <sstream>
 #include <string>
+#include <locale>
+#include <codecvt>
+#include <type_traits>
 #include <unordered_map>
 #ifdef WIN32
 #include <lmcons.h>
@@ -545,6 +549,94 @@ char * RsIamHelper::ReadAuthProfile(
     }
 
     return NULL;
+}
+
+template <typename T>
+void STRINGIFY_MEMBER(std::stringstream &ss, const T &member) {
+    ss << member;
+}
+
+template <>
+void STRINGIFY_MEMBER(std::stringstream &ss, const std::wstring &member) {
+    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
+    ss << converter.to_bytes(member);
+}
+
+#define STRINGIFY_MEMBER(stream, obj, member)                                  \
+    do {                                                                       \
+        stream << "[" << #member << ":";                                       \
+        STRINGIFY_MEMBER(stream, obj.member);                                  \
+        stream << "]";                                                         \
+    } while (0)
+
+rs_string RsIamHelper::printRsSettings(const RsSettings &in_settings) {
+    const RsSettings &obj = in_settings;
+    std::stringstream stream;
+
+    STRINGIFY_MEMBER(stream, in_settings, m_host);
+    STRINGIFY_MEMBER(stream, in_settings, m_port);
+    STRINGIFY_MEMBER(stream, in_settings, m_username);
+    STRINGIFY_MEMBER(stream, in_settings, m_password);
+    STRINGIFY_MEMBER(stream, in_settings, m_database);
+    STRINGIFY_MEMBER(stream, in_settings, m_sslMode);
+    STRINGIFY_MEMBER(stream, in_settings, m_disableCache);
+    STRINGIFY_MEMBER(stream, in_settings, m_proxyHost);
+    STRINGIFY_MEMBER(stream, in_settings, m_proxyPort);
+    STRINGIFY_MEMBER(stream, in_settings, m_proxyCredentials);
+    STRINGIFY_MEMBER(stream, in_settings, m_httpsProxyHost);
+    STRINGIFY_MEMBER(stream, in_settings, m_httpsProxyPort);
+    STRINGIFY_MEMBER(stream, in_settings, m_httpsProxyUsername);
+    STRINGIFY_MEMBER(stream, in_settings, m_httpsProxyPassword);
+    STRINGIFY_MEMBER(stream, in_settings, m_useProxyForIdpAuth);
+    STRINGIFY_MEMBER(stream, in_settings, m_accessKeyID);
+    STRINGIFY_MEMBER(stream, in_settings, m_secretAccessKey);
+    STRINGIFY_MEMBER(stream, in_settings, m_sessionToken);
+    STRINGIFY_MEMBER(stream, in_settings, m_awsRegion);
+    STRINGIFY_MEMBER(stream, in_settings, m_clusterIdentifer);
+    STRINGIFY_MEMBER(stream, in_settings, m_awsProfile);
+    STRINGIFY_MEMBER(stream, in_settings, m_dbUser);
+    STRINGIFY_MEMBER(stream, in_settings, m_authType);
+    STRINGIFY_MEMBER(stream, in_settings, m_caPath);
+    STRINGIFY_MEMBER(stream, in_settings, m_caFile);
+    STRINGIFY_MEMBER(stream, in_settings, m_partnerSpid);
+    STRINGIFY_MEMBER(stream, in_settings, m_loginToRp);
+    STRINGIFY_MEMBER(stream, in_settings, m_oktaAppName);
+    STRINGIFY_MEMBER(stream, in_settings, m_acctId);
+    STRINGIFY_MEMBER(stream, in_settings, m_workGroup);
+    STRINGIFY_MEMBER(stream, in_settings, m_accessDuration);
+    STRINGIFY_MEMBER(stream, in_settings, m_idpPort);
+    STRINGIFY_MEMBER(stream, in_settings, m_pluginName);
+    STRINGIFY_MEMBER(stream, in_settings, m_dbGroups);
+    STRINGIFY_MEMBER(stream, in_settings, m_endpointUrl);
+    STRINGIFY_MEMBER(stream, in_settings, m_stsEndpointUrl);
+    STRINGIFY_MEMBER(stream, in_settings, m_idpHost);
+    STRINGIFY_MEMBER(stream, in_settings, m_idpTenant);
+    STRINGIFY_MEMBER(stream, in_settings, m_idp_response_timeout);
+    STRINGIFY_MEMBER(stream, in_settings, m_login_url);
+    STRINGIFY_MEMBER(stream, in_settings, m_dbGroupsFilter);
+    STRINGIFY_MEMBER(stream, in_settings, m_listen_port);
+    STRINGIFY_MEMBER(stream, in_settings, m_clientSecret);
+    STRINGIFY_MEMBER(stream, in_settings, m_clientId);
+    STRINGIFY_MEMBER(stream, in_settings, m_scope);
+    STRINGIFY_MEMBER(stream, in_settings, m_appId);
+    STRINGIFY_MEMBER(stream, in_settings, m_preferredRole);
+    STRINGIFY_MEMBER(stream, in_settings, m_role_arn);
+    STRINGIFY_MEMBER(stream, in_settings, m_web_identity_token);
+    STRINGIFY_MEMBER(stream, in_settings, m_role_session_name);
+    STRINGIFY_MEMBER(stream, in_settings, m_duration);
+    STRINGIFY_MEMBER(stream, in_settings, m_authProfile);
+    STRINGIFY_MEMBER(stream, in_settings, m_stsConnectionTimeout);
+    STRINGIFY_MEMBER(stream, in_settings, m_idpAuthToken);
+    STRINGIFY_MEMBER(stream, in_settings, m_idpAuthTokenType);
+    STRINGIFY_MEMBER(stream, in_settings, m_iamAuth);
+    STRINGIFY_MEMBER(stream, in_settings, m_forceLowercase);
+    STRINGIFY_MEMBER(stream, in_settings, m_userAutoCreate);
+    STRINGIFY_MEMBER(stream, in_settings, m_sslInsecure);
+    STRINGIFY_MEMBER(stream, in_settings, m_useInstanceProfile);
+    STRINGIFY_MEMBER(stream, in_settings, m_groupFederation);
+    STRINGIFY_MEMBER(stream, in_settings, m_isCname);
+    STRINGIFY_MEMBER(stream, in_settings, m_isServerless);
+    return stream.str();
 }
 
 
