@@ -44,6 +44,7 @@ SQLRETURN SQL_API SQLPrepareW(SQLHSTMT  phstmt,
     SQLRETURN rc;
     char *szCmd;
     size_t len;
+    std::string u8Str;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
     char *pLastBatchMultiInsertCmd = NULL;
 
@@ -74,10 +75,10 @@ SQLRETURN SQL_API SQLPrepareW(SQLHSTMT  phstmt,
         addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
         goto error; 
     }
-
-    len = calculate_utf8_len(pwCmd, cchLen);
+    len = wchar16_to_utf8_str(pwCmd, cchLen, u8Str);
     szCmd = (char *)checkLenAndAllocatePaStrBuf(len, pStmt->pCmdBuf);
-    wchar_to_utf8(pwCmd, cchLen, szCmd, len);
+    memcpy(szCmd, u8Str.data(), len);
+    szCmd[len] = '\0';
 
     if(szCmd)
     {

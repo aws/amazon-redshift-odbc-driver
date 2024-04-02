@@ -238,7 +238,7 @@ SQLRETURN SQL_API SQLDescribeColW(SQLHSTMT            phstmt,
 
     if (SQL_SUCCEEDED(rc) && pwColName) {
         // Convert to unicode
-      int strLen = char_utf8_to_wchar_utf16(szColName, cchLen, pwColName);
+      int strLen = char_utf8_to_wchar_utf16(szColName, cchLen, pwColName, cchLen);
       *pcchLen = strLen;
       RS_LOG_TRACE("RSRES",
                    "cchLen=%d sizeof(SQLWCHAR):%d strLen=%d *pcchLen=%d",

@@ -649,19 +649,19 @@ SQLRETURN SQL_API SQLTablesW(SQLHSTMT          phstmt,
                                 SQLSMALLINT    cchTableType)
 {
     SQLRETURN rc;
-    char szCatalogName[MAX_IDEN_LEN];
-    char szSchemaName[MAX_IDEN_LEN];
-    char szTableName[MAX_IDEN_LEN]; 
-    char szTableType[MAX_TEMP_BUF_LEN]; 
+    char szCatalogName[MAX_IDEN_LEN] = {0};
+    char szSchemaName[MAX_IDEN_LEN] = {0};
+    char szTableName[MAX_IDEN_LEN] = {0}; 
+    char szTableType[MAX_TEMP_BUF_LEN] = {0}; 
     
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLTablesW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, pwTableType, cchTableType);
 
-    wchar_to_utf8(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwTableType, cchTableType, szTableType, MAX_TEMP_BUF_LEN);
-
+	wchar16_to_utf8_char(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwTableType, cchTableType, szTableType, MAX_TEMP_BUF_LEN);
+	RS_LOG_TRACE("RSCAT", "wchar_to_utf8 strlen(szCatalogName)=%d", strlen(szCatalogName));
 
     rc = RsCatalog::RS_SQLTables(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
                                 (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
