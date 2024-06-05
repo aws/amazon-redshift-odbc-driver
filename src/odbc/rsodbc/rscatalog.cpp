@@ -3191,8 +3191,8 @@ static void getCatalogFilterCondition(char *catalogFilter,
 		else {
 			if (databaseColName == NULL)
 				databaseColName = "database_name";
-
-			snprintf(catalogFilter, bufLen, " AND %s = '%.*s' ", databaseColName, cbEscapedName, pEscapedName);
+			
+			snprintf(catalogFilter, bufLen, " AND %s LIKE '%.*s' ", databaseColName, cbEscapedName, pEscapedName);
 		}
 
 		pEscapedName = (char *)rs_free(pEscapedName);
