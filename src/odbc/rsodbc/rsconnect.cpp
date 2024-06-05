@@ -2038,6 +2038,11 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
                     strncpy(pConnectProps->szUser, pval, MAX_IDEN_LEN - 1);
                     pConnectProps->szUser[MAX_IDEN_LEN - 1] = '\0';
                 }
+            } else if (_stricmp(pname, RS_USER) == 0) {
+                if (CAN_OVERRIDE_DSN || pConnectProps->szUser[0] == '\0') {
+                    strncpy(pConnectProps->szUser, pval, MAX_IDEN_LEN - 1);
+                    pConnectProps->szUser[MAX_IDEN_LEN - 1] = '\0';
+                }
             } else if (_stricmp(pname, RS_PASSWORD) == 0 ||
                         _stricmp(pname, RS_PWD) == 0) {
                 pConnectProps->iPasswordKeyWordType =
