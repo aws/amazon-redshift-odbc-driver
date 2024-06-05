@@ -53,11 +53,9 @@ TEST(VERSION_TEST_SUITE, odbc_dependency_change_check) {
 
 // Any change to the number or names of dependencies will be detected. And this
 // test will enforce a manual check
+    std::set<std::string> expectedDependencies = {"aws-sdk-cpp", "openssl", "c-ares"};
 #ifdef LINUX
-    std::set<std::string> expectedDependencies = {
-        "aws-sdk-cpp", "openssl", "c-ares", "curl", "nghttp2", "zlib"};
-#else
-    std::set<std::string> expectedDependencies = {"aws-sdk-cpp", "openssl"};
+    expectedDependencies.insert({"aws-sdk-cpp", "openssl", "curl", "nghttp2", "zlib"});
 #endif
     std::vector<std::string> dependencies;
 
