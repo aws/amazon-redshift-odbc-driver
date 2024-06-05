@@ -89,7 +89,7 @@
 #define RS_IDENTITY_NAMESPACE     "identity_namespace"
 #define RS_SERVERLESS				"Serverless"
 #define RS_WORKGROUP				"Workgroup"
-
+#define RS_MIN_TLS                "Min_TLS"
 
  // Connection options value
 #define RS_AUTH_TYPE_STATIC   "Static"
@@ -147,6 +147,7 @@
 #define DFLT_DSN ""
 //#define DFLT_EDP "1"
 #define DFLT_EM "1"
+#define DFLT_TLS "2"
 //#define DFLT_ECMD "0"
 #define DFLT_FG "0"
 #define DFLT_FM "0"
@@ -185,6 +186,7 @@
 //#define DFLT_KSA "SSPI"  // Kerberos API
 #define DFLT_SC_ROWS "100"
 #define DFLT_SSL_MODE "verify-ca"
+#define DFTL_TLS_VERSION "1.2" // Default TLS version is 1.2
 
 // IDP default values
 #define DFLT_IAM "0"
@@ -265,7 +267,7 @@
 /* 1 Workgroup*/
 /* 1 Compression */
 
-#define DD_DSN_ATTR_COUNT 99
+#define DD_DSN_ATTR_COUNT 101
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -367,6 +369,7 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { "Description", "" },
 //{ "EnableDescribeParam", DFLT_EDP },
 { "EncryptionMethod", DFLT_EM },
+{ "TLSMethod", DFLT_TLS },
 //{ "ExtendedColumnMetaData", DFLT_ECMD },
 { "FailoverGranularity", DFLT_FG },
 { "FailoverMode", DFLT_FM },
@@ -405,6 +408,7 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 // { "KerberosAPI", DFLT_KSA },
 { "StreamingCursorRows", DFLT_SC_ROWS },
 { RS_SSL_MODE, DFLT_SSL_MODE },
+{ RS_MIN_TLS, DFTL_TLS_VERSION },
 { RS_IAM, DFLT_IAM},
 { RS_AUTH_TYPE, DFLT_AUTH_TYPE},
 { RS_CLUSTER_ID, DFLT_CLUSTER_ID},
@@ -490,6 +494,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { "DESC", "Description" },
 //{ "EDP", "EnableDescribeParam" },
 { "EM", "EncryptionMethod" },
+{ "TLS", "TLSMethod" },
 //{ "ECMD", "ExtendedColumnMetaData" },
 { "FG", "FailoverGranularity" },
 { "FM", "FailoverMode" },
@@ -528,6 +533,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 // { "KSA", "KerberosAPI" },
 { "SCR", "StreamingCursorRows" },
 { RS_SSL_MODE, RS_SSL_MODE },
+{ RS_MIN_TLS, RS_MIN_TLS },
 { RS_IAM, RS_IAM },
 { RS_AUTH_TYPE, RS_AUTH_TYPE },
 { RS_CLUSTER_ID, RS_CLUSTER_ID },
@@ -675,6 +681,10 @@ static char *szCompressions[] = {
 #define SSL_MODE_REQUIRE "require"
 #define SSL_MODE_VERIFY_CA "verify-ca"
 #define SSL_MODE_VERIFY_FULL "verify-full"
+
+#define TLS_VERSION_10 "1.0"
+#define TLS_VERSION_11 "1.1"
+#define TLS_VERSION_12 "1.2"
 
 #define MAX_IDP_CONTROLS 59
 
@@ -2220,6 +2230,10 @@ static LRESULT CALLBACK rs_dsn_ssl_sheet(HWND hwndDlg, UINT message, WPARAM wPar
 //            lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_KSA),g_setOfKSA[0]); 
 //            lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_KSA),g_setOfKSA[1]); 
 //			ComboBox_SelectString(GetDlgItem(hwndDlg, IDC_COMBO_KSA), 0, rs_dsn_get_attr(rs_dsn_setup_ctxt, "KerberosAPI"));
+			lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_TLS),TLS_VERSION_10);
+			lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_TLS),TLS_VERSION_11);
+			lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_TLS), TLS_VERSION_12);
+			ComboBox_SetCurSel(GetDlgItem(hwndDlg, IDC_COMBO_TLS), rs_dsn_int_attr(rs_dsn_setup_ctxt, "TLSMethod"));
 			SetWindowLongPtr(hwndDlg, DWLP_USER, sheet->lParam);
 			rs_dsn_setup_ctxt->ssl_inited = TRUE;
 			break;
@@ -3256,6 +3270,7 @@ rs_dsn_read_ssl_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_EDIT_TS, "TrustStore");
 //		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_EDIT_KSN, "KerberosServiceName");
 //		rs_dsn_read_int_entry(hdlg, rs_dsn_setup_ctxt, IDC_COMBO_KSA, "KerberosAPI", g_setOfKSA);
+		rs_dsn_read_int_entry(hdlg, rs_dsn_setup_ctxt, IDC_COMBO_TLS, "TLSMethod", NULL);
 
 		// Derived SSLMode
 		int em = rs_dsn_int_attr(rs_dsn_setup_ctxt, "EncryptionMethod");
@@ -3275,6 +3290,19 @@ rs_dsn_read_ssl_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 			sslMode = SSL_MODE_REQUIRE;
 
 		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_SSL_MODE, sslMode);
+
+		int tls = rs_dsn_int_attr(rs_dsn_setup_ctxt, "TLSMethod");
+		char *tlsVersion = TLS_VERSION_12;
+		if (tls == 0)
+			tlsVersion = TLS_VERSION_10;
+		else
+		if (tls == 1)
+			tlsVersion = TLS_VERSION_11;
+		else
+		if (tls == 2)
+			tlsVersion = TLS_VERSION_12;
+
+		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_MIN_TLS, tlsVersion);
 	}
 }
 

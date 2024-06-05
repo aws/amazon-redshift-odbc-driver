@@ -237,6 +237,7 @@
 #define IDC_GROUP_FEDERATION            1228
 #define IDC_COMPRESSION_COMBO           1229
 #define IDC_COMPRESSION_STATIC          1230
+#define IDC_COMBO_TLS                   1231
 
 // Next default values for new objects
 // 
