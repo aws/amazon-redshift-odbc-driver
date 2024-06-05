@@ -2982,9 +2982,14 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
         pConnectProps->iStreamingCursorRows = 0;
 
 	  // Read current db only or multiple db
-	  bVal = (pConnectProps->iDatabaseMetadataCurrentDbOnly == 1);
-	  RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_DATABASE_METADATA_CURRENT_DB_ONLY, &bVal);
-	  pConnectProps->iDatabaseMetadataCurrentDbOnly = (bVal) ? 1 : 0;
+	  // If user didn't include DatabaseMetadataCurrentDbOnly flag in dsn, RS_SQLGetPrivateProfileString would return empty string, which will cause readBoolValFromDsn returning false to bVal
+	  // In this case, we would use default value in iDatabaseMetadataCurrentDbOnly instead of calling readBoolValFromDsn
+	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_DATABASE_METADATA_CURRENT_DB_ONLY, "", temp, MAX_IAM_BUF_VAL, ODBC_INI);
+	  if(temp[0] != '\0') {
+        bVal = (pConnectProps->iDatabaseMetadataCurrentDbOnly == 1);
+        RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_DATABASE_METADATA_CURRENT_DB_ONLY, &bVal);
+        pConnectProps->iDatabaseMetadataCurrentDbOnly = (bVal) ? 1 : 0;
+	  }
 
 	  // Read READ ONLY session
 	  bVal = (pConnectProps->iReadOnly == 1);
