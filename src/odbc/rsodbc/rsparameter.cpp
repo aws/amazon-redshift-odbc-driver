@@ -5,9 +5,53 @@
 * Author: igarish
 *-------------------------------------------------------------------------
 */
-
 #include "rsparameter.h"
 #include "rsoptions.h"
+
+
+void initSQLTypeMap(SQLMAP& map){
+    std::fill(map, map+SQL_MAP_SIZE, SQL_NO_TYPE);
+
+    map[SQL_CHAR - SQL_TYPE_MIN] = SQL_CHAR;
+    map[SQL_VARCHAR - SQL_TYPE_MIN] = SQL_VARCHAR;
+    map[SQL_LONGVARCHAR - SQL_TYPE_MIN] = SQL_LONGVARCHAR;
+    map[SQL_WCHAR - SQL_TYPE_MIN] = SQL_WCHAR;
+    map[SQL_WVARCHAR - SQL_TYPE_MIN] = SQL_WVARCHAR;
+    map[SQL_WLONGVARCHAR - SQL_TYPE_MIN] = SQL_WLONGVARCHAR;
+    map[SQL_BIT - SQL_TYPE_MIN] = SQL_BIT;
+    map[SQL_BINARY - SQL_TYPE_MIN] = SQL_BINARY;
+    map[SQL_VARBINARY - SQL_TYPE_MIN] = SQL_VARBINARY;
+    map[SQL_LONGVARBINARY - SQL_TYPE_MIN] = SQL_LONGVARBINARY;
+    map[SQL_NUMERIC - SQL_TYPE_MIN] = SQL_NUMERIC;
+    map[SQL_DECIMAL - SQL_TYPE_MIN] = SQL_DECIMAL;
+    map[SQL_TINYINT - SQL_TYPE_MIN] = SQL_TINYINT;
+    map[SQL_SMALLINT - SQL_TYPE_MIN] = SQL_SMALLINT;
+    map[SQL_INTEGER - SQL_TYPE_MIN] = SQL_INTEGER;
+    map[SQL_BIGINT - SQL_TYPE_MIN] = SQL_BIGINT;
+    map[SQL_REAL - SQL_TYPE_MIN] = SQL_REAL;
+    map[SQL_FLOAT - SQL_TYPE_MIN] = SQL_FLOAT;
+    map[SQL_DOUBLE - SQL_TYPE_MIN] = SQL_DOUBLE;
+    map[SQL_GUID - SQL_TYPE_MIN] = SQL_GUID;
+    map[SQL_TYPE_DATE - SQL_TYPE_MIN] = SQL_TYPE_DATE;
+    map[SQL_TYPE_TIME - SQL_TYPE_MIN] = SQL_TYPE_TIME;
+    map[SQL_TYPE_TIMESTAMP - SQL_TYPE_MIN] = SQL_TYPE_TIMESTAMP;
+    map[SQL_DATE - SQL_TYPE_MIN] = SQL_TYPE_DATE;
+    map[SQL_TIME - SQL_TYPE_MIN] = SQL_TYPE_TIME;
+    map[SQL_TIMESTAMP - SQL_TYPE_MIN] = SQL_TYPE_TIMESTAMP;
+    map[SQL_INTERVAL_DAY - SQL_TYPE_MIN] = SQL_INTERVAL_DAY;
+    map[SQL_INTERVAL_DAY_TO_HOUR - SQL_TYPE_MIN] = SQL_INTERVAL_DAY_TO_HOUR;
+    map[SQL_INTERVAL_DAY_TO_MINUTE - SQL_TYPE_MIN] = SQL_INTERVAL_DAY_TO_MINUTE;
+    map[SQL_INTERVAL_DAY_TO_SECOND - SQL_TYPE_MIN] = SQL_INTERVAL_DAY_TO_SECOND;
+    map[SQL_INTERVAL_HOUR - SQL_TYPE_MIN] = SQL_INTERVAL_HOUR;
+    map[SQL_INTERVAL_HOUR_TO_MINUTE - SQL_TYPE_MIN] = SQL_INTERVAL_HOUR_TO_MINUTE;
+    map[SQL_INTERVAL_HOUR_TO_SECOND - SQL_TYPE_MIN] = SQL_INTERVAL_HOUR_TO_SECOND;
+    map[SQL_INTERVAL_MINUTE - SQL_TYPE_MIN] = SQL_INTERVAL_MINUTE;
+    map[SQL_INTERVAL_MINUTE_TO_SECOND - SQL_TYPE_MIN] = SQL_INTERVAL_MINUTE_TO_SECOND;
+    map[SQL_INTERVAL_MONTH - SQL_TYPE_MIN] = SQL_INTERVAL_MONTH;
+    map[SQL_INTERVAL_SECOND - SQL_TYPE_MIN] = SQL_INTERVAL_SECOND;
+    map[SQL_INTERVAL_YEAR - SQL_TYPE_MIN] = SQL_INTERVAL_YEAR;
+    map[SQL_INTERVAL_YEAR_TO_MONTH - SQL_TYPE_MIN] = SQL_INTERVAL_YEAR_TO_MONTH;
+}
 
 /*====================================================================================================================================================*/
 
@@ -30,6 +74,9 @@ SQLRETURN SQL_API SQLBindParameter(SQLHSTMT               phstmt,
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLBindParameter(FUNC_CALL, 0, phstmt, hParam, hInOutType, hType, hSQLType, iColSize, hScale, pValue, cbLen, pcbLenInd);
 
+    if(RsParameter::sqlTypeMap[0] != SQL_NO_TYPE){
+      initSQLTypeMap(RsParameter::sqlTypeMap);
+    }
     rc = RsParameter::RS_SQLBindParameter(phstmt, hParam, hInOutType, hType, hSQLType, iColSize, hScale, pValue, cbLen, pcbLenInd);
 
     if(IS_TRACE_LEVEL_API_CALL())
@@ -81,6 +128,14 @@ SQLRETURN SQL_API RsParameter::RS_SQLBindParameter(SQLHSTMT     phstmt,
         addError(&pStmt->pErrorList,"HY105", "Invalid parameter type", 0, NULL);
         goto error; 
     } */
+    
+    if(RsParameter::sqlTypeMap[hSQLType-SQL_TYPE_MIN] == SQL_NO_TYPE){
+        rc = SQL_ERROR;
+        char ErrMsg[MAX_ERR_MSG_LEN];
+        snprintf(ErrMsg, sizeof(ErrMsg), "Invalid SQL type: %hd", hSQLType);
+        addError(&pStmt->pErrorList,"HY004", ErrMsg, 0, NULL);
+        goto error;
+    }
 
     if(pValue == NULL && pcbLenInd == NULL)
     {
