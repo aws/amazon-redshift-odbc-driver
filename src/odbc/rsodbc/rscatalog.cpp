@@ -661,7 +661,6 @@ SQLRETURN SQL_API SQLTablesW(SQLHSTMT          phstmt,
     wchar16_to_utf8_char(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
     wchar16_to_utf8_char(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
     wchar16_to_utf8_char(pwTableType, cchTableType, szTableType, MAX_TEMP_BUF_LEN);
-	RS_LOG_TRACE("RSCAT", "wchar_to_utf8 strlen(szCatalogName)=%d", strlen(szCatalogName));
 
     rc = RsCatalog::RS_SQLTables(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
                                 (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
@@ -832,19 +831,18 @@ SQLRETURN SQL_API SQLColumnsW(SQLHSTMT     phstmt,
                                 SQLSMALLINT  cchColumnName)
 {
     SQLRETURN rc;
-    char szCatalogName[MAX_IDEN_LEN];
-    char szSchemaName[MAX_IDEN_LEN];
-    char szTableName[MAX_IDEN_LEN]; 
-    char szColumnName[MAX_IDEN_LEN]; 
+    char szCatalogName[MAX_IDEN_LEN] = {0};
+    char szSchemaName[MAX_IDEN_LEN] = {0};
+    char szTableName[MAX_IDEN_LEN] = {0};
+    char szColumnName[MAX_IDEN_LEN] = {0};
     
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLColumnsW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, pwColumnName, cchColumnName);
 
-    wchar_to_utf8(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwColumnName, cchColumnName, szColumnName, MAX_IDEN_LEN);
-
+    wchar16_to_utf8_char(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwColumnName, cchColumnName, szColumnName, MAX_IDEN_LEN);
 
     rc = RsCatalog::RS_SQLColumns(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
                               (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
@@ -2066,13 +2064,13 @@ SQLRETURN SQL_API SQLForeignKeysW(SQLHSTMT         phstmt,
         TraceSQLForeignKeysW(FUNC_CALL, 0, phstmt, pwPkCatalogName, cchPkCatalogName, pwPkSchemaName, cchPkSchemaName, pwPkTableName, cchPkTableName,
                                 pwFkCatalogName, cchFkCatalogName, pwFkSchemaName, cchFkSchemaName, pwFkTableName, cchFkTableName);
 
-    wchar_to_utf8(pwPkCatalogName, cchPkCatalogName, szPkCatalogName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwPkSchemaName, cchPkSchemaName, szPkSchemaName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwPkTableName, cchPkTableName, szPkTableName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwPkCatalogName, cchPkCatalogName, szPkCatalogName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwPkSchemaName, cchPkSchemaName, szPkSchemaName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwPkTableName, cchPkTableName, szPkTableName, MAX_IDEN_LEN);
 
-    wchar_to_utf8(pwFkCatalogName, cchFkCatalogName, szFkCatalogName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwFkSchemaName, cchFkSchemaName, szFkSchemaName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwFkTableName, cchFkTableName, szFkTableName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwFkCatalogName, cchFkCatalogName, szFkCatalogName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwFkSchemaName, cchFkSchemaName, szFkSchemaName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwFkTableName, cchFkTableName, szFkTableName, MAX_IDEN_LEN);
 
     rc = RsCatalog::RS_SQLForeignKeys(phstmt, (SQLCHAR *)((pwPkCatalogName) ? szPkCatalogName : NULL), SQL_NTS,
                                    (SQLCHAR *)((pwPkSchemaName)  ? szPkSchemaName  : NULL), SQL_NTS,
@@ -2207,9 +2205,9 @@ SQLRETURN SQL_API SQLPrimaryKeysW(SQLHSTMT     phstmt,
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLPrimaryKeysW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName);
 
-    wchar_to_utf8(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
 
     rc = RsCatalog::RS_SQLPrimaryKeys(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
                                     (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,

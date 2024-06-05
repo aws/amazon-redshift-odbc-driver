@@ -60,10 +60,10 @@ SQLRETURN SQL_API SQLExecDirectW(SQLHSTMT   phstmt,
         SQL_WCHART_CONVERT is typedefed to wchar_t. b) Let all unicode
         conversions use the same bugfixed method.
        */
-      std::string utf8;
-      len = wchar16_to_utf8_str(pwCmd, cchLen, utf8);
+      std::string utf8Str;
+      len = wchar16_to_utf8_str(pwCmd, cchLen, utf8Str);
       szCmd = (char *)checkLenAndAllocatePaStrBuf(len, pStmt->pCmdBuf);
-      memcpy(szCmd, utf8.c_str(), len);  // szCmd is already null terminated
+      memcpy(szCmd, utf8Str.c_str(), len);  // szCmd is already null terminated
     }
 
     if(szCmd)

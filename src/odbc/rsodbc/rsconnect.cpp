@@ -818,18 +818,20 @@ SQLRETURN SQL_API SQLDriverConnectW(SQLHDBC             phdbc,
                                     SQLUSMALLINT        hDriverCompletion)
 {
     SQLRETURN rc;
-    char *szConnStrIn;
-    char *szConnStrOut;
+    char *szConnStrIn = NULL;
+    char *szConnStrOut = NULL;
     size_t len;
+    std::string utf8Str;
     
     beginApiMutex(NULL, phdbc);
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLDriverConnectW(FUNC_CALL, 0, phdbc, hwnd, wszConnStrIn, cchConnStrIn, wszConnStrOut, cchConnStrOut, pcchConnStrOut, hDriverCompletion);
 
-    len = calculate_utf8_len(wszConnStrIn, cchConnStrIn);
-
+    len = wchar16_to_utf8_str(wszConnStrIn, cchConnStrIn, utf8Str);
     szConnStrIn = (char *)((len > 0) ? rs_calloc(sizeof(char),len + 1) : NULL);
+    memcpy(szConnStrIn, utf8Str.data(), len);
+    szConnStrIn[len] = '\0';
 
     if(wszConnStrOut != NULL)
     {
@@ -841,12 +843,14 @@ SQLRETURN SQL_API SQLDriverConnectW(SQLHDBC             phdbc,
     else
         szConnStrOut = NULL;
 
-    wchar_to_utf8(wszConnStrIn, cchConnStrIn, szConnStrIn, len);
-
     rc = RS_CONN_INFO::RS_SQLDriverConnect(phdbc, hwnd, (SQLCHAR *)szConnStrIn, cchConnStrIn, (SQLCHAR *)szConnStrOut, cchConnStrOut, pcchConnStrOut, hDriverCompletion);
 
-    if(SQL_SUCCEEDED(rc))
-        utf8_to_wchar(szConnStrOut, cchConnStrOut, wszConnStrOut, cchConnStrOut);
+    if(SQL_SUCCEEDED(rc)) {
+        len = char_utf8_to_utf16_wchar(szConnStrOut, cchConnStrOut, wszConnStrOut, cchConnStrOut);
+        if (pcchConnStrOut) {
+            *pcchConnStrOut = len;
+        }
+    }
 
     szConnStrIn = (char *)rs_free(szConnStrIn);
     szConnStrOut = (char *)rs_free(szConnStrOut);

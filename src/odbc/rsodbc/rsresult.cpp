@@ -12,6 +12,7 @@
 #include "rstrace.h"
 #include "rsoptions.h"
 #include "rsmin.h"
+#include <string>
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,7 +33,6 @@ void pgWaitForCscNextResult(void *_pCscStatementContext, PGresult * res, int res
 #ifdef __cplusplus
 }
 #endif
-
 
 /*====================================================================================================================================================*/
 
@@ -238,7 +238,7 @@ SQLRETURN SQL_API SQLDescribeColW(SQLHSTMT            phstmt,
 
     if (SQL_SUCCEEDED(rc) && pwColName) {
         // Convert to unicode
-      int strLen = char_utf8_to_wchar_utf16(szColName, cchLen, pwColName, cchLen);
+      int strLen = char_utf8_to_utf16_wchar(szColName, strlen(szColName), pwColName, cchLen);
       *pcchLen = strLen;
       RS_LOG_TRACE("RSRES",
                    "cchLen=%d sizeof(SQLWCHAR):%d strLen=%d *pcchLen=%d",

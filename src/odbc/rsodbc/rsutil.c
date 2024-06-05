@@ -2038,7 +2038,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                         */
                         std::u16string wchar16;
                         static const int wsize = sizeof(WCHAR);
-                        int wchar16Size = char_utf8_to_str_utf16(
+                        int wchar16Size = char_utf8_to_utf16_str(
                             iConversion ? rsVal.pcVal : pColData, iColDataLen,
                             wchar16);
                         // How many bytes we'd like to write:
