@@ -654,7 +654,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
                 if (pValue && pData && (iDataLen != SQL_NULL_DATA)) {
                   rc = convertSQLDataToCData(
                       pStmt, pData, iDataLen, pDescRec->hType, pValue, cbLen,
-                      &(pResult->cbLenOffset), pcbLenInd, hType,
+                      &(pResult->getColumnReadOffset(hCol)), pcbLenInd, hType,
                       pDescRec->hRsSpecialType, format, pDescRec);
                 } else if (iDataLen == SQL_NULL_DATA) {
                   if (pValue && (cbLen > 0)) *(char *)pValue = '\0';
@@ -1605,6 +1605,8 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                                             pcbLenInd,
 											TRUE);
 
+                        pStmt->pResultHead->getColumnReadOffset(pDescRec->hRecNumber) = 0;
+                        //TODO: Check for SQL_SUCCESS_WITH_INFO
                         if(rc1 == SQL_ERROR)
                         {
                             rc = SQL_ERROR;

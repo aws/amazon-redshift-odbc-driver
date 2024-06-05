@@ -887,9 +887,16 @@ unsigned char hex_to_binary(char in_hex)
 
 /*====================================================================================================================================================*/
 
-SQLRETURN copyHexToBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
+SQLRETURN copyHexToBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen, SQLLEN *cbLenOffset)
 {
 	SQLRETURN rc = SQL_SUCCESS;
+
+    if (*cbLenOffset != 0) {
+        int hexBatchPos = *cbLenOffset * 2;
+        pSrc += hexBatchPos;
+        iSrcLen -= hexBatchPos;
+    }
+
 	int len = (pSrc && (iSrcLen != SQL_NULL_DATA))
 		? iSrcLen
 		: 0;
@@ -909,7 +916,7 @@ SQLRETURN copyHexToBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *
 
 				len = iSrcLen / 2;
 
-				if (len < cbLen)
+				if (len <= cbLen)
 					output_len = len;
 				else
 				{
@@ -942,6 +949,12 @@ SQLRETURN copyHexToBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *
 		*pcbLen = len;
 	else
 		rc = SQL_SUCCESS;
+
+    if (rc == SQL_SUCCESS_WITH_INFO) {
+        *cbLenOffset += cbLen;
+    } else {
+        *cbLenOffset = 0;
+    }
 
 	return rc;
 }
@@ -1690,7 +1703,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 
     RS_LOG_DEBUG("RSUTIL",
                     "convertSQLDataToCData hCType=%d hSQLType=%d "
-                    "format=%d iColDataLen%d iConversion=%d",
+                    "format=%d iColDataLen=%d iConversion=%d",
                     hCType, hSQLType, format, iColDataLen, iConversion);
 
     switch(hCType)
@@ -2076,7 +2089,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                             "iColDataLen=%d, cbLen=%d, "
                             "wchar16Size=%d, "
                             "limit=%d, pcbLenInd=%d, cbLenOffset=%d, rc=%d",
-                            iColDataLen, cbLen, limit, *pcbLenInd, *cbLenOffset, rc);
+                            iColDataLen, cbLen, wchar16Size, limit, *pcbLenInd, *cbLenOffset, rc);
                     } else {
                         // Binary TIMETZOID or TIMESTAMPTZOID
 #ifdef WIN32
@@ -3791,7 +3804,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					else
 					{
 						// Convert HEX format to Binary
-						rc = copyHexToBinaryDataBigLen(rsVal.pcVal, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyHexToBinaryDataBigLen(rsVal.pcVal, iColDataLen, (char *)pBuf, cbLen, pcbLenInd, cbLenOffset);
 					}
 					break;
 				}

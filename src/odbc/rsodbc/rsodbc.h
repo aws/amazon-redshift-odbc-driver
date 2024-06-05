@@ -25,6 +25,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <map>
 
 #include "libpq-fe.h"
 
@@ -1369,7 +1370,7 @@ class RS_RESULT_INFO
 {
 public:
 
-    RS_RESULT_INFO(RS_STMT_INFO *_phstmt, PGresult * _pgResult) {
+    RS_RESULT_INFO(RS_STMT_INFO *_phstmt, PGresult *_pgResult) : cbLenOffsets() {
       phstmt = _phstmt;
       pgResult = _pgResult;
 
@@ -1383,7 +1384,6 @@ public:
       pIRDRecs = NULL;
 
       iPrevhCol = 0;
-      cbLenOffset = 0;
       pNext = NULL;
     }
 
@@ -1400,7 +1400,7 @@ public:
     struct _RS_DESC_REC *pIRDRecs; // IRD Records
 
     int iPrevhCol; // Track column number for SQLGetData. If same col number get called in same row then return SQL_NO_DATA.
-    SQLLEN cbLenOffset; // keeping state of how much data was processed last time.
+    std::map<int, SQLLEN> cbLenOffsets; // keeping per-column state of how much data was processed last time.
     // Next element
     RS_RESULT_INFO *pNext;
 
@@ -1410,6 +1410,7 @@ public:
     static SQLRETURN setAbsolute(RS_STMT_INFO *pStmt, RS_RESULT_INFO *pResult, SQLLEN iFetchOffset);
     static int isBeforeFirstRow(RS_STMT_INFO *pStmt, RS_RESULT_INFO *pResult);
     static int isAfterLastRow(RS_STMT_INFO *pStmt, RS_RESULT_INFO *pResult);
+    SQLLEN& getColumnReadOffset(int iCol) { return cbLenOffsets[iCol]; }
 };
 
 
