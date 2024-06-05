@@ -1,5 +1,21 @@
 Changelog
 =========
+
+v2.1.2 (2024-06-05)
+---------------------
+1. Upgraded the deprecated minimum TLS functions in OpenSSL to more versatile TLS methods that can support multiple TLS protocol versions.
+2. Updated the default minimum TLS version to the more secure and faster TLS 1.2, changed from the previous default of TLS 1.0. 
+3. Added new options in the Windows ODBC DSN GUI to allow setting the minimum TLS version to any supported version.
+4. Fixed a bug where the user option to provide the database username in the connection string was not working when connecting to Redshift using a database username and password.
+5. Fixed an issue with querying large geometry data type using SQLGetData.
+6. Fixed an issue in SQLFetch function where query buffer offset was not being reset properly, causing function execution to hang.
+7. Fixed issues in unicode conversion utility methods used internally. Updated calls to these conversion methods in the SQLForeignKeysW, SQLPrimaryKeysW, SQLColumnsW and SQLDriverConnectW APIs.
+8. Added missing OID mapping for Redshift Text data type.
+9. Added missing invalid SQL type validation in SQLBindParameter API.
+10. Fixed bug where databaseMetadataCurrentDbOnly flag was not using its default value when it is not included in DSN in Linux.
+11. Updated catalog filter to use LIKE instead of = to allow filter patterns with '%' in catalog name in ODBC metadata APIs like SQLTables.
+12. Fixed a bug where datatype of DECIMAL_DIGITS, NUM_PREC_RADIX, and NULLABLE columns in SQLColumns API result set were not following ODBC specification. This can impact behavior on some clients and tools.
+
 v2.1.1 (2024-04-01)
 ---------------------
 1. Corrected the data type of the bind offset pointer to SQLLEN from long for the plBindOffsetPtr variable in RS_DESC_HEADER to ensure compatibility
