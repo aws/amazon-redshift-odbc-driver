@@ -3455,8 +3455,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append(connSettings.m_unknownLength);
 	result.append(" end as COLUMN_SIZE , ");
 	} */
-	result.append("null as BUFFER_LENGTH , ");
-	result.append("case typname ");
+	result.append("CAST(NULL as INTEGER) as BUFFER_LENGTH , ");
+	result.append("CAST(case typname ");
 	result.append("when 'float4' then 8 ");
 	result.append("when 'float8' then 17 ");
 	result.append("when 'numeric' then (atttypmod - 4) & 65535 ");
@@ -3471,8 +3471,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'geography' then NULL ");
 	result.append("when 'intervaly2m' THEN 0 ");
 	result.append("when 'intervald2s' THEN 6 ");
-	result.append("else 0 end as DECIMAL_DIGITS, ");
-	result.append("case typname ");
+	result.append("else 0 end AS SMALLINT) as DECIMAL_DIGITS, ");
+	result.append("CAST(case typname ");
 	result.append("when 'varbyte' then 2 ");
 	result.append("when 'geography' then 2 ");
 	result.append("when 'varchar' THEN 0 ");
@@ -3482,11 +3482,11 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'nchar' THEN 0 ");
 	result.append("when 'bpchar' THEN 0 ");
 	result.append("when 'nvarchar' THEN 0 ");
-	result.append("else 10 end as NUM_PREC_RADIX, ");
-	result.append("case a.attnotnull OR (t.typtype = 'd' AND t.typnotnull) ");
+	result.append("else 10 end AS SMALLINT) as NUM_PREC_RADIX, ");
+	result.append("CAST(case a.attnotnull OR (t.typtype = 'd' AND t.typnotnull) ");
 	result.append("when 'false' then 1 ");
 	result.append("when NULL then 2 ");
-	result.append("else 0 end AS NULLABLE , ");
+	result.append("else 0 end AS SMALLINT) AS NULLABLE , ");
 	result.append("dsc.description as REMARKS , ");
 	result.append("pg_catalog.pg_get_expr(def.adbin, def.adrelid) AS COLUMN_DEF, ");
 	result.append("CAST(case typname ");
@@ -3745,8 +3745,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("WHEN 'intervaly2m' THEN 32 ");
 	result.append("WHEN 'intervald2s' THEN 64 ");
 	result.append("ELSE 2147483647 END AS COLUMN_SIZE, ");
-	result.append("NULL AS BUFFER_LENGTH, ");
-	result.append("CASE REGEXP_REPLACE(columntype,'[()0-9,]') ");
+	result.append("CAST(NULL as INTEGER) AS BUFFER_LENGTH, ");
+	result.append("CAST(CASE REGEXP_REPLACE(columntype,'[()0-9,]') ");
 	result.append("WHEN 'real' THEN 8 ");
 	result.append("WHEN 'float4' THEN 8 ");
 	result.append("WHEN 'double precision' THEN 17 ");
@@ -3760,8 +3760,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("WHEN 'geography' THEN NULL ");
 	result.append("WHEN 'intervaly2m' THEN 0 ");
 	result.append("WHEN 'intervald2s' THEN 6 ");
-	result.append("ELSE 0 END AS DECIMAL_DIGITS, ");
-	result.append("CASE columntype ");
+	result.append("ELSE 0 END AS SMALLINT) AS DECIMAL_DIGITS, ");
+	result.append("CAST(CASE columntype ");
 	result.append("WHEN 'varbyte' THEN 2 ");
 	result.append("WHEN 'geography' THEN 2 ");
 	result.append("when 'varchar' THEN 0 ");
@@ -3771,8 +3771,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'nchar' THEN 0 ");
 	result.append("when 'bpchar' THEN 0 ");
 	result.append("when 'nvarchar' THEN 0 ");
-	result.append("ELSE 10 END AS NUM_PREC_RADIX, ");
-	result.append("NULL AS NULLABLE,  NULL AS REMARKS,   NULL AS COLUMN_DEF, ");
+	result.append("ELSE 10 END AS SMALLINT) AS NUM_PREC_RADIX, ");
+	result.append("CAST(NULL AS SMALLINT) AS NULLABLE,  NULL AS REMARKS,   NULL AS COLUMN_DEF, ");
 	result.append("CAST(CASE columntype_rep ");
 	result.append("WHEN 'text' THEN 12 ");
 	result.append("WHEN 'bit' THEN -7 ");
@@ -3992,8 +3992,8 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'intervald2s' THEN 64"
 		 " ELSE 2147483647" 
 		 " END AS COLUMN_SIZE,"
-		 " NULL AS BUFFER_LENGTH,"
-		 " CASE data_type"
+		 " CAST(NULL as INTEGER) AS BUFFER_LENGTH,"
+		 " CAST(CASE data_type"
 		 " WHEN 'real' THEN 8"
 		 " WHEN 'float4' THEN 8"
 		 " WHEN 'double precision' THEN 17"
@@ -4014,8 +4014,8 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'intervaly2m' THEN 0"
 		 " WHEN 'intervald2s' THEN 6"
 		 " ELSE 0"
-		 " END AS DECIMAL_DIGITS,"
-		 " CASE data_type"
+		 " END AS SMALLINT) AS DECIMAL_DIGITS,"
+		 " CAST(CASE data_type"
 		 " WHEN 'varbyte' THEN 2"
 		 " WHEN 'geography' THEN 2"
 		 " when 'varchar' THEN 0 "
@@ -4026,10 +4026,10 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " when 'bpchar' THEN 0 "
 		 " when 'nvarchar' THEN 0 "
 		 " ELSE 10"
-		 " END AS NUM_PREC_RADIX,"
-		 " CASE is_nullable WHEN 'YES' THEN 1"
+		 " END AS SMALLINT) AS NUM_PREC_RADIX,"
+		 " CAST(CASE is_nullable WHEN 'YES' THEN 1"
 		 " WHEN 'NO' THEN 0"
-		 " ELSE 2 end AS NULLABLE,"
+		 " ELSE 2 end AS SMALLINT) AS NULLABLE,"
 		 " REMARKS,"
 		 " column_default AS COLUMN_DEF,"
 		 " CAST(CASE regexp_replace(data_type, '^_.+', 'ARRAY')"
