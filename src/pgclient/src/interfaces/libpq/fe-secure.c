@@ -900,18 +900,20 @@ init_ssl_system(PGconn *conn)
 			SSL_load_error_strings();
 		}
 
+		SSL_context = SSL_CTX_new(TLS_method());
 		if (conn->min_tls != NULL)
 		{
+			RS_LOG_DEBUG("FESEC", "Min TLS version=%s\n", conn->min_tls);
 			if (strcmp(conn->min_tls, "1.2") == 0)
-				SSL_context = SSL_CTX_new(TLSv1_2_method());
+				SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
 			else
 			if (strcmp(conn->min_tls, "1.1") == 0)
-				SSL_context = SSL_CTX_new(TLSv1_1_method());
+				SSL_CTX_set_min_proto_version(SSL_context, TLS1_1_VERSION);
 			else
-				SSL_context = SSL_CTX_new(TLSv1_method());
+				SSL_CTX_set_min_proto_version(SSL_context, TLS1_VERSION);
 		}
 		else
-			SSL_context = SSL_CTX_new(TLSv1_method());
+			SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
 
 		if (!SSL_context)
 		{
