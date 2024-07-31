@@ -6557,7 +6557,7 @@ char *convertCParamDataToSQLData(RS_STMT_INFO *pStmt, char *pParamData, int iPar
         case SQL_WCHAR:
         case SQL_WVARCHAR:
         {
-            switch(hCType)
+            switch(hType)
             {
                 case SQL_C_CHAR:
                 case SQL_C_WCHAR:
@@ -6602,7 +6602,7 @@ char *convertCParamDataToSQLData(RS_STMT_INFO *pStmt, char *pParamData, int iPar
 
 		case SQL_LONGVARCHAR: // SUPER
 		{
-			switch (hCType)
+			switch (hType)
 			{
 			case SQL_C_CHAR:
 			case SQL_C_WCHAR:
@@ -6624,7 +6624,7 @@ char *convertCParamDataToSQLData(RS_STMT_INFO *pStmt, char *pParamData, int iPar
 
 		case SQL_LONGVARBINARY: // GEOMETRY, VARBYTE, GEOGRAPHY
 		{
-			switch (hCType)
+			switch (hType)
 			{
 			case SQL_C_CHAR:
 			case SQL_C_WCHAR:
@@ -7433,8 +7433,12 @@ error:
     {
         char szErrMsg[MAX_ERR_MSG_LEN];
 
-        snprintf(szErrMsg, sizeof(szErrMsg), "Parameter type conversion is not supported from %hd SQL type to %hd C type.", hSQLType,hCType);
-
+        if(hType == SQL_C_DEFAULT){
+            snprintf(szErrMsg, sizeof(szErrMsg), "SQL_C_DEFAULT type conversion is not supported for %hd SQL type", hSQLType);
+        }
+        else{
+            snprintf(szErrMsg, sizeof(szErrMsg), "Parameter type conversion is not supported from %hd SQL type to %hd C type.", hSQLType,hCType);
+        }
         if(pStmt)
             addError(&pStmt->pErrorList,"HY000", szErrMsg, 0, NULL);
     }
@@ -7797,6 +7801,9 @@ short getDefaultCTypeFromSQLType(short hSQLType, int *piConversionError)
     {
         case SQL_CHAR:
         case SQL_VARCHAR:
+        case SQL_LONGVARCHAR:
+        case SQL_NUMERIC:
+        case SQL_DECIMAL:
         {
             hCType = SQL_C_CHAR;
             break;
@@ -7804,6 +7811,7 @@ short getDefaultCTypeFromSQLType(short hSQLType, int *piConversionError)
 
         case SQL_WCHAR:
         case SQL_WVARCHAR:
+        case SQL_WLONGVARCHAR:
         {
             hCType = SQL_C_WCHAR;
             break;
@@ -7843,6 +7851,14 @@ short getDefaultCTypeFromSQLType(short hSQLType, int *piConversionError)
         case SQL_BIT:
         {
             hCType = SQL_C_BIT;
+            break;
+        }
+
+        case SQL_BINARY:
+        case SQL_VARBINARY:
+        case SQL_LONGVARBINARY:
+        {
+            hCType = SQL_C_BINARY;
             break;
         }
 
@@ -7900,17 +7916,10 @@ short getDefaultCTypeFromSQLType(short hSQLType, int *piConversionError)
             break;
         }
 
-        case SQL_NUMERIC:
-        case SQL_DECIMAL:
-        {
-            hCType = SQL_C_NUMERIC;
-            break;
-        }
-
         default:
         {
             iConversionError = TRUE;
-            hCType = SQL_C_CHAR;
+            hCType = SQL_C_DEFAULT;
             break;
         }
 
@@ -7918,6 +7927,10 @@ short getDefaultCTypeFromSQLType(short hSQLType, int *piConversionError)
 
     if(piConversionError)
         *piConversionError = iConversionError;
+
+    RS_LOG_DEBUG("RSUTIL",
+                    "getDefaultCTypeFromSQLType hSQLType=%d hCType=%d",
+                    hSQLType, hCType);
 
     return hCType;
 
