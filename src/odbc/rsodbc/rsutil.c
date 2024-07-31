@@ -1696,17 +1696,23 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
     RS_VALUE  rsVal;
     int iConversionError = FALSE;
 	int len;
+    short hType;
+
+    if(hCType == SQL_C_DEFAULT)
+        hType = getDefaultCTypeFromSQLType(hSQLType, &iConversionError);
+    else
+        hType = hCType;
 
     int iConversion =
-        getRsVal(pColData, iColDataLen, hSQLType, &rsVal, hCType, format,
+        getRsVal(pColData, iColDataLen, hSQLType, &rsVal, hType, format,
                     pDescRec, hRsSpecialType, FALSE);
 
     RS_LOG_DEBUG("RSUTIL",
                     "convertSQLDataToCData hCType=%d hSQLType=%d "
                     "format=%d iColDataLen=%d iConversion=%d",
-                    hCType, hSQLType, format, iColDataLen, iConversion);
+                    hType, hSQLType, format, iColDataLen, iConversion);
 
-    switch(hCType)
+    switch(hType)
     {
         case SQL_C_CHAR:
         {
@@ -2587,7 +2593,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_VARCHAR:
 				{
 					// Convert char to short
-					getRsVal(pColData, iColDataLen, SQL_SMALLINT, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+					getRsVal(pColData, iColDataLen, SQL_SMALLINT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 
 					// Now put short into app buf
 					rc = getShortData(rsVal.hVal, pBuf, pcbLenInd);
@@ -2601,7 +2607,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to short
-						getRsVal(pColData, iColDataLen, SQL_SMALLINT, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_SMALLINT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 
 					// Now put short into app buf
@@ -2616,7 +2622,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to short
-						getRsVal(pColData, iColDataLen, SQL_SMALLINT, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_SMALLINT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -2703,7 +2709,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_VARCHAR:
 				{
 					// Convert char to int
-					getRsVal(pColData, iColDataLen, SQL_INTEGER, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+					getRsVal(pColData, iColDataLen, SQL_INTEGER, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 
 					// Now put int into app buf
 					rc = getIntData(rsVal.iVal, pBuf, pcbLenInd);
@@ -2718,7 +2724,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to boolean
-						getRsVal(pColData, iColDataLen, SQL_BIT, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_BIT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 
 					iVal = (rsVal.bVal == 1) ? 1 : 0;
@@ -2734,7 +2740,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to int
-						getRsVal(pColData, iColDataLen, SQL_INTEGER, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_INTEGER, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 
 					// Now put int into app buf
@@ -2749,7 +2755,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to int
-						getRsVal(pColData, iColDataLen, SQL_INTEGER, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_INTEGER, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -2836,7 +2842,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_VARCHAR:
 				{
 					// Convert char to long long
-					getRsVal(pColData, iColDataLen, SQL_BIGINT, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+					getRsVal(pColData, iColDataLen, SQL_BIGINT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 
 					// Now put long long into app buf
 					rc = getBigIntData(rsVal.llVal, pBuf, pcbLenInd);
@@ -2850,7 +2856,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to long long
-						getRsVal(pColData, iColDataLen, SQL_BIGINT, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_BIGINT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 
 					// Now put long long into app buf
@@ -2865,7 +2871,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to long long
-						getRsVal(pColData, iColDataLen, SQL_BIGINT, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_BIGINT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -2950,7 +2956,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_VARCHAR:
 				{
 					// Convert char to float
-					getRsVal(pColData, iColDataLen, SQL_REAL, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+					getRsVal(pColData, iColDataLen, SQL_REAL, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 
 					// Now put float into app buf
 					rc = getFloatData(rsVal.fVal, pBuf, pcbLenInd);
@@ -2964,7 +2970,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to float
-						getRsVal(pColData, iColDataLen, SQL_REAL, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_REAL, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 
 					// Now put float into app buf
@@ -2979,7 +2985,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to float
-						getRsVal(pColData, iColDataLen, SQL_REAL, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_REAL, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -3064,7 +3070,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_VARCHAR:
 				{
 					// Convert char to double
-					getRsVal(pColData, iColDataLen, SQL_DOUBLE, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+					getRsVal(pColData, iColDataLen, SQL_DOUBLE, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 
 					// Now put double into app buf
 					rc = getDoubleData(rsVal.dVal, pBuf, pcbLenInd);
@@ -3078,7 +3084,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to double
-						getRsVal(pColData, iColDataLen, SQL_DOUBLE, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_DOUBLE, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 
 					// Now put double into app buf
@@ -3093,7 +3099,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to double
-						getRsVal(pColData, iColDataLen, SQL_DOUBLE, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_DOUBLE, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -3180,7 +3186,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_VARCHAR:
 				{
 					// Convert char to bit
-					getRsVal(pColData, iColDataLen, SQL_BIT, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+					getRsVal(pColData, iColDataLen, SQL_BIT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 
 					// Now put bit into app buf
 					rc = getBooleanData(rsVal.bVal, pBuf, pcbLenInd);
@@ -3194,7 +3200,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to bit
-						getRsVal(pColData, iColDataLen, SQL_BIT, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_BIT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -3601,7 +3607,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_VARCHAR:
 				{
 					// Convert char to Numeric
-					getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+					getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 
 					// Now put numeric into app buf
 					rc = getNumericData(&(rsVal.nVal), pBuf, pcbLenInd);
@@ -3615,7 +3621,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to Numeric
-						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -3639,7 +3645,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to Numeric
-						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -3664,7 +3670,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to Numeric
-						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -3689,7 +3695,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to Numeric
-						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -3714,7 +3720,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to Numeric
-						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -3740,7 +3746,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					if (IS_TEXT_FORMAT(format))
 					{
 						// Convert char to Numeric
-						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hCType, format, pDescRec, hRsSpecialType, TRUE);
+						getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
 					}
 					else
 					{
@@ -3934,10 +3940,10 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                      "Fetch data type conversion is not supported from "
                      "hCType=%d hSQLType=%d "
                      "format=%d iColDataLen%d iConversion=%d",
-                     hCType, hSQLType, format, iColDataLen, iConversion);
+                     hType, hSQLType, format, iColDataLen, iConversion);
         char szErrMsg[MAX_ERR_MSG_LEN];
 
-        snprintf(szErrMsg, sizeof(szErrMsg), "Fetch data type conversion is not supported from %hd SQL type to %hd C type.", hSQLType,hCType);
+        snprintf(szErrMsg, sizeof(szErrMsg), "Fetch data type conversion is not supported from %hd SQL type to %hd C type.", hSQLType,hType);
 
         rc = SQL_ERROR;
         if(pStmt)
