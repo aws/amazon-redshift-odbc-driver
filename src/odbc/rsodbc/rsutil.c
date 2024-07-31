@@ -4340,6 +4340,10 @@ int getRsVal(char *pColData, int iColDataLen, short hSQLType, RS_VALUE  *pRsVal,
 
 						// Pad zeros at the right
 						fractionLen = (int)strlen(szFraction);
+						if (hRsSpecialType == TIMESTAMPTZOID)
+						{
+							fractionLen -= 3;
+						}
 						if (fractionLen > 0)
 						{
 							for (i = fractionLen + 1; i < 10; i++)

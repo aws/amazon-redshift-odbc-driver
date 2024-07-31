@@ -1245,8 +1245,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'time with time zone' THEN 2013 "
 		 " WHEN 'timestamp' THEN 93 "
 		 " WHEN 'timestamp without time zone' THEN 93 "
-		 " WHEN 'timestamptz' THEN 2014 "
-		 " WHEN 'timestamp with time zone' THEN 2014 "
+		 " WHEN 'timestamptz' THEN 93 "
+		 " WHEN 'timestamp with time zone' THEN 93 "
 		 " WHEN 'smallint' THEN 5 "
 		 " WHEN 'int2' THEN 5 "
 		 " WHEN 'integer' THEN 4 "
@@ -1482,8 +1482,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'time with time zone' THEN 2013 "
 		 " WHEN 'timestamp' THEN 93 "
 		 " WHEN 'timestamp without time zone' THEN 93 "
-		 " WHEN 'timestamptz' THEN 2014 "
-		 " WHEN 'timestamp with time zone' THEN 2014 "
+		 " WHEN 'timestamptz' THEN 93 "
+		 " WHEN 'timestamp with time zone' THEN 93 "
 		 " WHEN 'smallint' THEN 5 "
 		 " WHEN 'int2' THEN 5 "
 		 " WHEN 'integer' THEN 4 "
@@ -3368,8 +3368,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'time with time zone' THEN 2013 ");
 	result.append("when 'timestamp' THEN 93 ");
 	result.append("when 'timestamp without time zone' THEN 93 ");
-	result.append("when 'timestamptz' THEN 2014 ");
-	result.append("when 'timestamp with time zone' THEN 2014 ");
+	result.append("when 'timestamptz' THEN 93 ");
+	result.append("when 'timestamp with time zone' THEN 93 ");
 	result.append("when 'smallint' THEN 5 ");
 	result.append("when 'int2' THEN 5 ");
 	result.append("when 'integer' THEN 4 ");
@@ -3658,8 +3658,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'time with time zone' THEN 2013 ");
 	result.append("WHEN 'timestamp' THEN 93 ");
 	result.append("WHEN 'timestamp without time zone' THEN 93 ");
-	result.append("when 'timestamptz' THEN 2014 ");
-	result.append("WHEN 'timestamp with time zone' THEN 2014 ");
+	result.append("when 'timestamptz' THEN 93 ");
+	result.append("WHEN 'timestamp with time zone' THEN 93 ");
 	result.append("WHEN 'smallint' THEN 5 ");
 	result.append("WHEN 'int2' THEN 5 ");
 	result.append("WHEN 'integer' THEN 4 ");
@@ -3674,7 +3674,7 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("WHEN 'float8' THEN 8 ");
 	result.append("WHEN 'float' THEN 6 ");
 	result.append("WHEN 'numeric' THEN 2 ");
-	result.append("WHEN 'timestamptz' THEN 2014 ");
+	result.append("WHEN 'timestamptz' THEN 93 ");
 	result.append("WHEN 'bytea' THEN -2 ");
 	result.append("WHEN 'oid' THEN -5 ");
 	result.append("WHEN 'name' THEN 12 ");
@@ -3901,8 +3901,8 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'time with time zone' THEN 2013 "
 		 " WHEN 'timestamp' THEN 93"
 		 " WHEN 'timestamp without time zone' THEN 93"
-		 " WHEN 'timestamptz' THEN 2014"
-		 " WHEN 'timestamp with time zone' THEN 2014"
+		 " WHEN 'timestamptz' THEN 93"
+		 " WHEN 'timestamp with time zone' THEN 93"
 		 " WHEN 'smallint' THEN 5"
 		 " WHEN 'int2' THEN 5"
 		 " WHEN 'integer' THEN 4"
@@ -4191,8 +4191,8 @@ static void buildUniversalAllSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'time with time zone' THEN 2013 "
 		 " WHEN 'timestamp' THEN 93 "
 		 " WHEN 'timestamp without time zone' THEN 93 "
-		 " WHEN 'timestamptz' THEN 2014 "
-		 " WHEN 'timestamp with time zone' THEN 2014 "
+		 " WHEN 'timestamptz' THEN 93 "
+		 " WHEN 'timestamp with time zone' THEN 93 "
 		 " WHEN 'smallint' THEN 5 "
 		 " WHEN 'int2' THEN 5 "
 		 " WHEN 'integer' THEN 4 "
@@ -4480,8 +4480,8 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN external_type = 'time with time zone' THEN 2013 "
 		 " WHEN external_type = 'timestamp' THEN 93"
 		 " WHEN external_type = 'timestamp without time zone' THEN 93"
-		 " WHEN external_type = 'timestamptz' THEN 2014"
-		 " WHEN external_type = 'timestamp with time zone' THEN 2014"
+		 " WHEN external_type = 'timestamptz' THEN 93"
+		 " WHEN external_type = 'timestamp with time zone' THEN 93"
 		 " WHEN external_type = 'smallint' THEN 5"
 		 " WHEN external_type = 'int2' THEN 5"
 		 " WHEN external_type = '_int2' THEN 5"

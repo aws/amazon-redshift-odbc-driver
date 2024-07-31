@@ -1484,7 +1484,7 @@ short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType)
 			if (phRsSpecialType)
 				*phRsSpecialType = TIMESTAMPTZOID;
 
-			sqlType = SQL_VARCHAR;
+			sqlType = SQL_TYPE_TIMESTAMP;
 			break;
 		}
 
