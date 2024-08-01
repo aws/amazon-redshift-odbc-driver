@@ -1,6 +1,14 @@
 Changelog
 =========
 
+v2.1.3 (2024-07-31)
+---------------------
+1. Fixed an inconsistent metadata issue for Redshift type timestamptz in SQLColumns and SQLDescribeCol by changing the return value for Data type column in SQLColumns API from 2014 to SQL_TYPE_TIMESTAMP (93) and in SQLDescribeCol API from SQL_VARCHAR (12) to SQL_TYPE_TIMESTAMP (93).
+2. Fixed an issue when invoking SQLBindParameter with the C type SQL_C_DEFAULT by converting SQL_C_DEFAULT to a new C type based on the SQL type. Also, added enhanced logging to provide informational and error messages related to SQL_C_DEFAULT conversions.
+3. Added missing group federation checkbox in JWT IAM Auth Plugin ODBC DSN GUI in Windows.
+4. Fixed an issue where an incorrect return value was generated when calling SQLGetData with the C type SQL_C_DEFAULT.
+5. Added support for a new browser authentication plugin called BrowserIdcAuthPlugin to facilitate single-sign-on integration with AWS IAM Identity Center.
+
 v2.1.2 (2024-06-05)
 ---------------------
 1. Upgraded the deprecated minimum TLS functions in OpenSSL to more versatile TLS methods that can support multiple TLS protocol versions.
