@@ -58,6 +58,8 @@ struct RS_IAM_CONN_PROPS_INFO {
   char szBasicAuthToken[MAX_BASIC_AUTH_TOKEN_LEN];
   char szIdentityNamespace[MAX_IAM_BUF_VAL];
   char szTokenType[MAX_IDEN_LEN];
+  char szIssuerUrl[MAX_IAM_BUF_VAL];
+  char szIdcRegion[MAX_IDEN_LEN];
   bool isDisableCache; 
   int iStsConnectionTimeout; 
   bool isGroupFederation;

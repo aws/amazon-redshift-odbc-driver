@@ -18,6 +18,9 @@
 #include "IAMUtils.h"
 #include "RsSettings.h"
 #include "rslog.h"
+#include <openssl/bio.h>
+#include <openssl/evp.h>
+#include <openssl/buffer.h>
 
 #include <ares.h>
 #include <ares_dns.h>
@@ -141,6 +144,25 @@ void IAMUtils::ThrowConnectionExceptionWithInfo(
     throw RsErrorException(atoi(SQLSTATE_COMM_LINK_FAILURE), IAM_ERROR, in_messageKey, msgParams);
 }
 
+std::string IAMUtils::base64urlEncode(const unsigned char* input, size_t length) {
+    BIO* bmem = BIO_new(BIO_s_mem());
+    BIO* b64 = BIO_new(BIO_f_base64());
+    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+    BIO_push(b64, bmem);
+    BIO_write(b64, input, length);
+    BIO_flush(b64);
+
+    char* base64Encoded;
+    long base64EncodedLength = BIO_get_mem_data(bmem, &base64Encoded);
+    std::string base64UrlValue(base64Encoded, base64EncodedLength);
+	BIO_free_all(b64);
+
+    base64UrlValue = base64UrlValue.substr(0, base64UrlValue.find_last_not_of('=') + 1);
+    std::replace(base64UrlValue.begin(), base64UrlValue.end(), '+', '-');
+    std::replace(base64UrlValue.begin(), base64UrlValue.end(), '/', '_');
+
+    return base64UrlValue;
+}
 
 std::string IAMUtils::trim(std::string& str)
 {

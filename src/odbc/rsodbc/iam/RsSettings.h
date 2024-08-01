@@ -124,6 +124,9 @@ struct RsSettings
     int   m_stsConnectionTimeout;
     rs_string m_idpAuthToken; // auth token used in IdC Token Auth plugin
     rs_string m_idpAuthTokenType; // token type used in IdC Token Auth plugin
+    rs_string m_issuerUrl; // start url of IdC portal - used in IdC Browser plugin
+    rs_string m_idcRegion; // IdC region - used in IdC Browser plugin
+    rs_string m_idcClientDisplayName; // display name of the client using the IdC browser auth plugin
 
     bool          m_iamAuth;
     bool          m_forceLowercase;

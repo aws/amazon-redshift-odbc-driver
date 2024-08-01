@@ -2347,6 +2347,15 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
         } else if (_stricmp(pname, RS_IDENTITY_NAMESPACE) == 0) {
           rs_strncpy(pIamProps->szIdentityNamespace, pval,
                      sizeof(pIamProps->szIdentityNamespace));
+        } else if (_stricmp(pname, RS_ISSUER_URL) == 0){
+          rs_strncpy(pIamProps->szIssuerUrl, pval,
+                     sizeof(pIamProps->szIssuerUrl));
+        } else if (_stricmp(pname, RS_IDC_REGION) == 0){
+          rs_strncpy(pIamProps->szIdcRegion, pval,
+                     sizeof(pIamProps->szIdcRegion));
+        } else if (_stricmp(pname, RS_IDC_CLIENT_DISPLAY_NAME) == 0) {
+          rs_strncpy(pIamProps->szIdcClientDisplayName, pval,
+                     sizeof(pIamProps->szIdcClientDisplayName));
         } else if (_stricmp(pname, RS_IAM_CA_FILE) == 0) {
           if (pval) {
             strncpy(pIamProps->szCaFile, pval,
@@ -3019,7 +3028,7 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
       char pluginName[MAX_IDEN_LEN];
       RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_PLUGIN_NAME, "", pluginName, MAX_IDEN_LEN, ODBC_INI);
 
-      if(_stricmp(pluginName, PLUGIN_IDP_TOKEN_AUTH) == 0) {
+      if(_stricmp(pluginName, PLUGIN_IDP_TOKEN_AUTH) == 0 || _stricmp(pluginName, PLUGIN_BROWSER_IDC_AUTH) == 0) {
         pConnectProps->isNativeAuth = true;
       }
 
@@ -3125,6 +3134,9 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_BASIC_AUTH_TOKEN, "", pIamProps->szBasicAuthToken, MAX_BASIC_AUTH_TOKEN_LEN, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IDENTITY_NAMESPACE, "", pIamProps->szIdentityNamespace, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_TOKEN_TYPE, "", pIamProps->szTokenType, MAX_IDEN_LEN, ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_ISSUER_URL, "", pIamProps->szIssuerUrl, MAX_IAM_BUF_VAL, ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IDC_REGION, "", pIamProps->szIdcRegion, MAX_IDEN_LEN, ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IDC_CLIENT_DISPLAY_NAME, "", pIamProps->szIdcClientDisplayName, MAX_IAM_BUF_VAL, ODBC_INI);
 
 		RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_DISABLE_CACHE, &(pIamProps->isDisableCache));
 
@@ -3286,7 +3298,8 @@ static SQLRETURN handleFederatedNonIamConnection(RS_CONN_INFO* pConn) {
     RS_IAM_CONN_PROPS_INFO* pIamProps = pConn->pConnectProps->pIamProps;
 
     if (pIamProps && (pIamProps->szPluginName[0] != '\0') &&
-        (_stricmp(pIamProps->szPluginName, PLUGIN_IDP_TOKEN_AUTH) == 0)) {
+        ((_stricmp(pIamProps->szPluginName, PLUGIN_IDP_TOKEN_AUTH) == 0) || 
+         (_stricmp(pIamProps->szPluginName, PLUGIN_BROWSER_IDC_AUTH) == 0))) {
         copyCommonConnectionProperties(pIamProps, pConnectProps);
         pConnectProps->isNativeAuth = true;
 

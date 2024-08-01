@@ -97,6 +97,9 @@ class Parser {
         const rs_string URI = "/redshift/";
         const rs_string HTTP_VERSION = "HTTP/1.1";
         const int MAX_HEADER_SIZE = 8192;
+
+        const rs_string GET_METHOD = "GET";
+        const rs_string PKCE_URI = "/?code=";
                         
         STATE parser_state_;
         size_t header_size_;

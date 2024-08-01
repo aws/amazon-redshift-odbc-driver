@@ -25,8 +25,8 @@ set_source_files_properties(${C_SOURCES} PROPERTIES LANGUAGE CXX )
 # look for static libs: .a or .lib
 set_deps_library_suffix()
 set (PACKAGES 
-    ssl aws-cpp-sdk-redshift aws-cpp-sdk-redshift-serverless aws-cpp-sdk-sts 
-    aws-cpp-sdk-core aws-crt-cpp aws-c-s3 aws-c-auth aws-c-event-stream
+    ssl aws-cpp-sdk-redshift aws-cpp-sdk-redshift-serverless aws-cpp-sdk-sso-oidc
+    aws-cpp-sdk-sts aws-cpp-sdk-core aws-crt-cpp aws-c-s3 aws-c-auth aws-c-event-stream
     aws-c-http aws-c-mqtt aws-c-io aws-c-cal aws-checksums aws-c-compression
     aws-c-common s2n aws-c-sdkutils curl ssl crypto nghttp2 cares z
     krb5 gssapi_krb5 k5crypto krb5support com_err

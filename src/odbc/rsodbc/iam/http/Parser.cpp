@@ -22,6 +22,13 @@ void Parser::ParseRequestLine(rs_string& str)
         (command[1] == URI) && (command[2] == HTTP_VERSION))
     {
         parser_state_ = STATE::PARSE_HEADER;
+    } 
+    else if ((command.size() == 3) && (command[0] == GET_METHOD) &&
+             (command[1].find(PKCE_URI) == 0) && (command[2] == HTTP_VERSION)) 
+    {
+        size_t question_mark_pos = command[1].find('?');
+        rs_string parsed_body = command[1].substr(question_mark_pos + 1);
+        ParseBodyLine(parsed_body);
     }
     else
     {

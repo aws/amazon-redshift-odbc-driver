@@ -60,7 +60,8 @@ CPP_SRCS += \
 ../iam/plugins/IdpTokenAuthPlugin.cpp \
 ../iam/plugins/NativePluginCredentialsProvider.cpp \
 ../iam/plugins/IAMExternalCredentialsProvider.cpp \
-../iam/plugins/IAMPluginFactory.cpp 
+../iam/plugins/IAMPluginFactory.cpp \
+../iam/plugins/BrowserIdcAuthPlugin.cpp
 
 OBJS += \
 ./dllmain.o \
@@ -116,7 +117,8 @@ OBJS += \
 ./IdpTokenAuthPlugin.o \
 ./NativePluginCredentialsProvider.o \
 ./IAMExternalCredentialsProvider.o \
-./IAMPluginFactory.o 
+./IAMPluginFactory.o \
+./BrowserIdcAuthPlugin.o
 
 C_DEPS += \
 ./dllmain.d \
@@ -175,7 +177,8 @@ C_DEPS += \
   ./JwtIamAuthPlugin.d \
   ./IdpTokenAuthPlugin.d \
   ./IAMExternalCredentialsProvider.d \
-  ./IAMPluginFactory.d 
+  ./IAMPluginFactory.d \
+  ./BrowserIdcAuthPlugin.d
 
 
 # Each subdirectory must supply rules for building sources it contributes

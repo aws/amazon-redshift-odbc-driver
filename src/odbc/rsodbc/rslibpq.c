@@ -408,7 +408,10 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 		}
 
 		if(pConnectProps->pIamProps) {
-			if(_stricmp(plugin_name, PLUGIN_IDP_TOKEN_AUTH) == 0 && pConnectProps->pIamProps->szTokenType[0] != '\0') {
+            if(_stricmp(plugin_name, PLUGIN_BROWSER_IDC_AUTH) == 0) {
+                ppKeywords[iCount] = RS_TOKEN_TYPE;
+                ppValues[iCount++] = RS_TOKEN_TYPE_ACCESS_TOKEN;
+            } else if(_stricmp(plugin_name, PLUGIN_IDP_TOKEN_AUTH) == 0 && pConnectProps->pIamProps->szTokenType[0] != '\0') {
 				ppKeywords[iCount] = RS_TOKEN_TYPE;
 				ppValues[iCount++] = pConnectProps->pIamProps->szTokenType;
 			}

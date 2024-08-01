@@ -50,4 +50,5 @@ endfunction()
 
 function(set_deps_library_suffix)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" PARENT_SCOPE)
+    message("4. CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES}")
 endfunction()

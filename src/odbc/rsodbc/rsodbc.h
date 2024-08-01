@@ -957,8 +957,9 @@ public:
 #define RS_BASIC_AUTH_TOKEN            "token"
 #define RS_IDENTITY_NAMESPACE          "identity_namespace" 
 #define RS_TOKEN_TYPE                  "token_type"
-
-
+#define RS_ISSUER_URL              "issuer_url"
+#define RS_IDC_REGION              "idc_region"
+#define RS_IDC_CLIENT_DISPLAY_NAME "idc_client_display_name"
 #define RS_NATIVE_KEY_PROVIDER_NAME	"provider_name"
 
 
@@ -968,7 +969,7 @@ public:
 #define RS_AUTH_TYPE_PROFILE  "Profile"
 #define RS_AUTH_TYPE_PLUGIN   "Plugin"
 #define RS_IDP_TYPE_AWS_IDC   "AwsIdc"
-
+#define RS_TOKEN_TYPE_ACCESS_TOKEN  "ACCESS_TOKEN"
 
 /* Predefined external plug-in */
 #define IAM_PLUGIN_ADFS             "ADFS"
@@ -980,7 +981,8 @@ public:
 #define IAM_PLUGIN_JWT              "JWT"   // used for federated native IdP auth
 #define IAM_PLUGIN_BROWSER_AZURE_OAUTH2    "BrowserAzureADOAuth2"   // used for federated native IdP auth
 #define JWT_IAM_AUTH_PLUGIN         "JwtIamAuthPlugin"   // used for federated Jwt IAM auth
-#define PLUGIN_IDP_TOKEN_AUTH              "IdpTokenAuthPlugin"
+#define PLUGIN_IDP_TOKEN_AUTH       "IdpTokenAuthPlugin"
+#define PLUGIN_BROWSER_IDC_AUTH     "BrowserIdcAuthPlugin"
 
 #define RS_LOG_LEVEL_OPTION_NAME "LogLevel"
 #define RS_LOG_PATH_OPTION_NAME  "LogPath"

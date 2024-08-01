@@ -74,7 +74,12 @@ namespace IamSupport
         static void ThrowConnectionExceptionWithInfo(
             const rs_string& in_errorMsg,
             const rs_string& in_messageKey = "IAMConnectionError");
-
+        
+        /// @brief Base64url encodes the input
+        ///
+        /// @param input                     Value we want to base64url encode
+        /// @param in_messageKey             Length of the value we want to encode
+        static std::string base64urlEncode(const unsigned char* input, size_t length);
 
         static std::string trim(std::string& str);
 
