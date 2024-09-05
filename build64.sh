@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #./build64.sh [n.n.n n]
 #CMAKE=/path-to/Cmake/bin/cmake ENABLE_TESTING=1 ./build64.sh [n.n.n n]
 
