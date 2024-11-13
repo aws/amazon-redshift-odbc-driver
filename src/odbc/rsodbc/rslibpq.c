@@ -1003,27 +1003,65 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
 
                             iOffset = (iMultiInsert) ? iOffset : iBindParam;
 
-							if (pDescRec->hInOutType == SQL_PARAM_OUTPUT)
-							{
-								ppBindParamVals[iOffset] = "null";
-							}
-							else
-							{
-								ppBindParamVals[iOffset] = convertCParamDataToSQLData(pStmt,
-									(pDescRec->pDataAtExec) ? pDescRec->pDataAtExec->pValue
-									: (pDescRec->pValue ? ((char *)pDescRec->pValue + (lParamProcessed * iValOffset) + iBindOffset) : NULL),
-									(pDescRec->pDataAtExec) ? (int)pDescRec->pDataAtExec->cbLen : (int)(pDescRec->cbLen),
-									(pDescRec->pDataAtExec) ? (SQLLEN *)(void *)(&(pDescRec->pDataAtExec->cbLen))
-									: (pDescRec->pcbLenInd) ? (SQLLEN *)(void *)(pDescRec->pcbLenInd + lParamProcessed) : NULL,
-									pDescRec->hType, pDescRec->hParamSQLType,
-									(pIPDRec && pIPDRec->hType != 0) ? pIPDRec->hType : pDescRec->hParamSQLType,
-									&(pBindParamStrBuf[iOffset]), &iConversionError);
-								if (iConversionError)
-								{
-									rc = SQL_ERROR;
-									goto error;
-								}
-							}
+                            if (pDescRec->hInOutType == SQL_PARAM_OUTPUT)
+                            {
+                                ppBindParamVals[iOffset] = "null";
+                            }
+                            else
+                            {
+                                char *pParamData = NULL;
+                                if (pDescRec->pDataAtExec) {
+                                    pParamData = pDescRec->pDataAtExec->pValue;
+                                } else {
+                                    if (pDescRec->pValue) {
+                                        pParamData = (char *)pDescRec->pValue + (lParamProcessed * iValOffset) + iBindOffset;
+                                    } else {
+                                        pParamData = NULL;
+                                    }
+                                }
+                                int iParamDataLen = 0;
+                                if (pDescRec->pDataAtExec) {
+                                    iParamDataLen = pDescRec->pDataAtExec->cbLen;
+                                } else {//pcbLenInd
+                                    iParamDataLen = pDescRec->cbLen;
+                                }
+                                SQLLEN *plParamDataStrLenInd = NULL;
+                                if (pDescRec->pDataAtExec) {
+                                    plParamDataStrLenInd = (SQLLEN *)(void *)(&(
+                                        pDescRec->pDataAtExec->cbLen));
+                                } else {
+                                    if (pDescRec->pcbLenInd) {
+                                        plParamDataStrLenInd =
+                                            (SQLLEN *)(void *)(pDescRec
+                                                                   ->pcbLenInd +
+                                                               lParamProcessed);
+                                    } else {
+
+                                        plParamDataStrLenInd = NULL;
+                                    }
+                                }
+                                short hPrepSQLType;
+                                if (pIPDRec && pIPDRec->hType != 0) {
+                                    hPrepSQLType = pIPDRec->hType;
+                                } else {
+                                    hPrepSQLType = pDescRec->hParamSQLType;
+                                }
+                                ppBindParamVals[iOffset] = convertCParamDataToSQLData(
+                                    pStmt,
+                                    pParamData,
+                                    iParamDataLen,
+                                    plParamDataStrLenInd,
+                                    pDescRec->hType,
+                                    pDescRec->hParamSQLType,
+                                    hPrepSQLType,
+                                    &(pBindParamStrBuf[iOffset]), 
+                                    &iConversionError);
+                                if (iConversionError)
+                                {
+                                    rc = SQL_ERROR;
+                                    goto error;
+                                }
+                            }
 
                             piParamFormats[iOffset] = RS_TEXT_FORMAT;
 
