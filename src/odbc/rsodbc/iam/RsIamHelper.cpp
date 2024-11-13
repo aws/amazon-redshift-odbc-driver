@@ -187,7 +187,8 @@ bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, bool i
             {
                 /* Update this function every time when an IAM related connection attribute is added */
                 rc =
-                    s_rsSettings.m_host == in_settings.m_host     &&
+                    (s_rsSettings.m_host == in_settings.m_host || 
+                    s_rsSettings.m_host == in_settings.m_managedVpcUrl) &&
                     s_rsSettings.m_username == in_settings.m_username &&
                     s_rsSettings.m_password == in_settings.m_password &&
                     s_rsSettings.m_database == in_settings.m_database &&
@@ -231,7 +232,8 @@ bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, bool i
                     s_rsSettings.m_loginToRp == in_settings.m_loginToRp &&
                     s_rsSettings.m_preferredRole == in_settings.m_preferredRole &&
                     s_rsSettings.m_sslInsecure == in_settings.m_sslInsecure &&
-                    s_rsSettings.m_groupFederation == in_settings.m_groupFederation;
+                    s_rsSettings.m_groupFederation == in_settings.m_groupFederation &&
+                    s_rsSettings.m_managedVpcUrl == in_settings.m_managedVpcUrl;
             }
         }
     }
@@ -338,11 +340,23 @@ void RsIamHelper::SetIamSettings(
         bool provisionedMatches = std::regex_match(settings.m_host, mProvisioned, hostPattern);
         bool serverlessMatches = std::regex_match(settings.m_host, mServerless, serverlessWorkgroupHostPattern);
         rs_string clusterId;
-        rs_string userInputClusterId = pIamProps->szClusterId;
+
+        // replace host value if user has provided a managed VPC URL.
+        settings.m_managedVpcUrl = pIamProps->szManagedVpcUrl;
+        if (!settings.m_managedVpcUrl.empty()) {
+            if (!workGroup.empty()) {
+                settings.m_workGroup = workGroup;
+            }
+            settings.m_host = settings.m_managedVpcUrl;
+        }
 
         if(provisionedMatches){
             RS_LOG_DEBUG("IAMHLP", "Code flow for regular provisioned cluster");
-            clusterId = requiredClusterId;
+            if (strlen(pIamProps->szClusterId) > 0) {
+                clusterId = pIamProps->szClusterId;
+            } else {
+                clusterId = requiredClusterId;
+            }
         }
         else if(serverlessMatches){
             // serverless vanilla
@@ -354,16 +368,15 @@ void RsIamHelper::SetIamSettings(
             // hostname doesn't match serverless regex but serverless set to true explicitly by user
             // when ready for implementation, remove setting of the isServerless property automatically in parseUrl(),
             // set it here instead
-            // currently do nothing as server does not support cname for serverless
-            if(!(workGroup.empty())){
+            if(!(settings.m_workGroup.empty())){
                 // workgroup specified by user - serverless nlb call
                 // check for serverlessAcctId to enter serverless NLB logic flow, for when we implement this for serverless after server side is ready
                 // currently do nothing as regular code flow is sufficient
                 RS_LOG_DEBUG("IAMHLP", "Code flow for nlb serverless cluster");
             }
             else{
-                // attempt serverless cname call - currently not supported by server
-                // currently sets isCname to true which will be asserted on later, as cname for serverless is not supported yet
+                // attempt serverless cname call
+                // currently sets isCname to true which will be asserted on later
                 RS_LOG_DEBUG("IAMHLP", "Code flow for cname serverless cluster");
                 settings.m_isCname = true;
             }
@@ -446,7 +459,12 @@ void RsIamHelper::SetIamSettings(
 
         settings.m_groupFederation = pIamProps->isGroupFederation;
     } else { // non-IAM
+        settings.m_managedVpcUrl = pIamProps->szManagedVpcUrl;
+        if (!settings.m_managedVpcUrl.empty()) {
+            settings.m_host = settings.m_managedVpcUrl;
+        }
         settings.m_clusterIdentifer = pIamProps->szClusterId;
+
         if (pIamProps->szPluginName[0] != '\0' && ((_stricmp(pIamProps->szPluginName, PLUGIN_IDP_TOKEN_AUTH) == 0) ||
                                                    (_stricmp(pIamProps->szPluginName, PLUGIN_BROWSER_IDC_AUTH) == 0))) {
             SetCommonFederatedAuthSettings(pIamProps, settings);

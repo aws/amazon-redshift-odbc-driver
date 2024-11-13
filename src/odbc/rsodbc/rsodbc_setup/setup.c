@@ -93,6 +93,7 @@
 #define RS_SERVERLESS				"Serverless"
 #define RS_WORKGROUP				"Workgroup"
 #define RS_MIN_TLS                "Min_TLS"
+#define RS_VPC_ENDPOINT_URL        "vpc_endpoint_url"
 
  // Connection options value
 #define RS_AUTH_TYPE_STATIC   "Static"
@@ -241,6 +242,7 @@
 #define DFLT_IDC_REGION ""
 #define DFLT_ISSUER_URL ""
 #define DFLT_IDC_CLIENT_DISPLAY_NAME ""
+#define DFLT_VPC_ENDPOINT_URL ""
 
 #define DFLT_DATABASE_METADATA_CURRENT_DB_ONLY "1"
 #define DFLT_READ_ONLY "0"
@@ -274,7 +276,7 @@
 /* 1 Workgroup*/
 /* 1 Compression */
 
-#define DD_DSN_ATTR_COUNT 104
+#define DD_DSN_ATTR_COUNT 105
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -476,6 +478,7 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_SERVERLESS, DFLT_SERVERLESS},
 { RS_WORKGROUP, DFLT_WORKGROUP},
 { RS_COMPRESSION_TYPE , DFLT_COMPRESSION },
+{ RS_VPC_ENDPOINT_URL , DFLT_VPC_ENDPOINT_URL },
 { "", "" }
 };
 
@@ -604,6 +607,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { RS_SERVERLESS, RS_SERVERLESS},
 { RS_WORKGROUP, RS_WORKGROUP},
 { RS_COMPRESSION_TYPE , RS_COMPRESSION_TYPE },
+{ RS_VPC_ENDPOINT_URL , RS_VPC_ENDPOINT_URL },
 { "", "" }
 };
 
@@ -791,6 +795,8 @@ static int rs_idp_controls[] =
 	IDC_IDP_RESPONSE_TIMEOUT,
 	IDC_IDC_CLIENT_DISPLAY_NAME_STATIC, // Display name of client using IdC browser auth plugin 
 	IDC_IDC_CLIENT_DISPLAY_NAME,
+	IDC_MANAGED_VPC_STATIC,
+	IDC_MANAGED_VPC,
 	0
 };
 
@@ -825,6 +831,8 @@ static int rs_iam_controls[] =
 	IDC_EPU,
 	IDC_WORKGROUP_STATIC,
 	IDC_WORKGROUP,
+	IDC_MANAGED_VPC_STATIC,
+	IDC_MANAGED_VPC,
 	0
 };
 
@@ -844,6 +852,7 @@ static rs_dialog_controls rs_iam_val_controls[] =
 	{IDC_ST,  RS_TEXT_CONTROL, RS_SESSION_TOKEN },
 	{IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
 	{IDC_WORKGROUP,  RS_TEXT_CONTROL, RS_WORKGROUP },
+	{IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{0,  RS_NONE_CONTROL,"" }
 };
 
@@ -869,6 +878,8 @@ static int rs_profile_controls[] =
 	IDC_EPU,
 	IDC_WORKGROUP_STATIC,
 	IDC_WORKGROUP,
+	IDC_MANAGED_VPC_STATIC,
+    IDC_MANAGED_VPC,
 	0
 };
 
@@ -886,6 +897,7 @@ static rs_dialog_controls rs_profile_val_controls[] =
 	{ IDC_UIP, RS_CHECKBOX_CONTROL, RS_INSTANCE_PROFILE},
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
 	{IDC_WORKGROUP,  RS_TEXT_CONTROL, RS_WORKGROUP },
+	{ IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -928,6 +940,8 @@ static int rs_adfs_controls[] =
 	IDC_EPU,
 	IDC_WORKGROUP_STATIC,
 	IDC_WORKGROUP,
+	IDC_MANAGED_VPC_STATIC,
+    IDC_MANAGED_VPC,
 	0
 };
 
@@ -949,6 +963,7 @@ static rs_dialog_controls rs_adfs_val_controls[] =
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
 	{ IDC_STS_EPU,  RS_TEXT_CONTROL, RS_IAM_STS_ENDPOINT_URL },
 	{IDC_WORKGROUP,  RS_TEXT_CONTROL, RS_WORKGROUP },
+	{IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -982,6 +997,8 @@ static int rs_azure_controls[] =
 	IDC_EPU,
 	IDC_WORKGROUP_STATIC,
 	IDC_WORKGROUP,
+	IDC_MANAGED_VPC_STATIC,
+    IDC_MANAGED_VPC,
 	0
 };
 
@@ -1003,6 +1020,7 @@ static rs_dialog_controls rs_azure_val_controls[] =
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
 	{ IDC_STS_EPU,  RS_TEXT_CONTROL, RS_IAM_STS_ENDPOINT_URL },
 	{IDC_WORKGROUP,  RS_TEXT_CONTROL, RS_WORKGROUP },
+	{IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -1036,6 +1054,8 @@ static int rs_azure_browser_controls[] =
 	IDC_EPU,
 	IDC_WORKGROUP_STATIC,
 	IDC_WORKGROUP,
+	IDC_MANAGED_VPC_STATIC,
+    IDC_MANAGED_VPC,
 	0
 };
 
@@ -1058,6 +1078,7 @@ static rs_dialog_controls rs_azure_browser_val_controls[] =
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
 	{ IDC_STS_EPU,  RS_TEXT_CONTROL, RS_IAM_STS_ENDPOINT_URL },
 	{IDC_WORKGROUP,  RS_TEXT_CONTROL, RS_WORKGROUP },
+	{IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -1082,6 +1103,8 @@ static int rs_azure_browser_oauth2_controls[] =
 	IDC_SERVERLESS,
 	IDC_WORKGROUP_STATIC,
 	IDC_WORKGROUP,
+	IDC_MANAGED_VPC_STATIC,
+    IDC_MANAGED_VPC,
 	0
 };
 
@@ -1097,6 +1120,7 @@ static rs_dialog_controls rs_azure_browser_oauth2_val_controls[] =
 	{ IDC_SCOPE, RS_TEXT_CONTROL, RS_SCOPE },
 	{IDC_SERVERLESS, RS_CHECKBOX_CONTROL, RS_SERVERLESS },
 	{IDC_WORKGROUP,  RS_TEXT_CONTROL, RS_WORKGROUP },
+	{IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -1130,6 +1154,8 @@ static int rs_saml_browser_controls[] =
 	IDC_EPU,
 	IDC_WORKGROUP_STATIC,
 	IDC_WORKGROUP,
+	IDC_MANAGED_VPC_STATIC,
+    IDC_MANAGED_VPC,
 	0
 };
 
@@ -1151,6 +1177,7 @@ static rs_dialog_controls rs_saml_browser_val_controls[] =
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
 	{ IDC_STS_EPU,  RS_TEXT_CONTROL, RS_IAM_STS_ENDPOINT_URL },
 	{IDC_WORKGROUP,  RS_TEXT_CONTROL, RS_WORKGROUP },
+	{IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -1221,6 +1248,8 @@ static int rs_okta_controls[] =
 	IDC_EPU,
 	IDC_WORKGROUP_STATIC,
 	IDC_WORKGROUP,
+	IDC_MANAGED_VPC_STATIC,
+    IDC_MANAGED_VPC,
 	0
 };
 
@@ -1241,6 +1270,7 @@ static rs_dialog_controls rs_okta_val_controls[] =
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
 	{ IDC_STS_EPU,  RS_TEXT_CONTROL, RS_IAM_STS_ENDPOINT_URL },
 	{IDC_WORKGROUP,  RS_TEXT_CONTROL, RS_WORKGROUP },
+	{IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -1274,6 +1304,8 @@ static int rs_ping_federated_controls[] =
 	IDC_EPU,
 	IDC_WORKGROUP_STATIC,
 	IDC_WORKGROUP,
+	IDC_MANAGED_VPC_STATIC,
+    IDC_MANAGED_VPC,
 	0
 };
 
@@ -1295,6 +1327,7 @@ static rs_dialog_controls rs_ping_federated_val_controls[] =
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
 	{ IDC_STS_EPU,  RS_TEXT_CONTROL, RS_IAM_STS_ENDPOINT_URL },
 	{IDC_WORKGROUP,  RS_TEXT_CONTROL, RS_WORKGROUP },
+	{IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -1318,6 +1351,8 @@ static int rs_jwt_iam_auth_controls[] =
 	IDC_SERVERLESS,
 	IDC_WORKGROUP_STATIC,
 	IDC_WORKGROUP,
+	IDC_MANAGED_VPC_STATIC,
+    IDC_MANAGED_VPC,
 	0
 };
 
@@ -1333,6 +1368,7 @@ static rs_dialog_controls rs_jwt_iam_auth_val_controls[] =
 	{ IDC_RSN, RS_TEXT_CONTROL, RS_ROLE_SESSION_NAME },
 	{IDC_SERVERLESS, RS_CHECKBOX_CONTROL, RS_SERVERLESS },
 	{IDC_WORKGROUP,  RS_TEXT_CONTROL, RS_WORKGROUP },
+	{IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -1347,6 +1383,8 @@ static int rs_idp_token_auth_controls[] =
 	IDC_SERVERLESS_IDP_TOKEN, 
 	IDC_WORKGROUP_STATIC,
 	IDC_WORKGROUP,
+	IDC_MANAGED_VPC_STATIC,
+    IDC_MANAGED_VPC,
 	0
 };
 
@@ -1357,6 +1395,7 @@ static rs_dialog_controls rs_idp_token_auth_val_controls[] =
 	{ IDC_IDENTITY_NAMESPACE, RS_TEXT_CONTROL, RS_IDENTITY_NAMESPACE },
 	{IDC_SERVERLESS_IDP_TOKEN, RS_CHECKBOX_CONTROL, RS_SERVERLESS },
 	{IDC_WORKGROUP,  RS_TEXT_CONTROL, RS_WORKGROUP },
+	{IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -1374,6 +1413,8 @@ static int rs_idc_browser_auth_controls[] =
 	IDC_IDP_RESPONSE_TIMEOUT,
 	IDC_IDC_CLIENT_DISPLAY_NAME_STATIC, 
 	IDC_IDC_CLIENT_DISPLAY_NAME,
+	IDC_MANAGED_VPC_STATIC,
+    IDC_MANAGED_VPC,
 	0
 };
 
@@ -1385,6 +1426,7 @@ static rs_dialog_controls rs_idc_browser_auth_val_controls[] =
 	{ IDC_LISTEN_PORT, RS_TEXT_CONTROL, RS_LISTEN_PORT },
 	{ IDC_IDP_RESPONSE_TIMEOUT, RS_TEXT_CONTROL, RS_IDP_RESPONSE_TIMEOUT },
 	{ IDC_IDC_CLIENT_DISPLAY_NAME, RS_TEXT_CONTROL, RS_IDC_CLIENT_DISPLAY_NAME },
+	{ IDC_MANAGED_VPC,  RS_TEXT_CONTROL, RS_VPC_ENDPOINT_URL },
 	{ 0,  RS_NONE_CONTROL,"" }
 };
 
@@ -1406,7 +1448,7 @@ static void
 rs_dsn_log(int lineno, char *fmt, ...)
 {
 #ifdef DSN_DEBUG
-	FILE *logfile = fopen("C:\\rsodbc_dsn_dlg.log", "a");
+	FILE *logfile = fopen("C:\\Users\\Public\\log\\rsodbc_dsn_dlg.log", "a");
 	va_list		args;
 	va_start(args, fmt);
 	if (NULL == logfile)
@@ -3495,9 +3537,8 @@ rs_odbc_glb_write_attrs(
 
 	rs_dsn_log(__LINE__, "rs_odbc_glb_write_attrs()");
 	//create an entry, if not exists
-	if (ERROR_SUCCESS == RegCreateKeyEx(HKEY_LOCAL_MACHINE, TRACE_KEY_NAME,
-	                                    0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL,
-										 &odbcKey, NULL))
+	int rc = RegCreateKeyEx(HKEY_LOCAL_MACHINE, TRACE_KEY_NAME, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &odbcKey, NULL);
+	if (ERROR_SUCCESS == rc)
 	{
 		/*
 		*	note that the value in the input context is our default
@@ -3510,7 +3551,7 @@ rs_odbc_glb_write_attrs(
 		}
 		RegCloseKey(odbcKey);
 	} else {
-		rs_dsn_log(__LINE__, "rs_odbc_glb_write_attrs() NOT successful");
+		rs_dsn_log(__LINE__, "rs_odbc_glb_write_attrs() NOT successful %d", rc);
 	}
 
 	rs_dsn_log(__LINE__, "rs_odbc_glb_write_attrs() return");

@@ -248,6 +248,8 @@
 #define IDC_COMPRESSION_STATIC          1230
 #define IDC_COMBO_TLS                   1231
 #define IDC_IDC_CLIENT_DISPLAY_NAME_STATIC  1232
+#define IDC_MANAGED_VPC_STATIC          1233
+#define IDC_MANAGED_VPC                 1234
 
 // Next default values for new objects
 // 

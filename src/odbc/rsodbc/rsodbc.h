@@ -961,6 +961,7 @@ public:
 #define RS_IDC_REGION              "idc_region"
 #define RS_IDC_CLIENT_DISPLAY_NAME "idc_client_display_name"
 #define RS_NATIVE_KEY_PROVIDER_NAME	"provider_name"
+#define RS_VPC_ENDPOINT_URL         "vpc_endpoint_url"
 
 
 

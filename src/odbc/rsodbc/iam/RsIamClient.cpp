@@ -716,7 +716,7 @@ Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentia
     }         
 
 	request.SetDbName(m_settings.m_database);
-    if(inferredWorkgroup.empty() && m_settings.m_workGroup.length()){
+    if(!m_settings.m_workGroup.empty()){
         request.SetWorkgroupName(m_settings.m_workGroup);
     }
     else

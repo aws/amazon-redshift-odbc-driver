@@ -654,15 +654,23 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
 				if (pConnectProps->szPort[0] == '\0')
 					strncpy(pConnectProps->szPort, DEFAULT_PORT, sizeof(pConnectProps->szPort));
 
-                if(pConnectProps->szHost[0] == '\0'
-                    || pConnectProps->szDatabase[0] == '\0')
+                if(pConnectProps->szHost[0] == '\0')
                 {
-					if (pConnectProps->szHost[0] == '\0')
-						addError(&pConn->pErrorList,"HY000", "Required keyword HOST does not found in connection string", 0, NULL);
-					else
-					if (pConnectProps->szDatabase[0] == '\0')
-						addError(&pConn->pErrorList, "HY000", "Required keyword Database does not found in connection string", 0, NULL);
-					rc = SQL_ERROR;
+                    if (pConnectProps->pIamProps->szManagedVpcUrl[0] == '\0') {
+                        addError(&pConn->pErrorList,"HY000", "Required keyword Server or Managed VPC URL not found in connection string", 0, NULL);
+					    rc = SQL_ERROR;
+                    }
+                    else if ((pConnectProps->pIamProps->szClusterId[0] == '\0') && (pConnectProps->pIamProps->szWorkGroup[0] == '\0')) {
+                        addError(&pConn->pErrorList,"HY000", "Required keyword ClusterID or Workgroup not found in connection string for managed VPC connection", 0, NULL);
+					    rc = SQL_ERROR;
+                    } 
+                    else {
+                        rc = doConnection(pConn);
+                    }
+                }
+                else if (pConnectProps->szDatabase[0] == '\0') {
+                    addError(&pConn->pErrorList, "HY000", "Required keyword Database not found in connection string", 0, NULL);
+                    rc = SQL_ERROR;
                 }
                 else
                 {
@@ -2231,6 +2239,9 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
         } else if (_stricmp(pname, RS_IAM_STS_ENDPOINT_URL) == 0) {
           rs_strncpy(pIamProps->szStsEndpointUrl, pval,
                      sizeof(pIamProps->szStsEndpointUrl));
+        } else if (_stricmp(pname, RS_VPC_ENDPOINT_URL) == 0) {
+          rs_strncpy(pIamProps->szManagedVpcUrl, pval,
+                     sizeof(pIamProps->szManagedVpcUrl));
         } else if (_stricmp(pname, RS_DB_USER) == 0) {
           rs_strncpy(pIamProps->szDbUser, pval, sizeof(pIamProps->szDbUser));
         } else if (_stricmp(pname, RS_DB_GROUPS) == 0) {
@@ -2244,7 +2255,7 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
         } else if (_stricmp(pname, RS_SERVERLESS) == 0) {
                       pIamProps->isServerless = convertToBoolVal(pval);
         } else if (_stricmp(pname, RS_WORKGROUP) == 0) {
-          rs_strncpy(pIamProps->szSecretAccessKey, pval,
+          rs_strncpy(pIamProps->szWorkGroup, pval,
                      sizeof(pIamProps->szWorkGroup));
         } else if (_stricmp(pname, RS_FORCE_LOWER_CASE) == 0) {
                       pIamProps->isForceLowercase = convertToBoolVal(pval);
@@ -3088,6 +3099,7 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_REGION, "", pIamProps->szRegion, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_END_POINT_URL, "", pIamProps->szEndpointUrl, MAX_IAM_BUF_VAL, ODBC_INI);
 		RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IAM_STS_ENDPOINT_URL, "", pIamProps->szStsEndpointUrl, MAX_IAM_BUF_VAL, ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_VPC_ENDPOINT_URL, "", pIamProps->szManagedVpcUrl, MAX_IAM_BUF_VAL, ODBC_INI);
 		RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_DB_USER, "", pIamProps->szDbUser, MAX_IDEN_LEN, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_DB_GROUPS, "", pIamProps->szDbGroups, MAX_IAM_DBGROUPS_LEN, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_DB_GROUPS_FILTER, "", pIamProps->szDbGroupsFilter, MAX_IAM_DBGROUPS_LEN, ODBC_INI);
@@ -3267,7 +3279,7 @@ copyCommonConnectionProperties(RS_IAM_CONN_PROPS_INFO *pIamProps,
     rs_strncpy(pIamProps->szDatabase, pConnectProps->szDatabase,
                std::min<int>(sizeof(pIamProps->szDatabase), sizeof(pConnectProps->szDatabase)));
     if (strlen(pConnectProps->szCaFile) > 0) { //overwrite
-        RS_LOG_DEBUG("RSCNN", "%s : setting pIamProps->szCaPath from  '%s' to '%s' of size:%d", __func__,
+        RS_LOG_DEBUG("RSCNN", "%s : setting pIamProps->szCaFile from  '%s' to '%s' of size:%d", __func__,
                      pIamProps->szCaFile, pConnectProps->szCaFile, strlen(pConnectProps->szCaFile));
         rs_strncpy(pIamProps->szCaFile, pConnectProps->szCaFile,
                 std::min<int>(sizeof(pIamProps->szCaFile), sizeof(pConnectProps->szCaFile)));
