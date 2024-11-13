@@ -405,7 +405,7 @@ int connect_using_proxy(int sock, PGconn* conn)
 	   PQconnectPoll should not be used for proxy timeout.
 	int timeout = conn->connect_timeout ? atoi(conn->connect_timeout) : -1;
 	*/
-	static const PROXY_LOGIN_TIMEOUT_SECONDS = 5;
+	static const int PROXY_LOGIN_TIMEOUT_SECONDS = 5;
 	int timeout = PROXY_LOGIN_TIMEOUT_SECONDS;
 
 	// HTTP CONNECT method
