@@ -1,7 +1,9 @@
 # Bring files from various sources libpq subfolders here and build them.
 file(GLOB_RECURSE LIBPQ_COMMON_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
 file(GLOB_RECURSE LIBPQ_COMMON_SOURCES_WIN ${CMAKE_CURRENT_SOURCE_DIR}/*win*.c)
-list(REMOVE_ITEM LIBPQ_COMMON_SOURCES ${LIBPQ_COMMON_SOURCES_WIN})
+if (NOT WIN32)
+    list(REMOVE_ITEM LIBPQ_COMMON_SOURCES ${LIBPQ_COMMON_SOURCES_WIN})
+endif()
 
 # list(APPEND LIBPQ_COMMON_SOURCES fe-auth.c fe-connect.c fe-exec.c fe-misc.c fe-print.c fe-lobj.c
 # 	fe-protocol2.c fe-protocol3.c pqexpbuffer.c pqsignal.c fe-secure.c libpq-events.c
@@ -11,10 +13,8 @@ list(REMOVE_ITEM LIBPQ_COMMON_SOURCES ${LIBPQ_COMMON_SOURCES_WIN})
 # 	file_util.c rsfile.c rslock.c rsmem.c MessageLoopState.c)
 
 # libpq/port files
-list (APPEND LIBPQ_PORT_SOURCE_NAMES chklocale.c inet_net_ntop.c noblock.c pgstrcasecmp.c thread.c strlcpy.c getpeereid.c)
-foreach(FILE ${LIBPQ_PORT_SOURCE_NAMES})
-    list(APPEND LIBPQ_PORT_SOURCES "${PGCLIENT_SRC_DIR}/port/${FILE}")
-endforeach()
+set(LIBPQ_PORT_SOURCES)
+add_libpqport_sources()
 
 # backend/libpq files
 list (APPEND LIBPQ_BACKEND_FILES ip.c md5.c zpq_stream.c z_stream.c lz4.c zstd-in.c)
@@ -32,47 +32,26 @@ list(APPEND SOURCES ${LIBPQ_COMMON_SOURCES} ${LIBPQ_PORT_SOURCES} ${LIBPQ_BACKEN
 
 # Create the library target
 add_library(pq STATIC ${SOURCES})
-
+if (WIN32)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+endif()
 # Set include directories for the library(for openssl)
-if(OPENSSL_DIR)
-    target_include_directories(pq PRIVATE ${OPENSSL_DIR}/include)
+if(RS_OPENSSL_DIR)
+    target_include_directories(pq PRIVATE ${RS_OPENSSL_DIR}/include)
 endif()
 
 target_include_directories(pq PRIVATE ${PGCLIENT_INCLUDE_DIR})
+include_directories_libpq()
 
 # Also set include directories for a specific header file
 get_filename_component(PG_CONFIG_PATHS_DIR ${PG_CONFIG_PATHS_H_FILE} DIRECTORY)
 target_include_directories(pq PRIVATE ${PG_CONFIG_PATHS_DIR})
 target_sources(pq PRIVATE ${PG_CONFIG_PATHS_H_FILE})
 
-target_compile_options(pq PRIVATE
-    # -m64
-    -O2
-    -Wall
-    -Wmissing-prototypes
-    -Wpointer-arith
-    -Wdeclaration-after-statement
-    -Wendif-labels
-    -Wformat-security
-    -fno-strict-aliasing
-    -fwrapv
-    -pthread
-    -fpic
-)
 
-target_compile_definitions(pq PRIVATE
-    -D_REENTRANT
-    -D_THREAD_SAFE
-    -D_POSIX_PTHREAD_SEMANTICS
-    -DLINUX
-    -DUSE_SSL
-    -DENABLE_GSS
-    -DFRONTEND
-    -DUNSAFE_STAT_OK
-    -D_GNU_SOURCE
-    -DSO_MAJOR_VERSION=5
-)
+
 # Any extra custom definitions
+target_compile_options_pq()
 target_compile_definitions_pq()
 
 # Optionally, set compiler options

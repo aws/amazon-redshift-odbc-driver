@@ -8,7 +8,9 @@
 #include <curl/curl.h>          // For libcurl version
 #include <krb5.h>               // For Kerberos version
 #include <nghttp2/nghttp2ver.h> // For nghttp2 version
+#if !defined(__APPLE__)
 #include <s2n.h>                // For s2n version
+#endif
 #include <zlib.h>               // For zlib version
 #endif
 #include <algorithm>

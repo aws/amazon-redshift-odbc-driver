@@ -20,20 +20,20 @@
       <Directory Id="BINDIR" Name=".">
         <Component Id="rsodbc.files" Guid="486400C3-BD3B-424d-8B1F-C9DA38BDAA88" Win64="yes">
           <!-- Redshift -->
-          <File Id="rsodbc.dll" Name="rsodbc.dll" Source="../x64/Release/rsodbc.dll" />
+          <File Id="rsodbc.dll" Name="rsodbc.dll" Source="$(var.ProjectDir)/cmake-build/install/lib/rsodbc64.dll" />
           <File Id="root.crt" Name="root.crt" Source="../root.crt" />
-          <File Id="libcrypto_1_1_x64.dll" Name="libcrypto-1_1-x64.dll" Source="../iam/windows/openssl/1.1/bin/libcrypto-1_1-x64.dll" />
-          <File Id="libssl_1_1_x64.dll" Name="libssl-1_1-x64.dll" Source="../iam/windows/openssl/1.1/bin/libssl-1_1-x64.dll" />
-          <File Id="rsodbcsetup.dll" Name="rsodbcsetup.dll" Source="../rsodbc_setup/x64/Release/rsodbcsetup.dll" />
-          <File Id="gssapi64.dll" Name="gssapi64.dll" Source="../../../pgclient/kfw-3-2-2-final/bin/Win64/gssapi64.dll" />
-          <File Id="krb5_64.dll" Name="krb5_64.dll" Source="../../../pgclient/kfw-3-2-2-final/bin/Win64/krb5_64.dll" />
-          <File Id="k5sprt64.dll" Name="k5sprt64.dll" Source="../../../pgclient/kfw-3-2-2-final/bin/Win64/k5sprt64.dll" />
-          <File Id="wshelp64.dll" Name="wshelp64.dll" Source="../../../pgclient/kfw-3-2-2-final/bin/Win64/wshelp64.dll" />
-          <File Id="comerr64.dll" Name="comerr64.dll" Source="../../../pgclient/kfw-3-2-2-final/bin/Win64/comerr64.dll" />
-          <File Id="msvcr100.dll" Name="msvcr100.dll" Source="../../../pgclient/kfw-3-2-2-final/bin/Win64/msvcr100.dll" />
-          <File Id="krbcc64.dll" Name="krbcc64.dll" Source="../../../pgclient/kfw-3-2-2-final/bin/Win64/krbcc64.dll" />
-          <File Id="leashw64.dll" Name="leashw64.dll" Source="../../../pgclient/kfw-3-2-2-final/bin/Win64/leashw64.dll" />
-          <File Id="xpprof64.dll" Name="xpprof64.dll" Source="../../../pgclient/kfw-3-2-2-final/bin/Win64/xpprof64.dll" />
+          <File Id="libcrypto_1_1_x64.dll" Name="libcrypto-1_1-x64.dll" Source="$(var.ProjectDir)/src/odbc/rsodbc/iam/windows/openssl/Release/bin/libcrypto-1_1-x64.dll" />
+          <File Id="libssl_1_1_x64.dll" Name="libssl-1_1-x64.dll" Source="$(var.ProjectDir)/src/odbc/rsodbc/iam/windows/openssl/Release/bin/libssl-1_1-x64.dll" />
+          <File Id="rsodbcsetup.dll" Name="rsodbcsetup.dll" Source="$(var.ProjectDir)/cmake-build/install/lib/rsodbcsetup.dll" />
+          <File Id="gssapi64.dll" Name="gssapi64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/gssapi64.dll" />
+          <File Id="krb5_64.dll" Name="krb5_64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/krb5_64.dll" />
+          <File Id="k5sprt64.dll" Name="k5sprt64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/k5sprt64.dll" />
+          <File Id="wshelp64.dll" Name="wshelp64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/wshelp64.dll" />
+          <File Id="comerr64.dll" Name="comerr64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/comerr64.dll" />
+          <File Id="msvcr100.dll" Name="msvcr100.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/msvcr100.dll" />
+          <File Id="krbcc64.dll" Name="krbcc64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/krbcc64.dll" />
+          <File Id="leashw64.dll" Name="leashw64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/leashw64.dll" />
+          <File Id="xpprof64.dll" Name="xpprof64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/xpprof64.dll" />
 
           <!-- Note, installing the driver properly (IE, using ODBCDriver) has proven unreliable -->
           <!--       so we install the registry keys manually ourselves.                         -->

@@ -65,23 +65,23 @@
      <!-- Add files to your installer package -->
      <DirectoryRef Id="BASEDIR">
         <Component Id="rsodbcsql.exe" Guid="BC8A809A-59CA-41f6-A657-06553364049A" Win64="yes">
-          <File Id="rsodbcsql.exe" Name="rsodbcsql.exe" Source="../rsodbcsql/x64/Release/rsodbcsql.exe" />
+          <File Id="rsodbcsql.exe" Name="rsodbcsql.exe" Source="$(var.ProjectDir)/cmake-build/install/bin/rsodbcsql.exe" />
 	</Component>
      </DirectoryRef>
      <DirectoryRef Id="BINDIR">
         <Component Id="rs_ini_file" Guid="636F970E-445F-431F-85CE-4F5DF61B345B" Win64="yes">
-          <File Id="amazon.redshiftodbc.ini" Name="amazon.redshiftodbc.ini" Source="../amazon.redshiftodbc.ini" />
+          <File Id="amazon.redshiftodbc.ini" Name="amazon.redshiftodbc.ini" Source="$(var.ProjectDir)/src/odbc/rsodbc/amazon.redshiftodbc.ini" />
 	</Component>
      </DirectoryRef>
      <DirectoryRef Id="CONNECTDIR">
         <Component Id="rsodbc_samples.files" Guid="E7E557CF-0531-4ec5-9C4E-7431722B1338" Win64="yes">
-          <File Id="connect.c" Name="connect.c" Source="../samples/connect/connect.c" />
-          <File Id="connect.rc" Name="connect.rc" Source="../samples/connect/connect.rc" />
-          <File Id="resource.h" Name="resource.h" Source="../samples/connect/resource.h" />
-          <File Id="redshift.ico" Name="resdhfit.ico" Source="../samples/connect/redshift.ico" />
-          <File Id="connect.sln" Name="connect.sln" Source="../samples/connect/connect.sln" />
-          <File Id="connect.vcproj" Name="connect.vcproj" Source="../samples/connect/connect.vcproj" />
-          <File Id="connect.exe" Name="connect.exe" Source="../samples/connect/x64/Release/connect.exe" />
+          <File Id="connect.c" Name="connect.c" Source="$(var.ProjectDir)/src/odbc/rsodbc/samples/connect/connect.c" />
+          <File Id="connect.rc" Name="connect.rc" Source="$(var.ProjectDir)/src/odbc/rsodbc/samples/connect/connect.rc" />
+          <File Id="resource.h" Name="resource.h" Source="$(var.ProjectDir)/src/odbc/rsodbc/samples/connect/resource.h" />
+          <File Id="redshift.ico" Name="resdhfit.ico" Source="$(var.ProjectDir)/src/odbc/rsodbc/samples/connect/redshift.ico" />
+          <File Id="connect.sln" Name="connect.sln" Source="$(var.ProjectDir)/src/odbc/rsodbc/samples/connect/connect.sln" />
+          <File Id="connect.vcproj" Name="connect.vcproj" Source="$(var.ProjectDir)/src/odbc/rsodbc/samples/connect/connect.vcxproj" />
+          <File Id="connect.exe" Name="connect.exe" Source="$(var.ProjectDir)/cmake-build/install/bin/connect64.exe" />
 	</Component>
      </DirectoryRef>
     
