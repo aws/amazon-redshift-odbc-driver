@@ -2,7 +2,8 @@
 #include <rsdesc.h>
 #include <rsodbc.h>
 #include <sql.h>
-#include <rslibpq.c>
+#include <rsodbc.h>
+#include <rs_pq_type.h>
 
 // This unit test is for testing the oid mapping in ODBC 2.x
 TEST(OID_MAPPING_TEST_SUITE, test_bool) {
