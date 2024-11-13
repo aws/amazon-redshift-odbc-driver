@@ -2,7 +2,7 @@
 #define _RS_IAM_H_
 
 #define MAX_IAM_BUF_VAL     256
-#define MAX_IAM_SESSION_TOKEN_LEN 1024
+#define MAX_IAM_SESSION_TOKEN_LEN 2048
 #define MAX_IAM_DBGROUPS_LEN 1024
 #define MAX_IAM_JWT_LEN (16 * 1024)
 #define MAX_IDEN_LEN        (128 + 1)
@@ -67,6 +67,7 @@ struct RS_IAM_CONN_PROPS_INFO {
   char szIdcClientDisplayName[MAX_IAM_BUF_VAL]; // idc_client_display_name
   bool isServerless;
   char szWorkGroup[MAX_IDEN_LEN];
+  char szManagedVpcUrl[MAX_IAM_BUF_VAL];
 };
 
 struct RS_PROXY_CONN_PROPS_INFO {

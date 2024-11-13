@@ -263,7 +263,7 @@
 #define MIN(x,y)	  ((x) < (y) ? (x) : (y))
 
 #define MAXKEYLEN		(32+1)	/* Max keyword length */
-#define MAXVALLEN		(1023+1) /* Max value length */
+#define MAXVALLEN		(2047+1) /* Max value length */
 #define MAXDSNAME		(32+1)	/* Max data source name length */
 
 /* 8 -> 4 for CSC + 1 for MICC + 1 for KSN + 1 for KSA  + 1 for SCR */
