@@ -1,6 +1,25 @@
 Changelog
 =========
 
+v2.1.4 (2024-11-12)
+---------------------
+1. Increased the session token buffer size from 1024 bytes to 2048 bytes to accommodate larger V2 tokens during IAM authentication processes.
+2. Improved regex processing of user provided URIs in all IAM authentication workflows.
+3. Improved String Manipulation Functions: stristr (Case-Insensitive String Search), strcasewhole (Whole Word Case-Insensitive Comparison), strcasestr (Custom Case-Insensitive Substring Search for windows), and findSQLClause (SQL Clause Extraction).
+4. Fixed Unicode Handling in "getParamVal" for Prepared Query Processing.
+5. Updated the version of aws-sdk-cpp to 1.11.336 (windows).
+6. Implemented mandatory default functionality for aws-sdk-cpp's WinSyncHttpClient::DoQueryDataAvailable and WinSyncHttpClient::GetActualHttpVersionUsed methods, ensuring compliance with the AWS SDK.
+7. Upgraded the c-ares library dependency for Windows to version 1.29.0
+8. Upgraded the googletest library dependency for Windows to version 1.14.0
+9. Updated the cmake_minimum_required version from 3.12 to 3.20
+10. Migrated the Windows build process to utilize the CMake build system. To build and package for Windows, execute the build64.bat script located in the project's root directory.
+11. Added support for building ODBC2.x Windows driver in both Release and Debug modes, ensuring that the required dependencies are available in their respective Debug and Release subfolders, enabling more comprehensive testing and debugging scenarios.
+12. Enhanced the build scripts by removing unused build and test files, and implemented a consistent naming convention by prefixing internal CMake variables with 'RS_' for better organization and maintainability.
+13. Removed the use of the -MMD, -MP, and -MF compiler options in the CMake build configuration for Linux, resolving compatibility issues with C++17 std::string_view.
+14. Fixed an issue where the data types returned for the BUFFER_LENGTH, DECIMAL_DIGITS, NUM_PREC_RADIX, and NULLABLE columns in the result set of the SQLColumns ODBC API call were not conforming to the ODBC specification.
+15. Updated the SQL data type representations in the rscatalog component for 'date', 'time', 'timetz', 'time with time zone', 'timestamp without time zone', 'timestamptz', and 'timestamp' to use the non-concise data type instead of the concise data type.
+16. Added support to connect to Redshift via managed Virtual Private Cloud (VPC) endpoints. 
+
 v2.1.3 (2024-07-31)
 ---------------------
 1. Fixed an inconsistent metadata issue for Redshift type timestamptz in SQLColumns and SQLDescribeCol by changing the return value for Data type column in SQLColumns API from 2014 to SQL_TYPE_TIMESTAMP (93) and in SQLDescribeCol API from SQL_VARCHAR (12) to SQL_TYPE_TIMESTAMP (93).
