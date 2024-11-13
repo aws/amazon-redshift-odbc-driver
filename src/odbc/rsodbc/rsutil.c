@@ -17,6 +17,10 @@
 #include <rsversion.h>
 #include <algorithm>
 #include <vector>
+#include <cctype>
+#include <regex>
+#include <string>
+#include <iostream>
 
 #ifdef WIN32
 #include <winsock.h>
@@ -631,37 +635,67 @@ char *appendStr(char *pStrOut, size_t *pcbStrOut,char *szStrIn)
 }
 
 /*====================================================================================================================================================*/
+// search for case-insensitive and whole word substring in a string
+char* strcasestrwhole(const char* str, const char* substr) {
+    if (str == nullptr || substr == nullptr) {
+        return nullptr;
+    }
+
+    //to comply with strcasestr behavior:
+    if (strlen(substr) == 0 && strlen(str) == 0) {
+        return (char*)str;
+    }
+    if (strlen(str) == 0) {
+        return nullptr;
+    }
+
+    // Convert char* to std::string
+    std::string s(str);
+    std::string sub(substr);
+
+    // Construct regex pattern for whole-word, case-insensitive match
+    std::string pattern = "\\b" + sub + "\\b";
+    std::regex wordRegex(pattern, std::regex_constants::icase);
+
+    // Perform regex search
+    std::smatch match;
+    if (std::regex_search(s, match, wordRegex)) {
+        // Find the position of the match within the original char* string
+        size_t pos = match.position(0);
+        auto t = str + pos;
+        return (char*)(str + pos);
+    } else {
+        return nullptr;
+    }
+}
+
+#ifdef WIN32
+// Custom strcasestr implementation for cross-platform support
+char *strcasestr(const char *str, const char *subStr) {
+    if (str == nullptr || subStr == nullptr) return nullptr;
+
+    size_t subStrLen = strlen(subStr);
+    if (subStrLen == 0) return (char *)str;
+    char *ptr = (char *)str;
+    while (*ptr) {
+        if (_strnicmp (ptr, subStr, subStrLen) == 0) {
+            return ptr;
+        }
+        ptr++;
+    }
+    return nullptr;
+}
+#endif
 
 //---------------------------------------------------------------------------------------------------------igarish
 // Case insensitive strstr.
 //
-char *stristr(char *str, char *subStr)
+char *stristr(const char *str, const char *subStr)
 {
-    char *ptr = strstr(str, subStr);
-
-    if(!ptr)
-    {
-        char *subStr1 = rs_strdup(subStr, SQL_NTS);
-        
-        subStr1 = _strlwr(subStr1);
-
-        ptr = strstr(str, subStr1);
-        if(!ptr)
-        {
-            char *str1 = rs_strdup(str, SQL_NTS);
-
-            str1 = _strlwr(str1);
-            ptr = strstr(str1,subStr1);
-            if(ptr)
-                ptr = str + (str1 - ptr);
-
-            str1 = (char *)rs_free(str1);
-        }
-        
-        subStr1 = (char *)rs_free(subStr1);
+    if (str == nullptr || subStr == nullptr) {
+        return nullptr;
     }
-
-    return ptr;
+    return strcasestr((char*)str, (char*)subStr);
 }
 
 /*====================================================================================================================================================*/
@@ -7456,7 +7490,102 @@ error:
 }
 
 /*====================================================================================================================================================*/
+void printHexSQLCHAR(SQLCHAR *sqlchar, int len,
+                     const std::function<void(const std::string &)> &logFunc) {
+    // Number of bytes to read
+    const int numBytes = 1024;
+    std::vector<unsigned char> buffer(numBytes, 0);
 
+    bool safeToRead = false;
+    try {
+        // Attempt to copy the bytes from the SQLCHAR* variable
+        std::memcpy(buffer.data(), sqlchar, len);
+        safeToRead = true;
+    } catch (const std::exception &e) {
+        logFunc("Exception occurred while reading memory: " +
+                std::string(e.what()) + "\n");
+        // Copy as many bytes as safely accessible
+        int i;
+        for (i = 0; i < len && i < numBytes; ++i) {
+            try {
+                buffer[i] = reinterpret_cast<unsigned char *>(sqlchar)[i];
+            } catch (const std::exception &e) {
+                break; // Stop copying if an exception occurs
+            }
+        }
+        // Null-terminate the accessible portion of buffer if partial read
+        for (; i < numBytes; ++i) {
+            buffer[i] = 0;
+        }
+    }
+
+    if (safeToRead) {
+        // If memory was safely read, proceed to print it
+        // Each byte needs 3 chars ("XX ") and one for null-terminator
+        std::vector<char> hexString(numBytes * 4, 0);
+        int pos = 0;
+        logFunc("Hex bytes:\n");
+        for (int i = 0; i < len && i < numBytes; ++i) {
+            pos += std::sprintf(&hexString[pos], "%02X ", buffer[i]);
+            if ((i + 1) % 16 == 0) {
+                // Add a newline every 16 bytes for readability
+                hexString[pos++] = '\n';
+            }
+        }
+        hexString[pos] = '\0'; // Null-terminate the string
+        logFunc(hexString.data());
+    }
+}
+
+void printHexSQLWCHR(SQLWCHAR *sqlwchr, int len,
+                     const std::function<void(const std::string &)> &logFunc) {
+    logFunc("Printing SQLWCHAR* as hex bytes:");
+
+    // Number of bytes to read
+    const int numBytes = 1024;
+    std::vector<unsigned char> buffer(numBytes, 0);
+
+    bool safeToRead = false;
+    try {
+        // Attempt to copy the bytes from the SQLWCHAR* variable
+        std::memcpy(buffer.data(), sqlwchr, len * sizeof(SQLWCHAR));
+        safeToRead = true;
+    } catch (const std::exception &e) {
+        logFunc("Exception occurred while reading memory: " +
+                std::string(e.what()) + "\n");
+        // Copy as many bytes as safely accessible
+        int i;
+        for (i = 0; i < len * sizeof(SQLWCHAR) && i < numBytes; ++i) {
+            try {
+                buffer[i] = reinterpret_cast<unsigned char *>(sqlwchr)[i];
+            } catch (const std::exception &e) {
+                break; // Stop copying if an exception occurs
+            }
+        }
+        // Null-terminate the accessible portion of buffer if partial read
+        for (; i < numBytes; ++i) {
+            buffer[i] = 0;
+        }
+    }
+
+    if (safeToRead) {
+        // If memory was safely read, proceed to print it
+        std::vector<char> hexString(
+            numBytes * 4,
+            0); // Each byte needs 3 chars ("XX ") and one for null-terminator
+        int pos = 0;
+        logFunc("Hex bytes:");
+        for (int i = 0; i < len * sizeof(SQLWCHAR) && i < numBytes; ++i) {
+            pos += std::sprintf(&hexString[pos], "%02X ", buffer[i]);
+            if ((i + 1) % 16 == 0) {
+                // Add a newline every 16 bytes for readability
+                hexString[pos++] = '\n';
+            }
+        }
+        hexString[pos] = '\0'; // Null-terminate the string
+        logFunc(hexString.data());
+    }
+}
 //---------------------------------------------------------------------------------------------------------igarish
 // Get parameter value as string from C buffer using given C data type.
 //
@@ -7535,11 +7664,22 @@ char *getParamVal(char *pParamData, int iParamDataLen, SQLLEN *plParamDataStrLen
                 else
                 if(iIndicator == SQL_NTS || iParamDataLen > 0)
                 {
-                    size_t len = calculate_utf8_len((WCHAR *)pParamData, cchLen);
-
-                    pBindParamStrBuf->pBuf = (char *)rs_malloc(len + 1);
-                    pBindParamStrBuf->iAllocDataLen = (int)(len + 1);
-                    wchar_to_utf8((WCHAR *)pParamData, cchLen, pBindParamStrBuf->pBuf, len + 1);
+                    /* uncomment for debuging purposes only
+                    auto myLoggingLambda = [](const std::string& message) {
+                        RS_LOG_TRACE("RSUTL", "%s", message.data());
+                    };
+                    */
+                    std::string utf8Str;
+                    static const int charsize = sizeof(SQLCHAR);
+                    // printHexSQLWCHR((SQLWCHAR *)pParamData, cchLen, myLoggingLambda);
+                    size_t len = wchar16_to_utf8_str((SQLWCHAR *)pParamData,
+                                                     cchLen, utf8Str);
+                    size_t bufSize = len;
+                    pBindParamStrBuf->pBuf = (char *)rs_malloc(bufSize + charsize);
+                    pBindParamStrBuf->iAllocDataLen = (int)(bufSize + charsize);
+                    memcpy(pBindParamStrBuf->pBuf, (char *)utf8Str.c_str(), bufSize);
+                    memset((char *)pBindParamStrBuf->pBuf + bufSize, '\0', charsize);
+                    // printHexSQLCHAR((SQLCHAR *)pBindParamStrBuf->pBuf, bufSize + charsize, myLoggingLambda);
                 }
                 else
                 if(iParamDataLen == 0)
@@ -11873,13 +12013,16 @@ int getTotalMultiTuples(int numOfParamMarkers, long lArraySize, int *piLastBatch
 //
 char *findSQLClause(char *pTempCmd, char *pClause)
 {
+   if (pTempCmd == nullptr || pClause == nullptr) {
+       return nullptr;
+   }
+
    char *pTemp = pTempCmd;
    int  iClauseLen = (int)strlen(pClause);
 
    while(pTemp != NULL)
    {
-       pTemp = stristr(pTemp,pClause);
-
+       pTemp = strcasestrwhole(pTemp,pClause);
        if(pTemp)
        {
             if(pTemp == pTempCmd)
@@ -11890,6 +12033,14 @@ char *findSQLClause(char *pTempCmd, char *pClause)
                 if(isspace(*(pTemp - 1)) || *(pTemp - 1) == ')')
                 {
                     // Is it embed in double quotes?
+                    /*
+                    TODO: This solution is not good for a super rare corner cases where input is bad like:
+                        INSERT INTO VALUES\" (col1, col2) VALUES (1, 2), (3, 4)
+                        then findSQLClause will return :
+                        VALUES\" (col1, col2) VALUES (1, 2), (3, 4)
+                        instead of:
+                        VALUES (1, 2), (3, 4)
+                    */
                     if(!DoesEmbedInDoubleQuotes(pTempCmd, pTemp))
                         break; 
                 }

@@ -282,7 +282,11 @@ std::string& trim(std::string& s);
 char *trim_whitespaces(char *str);
 
 char *appendStr(char *pStrOut, size_t *pcbStrOut,char *szStrIn);
-char *stristr(char *str, char *subStr);
+#ifdef WIN32
+char *strcasestr(const char *str, const char *subStr);
+#endif
+char* strcasestrwhole(const char* str, const char* substr);
+char *stristr(const char *str, const char *subStr);
 
 SQLRETURN copyStrDataSmallLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLSMALLINT cbLen, SQLSMALLINT *pcbLen);
 SQLRETURN copyStrDataLargeLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLINTEGER cbLen, SQLINTEGER *pcbLen);
@@ -572,4 +576,8 @@ class ExceptionInvalidParameter : public std::invalid_argument {
     // Constructor that takes a std::string message
     ExceptionInvalidParameter(const std::string &message);
 };
+
+// print hex representation of SQLWCHAR and SQLCHAR
+void printHexSQLWCHR(SQLWCHAR* sqlwchr, int len, const std::function<void(const std::string&)>& logFunc);
+void printHexSQLCHAR(SQLCHAR* sqlchar, int len, const std::function<void(const std::string&)>& logFunc);
 #endif /* C++ */
