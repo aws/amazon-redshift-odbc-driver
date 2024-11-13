@@ -7,12 +7,24 @@
 */
 
 #include "rsodbcsql.h"
+#include <stdio.h>
+#include <cctype>
+#include <string>
+#include <algorithm>
 
 int giDisplayData = TRUE; 
 int giCmdLineOptionQuery = FALSE;
 int giBenchMarkMode = FALSE;
+// Global variable, declared out of stacks 
+char szInput[SQL_QUERY_SIZE];
+bool gQuietMode = false;
+bool gFileMode = false;
+FILE *fp = stdin;
 
-
+bool gQuietFileMode()
+{
+	return gQuietMode && gFileMode;
+}
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
@@ -26,8 +38,6 @@ int main(int argc, char **argv)
 	HDBC	lpDbc = NULL;
 	HSTMT	lpStmt = NULL;
 	char	*pszConnStr;
-	char	szInput[SQL_QUERY_SIZE];
-	FILE *fp = stdin;
     long long llStartTime;
     long long llEndTime;
 
@@ -78,37 +88,79 @@ int main(int argc, char **argv)
 	{
 		pszConnStr = NULL;
 	}
-
-	if(argc > 2)
 	{
-		char *pqueryArg = *++argv;
+		char *pqueryArg = (argc > 2) ? *++argv : NULL;
+		// char *pqueryArg = *++argv;
+		// if(strstr(pqueryArg,".sql") ||  strstr(pqueryArg,".SQL"))
+		// {
+		// 	gFileMode = true;
+        //     // Query file name
+		// 	char *file_name = pqueryArg; // *++argv;
+		// 	fp = fopen(file_name,"rt");
 
-		if(strstr(pqueryArg,".sql") ||  strstr(pqueryArg,".SQL"))
-		{
-            // Query file name
-			char *file_name = pqueryArg; // *++argv;
-			fp = fopen(file_name,"rt");
+		// 	if (!fp) {
+		// 		printf("Not open: %s\n", file_name); 
+		// 		exit(1);
+		// 	}
+			
+		// 	printf("Open: %s\n", file_name);
+		// 	fflush(stdout);
+		// }
+		// else
+		// {
+        //     // Directly treat as query
+		// 	strncpy(szInput, pqueryArg,sizeof(szInput));
+		// 	fp = NULL;
+        //     giCmdLineOptionQuery = TRUE;
+		// }
 
-			(fp) ? printf("Open: %s", file_name) : printf("Not open: %s", file_name); 
-			printf("\n");
+		auto openFile = [&]() {
+			if (pqueryArg && (strstr(pqueryArg, ".sql") || strstr(pqueryArg, ".SQL"))) {
+				gFileMode = true;
+				// Query file name
+				char *file_name = pqueryArg; // *++argv;
+				fp = fopen(file_name, "rt");
+
+				if (!fp) {
+					printf("Not open: %s\n", file_name);
+					exit(1);
+				}
+
+				if (!gQuietFileMode())
+					printf("Open: %s\n", file_name);
+				fflush(stdout);
+			} else {
+				// Directly treat as query
+				strncpy(szInput, pqueryArg, sizeof(szInput));
+				fp = NULL;
+				giCmdLineOptionQuery = TRUE;
+			}
+		};
+
+			if (argc > 3) {
+			std::string pDebugMode = std::string(*++argv);
+			std::transform(pDebugMode.begin(), pDebugMode.end(), pDebugMode.begin(),
+							[](unsigned char c) { return std::tolower(c); });
+			gQuietMode = pDebugMode == "quiet" ? true : false;
 		}
-		else
-		{
-            // Directly treat as query
-			strncpy(szInput, pqueryArg,sizeof(szInput));
-			fp = NULL;
-            giCmdLineOptionQuery = TRUE;
-		}
+		openFile();
 	}
 
-	if(argc > 3)
+    if(argc > 4)
 	{
 		char *pDispDataArg = *++argv;
 
         giDisplayData = atoi(pDispDataArg);
     }
 
-	if(argc > 4)
+	if(argc > 5)
+	{
+		char *pDispDataArg = *++argv;
+
+        giDisplayData = atoi(pDispDataArg);
+    }
+
+	if(argc > 6)
 	{
 		char *pBenchmarkArg = *++argv;
 
@@ -128,7 +180,7 @@ int main(int argc, char **argv)
 							 NULL,
 							 SQL_DRIVER_NOPROMPT)); // SQL_DRIVER_COMPLETE
 
-	fprintf(stderr,"Connected.\n");
+	if(!gQuietFileMode()) fprintf(stderr,"Connected.\n");
 
 /*	CHECK_ODBC_RC(lpDbc,
 			SQL_HANDLE_DBC,
@@ -139,7 +191,7 @@ int main(int argc, char **argv)
 			SQLAllocHandle(SQL_HANDLE_STMT,lpDbc,&lpStmt));
 
 
-	printf("Enter SQL commands, type quit to exit\nrsodbcsql>");
+	if(!gQuietFileMode()) printf("Enter SQL commands, type quit to exit\nrsodbcsql>");
 
 	// Loop to get input and execute queries
 	while(ReadCmd(fp,szInput,SQL_QUERY_SIZE-1))
@@ -156,7 +208,7 @@ int main(int argc, char **argv)
 		// Execute the query
 		if (!(*szInput))
 		{
-			printf("rsodbcsql>");
+			if(!gQuietFileMode()) printf("rsodbcsql>");
 			continue;
 		}
         else
@@ -201,10 +253,13 @@ int main(int argc, char **argv)
 
 					    if (siRowCount >= 0)
 					    {
-						    printf("%ld %s affected\n",
-								    siRowCount,
-								    siRowCount == 1 ? "row" : "rows");
-					    }
+							if (!gQuietFileMode())
+								printf("%ld %s affected\n",
+										siRowCount,
+										siRowCount == 1
+											? "row"
+											: "rows");
+						}
 				    }
 
                     // Check for more results
@@ -219,7 +274,7 @@ int main(int argc, char **argv)
 				                SQL_HANDLE_STMT,
 				                SQLFreeStmt(lpStmt,SQL_UNBIND));
 
-                        printf("\n\n");
+                        if (!gQuietFileMode()) printf("\n\n");
                         continue;
                     }
                     else
@@ -248,7 +303,7 @@ int main(int argc, char **argv)
 
         llEndTime = currentTimeMillis();
 
-        printf("\n Total time taken for execute and fetch = %lld (milli seconds)\n", (llEndTime - llStartTime));
+        if (!gQuietFileMode()) printf("\n Total time taken for execute and fetch = %lld (milli seconds)\n", (llEndTime - llStartTime));
 
 		if(giBenchMarkMode)
 			printf("%u rows fetched from %hd columns.\n", (unsigned int)uiRowCount, sNumResults);
@@ -264,7 +319,7 @@ int main(int argc, char **argv)
 				SQLFreeStmt(lpStmt,SQL_UNBIND));
 
 
-		printf("rsodbcsql>");
+		if (!gQuietFileMode()) printf("rsodbcsql>");
 
         if(giCmdLineOptionQuery)
             break;
@@ -289,7 +344,7 @@ error:
 	if (lpEnv)
 		SQLFreeEnv(lpEnv);
 
-	printf("\nDisconnected.\n");
+	if (!gQuietFileMode()) printf("\nDisconnected.\n");
 
 	return 0;
 
@@ -484,7 +539,7 @@ void AllocateBindings(HSTMT			lpStmt,
 								&cchColumnNameLength,
 								NULL));
 
-		lpThisBinding->siDisplaySize = max(cchDisplay, cchColumnNameLength);
+		lpThisBinding->siDisplaySize = std::max<SQLLEN>(cchDisplay, cchColumnNameLength);
 		if (lpThisBinding->siDisplaySize < NULL_SIZE)
 			lpThisBinding->siDisplaySize = NULL_SIZE;
 

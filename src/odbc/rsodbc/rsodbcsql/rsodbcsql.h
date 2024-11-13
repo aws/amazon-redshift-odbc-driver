@@ -79,7 +79,7 @@ long long currentTimeMillis();
 #define	DISPLAY_FORMAT		"%c %*.*s "
 #define	DISPLAY_FORMAT_C	"%c %-*.*s "
 #define	NULL_SIZE			6	// <NULL>
-#define	SQL_QUERY_SIZE		32000 // Max. Num characters for SQL Query passed in.
+#define	SQL_QUERY_SIZE		5 * 1024 * 1024 // Max. Num characters for SQL Query passed in.
 
 #define	PIPE				'|'
 
@@ -99,8 +99,8 @@ long long currentTimeMillis();
 #define _strlwr 	strlwr
 #define Sleep		sleep
 
-#define max(x, y) (((x) > (y)) ? (x) : (y))
-#define min(x, y) (((x) < (y)) ? (x) : (y))
+// #define max(x, y) (((x) > (y)) ? (x) : (y))
+// #define min(x, y) (((x) < (y)) ? (x) : (y))
 
 void *GetDesktopWindow();
 
