@@ -126,14 +126,9 @@ rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
 
     rs_string uri = "https://" + m_argsMap[IAM_KEY_IDP_HOST] + ":" + m_argsMap[IAM_KEY_IDP_PORT] +
         "/adfs/ls/IdpInitiatedSignOn.aspx?loginToRp=" + m_argsMap[IAM_KEY_LOGINTORP];
-
-    RS_LOG_DEBUG("IAMCRD", 
-        "IAMAdfsCredentialsProvider::FormBasedAuthentication ",
-        + "Using URI: %s",
-        uri.c_str());
-
+        
 	// Enforce URL validation
-	ValidateURL(uri);
+	IAMUtils::ValidateURL(uri);
 
     /* Test the availability of the server by sending a simple GET request */
     Redshift::IamSupport::HttpResponse response = client->MakeHttpRequest(uri);
@@ -162,7 +157,7 @@ rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
         uri = "https://" + m_argsMap[IAM_KEY_IDP_HOST] + ":" + m_argsMap[IAM_KEY_IDP_PORT] + action;
 
 		// Enforce URL validation
-		ValidateURL(uri);
+		IAMUtils::ValidateURL(uri);
     }
 
     const rs_string requestBody = IAMHttpClient::CreateHttpFormRequestBody(paramMap);

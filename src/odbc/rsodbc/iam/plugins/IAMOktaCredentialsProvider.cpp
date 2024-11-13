@@ -109,12 +109,8 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
         "?onetimetoken=" + 
         sessionToken;
 
-    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetSamlAssertion ",
-        + "Using URI: %s",
-        uri.c_str());
-
 	// Enforce URL validation
-	ValidateURL(uri);
+	IAMUtils::ValidateURL(uri);
 
     Redshift::IamSupport::HttpResponse response = client->MakeHttpRequest(uri);
 	RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetSamlAssertion: response %s\n", response.GetResponseBody().c_str());
@@ -145,12 +141,8 @@ rs_string IAMOktaCredentialsProvider::GetAuthSessionToken(
 
     const rs_string uri = "https://" + m_argsMap[IAM_KEY_IDP_HOST] + "/api/v1/authn";
 
-    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetAuthSessionToken "
-         "Using URI: %s",
-        uri.c_str());
-
 	// Enforce URL validation
-	ValidateURL(uri);
+	IAMUtils::ValidateURL(uri);
 
     const std::map<rs_string, rs_string> requestHeader =
     {

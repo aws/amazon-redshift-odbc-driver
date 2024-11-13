@@ -218,12 +218,10 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 			"&state=" +
 			state;
 
-		RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode",
-			"uri=%s\n",uri.c_str());
 
 
 		// Enforce URL validation
-		ValidateURL(uri);
+		IAMUtils::ValidateURL(uri);
 
 		LaunchBrowser(uri);
 	}
@@ -298,7 +296,7 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 		"/oauth2/v2.0/token";
 
 	// Enforce URL regex in LOGIN_URL to avoid possible remote code execution
-	ValidateURL(reduri);
+	IAMUtils::ValidateURL(reduri);
 
 	const rs_string requestBody = IAMHttpClient::CreateHttpFormRequestBody(paramMap);
 

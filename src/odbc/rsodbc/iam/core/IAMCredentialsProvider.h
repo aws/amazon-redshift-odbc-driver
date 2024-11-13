@@ -53,16 +53,6 @@ namespace IamSupport
         /// @brief Disabled assignment operator to avoid warning.
         IAMCredentialsProvider& operator=(const IAMCredentialsProvider& in_credProvider);
 
-		/// Validates the URL string
-		///
-		/// URL string should start with https, and not include potential redirection 
-		///
-		/// @param in_url           The URL to the login page
-		///
-		/// @exception ErrorException if in_url is does not start with https or has forbidden characters
-		void ValidateURL(const rs_string & in_url);
-
-
         // The connection log. (NOT OWN)
 
         // The IAMConfiguration contains all IAM related settings.

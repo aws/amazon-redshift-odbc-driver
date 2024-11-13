@@ -217,7 +217,7 @@ rs_string IAMBrowserAzureCredentialsProvider::RequestAuthorizationCode()
 			state;
 
 		// Enforce URL validation
-		ValidateURL(uri);
+		IAMUtils::ValidateURL(uri);
 
 		LaunchBrowser(uri);
 	}
@@ -289,7 +289,7 @@ rs_string IAMBrowserAzureCredentialsProvider::RequestAccessToken(const rs_string
         "/oauth2/token";
     
 	// Enforce URL regex in LOGIN_URL to avoid possible remote code execution
-	ValidateURL(reduri);
+	IAMUtils::ValidateURL(reduri);
 
     const rs_string requestBody = IAMHttpClient::CreateHttpFormRequestBody(paramMap);
     

@@ -69,7 +69,7 @@ void IAMBrowserSamlCredentialsProvider::ValidateArgumentsMap()
 	else
 	{
 		// Enforce URL regex in LOGIN_URL to avoid possible remote code execution
-		ValidateURL(m_argsMap[IAM_KEY_LOGIN_URL]);
+		IAMUtils::ValidateURL(m_argsMap[IAM_KEY_LOGIN_URL]);
 	}
 
 

@@ -10,6 +10,12 @@
 #if defined LINUX
 #include <netdb.h>
 #endif
+
+#if !defined(_WIN32)
+#include <curl/curl.h>
+#else
+#include <winhttp.h>
+#endif
 namespace Redshift
 {
 namespace IamSupport
@@ -17,6 +23,13 @@ namespace IamSupport
     /// @brief Class containing some of the utility functions 
     class IAMUtils
     {
+        enum URLPart{
+            SCHEME,
+            HOST,
+            PATH,
+            EXTRAINFO
+        };
+
         // Public Static ==============================================================================
     public:
         /// @brief Tokenize the input connection setting using the delimiter
@@ -138,12 +151,25 @@ namespace IamSupport
 
         static void AresCallBack(void* arg, int status, int timeouts, struct hostent* hostent_result);
 
-#ifdef WIN32
-       static std::wstring GetLastErrorText();
+#ifdef _WIN32
+        static std::wstring GetLastErrorText();
+
+        static void WinValidatePart(URL_COMPONENTS &url_components, enum URLPart url_part);
+
+        static void WinValidateUrl(const rs_string& in_url);
 #endif // WIN32
+
+#if !defined(_WIN32)
+        static void CurlValidatePart(CURL *handle, CURLU *url, CURLUPart part_name);
+
+        static void CurlValidateUrl(const rs_string &in_url);
+#endif
+
+        static void ValidateURL(const rs_string & in_url);
 
     };
 }
 }
 
 #endif
+

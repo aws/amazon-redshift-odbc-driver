@@ -97,9 +97,6 @@ AWSCredentials IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml(
             "Failed to retrieve SAML assertion. Please verify the connection settings.");
     }
 
-    RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::GetAWSCredentialsWithSaml Saml Assertion: %s",
-                    in_samlAssertion.c_str());
-
     Base64::Base64 base64;
     ByteBuffer samlByteBuffer = base64.Decode(in_samlAssertion);
     const rs_string samlContent(

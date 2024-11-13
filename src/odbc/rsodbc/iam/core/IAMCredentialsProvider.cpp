@@ -1,6 +1,8 @@
 #include "IAMCredentialsProvider.h"
 #include "IAMUtils.h"
+#include <stdio.h>
 
+#include <string>
 #include <regex>
 
 using namespace Redshift::IamSupport;
@@ -88,15 +90,6 @@ bool IAMCredentialsProvider::CanUseCachedAwsCredentials()
         !m_credentials.GetAWSCredentials().GetAWSSecretKey().empty();
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-void IAMCredentialsProvider::ValidateURL(const rs_string & in_url)
-{
-	// Enforce URL regex in LOGIN_URL to avoid possible remote code execution
-	if (!std::regex_match(in_url, std::regex(IAM_URL_PATTERN)))
-	{
-		IAMUtils::ThrowConnectionExceptionWithInfo("LOGIN_URL is not a valid URL starting with https://.");
-	}
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

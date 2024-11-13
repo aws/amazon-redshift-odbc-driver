@@ -77,14 +77,9 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
     const rs_string uri = "https://" + m_argsMap[IAM_KEY_IDP_HOST] + ":" +
         m_argsMap[IAM_KEY_IDP_PORT] + "/idp/startSSO.ping?PartnerSpId=" +
         m_argsMap[IAM_KEY_PARTNER_SPID];
-        
-
-    RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::GetSamlAssertion "
-         "Using URI: %s",
-        uri.c_str());
 
 	// Enforce URL validation
-	ValidateURL(uri);
+	IAMUtils::ValidateURL(uri);
 
     Redshift::IamSupport::HttpResponse response = client->MakeHttpRequest(uri);
 

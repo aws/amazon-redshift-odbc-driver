@@ -147,10 +147,17 @@ namespace IamSupport
     // The default duration
     #define IAM_DEFAULT_DURATION 0
 
-	// Enforce URL regex in LOGIN_URL to avoid possible remote code execution
-	// REGEX pattern used to verify legal URL strings
-	#define IAM_URL_PATTERN "^(https)://[-a-zA-Z0-9+&@#/%?=~_!:,.']*[-a-zA-Z0-9+&@#/%=~_']"
+    #define IAM_URL_PATTERN_SCHEME "https"
+ 	#define IAM_URL_PATTERN_DOMAIN "[a-zA-Z0-9_~.-]+"
+    #define IAM_URL_PATTERN_PATH "/[A-Za-z0-9_.~%+/-]*"
+    #define IAM_URL_PATTERN_PORT "[0-9]+"
+    #define IAM_URL_PATTERN_QUERY "[A-Za-z0-9_.~%+&=-]+"
+    #define IAM_URL_PATTERN_FRAGMENT "[a-zA-Z0-9+&@/%=~_!:,.-]+"
 
+    // This is used for validation on Windows, since the windows apis combine fragments
+    // and queries together when cracking them
+
+    #define IAM_URL_PATTERN_QUERY_AND_FRAGMENT L"[a-zA-Z0-9+&@/%?#=~_!:,.-]+"
 
     // The default timeout in milliseconds.
     static const long DEFAULT_TIMEOUT = 60000;

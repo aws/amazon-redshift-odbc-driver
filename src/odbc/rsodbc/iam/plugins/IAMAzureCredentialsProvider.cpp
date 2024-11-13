@@ -123,13 +123,8 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
         m_argsMap[IAM_KEY_IDP_TENANT] +
         "/oauth2/token";
 
-    RS_LOG_DEBUG("IAMCRD", 
-       "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication ",
-        + "Using URI: %s",
-        uri.c_str());
-
 	// Enforce URL validation
-	ValidateURL(uri);
+	IAMUtils::ValidateURL(uri);
 
 
     /* Setting the headers. */

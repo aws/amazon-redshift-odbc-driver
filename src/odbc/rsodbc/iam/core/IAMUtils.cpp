@@ -1,11 +1,14 @@
 
 #include "IAMUtils.h"
 
-#ifdef WIN32
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
-// Windows Header Files:
+// Windows Header Files
 #include <windows.h>
-#endif // WIN32
+#include <winhttp.h>
+#else
+#include <curl/curl.h>
+#endif
 
 #include <sql.h>
 #include <sqlext.h>
@@ -15,6 +18,7 @@
 
 #include "rslock.h"
 #include "RsIamClient.h"
+#include "rs_iam_support.h"
 #include "IAMUtils.h"
 #include "RsSettings.h"
 #include "rslog.h"
@@ -435,5 +439,173 @@ std::wstring IAMUtils::GetLastErrorText()
 
     return IAMUtils::convertStringToWstring(message);
 }
+
+void IAMUtils::WinValidatePart(URL_COMPONENTS &url_components, enum URLPart url_part){
+    bool isValid = false;
+    switch (url_part){
+        case SCHEME:{
+            isValid = url_components.nScheme == INTERNET_SCHEME_HTTPS;
+            break;
+        }
+        case HOST:
+        {
+            wchar_t* host = new WCHAR[url_components.dwHostNameLength + 1];
+            swprintf(host, url_components.dwHostNameLength + 1, L"%lS", url_components.lpszHostName);
+            host[url_components.dwHostNameLength] = L'\0';
+            isValid = std::regex_match(host, std::wregex(convertStringToWstring(IAM_URL_PATTERN_DOMAIN).c_str()));
+            delete[] host;
+            break;
+        }
+        case PATH:
+        {
+            wchar_t* path = new WCHAR[url_components.dwUrlPathLength + 1];
+            swprintf(path, url_components.dwUrlPathLength + 1, L"%lS", url_components.lpszUrlPath);
+            path[url_components.dwUrlPathLength] = L'\0';
+            isValid = std::regex_match(path, std::wregex(convertStringToWstring(IAM_URL_PATTERN_PATH).c_str()));
+            delete[] path;
+            break;
+        }
+        case EXTRAINFO:
+        {
+            wchar_t* extra_info = new WCHAR[url_components.dwExtraInfoLength + 1];
+            swprintf(extra_info, url_components.dwExtraInfoLength + 1, L"%lS", url_components.lpszExtraInfo);
+            extra_info[url_components.dwExtraInfoLength] = L'\0';
+            isValid = std::regex_match(extra_info, std::wregex(IAM_URL_PATTERN_QUERY_AND_FRAGMENT));
+            delete[] extra_info;
+            break;
+        }
+        default:
+            break;
+    }
+
+    if (!isValid)
+ 	{
+ 		IAMUtils::ThrowConnectionExceptionWithInfo("LOGIN_URL is not a valid url or does not start with https");
+ 	}
+}
+
+void IAMUtils::WinValidateUrl(const rs_string& in_url){
+    URL_COMPONENTS url_components;
+    // Initialize the URL_COMPONENTS structure.
+    ZeroMemory(&url_components, sizeof(url_components));
+    url_components.dwStructSize = sizeof(url_components);
+    
+    // Set required component lengths to non-zero 
+    // so that they are cracked.
+    url_components.dwSchemeLength    = (DWORD)-1;
+    url_components.dwHostNameLength  = (DWORD)-1;
+    url_components.dwUrlPathLength   = (DWORD)-1;
+    url_components.dwExtraInfoLength = (DWORD)-1;
+
+    rs_wstring in_url_wstr = IAMUtils::convertStringToWstring(in_url);
+
+    if (!WinHttpCrackUrl(in_url_wstr.c_str(), (DWORD)wcslen(in_url_wstr.c_str()), ICU_REJECT_USERPWD, &url_components))
+    {
+        DWORD error_code = GetLastError();
+        RS_LOG_DEBUG("IAM", "error_code from WinHttpCrackUrl: %d", error_code);
+        IAMUtils::ThrowConnectionExceptionWithInfo("Something went wrong when parsing the url. Please make sure that the url is in a valid format.");
+    } else {        
+        if (url_components.dwSchemeLength){
+            WinValidatePart(url_components, SCHEME);
+        }
+        if (url_components.dwHostNameLength)
+        {
+            WinValidatePart(url_components, HOST);
+        }
+        if (url_components.dwUrlPathLength){
+            WinValidatePart(url_components, PATH);
+        }
+        if (url_components.dwExtraInfoLength){
+            WinValidatePart(url_components, EXTRAINFO);
+        }
+        // We do not need to run WinValidatePart on the port, WinHttpCrackUrl already validates the port for us.
+    }
+
+}
 #endif // WIN32
 
+#if !defined(_WIN32)
+
+void IAMUtils::CurlValidatePart(CURL *handle, CURLU *url, CURLUPart part_name){
+    CURLUcode rc;
+    char *in_part;
+    rc = curl_url_get(url, part_name, &in_part, 0);
+    if (rc){
+        return;
+    }
+    bool isValid = false;
+    switch (part_name)
+    {
+        case CURLUPART_SCHEME:
+            isValid = std::regex_match(in_part, std::regex(IAM_URL_PATTERN_SCHEME));
+            break;
+        case CURLUPART_HOST:
+            isValid = std::regex_match(in_part, std::regex(IAM_URL_PATTERN_DOMAIN));
+            break;
+        case CURLUPART_PATH:
+            isValid = std::regex_match(in_part, std::regex(IAM_URL_PATTERN_PATH));
+            break;
+        case CURLUPART_QUERY:
+            isValid = std::regex_match(in_part, std::regex(IAM_URL_PATTERN_QUERY));
+            break;
+        case CURLUPART_PORT:
+            isValid = std::regex_match(in_part, std::regex(IAM_URL_PATTERN_PORT));
+            break;
+        case CURLUPART_FRAGMENT:
+            isValid = std::regex_match(in_part, std::regex(IAM_URL_PATTERN_FRAGMENT));
+        // In the case of all other url parts, we should break, thus keeping isValid false
+        // and throwing an error
+        default:
+            break;
+
+    }
+    // Enforce URL regex in LOGIN_URL to avoid possible remote code execution
+    RS_LOG_DEBUG("IAM", "result: %s", isValid ? "true":"false");
+ 	if (!isValid)
+ 	{
+ 		IAMUtils::ThrowConnectionExceptionWithInfo("LOGIN_URL is not a valid url or does not start with https");
+ 	}
+}
+
+
+void IAMUtils::CurlValidateUrl(const rs_string &in_url){
+
+    CURL *curl = curl_easy_init();
+
+    // CURLU is a handle that hold all info on the url
+    CURLU *in_curlu = curl_url();
+    if(curl) {
+        CURLUcode rc;
+        const char *url_ptr = in_url.c_str();
+        rc = curl_url_set(in_curlu, CURLUPART_URL, url_ptr, 0);
+        if(!rc){
+            CurlValidatePart(curl, in_curlu, CURLUPART_SCHEME);
+            CurlValidatePart(curl, in_curlu, CURLUPART_HOST);
+            CurlValidatePart(curl, in_curlu, CURLUPART_PATH);
+            CurlValidatePart(curl, in_curlu, CURLUPART_QUERY);
+            CurlValidatePart(curl, in_curlu, CURLUPART_PORT );
+            CurlValidatePart(curl, in_curlu, CURLUPART_FRAGMENT );
+            CurlValidatePart(curl, in_curlu, CURLUPART_USER );
+            CurlValidatePart(curl, in_curlu, CURLUPART_PASSWORD );
+            CurlValidatePart(curl, in_curlu, CURLUPART_OPTIONS );
+            CurlValidatePart(curl, in_curlu, CURLUPART_ZONEID );
+
+        } else {
+            IAMUtils::ThrowConnectionExceptionWithInfo("Something went wrong when parsing the url. Please make sure that the url is in a valid format.");
+        }
+    }
+}
+#endif
+
+
+void IAMUtils::ValidateURL(const rs_string & in_url)
+{
+    //const int in_url_len = in_url.length();
+    //TestWinCrackURL();
+    rs_string out_url;
+	#ifdef _WIN32
+        IAMUtils::WinValidateUrl(in_url);
+    #else
+        IAMUtils::CurlValidateUrl(in_url);
+    #endif
+}
