@@ -8,6 +8,7 @@
 
 #include "rslock.h"
 #include "rsmem.h"
+#include <stdint.h>
 
 /*====================================================================================================================================================*/
 
@@ -71,7 +72,7 @@ RS_DWORD rsGetCurrentThreadId(void)
 #endif
 
 #if defined LINUX 
-    lThreadId = pthread_self();
+    lThreadId = (unsigned int)(uintptr_t)pthread_self();
 #endif
 
     return lThreadId;
