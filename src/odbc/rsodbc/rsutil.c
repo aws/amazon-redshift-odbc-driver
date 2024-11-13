@@ -3384,6 +3384,23 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                     rc = getTimeStampData(&(rsVal.tsVal), pBuf, pcbLenInd);
                     break;
                 }
+                
+                case SQL_TYPE_TIME:
+                case SQL_TIME:
+                {
+                    TIMESTAMP_STRUCT tsVal;
+
+                    tsVal.year  = 0;
+                    tsVal.month = 0;
+                    tsVal.day = 0;
+                    tsVal.hour = rsVal.tVal.sqltVal.hour;
+                    tsVal.minute = rsVal.tVal.sqltVal.minute;
+                    tsVal.second = rsVal.tVal.sqltVal.second;
+                    tsVal.fraction = rsVal.tVal.fraction;
+
+                    rc = getTimeStampData(&tsVal, pBuf, pcbLenInd);
+                    break;
+                }
 
                 case SQL_TYPE_DATE:
                 case SQL_DATE:
@@ -3456,8 +3473,6 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_REAL:
                 case SQL_FLOAT:
                 case SQL_DOUBLE:
-                case SQL_TYPE_TIME:
-                case SQL_TIME:
                 case SQL_INTERVAL_YEAR_TO_MONTH:
                 case SQL_INTERVAL_DAY_TO_SECOND:
                 {
@@ -5486,7 +5501,10 @@ void getTypeName(short hType, char *pBuf, int bufLen, short hRsSpecialType)
         case SQL_TYPE_TIMESTAMP:
         case SQL_TIMESTAMP:
         {
-			rs_strncpy(pBuf,"TIMESTAMP", bufLen);
+            if(hRsSpecialType == TIMESTAMPTZOID)
+            	rs_strncpy(pBuf,"TIMESTAMPTZ", bufLen);
+            else
+                rs_strncpy(pBuf,"TIMESTAMP", bufLen);
             break;
         }
 
@@ -5504,7 +5522,10 @@ void getTypeName(short hType, char *pBuf, int bufLen, short hRsSpecialType)
         case SQL_TYPE_TIME:
         case SQL_TIME:
         {
-			rs_strncpy(pBuf,"TIME", bufLen);
+            if(hRsSpecialType == TIMETZOID)
+            	rs_strncpy(pBuf,"TIMETZ", bufLen);
+            else
+                rs_strncpy(pBuf,"TIME", bufLen);
             break;
         }
 
@@ -5516,10 +5537,7 @@ void getTypeName(short hType, char *pBuf, int bufLen, short hRsSpecialType)
 
         case SQL_VARCHAR:
         {
-            if(hRsSpecialType == TIMETZOID)
-				rs_strncpy(pBuf,"TIMETZ", bufLen);
-            else
-				rs_strncpy(pBuf,"CHARACTER VARYING", bufLen);
+			rs_strncpy(pBuf,"CHARACTER VARYING", bufLen);
             break;
         }
 

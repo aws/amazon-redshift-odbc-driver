@@ -1241,8 +1241,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'date' THEN 91 "
 		 " WHEN 'time' THEN 92 "
 		 " WHEN 'time without time zone' THEN 92 "
-		 " WHEN 'timetz' THEN 2013 "
-		 " WHEN 'time with time zone' THEN 2013 "
+		 " WHEN 'timetz' THEN 92 "
+		 " WHEN 'time with time zone' THEN 92 "
 		 " WHEN 'timestamp' THEN 93 "
 		 " WHEN 'timestamp without time zone' THEN 93 "
 		 " WHEN 'timestamptz' THEN 93 "
@@ -1398,15 +1398,15 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'nchar' THEN 1 "
 		 " WHEN 'bpchar' THEN 1 "
 		 " WHEN 'nvarchar' THEN 12 "
-		 " WHEN 'date' THEN 91 "
-		 " WHEN 'time' THEN 92 "
-		 " WHEN 'time without time zone' THEN 92 "
-		 " WHEN 'timetz' THEN 2013 "
-		 " WHEN 'time with time zone' THEN 2013 "
-		 " WHEN 'timestamp' THEN 93 "
-		 " WHEN 'timestamp without time zone' THEN 93 "
-		 " WHEN 'timestamptz' THEN 2014 "
-		 " WHEN 'timestamp with time zone' THEN 2014 "
+		 " WHEN 'date' THEN 9 "
+		 " WHEN 'time' THEN 9 "
+		 " WHEN 'time without time zone' THEN 9 "
+		 " WHEN 'timetz' THEN 9 "
+		 " WHEN 'time with time zone' THEN 9 "
+		 " WHEN 'timestamp' THEN 9 "
+		 " WHEN 'timestamp without time zone' THEN 9 "
+		 " WHEN 'timestamptz' THEN 9 "
+		 " WHEN 'timestamp with time zone' THEN 9 "
 		 " WHEN 'smallint' THEN 5 "
 		 " WHEN 'int2' THEN 5 "
 		 " WHEN 'integer' THEN 4 "
@@ -1478,8 +1478,8 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'date' THEN 91 "
 		 " WHEN 'time' THEN 92 "
 		 " WHEN 'time without time zone' THEN 92 "
-		 " WHEN 'timetz' THEN 2013 "
-		 " WHEN 'time with time zone' THEN 2013 "
+		 " WHEN 'timetz' THEN 92 "
+		 " WHEN 'time with time zone' THEN 92 "
 		 " WHEN 'timestamp' THEN 93 "
 		 " WHEN 'timestamp without time zone' THEN 93 "
 		 " WHEN 'timestamptz' THEN 93 "
@@ -1632,15 +1632,15 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 		 " WHEN 'nchar' THEN 1 "
 		 " WHEN 'bpchar' THEN 1 "
 		 " WHEN 'nvarchar' THEN 12 "
-		 " WHEN 'date' THEN 91 "
-		 " WHEN 'time' THEN 92 "
-		 " WHEN 'time without time zone' THEN 92 "
-		 " WHEN 'timetz' THEN 2013 "
-		 " WHEN 'time with time zone' THEN 2013 "
-		 " WHEN 'timestamp' THEN 93 "
-		 " WHEN 'timestamp without time zone' THEN 93 "
-		 " WHEN 'timestamptz' THEN 2014 "
-		 " WHEN 'timestamp with time zone' THEN 2014 "
+		 " WHEN 'date' THEN 9 "
+		 " WHEN 'time' THEN 9 "
+		 " WHEN 'time without time zone' THEN 9 "
+		 " WHEN 'timetz' THEN 9 "
+		 " WHEN 'time with time zone' THEN 9 "
+		 " WHEN 'timestamp' THEN 9 "
+		 " WHEN 'timestamp without time zone' THEN 9 "
+		 " WHEN 'timestamptz' THEN 9 "
+		 " WHEN 'timestamp with time zone' THEN 9 "
 		 " WHEN 'smallint' THEN 5 "
 		 " WHEN 'int2' THEN 5 "
 		 " WHEN 'integer' THEN 4 "
@@ -2332,11 +2332,11 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
 		},
 		{
 			"intervaly2m", SQL_INTERVAL_YEAR_TO_MONTH, 32, "\\'", "\\'", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "intervaly2m",
-			0, 0, SQL_CODE_YEAR_TO_MONTH, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
+			0, 0, SQL_INTERVAL, SQL_CODE_YEAR_TO_MONTH, SQL_NULL_DATA, SQL_NULL_DATA
 		},
 		{
 			"intervald2s", SQL_INTERVAL_DAY_TO_SECOND, 64, "\\'", "\\'", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "intervald2s",
-			0, 0, SQL_CODE_DAY_TO_SECOND, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
+			0, 0, SQL_INTERVAL, SQL_CODE_DAY_TO_SECOND, SQL_NULL_DATA, SQL_NULL_DATA
 		}
     };
 
@@ -2381,9 +2381,13 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
         {
             if(typesInfo[i].hType == hType)
             {
+                if(found){
+                    rs_strncat(szCatalogQuery," UNION SELECT ", MAX_CATALOG_QUERY_LEN - strlen(szCatalogQuery));
+                }
+                else{
+                    found = TRUE;
+                }
                 addTypeRow(szCatalogQuery, &(typesInfo[i]));
-                found = TRUE;
-                break;
             }
         }
 
@@ -3364,8 +3368,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'date' THEN 91 ");
 	result.append("when 'time' THEN 92 ");
 	result.append("when 'time without time zone' THEN 92 ");
-	result.append("when 'timetz' THEN 2013 ");
-	result.append("when 'time with time zone' THEN 2013 ");
+	result.append("when 'timetz' THEN 92 ");
+	result.append("when 'time with time zone' THEN 92 ");
 	result.append("when 'timestamp' THEN 93 ");
 	result.append("when 'timestamp without time zone' THEN 93 ");
 	result.append("when 'timestamptz' THEN 93 ");
@@ -3502,14 +3506,14 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'nchar' THEN 1 ");
 	result.append("when 'bpchar' THEN 1 ");
 	result.append("when 'nvarchar' THEN 12 ");
-	result.append("when 'date' THEN 91 ");
-	result.append("when 'time' THEN 92 ");
-	result.append("when 'time without time zone' THEN 92 ");
-	result.append("when 'timetz' THEN 2013 ");
-	result.append("when 'time with time zone' THEN 2013 ");
-	result.append("when 'timestamp with time zone' THEN 2014 ");
-	result.append("when 'timestamp' THEN 93 ");
-	result.append("when 'timestamp without time zone' THEN 93 ");
+	result.append("when 'date' THEN 9 ");
+	result.append("when 'time' THEN 9 ");
+	result.append("when 'time without time zone' THEN 9 ");
+	result.append("when 'timetz' THEN 9 ");
+	result.append("when 'time with time zone' THEN 9 ");
+	result.append("when 'timestamp with time zone' THEN 9 ");
+	result.append("when 'timestamp' THEN 9 ");
+	result.append("when 'timestamp without time zone' THEN 9 ");
 	result.append("when 'smallint' THEN 5 ");
 	result.append("when 'int2' THEN 5 ");
 	result.append("when 'integer' THEN 4 ");
@@ -3525,8 +3529,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'float' THEN 6 ");
 	result.append("when 'numeric' THEN 2 ");
 	result.append("when '_float4' THEN 2003 ");
-	result.append("when 'timestamptz' THEN 2014 ");
-	result.append("when 'timestamp with time zone' THEN 2014 ");
+	result.append("when 'timestamptz' THEN 9 ");
+	result.append("when 'timestamp with time zone' THEN 9 ");
 	result.append("when '_aclitem' THEN 2003 ");
 	result.append("when '_text' THEN 2003 ");
 	result.append("when 'bytea' THEN -2 ");
@@ -3542,7 +3546,17 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("when 'intervaly2m' THEN 107 ");
 	result.append("when 'intervald2s' THEN 110 ");
 	result.append("else 0 END as SMALLINT) AS SQL_DATA_TYPE, ");
-	result.append("CAST(NULL AS SMALLINT) as SQL_DATETIME_SUB , ");
+	result.append("CAST(case typname ");
+	result.append("when 'date' THEN 1 ");
+	result.append("when 'time' THEN 2 ");
+	result.append("when 'time without time zone' THEN 2 ");
+	result.append("when 'timetz' THEN 2 ");
+	result.append("when 'time with time zone' THEN 2 ");
+	result.append("when 'timestamp with time zone' THEN 3 ");
+	result.append("when 'timestamptz' THEN 3 ");
+	result.append("when 'timestamp' THEN 3 ");
+	result.append("when 'timestamp without time zone' THEN 3 ");
+	result.append("else NULL END AS SMALLINT) as SQL_DATETIME_SUB, ");
 	result.append("case typname ");
 	result.append("when 'int4' THEN 10 ");
 	result.append("when 'bit' THEN 1 ");
@@ -3654,8 +3668,8 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("WHEN 'date' THEN 91 ");
 	result.append("when 'time' THEN 92 ");
 	result.append("when 'time without time zone' THEN 92 ");
-	result.append("when 'timetz' THEN 2013 ");
-	result.append("when 'time with time zone' THEN 2013 ");
+	result.append("when 'timetz' THEN 92 ");
+	result.append("when 'time with time zone' THEN 92 ");
 	result.append("WHEN 'timestamp' THEN 93 ");
 	result.append("WHEN 'timestamp without time zone' THEN 93 ");
 	result.append("when 'timestamptz' THEN 93 ");
@@ -3786,15 +3800,15 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("WHEN 'bpchar' THEN 1 ");
 	result.append("WHEN 'nvarchar' THEN 12 ");
 	result.append("WHEN '\"char\"' THEN 1 ");
-	result.append("WHEN 'date' THEN 91 ");
-	result.append("WHEN 'time' THEN 92 ");
-	result.append("WHEN 'time without time zone' THEN 92 ");
-	result.append("WHEN 'timetz' THEN 2013 ");
-	result.append("WHEN 'time with time zone' THEN 2013 ");
-	result.append("WHEN 'timestamp' THEN 93 ");
-	result.append("WHEN 'timestamp without time zone' THEN 93 ");
-	result.append("WHEN 'timestamptz' THEN 2014 ");
-	result.append("WHEN 'timestamp with time zone' THEN 2014 ");
+	result.append("WHEN 'date' THEN 9 ");
+	result.append("WHEN 'time' THEN 9 ");
+	result.append("WHEN 'time without time zone' THEN 9 ");
+	result.append("WHEN 'timetz' THEN 9 ");
+	result.append("WHEN 'time with time zone' THEN 9 ");
+	result.append("WHEN 'timestamp' THEN 9 ");
+	result.append("WHEN 'timestamp without time zone' THEN 9 ");
+	result.append("WHEN 'timestamptz' THEN 9 ");
+	result.append("WHEN 'timestamp with time zone' THEN 9 ");
 	result.append("WHEN 'smallint' THEN 5 ");
 	result.append("WHEN 'int2' THEN 5 ");
 	result.append("WHEN 'integer' THEN 4 ");
@@ -3820,7 +3834,17 @@ static void buildLocalSchemaColumnsQuery(char *pszCatalogQuery,
 	result.append("WHEN 'intervaly2m' THEN 107 ");
 	result.append("WHEN 'intervald2s' THEN 110 ");
 	result.append("ELSE 0 END AS SMALLINT) AS SQL_DATA_TYPE, ");
-	result.append("CAST(NULL AS SMALLINT) AS SQL_DATETIME_SUB, CASE ");
+	result.append("CAST(case columntype_rep ");
+	result.append("when 'date' THEN 1 ");
+	result.append("when 'time' THEN 2 ");
+	result.append("when 'time without time zone' THEN 2 ");
+	result.append("when 'timetz' THEN 2 ");
+	result.append("when 'time with time zone' THEN 2 ");
+	result.append("when 'timestamp with time zone' THEN 3 ");
+	result.append("when 'timestamptz' THEN 3 ");
+	result.append("when 'timestamp' THEN 3 ");
+	result.append("when 'timestamp without time zone' THEN 3 ");
+	result.append("else NULL END AS SMALLINT) as SQL_DATETIME_SUB, CASE ");
 	result.append("WHEN LEFT (columntype,7) = 'varchar' THEN isnull(nullif(regexp_substr (columntype,'[0-9]+',7),''),'0')::INTEGER ");
 	result.append("WHEN LEFT (columntype,4) = 'char' THEN isnull(nullif(regexp_substr (columntype,'[0-9]+',4),''),'0')::INTEGER ");
 	result.append("WHEN columntype = 'string' THEN 16383  ELSE NULL ");
@@ -3897,8 +3921,8 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'date' THEN 91"
 		 " WHEN 'time' THEN 92 "
 		 " WHEN 'time without time zone' THEN 92 "
-		 " WHEN 'timetz' THEN 2013 "
-		 " WHEN 'time with time zone' THEN 2013 "
+		 " WHEN 'timetz' THEN 92 "
+		 " WHEN 'time with time zone' THEN 92 "
 		 " WHEN 'timestamp' THEN 93"
 		 " WHEN 'timestamp without time zone' THEN 93"
 		 " WHEN 'timestamptz' THEN 93"
@@ -4045,15 +4069,15 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'bpchar' THEN 1"
 		 " WHEN 'nvarchar' THEN 12"
 		 " WHEN '\"char\"' THEN 1"
-		 " WHEN 'date' THEN 91"
-		 " WHEN 'time' THEN 92 "
-		 " WHEN 'time without time zone' THEN 92 "
-		 " WHEN 'timetz' THEN 2013 "
-		 " WHEN 'time with time zone' THEN 2013 "
-		 " WHEN 'timestamp' THEN 93"
-		 " WHEN 'timestamp without time zone' THEN 93"
-		 " WHEN 'timestamptz' THEN 2014"
-		 " WHEN 'timestamp with time zone' THEN 2014"
+		 " WHEN 'date' THEN 9"
+		 " WHEN 'time' THEN 9 "
+		 " WHEN 'time without time zone' THEN 9 "
+		 " WHEN 'timetz' THEN 9 "
+		 " WHEN 'time with time zone' THEN 9 "
+		 " WHEN 'timestamp' THEN 9"
+		 " WHEN 'timestamp without time zone' THEN 9"
+		 " WHEN 'timestamptz' THEN 9"
+		 " WHEN 'timestamp with time zone' THEN 9"
 		 " WHEN 'smallint' THEN 5"
 		 " WHEN 'int2' THEN 5"
 		 " WHEN 'integer' THEN 4"
@@ -4079,7 +4103,17 @@ static void buildUniversalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'intervaly2m' THEN 107 "
 		 " WHEN 'intervald2s' THEN 110 "
 		 " ELSE 0 END AS SMALLINT) AS SQL_DATA_TYPE,"
-		 " CAST(NULL AS SMALLINT) AS SQL_DATETIME_SUB,"
+		 " CAST(CASE data_type"
+		 " WHEN 'date' THEN 1 "
+		 " WHEN 'time' THEN 2 "
+		 " WHEN 'time without time zone' THEN 2 "
+		 " WHEN 'timetz' THEN 2 "
+		 " WHEN 'time with time zone' THEN 2 "
+		 " WHEN 'timestamp with time zone' THEN 3 "
+		 " WHEN 'timestamptz' THEN 3 "
+		 " WHEN 'timestamp' THEN 3 "
+		 " WHEN 'timestamp without time zone' THEN 3 "
+		 " ELSE NULL END AS SMALLINT) as SQL_DATETIME_SUB, "
 		 " CASE data_type"
 		 " WHEN 'int4' THEN 10"
 		 " WHEN 'bit' THEN 1"
@@ -4187,8 +4221,8 @@ static void buildUniversalAllSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'date' THEN 91 "
 		 " WHEN 'time' THEN 92 "
 		 " WHEN 'time without time zone' THEN 92 "
-		 " WHEN 'timetz' THEN 2013 "
-		 " WHEN 'time with time zone' THEN 2013 "
+		 " WHEN 'timetz' THEN 92 "
+		 " WHEN 'time with time zone' THEN 92 "
 		 " WHEN 'timestamp' THEN 93 "
 		 " WHEN 'timestamp without time zone' THEN 93 "
 		 " WHEN 'timestamptz' THEN 93 "
@@ -4333,15 +4367,15 @@ static void buildUniversalAllSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'bpchar' THEN 1 "
 		 " WHEN 'nvarchar' THEN 12 "
 		 " WHEN '\"char\"' THEN 1 "
-		 " WHEN 'date' THEN 91 "
-		 " WHEN 'time' THEN 92 "
-		 " WHEN 'time without time zone' THEN 92 "
-		 " WHEN 'timetz' THEN 2013 "
-		 " WHEN 'time with time zone' THEN 2013 "
-		 " WHEN 'timestamp' THEN 93 "
-		 " WHEN 'timestamp without time zone' THEN 93 "
-		 " WHEN 'timestamptz' THEN 2014 "
-		 " WHEN 'timestamp with time zone' THEN 2014 "
+		 " WHEN 'date' THEN 9 "
+		 " WHEN 'time' THEN 9 "
+		 " WHEN 'time without time zone' THEN 9 "
+		 " WHEN 'timetz' THEN 9 "
+		 " WHEN 'time with time zone' THEN 9 "
+		 " WHEN 'timestamp' THEN 9 "
+		 " WHEN 'timestamp without time zone' THEN 9 "
+		 " WHEN 'timestamptz' THEN 9 "
+		 " WHEN 'timestamp with time zone' THEN 9 "
 		 " WHEN 'smallint' THEN 5 "
 		 " WHEN 'int2' THEN 5 "
 		 " WHEN 'integer' THEN 4 "
@@ -4367,7 +4401,17 @@ static void buildUniversalAllSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN 'intervaly2m' THEN 107 "
 		 " WHEN 'intervald2s' THEN 110 "
 		 " ELSE 0 END AS SMALLINT) AS SQL_DATA_TYPE, "
-		 " CAST(NULL AS SMALLINT) AS SQL_DATETIME_SUB, "
+		 " CAST(CASE data_type "
+		 " WHEN 'date' THEN 1 "
+		 " WHEN 'time' THEN 2 "
+		 " WHEN 'time without time zone' THEN 2 "
+		 " WHEN 'timetz' THEN 2 "
+		 " WHEN 'time with time zone' THEN 2 "
+		 " WHEN 'timestamp with time zone' THEN 3 "
+		 " WHEN 'timestamptz' THEN 3 "
+		 " WHEN 'timestamp' THEN 3 "
+		 " WHEN 'timestamp without time zone' THEN 3 "
+		 " ELSE NULL END AS SMALLINT) as SQL_DATETIME_SUB, "
 		 " CASE data_type "
 		 " WHEN 'int4' THEN 10 "
 		 " WHEN 'bit' THEN 1 "
@@ -4476,8 +4520,8 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN external_type = 'date' THEN 91"
 		 " WHEN external_type = 'time' THEN 92 "
 		 " WHEN external_type = 'time without time zone' THEN 92 "
-		 " WHEN external_type = 'timetz' THEN 2013 "
-		 " WHEN external_type = 'time with time zone' THEN 2013 "
+		 " WHEN external_type = 'timetz' THEN 92 "
+		 " WHEN external_type = 'time with time zone' THEN 92 "
 		 " WHEN external_type = 'timestamp' THEN 93"
 		 " WHEN external_type = 'timestamp without time zone' THEN 93"
 		 " WHEN external_type = 'timestamptz' THEN 93"
@@ -4648,15 +4692,15 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN left(external_type, 6) = 'bpchar' THEN 1"
 		 " WHEN left(external_type, 8) = 'nvarchar' THEN 12"
 		 " WHEN external_type = '\"char\"' THEN 1"
-		 " WHEN external_type = 'date' THEN 91"
-		 " WHEN external_type = 'time' THEN 92 "
-		 " WHEN external_type = 'time without time zone' THEN 92 "
-		 " WHEN external_type = 'timetz' THEN 2013 "
-		 " WHEN external_type = 'time with time zone' THEN 2013 "
-		 " WHEN external_type = 'timestamp' THEN 93"
-		 " WHEN external_type = 'timestamp without time zone' THEN 93"
-		 " WHEN external_type = 'timestamptz' THEN 2014"
-		 " WHEN external_type = 'timestamp with time zone' THEN 2014"
+		 " WHEN external_type = 'date' THEN 9"
+		 " WHEN external_type = 'time' THEN 9 "
+		 " WHEN external_type = 'time without time zone' THEN 9 "
+		 " WHEN external_type = 'timetz' THEN 9 "
+		 " WHEN external_type = 'time with time zone' THEN 9 "
+		 " WHEN external_type = 'timestamp' THEN 9"
+		 " WHEN external_type = 'timestamp without time zone' THEN 9"
+		 " WHEN external_type = 'timestamptz' THEN 9"
+		 " WHEN external_type = 'timestamp with time zone' THEN 9"
 		 " WHEN external_type = 'smallint' THEN 5"
 		 " WHEN external_type = 'int2' THEN 5"
 		 " WHEN external_type = '_int2' THEN 5"
@@ -4687,7 +4731,16 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN external_type = 'intervaly2m' THEN 107"
 		 " WHEN external_type = 'intervald2s' THEN 110"
 		 " ELSE 0 END AS SMALLINT) AS SQL_DATA_TYPE,"
-		 " CAST(NULL AS SMALLINT) AS SQL_DATETIME_SUB,"
+		 " CAST(CASE WHEN external_type = 'date' THEN 1 "
+		 " WHEN external_type = 'time' THEN 2 "
+		 " WHEN external_type = 'time without time zone' THEN 2 "
+		 " WHEN external_type = 'timetz' THEN 2 "
+		 " WHEN external_type = 'time with time zone' THEN 2 "
+		 " WHEN external_type = 'timestamp with time zone' THEN 3 "
+		 " WHEN external_type = 'timestamptz' THEN 3 "
+		 " WHEN external_type = 'timestamp' THEN 3 "
+		 " WHEN external_type = 'timestamp without time zone' THEN 3 "
+		 " ELSE NULL END AS SMALLINT) AS SQL_DATETIME_SUB, "
 		 " CASE WHEN left(external_type, 7) = 'varchar' "
 		 "  THEN CASE "
 		 "   WHEN regexp_instr(external_type, '\\\\(', 7) = 0 THEN '0' "

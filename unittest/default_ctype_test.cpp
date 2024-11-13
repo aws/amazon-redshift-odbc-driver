@@ -1,5 +1,6 @@
 #include "common.h"
 #include <rsdesc.h>
+#include <rsutil.h>
 #include <rsodbc.h>
 #include <sql.h>
 #include <map>

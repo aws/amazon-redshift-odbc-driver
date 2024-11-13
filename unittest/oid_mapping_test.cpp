@@ -72,6 +72,13 @@ TEST(OID_MAPPING_TEST_SUITE, test_time) {
     EXPECT_TRUE(mapPgTypeToSqlType(TIMEOID, &RsSpecialType) == SQL_TYPE_TIME);
     
 }
+TEST(OID_MAPPING_TEST_SUITE, test_timetz) {
+    
+    short RsSpecialType;
+    EXPECT_TRUE(mapPgTypeToSqlType(TIMETZOID, &RsSpecialType) == SQL_TYPE_TIME);
+    EXPECT_TRUE(RsSpecialType == TIMETZOID);
+    
+}
 TEST(OID_MAPPING_TEST_SUITE, test_timestamp) {
     
     short RsSpecialType;
