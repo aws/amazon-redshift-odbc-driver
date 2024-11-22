@@ -5,7 +5,7 @@
 #define MAX_IAM_SESSION_TOKEN_LEN 2048
 #define MAX_IAM_DBGROUPS_LEN 1024
 #define MAX_IAM_JWT_LEN (16 * 1024)
-#define MAX_IDEN_LEN        (128 + 1)
+#define MAX_IDEN_LEN        (1024+ 1)
 #define MAX_BASIC_AUTH_TOKEN_LEN (16 * 1024)
 
 struct RS_IAM_CONN_PROPS_INFO {
