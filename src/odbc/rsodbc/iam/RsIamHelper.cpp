@@ -302,9 +302,9 @@ void RsIamHelper::SetIamSettings(
     rs_string temp;
 
     settings.m_iamAuth = isIAMAuth;
+    SetCommonFederatedAuthSettings(pIamProps, settings);
 
     if(settings.m_iamAuth == true) {
-        SetCommonFederatedAuthSettings(pIamProps, settings);
         settings.m_username = pIamProps->szUser;
         settings.m_password = pIamProps->szPassword;
 
@@ -458,25 +458,24 @@ void RsIamHelper::SetIamSettings(
         }
 
         settings.m_groupFederation = pIamProps->isGroupFederation;
-    } else { // non-IAM
+    } else { 
+        // Only IdC based programmatic and browser based plugins follow this flow.
         settings.m_managedVpcUrl = pIamProps->szManagedVpcUrl;
         if (!settings.m_managedVpcUrl.empty()) {
             settings.m_host = settings.m_managedVpcUrl;
         }
         settings.m_clusterIdentifer = pIamProps->szClusterId;
+        settings.m_idpAuthToken = pIamProps->szBasicAuthToken;
+        settings.m_idpAuthTokenType = pIamProps->szTokenType;
+        settings.m_issuerUrl = pIamProps->szIssuerUrl;
+        settings.m_idcRegion = pIamProps->szIdcRegion;
+        settings.m_listen_port = pIamProps->lListenPort;
+        settings.m_idp_response_timeout = pIamProps->lIdpResponseTimeout;
+        settings.m_idcClientDisplayName = pIamProps->szIdcClientDisplayName;
 
-        if (pIamProps->szPluginName[0] != '\0' && ((_stricmp(pIamProps->szPluginName, PLUGIN_IDP_TOKEN_AUTH) == 0) ||
-                                                   (_stricmp(pIamProps->szPluginName, PLUGIN_BROWSER_IDC_AUTH) == 0))) {
-            SetCommonFederatedAuthSettings(pIamProps, settings);
-            settings.m_idpAuthToken = pIamProps->szBasicAuthToken;
-            settings.m_idpAuthTokenType = pIamProps->szTokenType;
-            settings.m_disableCache = true; // explicitly disable caching for idc plugins
-
-            settings.m_issuerUrl = pIamProps->szIssuerUrl;
-            settings.m_idcRegion = pIamProps->szIdcRegion;
-            settings.m_listen_port = pIamProps->lListenPort;
-            settings.m_idp_response_timeout = pIamProps->lIdpResponseTimeout;
-            settings.m_idcClientDisplayName = pIamProps->szIdcClientDisplayName;
+        if (pIamProps->szPluginName[0] != '\0' && (_stricmp(pIamProps->szPluginName, PLUGIN_IDP_TOKEN_AUTH) == 0)) {
+            // Explicitly disable caching for idc programmatic plugin. This is set false by default in RsSettings.h
+            settings.m_disableCache = true;
         } 
     }
 

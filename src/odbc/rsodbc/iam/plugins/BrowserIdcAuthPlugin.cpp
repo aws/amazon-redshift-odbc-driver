@@ -335,6 +335,8 @@ void BrowserIdcAuthPlugin::OpenBrowser(
         "&code_challenge=" + codeChallenge +
         "&code_challenge_method=" + CHALLENGE_METHOD;
 
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::OpenBrowser uri=%s", uri.c_str());
+
     // Enforce URL validation
     IAMUtils::ValidateURL(uri);
 
