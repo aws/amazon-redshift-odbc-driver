@@ -1,6 +1,12 @@
 Changelog
 =========
 
+v2.1.5 (2024-11-21)
+---------------------
+1. Introduced token caching support for the Browser IdC Auth plugin.
+2. Increased buffer size of MAX_IDEN_LEN to support connection parameter inputs up to 1024 characters.
+3. Updated the logic for retrieving database metadata through the SQLTables() and SQLColumns() API methods.
+
 v2.1.4 (2024-11-12)
 ---------------------
 1. Increased the session token buffer size from 1024 bytes to 2048 bytes to accommodate larger V2 tokens during IAM authentication processes.
