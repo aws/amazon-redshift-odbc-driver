@@ -3369,6 +3369,58 @@ PQgetvalue(const PGresult *res, int tup_num, int field_num)
 	return res->tuples[tup_num][field_num].value;
 }
 
+
+/*
+ * PQsetNumAttributes:
+ *	set the number of attributes based on column number
+ */
+void
+PQsetNumAttributes(PGresult *res, short columnNum)
+{
+	res->numAttributes = columnNum;
+}
+
+/*
+ * PQcreateCustomizeAttrs:
+ *	create customize PG result Attribute description for given column name
+ *  and column data type
+ */
+PGresAttDesc *PQcreateCustomizeAttrs(char **colName, int colNum,
+                                     int *colDatatype) {
+    PGresAttDesc *column =
+        (PGresAttDesc *)malloc(colNum * sizeof(PGresAttDesc));
+    int i;
+    for (i = 0; i < colNum; i++) {
+        column[i].name = malloc(128 * sizeof(char));
+        strncpy(column[i].name, colName[i], 128);
+        column[i].catalog_name = "";
+        column[i].schema_name = "";
+        column[i].table_name = "";
+        column[i].col_name = "";
+        column[i].typid = colDatatype[i];
+        column[i].format = 0;
+    }
+    return column;
+}
+
+/*
+ * getPQResultAttrs:
+ *	return column name
+ */
+char* 
+getPQResultAttrs(PGresult *res, int i){
+	return res->attDescs[i].name;
+}
+
+/*
+ * getPQResultAttrsType:
+ *	return column data type oid
+ */
+Oid
+getPQResultAttrsType(PGresult *res, int i){
+	return res->attDescs[i].typid;
+}
+
 /* PQgetlength:
  *	returns the actual length of a field value in bytes.
  */

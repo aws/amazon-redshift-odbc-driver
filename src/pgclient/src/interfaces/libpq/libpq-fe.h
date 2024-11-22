@@ -499,6 +499,10 @@ extern char *PQoidStatus(const PGresult *res);	/* old and ugly */
 extern Oid	PQoidValue(const PGresult *res);	/* new and improved */
 extern char *PQcmdTuples(PGresult *res);
 extern char *PQgetvalue(const PGresult *res, int tup_num, int field_num);
+extern void PQsetNumAttributes(PGresult *res, short columnNum);
+extern PGresAttDesc * PQcreateCustomizeAttrs(char** colName, int colNum, int* colDatatype);
+extern char* getPQResultAttrs(PGresult *res, int i);
+extern Oid getPQResultAttrsType(PGresult *res, int i);
 extern int	PQgetlength(const PGresult *res, int tup_num, int field_num);
 extern int	PQgetisnull(const PGresult *res, int tup_num, int field_num);
 extern int	PQnparams(const PGresult *res);

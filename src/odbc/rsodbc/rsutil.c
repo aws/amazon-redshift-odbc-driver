@@ -21,6 +21,7 @@
 #include <regex>
 #include <string>
 #include <iostream>
+#include <codecvt>
 
 #ifdef WIN32
 #include <winsock.h>
@@ -165,6 +166,36 @@ static const RS_MAP_SQL_TYPE_NAME gMapToPadbSQLTypeName[] =
     { "SQL_INTERVAL_DAY_TO_SECOND", "INTERVALD2S"},
     {NULL,NULL}
 };
+
+char* sqlTypeNameMap(short value){
+#define NAME(TYPE) case TYPE: return #TYPE;
+    switch (value) {
+        NAME(SQL_CHAR)
+        NAME(SQL_VARCHAR)
+        NAME(SQL_LONGVARCHAR)
+        NAME(SQL_WCHAR)
+        NAME(SQL_WVARCHAR)
+        NAME(SQL_WLONGVARCHAR)
+        NAME(SQL_DECIMAL)
+        NAME(SQL_NUMERIC)
+        NAME(SQL_BIT)
+        NAME(SQL_TINYINT)
+        NAME(SQL_SMALLINT)
+        NAME(SQL_INTEGER)
+        NAME(SQL_BIGINT)
+        NAME(SQL_REAL)
+        NAME(SQL_FLOAT)
+        NAME(SQL_DOUBLE)
+        NAME(SQL_BINARY)
+        NAME(SQL_VARBINARY)
+        NAME(SQL_LONGVARBINARY)
+        NAME(SQL_TYPE_DATE)
+        NAME(SQL_TYPE_TIME)
+        NAME(SQL_TYPE_TIMESTAMP)
+    }
+    return "unknown";
+#undef NAME
+}
 
 #ifdef __cplusplus
 extern "C" {
@@ -13671,4 +13702,136 @@ bool getLibpqParameterStatus(RS_STMT_INFO *pStmt, const std::string &param,
 ExceptionInvalidParameter::ExceptionInvalidParameter(const std::string &message)
     : std::invalid_argument(message) {
     RS_LOG_ERROR("%s", message.c_str());
+}
+
+bool isEmptyString(SQLCHAR *str) { return str && *str == '\0'; }
+
+bool isNullOrEmptyString(SQLCHAR *str) { return !str || *str == '\0'; }
+
+std::string char2String(const unsigned char *str) {
+    return std::string(reinterpret_cast<const char *>(str));
+}
+
+std::string_view char2StringView(const unsigned char *str) {
+    return std::string_view(reinterpret_cast<const char *>(str));
+}
+
+int showDiscoveryVersion(RS_STMT_INFO *pStmt) {
+    RS_CONN_INFO *pConn = pStmt->phdbc;
+    char *paramValueStr = libpqParameterStatus(pConn, "show_discovery");
+
+    // param not available, return early
+    if (!paramValueStr) {
+        return 0;
+    } else {
+        try {
+            return std::stoi(paramValueStr);
+        } catch (const std::invalid_argument &e) {
+            throw ExceptionInvalidParameter(
+                "Invalid server parameter value for 'show_discovery' : " +
+                std::string(paramValueStr));
+        }
+    }
+}
+
+bool getCaseSensitive(RS_STMT_INFO *pStmt) {
+    RS_CONN_INFO *pConn = pStmt->phdbc;
+    char *paramValueStr = libpqParameterStatus(pConn, "case_sensitive");
+
+    if (paramValueStr && (strcmp(paramValueStr, "on") == 0)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool sanitizeParameter(const char *input) {
+    return sanitizeParameter(
+        char2StringView(reinterpret_cast<const unsigned char *>(input)));
+}
+
+bool sanitizeParameter(const unsigned char *input) {
+    return sanitizeParameter(char2StringView(input));
+}
+
+bool sanitizeParameter(const std::string_view input) {
+    if (input.empty()) {
+        return true;
+    }
+
+    std::regex whitelist("^[a-zA-Z0-9_%^*+?{},$]{0,126}$");
+    if (std::regex_match(input.begin(), input.end(), whitelist)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool sanitizeParameterW(const SQLWCHAR *input, int inputLen) {
+    if (!input || (inputLen < 0 && inputLen != SQL_NTS)) {
+        return true;
+    }
+    std::string utf8str;
+    size_t strLen = wchar16_to_utf8_str(input, inputLen, utf8str);
+    return sanitizeParameterW(utf8str);
+}
+
+bool sanitizeParameterW(const std::string input) {
+    if (input.empty()) {
+        return true;
+    }
+
+    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converterW;
+    std::wstring wtest = converterW.from_bytes(input);
+    // 2 bytes: U+0080 to U+07FF
+    // 3 bytes: U+0800 to U+FFFF
+    // 4 bytes: U+10000 to U+10FFFF
+    std::wstring wexpr = converterW.from_bytes(
+        "^(?!.*[\"\';])([a-zA-Z0-9_%^*+?{},$]|[\\u0080-\\u07FF]|[\\u0800-"
+        "\\uFFFF]|[\\U00010000-\\U0010FFFF]){0,126}$");
+    std::wregex whitelist(wexpr);
+    if (std::regex_match(wtest, whitelist)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+// Helper function to retrieve current connected database name
+std::string getDatabase(RS_STMT_INFO *pStmt) {
+    RS_CONNECT_PROPS_INFO *connection = pStmt->phdbc->pConnectProps;
+    if (connection == NULL) {
+        return NULL;
+    }
+    return connection->szDatabase;
+}
+
+// Helper function to retrieve column index based on column name
+int getIndex(RS_STMT_INFO *pStmt, std::string columnName) {
+    return pStmt->pResultHead->columnNameIndexMap[columnName];
+}
+
+// Helper function to check if catalog name was SQL_ALL_CATALOGS
+bool isSqlAllCatalogs(SQLCHAR *pCatalogName, SQLSMALLINT cbCatalogName){
+    return pCatalogName && ((cbCatalogName == SQL_NTS && _stricmp((char *)pCatalogName, SQL_ALL_CATALOGS) == 0) || (cbCatalogName != SQL_NTS && _strnicmp((char *)pCatalogName, SQL_ALL_CATALOGS, cbCatalogName) == 0)); 	
+}
+
+// Helper function to check if schema name was SQL_ALL_SCHEMAS
+bool isSqlAllSchemas(SQLCHAR *pSchemaName, SQLSMALLINT cbSchemaName){
+    return pSchemaName && ((cbSchemaName == SQL_NTS && _stricmp((char *)pSchemaName, SQL_ALL_SCHEMAS) == 0) || (cbSchemaName != SQL_NTS && _strnicmp((char *)pSchemaName, SQL_ALL_SCHEMAS, cbSchemaName) == 0));
+}
+
+// Helper function to check if table type name was SQL_ALL_TABLE_TYPES
+bool isSqlAllTableTypes(SQLCHAR *pTableType, SQLSMALLINT cbTableType){
+    return pTableType && ((cbTableType == SQL_NTS && _stricmp((char *)pTableType, SQL_ALL_TABLE_TYPES) == 0) || (cbTableType != SQL_NTS && _strnicmp((char *)pTableType, SQL_ALL_TABLE_TYPES, cbTableType) == 0));
+}
+
+// Helper function to check if name was null/wildcard/empty string to determine if we want to specify LIKE in SHOW command
+bool checkNameIsNotPattern(const std::string &name){
+    return name.empty() || name == "%";
+}
+
+// Helper function to check if name was exact name to determine if we can skip corresponding SHOW API call
+bool checkNameIsExactName(const std::string &name){
+    return !name.empty() && (name.find("%") == std::string::npos);
 }

@@ -184,7 +184,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLDescribeCol(SQLHSTMT phstmt,
             else
             {
                 rc = SQL_ERROR;
-                addError(&pStmt->pErrorList,"HY000", "Invalid column number", 0, NULL);
+                addError(&pStmt->pErrorList,"HY000", "SQLDescribeCol: Invalid column number", 0, NULL);
                 goto error; 
             }
         }
@@ -320,16 +320,31 @@ SQLRETURN  SQL_API SQLBindCol(SQLHSTMT phstmt,
                                 SQLLEN *pcbLenInd)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    RS_DESC_REC *pDescRec;
     
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLBindCol(FUNC_CALL, 0, phstmt, hCol, hType, pValue, cbLen, pcbLenInd);
 
+    rc = RS_STMT_INFO::RS_SQLBindCol(phstmt, hCol, hType, pValue, cbLen, pcbLenInd);
+    
+    if(IS_TRACE_LEVEL_API_CALL())
+        TraceSQLBindCol(FUNC_RETURN, rc, phstmt, hCol, hType, pValue, cbLen, pcbLenInd);
+
+    return rc;
+}
+
+SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLBindCol(SQLHSTMT phstmt,
+                                SQLUSMALLINT hCol, 
+                                SQLSMALLINT hType,
+                                SQLPOINTER pValue, 
+                                SQLLEN cbLen, 
+                                SQLLEN *pcbLenInd){
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    RS_DESC_REC *pDescRec;
+
     if(!VALID_HSTMT(phstmt))
     {
-        rc = SQL_INVALID_HANDLE;
-        goto error;
+        return SQL_INVALID_HANDLE;
     }
 
     // Clear error list
@@ -337,9 +352,8 @@ SQLRETURN  SQL_API SQLBindCol(SQLHSTMT phstmt,
 
     if(hCol <= 0)
     {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HY000", "Invalid column number", 0, NULL);
-        goto error; 
+        addError(&pStmt->pErrorList,"HY000", "SQLBindCol: Invalid column number", 0, NULL);
+        return SQL_ERROR; 
     }
 
     if(pValue == NULL && pcbLenInd == NULL)
@@ -353,9 +367,8 @@ SQLRETURN  SQL_API SQLBindCol(SQLHSTMT phstmt,
         pDescRec = checkAndAddDescRec(pStmt->pStmtAttr->pARD, hCol, FALSE, NULL);
         if(pDescRec == NULL)
         {
-            rc = SQL_ERROR;
             addError(&pStmt->pErrorList,"HY001", "Memory allocation error", 0, NULL);
-            goto error;
+            return SQL_ERROR;
         }
 
         if(pDescRec)
@@ -371,12 +384,7 @@ SQLRETURN  SQL_API SQLBindCol(SQLHSTMT phstmt,
         }
     }
 
-error:
-
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLBindCol(FUNC_RETURN, rc, phstmt, hCol, hType, pValue, cbLen, pcbLenInd);
-
-    return rc;
+    return SQL_SUCCESS;
 }
 
 /*====================================================================================================================================================*/
@@ -675,7 +683,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
             else
             {
                 rc = SQL_ERROR;
-                addError(&pStmt->pErrorList,"HY000", "Invalid column number", 0, NULL);
+                addError(&pStmt->pErrorList,"HY000", "SQLGetData: Invalid column number", 0, NULL);
                 goto error; 
             }
         }
@@ -1183,7 +1191,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLColAttribute(SQLHSTMT        phstmt,
                 else
                 {
                     rc = SQL_ERROR;
-                    addError(&pStmt->pErrorList,"HY000", "Invalid column number", 0, NULL);
+                    addError(&pStmt->pErrorList,"HY000", "SQLColAttribute: Invalid column number", 0, NULL);
                     goto error; 
                 }
             }

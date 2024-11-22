@@ -26,8 +26,14 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <map>
+#include <unordered_map>
+#include <set>
+#include <list>
+#include <string_view>
+#include <vector>
 
 #include "libpq-fe.h"
+
 
 #ifdef WIN32
 #include "win_port.h"
@@ -40,6 +46,8 @@
 #include "rsiam.h"
 #include "iam/RsSettings.h"
 #include <rslog.h>
+
+#define NULL_LEN		(-1)	/* pg_result len for NULL value */
 
 // Handle checking macros
 #define VALID_HENV(henv)    (henv != SQL_NULL_HENV)
@@ -62,6 +70,12 @@
 #define PADB_MAX_PARAMETERS 32767
 #define MAX_LARGE_TEMP_BUF_LEN        1024
 #define MAX_SMALL_TEMP_BUF_LEN        32
+#define MAX_REMARK_LEN     256  // Size of remarks was defined as 256 in padb side
+#define MAX_SQL_LEN        1024
+#define MAX_COLUMN_DEF_LEN 4000 // Size of column default was defined as 4000 in padb side
+#define INT2_LEN    5
+#define INT4_LEN    10
+#define INT8_LEN    19
 
 
 #define SET_SQL_FUNCTION_BIT(puhSupported, uwAPI) \
@@ -132,27 +146,64 @@
 
 /* Proprietary Connection/Env Attributes. END */
 
-// Copied from rslibpq.c
-#define TIMETZOID       1266
-#define TIMESTAMPTZOID  1184 
-#define INTERVALY2MOID  1188
-#define INTERVALD2SOID  1190
-#define GEOMETRY		3000
-#define GEOMETRYHEX		3999
-#define SUPER			4000
-#define VARBYTE			6551
-#define GEOGRAPHY		3001
-#define VOIDOID         2278
-#define VARCHAROID      1043
+// OID values from catalog/pg_type.h
+#define BOOLOID            16
+#define BYTEAOID           17
+#define CHAROID            18
+#define NAMEOID            19
+#define INT8OID            20
+#define INT2OID            21
+#define INT4OID            23
+#define TEXTOID            25
+#define OIDOID             26
+#define FLOAT4OID          700
+#define FLOAT8OID          701
+#define UNKNOWNOID		   705
+#define BPCHAROID          1042
+#define VARCHAROID         1043
+#define DATEOID            1082
+#define TIMEOID            1083
+#define TIMESTAMPOID       1114
+#define TIMESTAMPTZOID     1184
+#define INTERVALOID        1186
+#define INTERVALY2MOID     1188
+#define INTERVALD2SOID     1190
+#define TIMETZOID          1266
+#define NUMERICOID         1700
+#define REFCURSOROID       1790
+#define CSTRINGOID         2275
+#define VOIDOID            2278
+#define GEOMETRY		   3000
+#define GEOGRAPHY		   3001
+#define GEOMETRYHEX		   3999
+#define SUPER			   4000
+#define VARBYTE			   6551
+#define UNSPECIFIEDOID     0
 
-#define UNSPECIFIEDOID  0
-#define UNKNOWNOID		705
+// PG catalog OID
+#define INT2VECTOROID      22
+#define REGPROCOID         24
+#define TIDOID             27
+#define XIDOID             28
+#define CIDOID             29
+#define OIDVECTOROID       30
+#define ABSTIMEOID         702
+#define NAMEARRAYOID       1003
+#define INT2ARRAYOID       1005
+#define INT4ARRAYOID       1007
+#define TEXTARRAYOID       1009
+#define FLOAT4ARRAYOID     1021
+#define ACLITEMARRAYOID    1034
+#define ANYARRAYOID        2277
 
 
 
 // Redshift specific data type(s)
+#define MAX_DATEOID_SIZE        10
+#define MAX_TIMEOID_SIZE        15
 #define MAX_TIMETZOID_SIZE		21 
-#define MAX_TIMESTAMPTZOID_SIZE 32
+#define MAX_TIMESTAMPOID_SIZE   29
+#define MAX_TIMESTAMPTZOID_SIZE 35
 #define MAX_INTERVALY2MOID_SIZE 32
 #define MAX_INTERVALD2SOID_SIZE 64
 #define MAX_SUPER_SIZE			4194304
@@ -524,6 +575,13 @@ class RS_STMT_INFO
                                            SQLSMALLINT *pDecimalDigits,
                                            SQLSMALLINT *pNullable);
 
+    static SQLRETURN  SQL_API RS_SQLBindCol(SQLHSTMT phstmt,
+                                SQLUSMALLINT hCol, 
+                                SQLSMALLINT hType,
+                                SQLPOINTER pValue, 
+                                SQLLEN cbLen, 
+                                SQLLEN *pcbLenInd);
+
     static SQLRETURN  SQL_API RS_SQLGetData(RS_STMT_INFO *pStmt,
                                       SQLUSMALLINT hCol,
                                       SQLSMALLINT hType,
@@ -831,6 +889,60 @@ public:
     static SQLRETURN  SQL_API RS_SQLFreeDesc(SQLHDESC phdesc);
 };
 
+typedef struct _tuple {
+    int len = 0;
+    char *value;
+} Tuple;
+
+// Define structure to store SHOW SCHEMAS result for post-processing
+struct SHOWSCHEMASResult {
+    SQLCHAR database_name[NAMEDATALEN] = {0};
+    SQLLEN database_name_Len = 0;
+    SQLCHAR schema_name[NAMEDATALEN] = {0};
+    SQLLEN schema_name_Len = 0;
+};
+
+// Define structure to store SHOW TABLES result for post-processing
+struct SHOWTABLESResult {
+    SQLCHAR database_name[NAMEDATALEN] = {0};
+    SQLLEN database_name_Len = 0;
+    SQLCHAR schema_name[NAMEDATALEN] = {0};
+    SQLLEN schema_name_Len = 0;
+    SQLCHAR table_name[NAMEDATALEN] = {0};
+    SQLLEN table_name_Len = 0;
+    SQLCHAR table_type[NAMEDATALEN] = {0};
+    SQLLEN table_type_Len = 0;
+    SQLCHAR remarks[MAX_REMARK_LEN] = {0};
+    SQLLEN remarks_Len = 0;
+};
+
+// Define structure to store SHOW COLUMNS result for post-processing
+struct SHOWCOLUMNSResult {
+    SQLCHAR database_name[NAMEDATALEN] = {0};
+    SQLLEN database_name_Len = 0;
+    SQLCHAR schema_name[NAMEDATALEN] = {0};
+    SQLLEN schema_name_Len = 0;
+    SQLCHAR table_name[NAMEDATALEN] = {0};
+    SQLLEN table_name_Len = 0;
+    SQLCHAR column_name[NAMEDATALEN] = {0};
+    SQLLEN column_name_Len = 0;
+    SQLSMALLINT ordinal_position = 0;
+    SQLLEN ordinal_position_Len = 0;
+    SQLCHAR column_default[MAX_COLUMN_DEF_LEN] = {0};
+    SQLLEN column_default_Len = 0;
+    SQLCHAR is_nullable[NAMEDATALEN] = {0};
+    SQLLEN is_nullable_Len = 0;
+    SQLCHAR data_type[NAMEDATALEN] = {0};
+    SQLLEN data_type_Len = 0;
+    SQLSMALLINT character_maximum_length = 0;
+    SQLLEN character_maximum_length_Len = 0;
+    SQLSMALLINT numeric_precision = 0;
+    SQLLEN numeric_precision_Len = 0;
+    SQLSMALLINT numeric_scale = 0;
+    SQLLEN numeric_scale_Len = 0;
+    SQLCHAR remarks[MAX_REMARK_LEN] = {0};
+    SQLLEN remarks_Len = 0;
+};
 
 #define SHORT_NAME_KEYWORD 0
 #define LONG_NAME_KEYWORD  1
@@ -1404,6 +1516,7 @@ public:
 
     int iPrevhCol; // Track column number for SQLGetData. If same col number get called in same row then return SQL_NO_DATA.
     std::map<int, SQLLEN> cbLenOffsets; // keeping per-column state of how much data was processed last time.
+    std::unordered_map<std::string, int> columnNameIndexMap; 
     // Next element
     RS_RESULT_INFO *pNext;
 
@@ -1587,6 +1700,14 @@ libpqExecuteDirectOrPreparedThreadProc(void *pArg);
 void libpqCloseResult(RS_RESULT_INFO *pResult);
 short mapPgTypeToSqlType(Oid pgType,short *phPaSpecialType);
 char *libpqGetData(RS_RESULT_INFO *pResult, short hCol, int *piLenInd, int *piFormat);
+SQLRETURN libpqInitializeResultSetField(RS_STMT_INFO *pStmt, char** tableCol, int colNum, int* tableColDatatype);
+SQLRETURN libpqCreateEmptyResultSet(RS_STMT_INFO *pStmt, short columnNum, const int* columnDataType);
+SQLRETURN libpqCreateSQLCatalogsCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<std::string>& intermediateRS);
+SQLRETURN libpqCreateSQLSchemasCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWSCHEMASResult>& intermediateRS);
+SQLRETURN libpqCreateSQLTableTypesCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<std::string> &tableTypeList);
+SQLRETURN libpqCreateSQLTablesCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::string &pTableType, const std::vector<SHOWTABLESResult>& intermediateRS);
+SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWCOLUMNSResult>& intermediateRS);
+
 
 SQLRETURN libpqPrepare(RS_STMT_INFO *pStmt, char *pszCmd);
 SQLRETURN libpqPrepareOnThread(RS_STMT_INFO *pStmt, char *pszCmd);

@@ -9,6 +9,10 @@
 #include "rscatalog.h"
 #include "rsexecute.h"
 #include "rsutil.h"
+#include "rsMetadataAPIPostProcessing.h"
+#include "rsMetadataServerAPIHelper.h"
+
+#include <regex>
 
 #define MAX_CATALOG_QUERY_LEN (16*1024)
 #define MAX_CATALOG_QUERY_FILTER_LEN (4*1024)
@@ -109,10 +113,6 @@
                                      " UNION " \
                                      " SELECT DISTINCT NULL as TABLE_CAT, NULL as TABLE_SCHEM, NULL as TABLE_NAME," \
                                      " 'TEMPORARY VIEW'  as TABLE_TYPE, " \
-                                     " NULL as REMARKS " \
-                                     " UNION " \
-                                     " SELECT DISTINCT NULL as TABLE_CAT, NULL as TABLE_SCHEM, NULL as TABLE_NAME," \
-                                     " 'SYSTEM TOAST TABLE'  as TABLE_TYPE, " \
                                      " NULL as REMARKS " \
                                      " ORDER BY TABLE_TYPE "
 
@@ -357,7 +357,6 @@ static void getCatalogFilterCondition(char *catalogFilter,
 										char * databaseColName);
 static char *escapedFilterCondition(const char *pName, short cbName);
 
-
 static void buildLocalSchemaTablesQuery(char *pszCatalogQuery,
 	RS_STMT_INFO *pStmt,
 	SQLCHAR *pCatalogName,
@@ -465,6 +464,24 @@ SQLRETURN  SQL_API SQLTables(SQLHSTMT phstmt,
 {
     SQLRETURN rc;
 
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    if (!VALID_HSTMT(phstmt)) {
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Clear error list
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
+    // Parameter input check
+    for (const auto &name : {pCatalogName, pSchemaName, pTableName}) {
+        if (name && !sanitizeParameter(name)) {
+            addError(&pStmt->pErrorList, "HY000", "Invalid parameter input", 0, NULL);
+            RS_LOG_DEBUG("RsMetadataServerAPIHelper", "Invalid parameter: %s", name);
+            return SQL_ERROR;
+        }
+    }
+
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLTables(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, pTableType, cbTableType);
 
@@ -494,111 +511,123 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
-
-    if(!VALID_HSTMT(phstmt))
-    {
-        rc = SQL_INVALID_HANDLE;
-        goto error;
-    }
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-	if ((!pSchemaName || (pSchemaName && *pSchemaName == '\0'))
-		&& (!pTableName || (pTableName && *pTableName == '\0'))
-		&& (!pTableType || (pTableType && *pTableType == '\0'))
-		&& ((pCatalogName != NULL)
-			&& ((cbCatalogName == SQL_NTS && _stricmp((char *)pCatalogName, SQL_ALL_CATALOGS) == 0)
-				|| (cbCatalogName != SQL_NTS && _strnicmp((char *)pCatalogName, SQL_ALL_CATALOGS, cbCatalogName) == 0)
-				) 
-			)
-		)
-	{
-		if (isSingleDatabaseMetaData(pStmt))
-			rs_strncpy(szCatalogQuery, SQLTABLES_ALL_CATALOG_QUERY, sizeof(szCatalogQuery));
-		else
-			rs_strncpy(szCatalogQuery, SQLTABLES_ALL_CATALOG_QUERY_DATASHARE, sizeof(szCatalogQuery));
-	}
-	else 
-    if( (!pCatalogName || (pCatalogName && *pCatalogName == '\0'))
-         && (!pTableName || (pTableName && *pTableName == '\0'))
-		 && (!pTableType || (pTableType && *pTableType == '\0'))
-		 && (pSchemaName
-                && ((cbSchemaName == SQL_NTS && _stricmp((char *)pSchemaName, SQL_ALL_SCHEMAS) == 0)
-                     || (cbSchemaName != SQL_NTS && _strnicmp((char *)pSchemaName, SQL_ALL_SCHEMAS, cbSchemaName) == 0)
-                    )
-            )
-    )
-    {
-		if (isSingleDatabaseMetaData(pStmt))
-			rs_strncpy(szCatalogQuery, SQLTABLES_ALL_SCHEMAS_QUERY, sizeof(szCatalogQuery));
-		else
-			rs_strncpy(szCatalogQuery, SQLTABLES_ALL_SCHEMAS_QUERY_DATASHARE, sizeof(szCatalogQuery));
-	}
-    else
-    if( (!pCatalogName || (pCatalogName && *pCatalogName == '\0'))
-         && (!pSchemaName || (pSchemaName && *pSchemaName == '\0'))
-         && (!pTableName || (pTableName && *pTableName == '\0'))
-         && (pTableType 
-                && ((cbTableType == SQL_NTS && _stricmp((char *)pTableType, SQL_ALL_TABLE_TYPES) == 0)
-                     || (cbTableType != SQL_NTS && _strnicmp((char *)pTableType, SQL_ALL_TABLE_TYPES, cbTableType) == 0)
-                    )
-            )
-        )
-    {
-        rs_strncpy(szCatalogQuery, SQLTABLES_ALL_TABLE_TYPES_QUERY, sizeof(szCatalogQuery));
-    }
-    else
-    {
-		int schemaPatternType;
+	if(showDiscoveryVersion(pStmt) >= 1){
+		RS_LOG_TRACE("RS_SQLTables","Current connected cluster support SHOW command");
 
-		if(isSingleDatabaseMetaData(pStmt)
-			&& !checkForValidCatalogName(pStmt, pCatalogName))
+		if (isNullOrEmptyString(pSchemaName) && isNullOrEmptyString(pTableName) && isSqlAllCatalogs(pCatalogName, cbCatalogName))
 		{
-			rc = SQL_ERROR;
-			addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLTables", 0, NULL);
-			goto error;
-		} 
+			//  Special SQLTables call : get catalog list
+			std::vector<std::string> intermediateRS;
+			rc = RsMetadataServerAPIHelper::sqlCatalogsServerAPI(phstmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
+			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerAPIHelper.sqlCatalogsServerAPI fail", 0, NULL);
+				return rc;
+			}
 
-		schemaPatternType = getExtSchemaPatternMatch(pStmt, pSchemaName, cbSchemaName);
-
-		if (IS_TRACE_ON())
-		{
-			RS_LOG_INFO("RSCATALOG", "schemaPatternType=%d", schemaPatternType);
+			rc = RsMetadataAPIPostProcessing::sqlCatalogsPostProcessing(phstmt, intermediateRS);
+			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlCatalogsPostProcessing fail", 0, NULL);
+				return rc;
+			}
 		}
-
-		if (schemaPatternType == LOCAL_SCHEMA_QUERY)
+		else 
+		if(isNullOrEmptyString(pCatalogName) && isNullOrEmptyString(pTableName) && isSqlAllSchemas(pSchemaName, cbSchemaName))
 		{
-			// Join on pg_catalog
-			buildLocalSchemaTablesQuery(szCatalogQuery, pStmt,
-				pCatalogName,
-				cbCatalogName,
-				pSchemaName,
-				cbSchemaName,
-				pTableName,
-				cbTableName,
-				pTableType,
-				cbTableType);
+			//  Special SQLTables call : get schema list
+			std::vector<SHOWSCHEMASResult> intermediateRS;
+			rc = RsMetadataServerAPIHelper::sqlSchemasServerAPI(phstmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
+			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerAPIHelper.sqlSchemasServerAPI fail", 0, NULL);
+				return rc;
+			}
+
+			rc = RsMetadataAPIPostProcessing::sqlSchemasPostProcessing(phstmt, intermediateRS);
+			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlSchemasPostProcessing fail", 0, NULL);
+				return rc;
+			}
+
 		}
-		else if (schemaPatternType == NO_SCHEMA_UNIVERSAL_QUERY) 
+		else
+		if(isNullOrEmptyString(pCatalogName) && isNullOrEmptyString(pSchemaName) && isNullOrEmptyString(pTableName) && isSqlAllTableTypes(pTableType, cbTableType))
+		{
+			// Special SQLTables call : get table type list
+			rc = RsMetadataAPIPostProcessing::sqlTableTypesPostProcessing(phstmt);
+			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlTableTypesPostProcessing fail", 0, NULL);
+				return rc;
+			}
+		}
+		else{
+			// Normal SQLTables call
+
+			// Map NULL to wildcard internally since ODBC accept NULL as catalog but SHOW command doesn't
+			// Map empty string to wildcard internally but will block them in the near future
+			std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "%" : char2String(pCatalogName);
+
+			// Map NULL to wildcard internally since ODBC accept NULL as schema name pattern but SHOW command doesn't
+			// Map empty string to wildcard internally but will block them in the near future
+			std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "%" : char2String(pSchemaName);
+
+			// Map NULL to wildcard internally since ODBC accept NULL as table name pattern but SHOW command doesn't
+			// Map empty string to wildcard internally but will block them in the near future
+			std::string tableName = (isNullOrEmptyString(pTableName)) ? "%" : char2String(pTableName);
+
+			// Return Empty ResultSet if catalog or schemaPattern or tableNamePattern is empty string
+			//bool retEmpty = isEmptyString(pCatalogName) || isEmptyString(pSchemaName) || isEmptyString(pTableName); // comment this out since the Driver will still accept empty string for now
+			bool retEmpty = false; // Map empty string to wildcard internally but will block them in the near future
+
+			std::vector<SHOWTABLESResult> intermediateRS;
+			rc = RsMetadataServerAPIHelper::sqlTablesServerAPI(phstmt, catalogName, schemaName, tableName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
+			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerAPIHelper.sqlTablesServerAPI fail", 0, NULL);
+				return rc;
+			}
+
+			std::string table_type = pTableType == NULL ? "" : char2String(pTableType);
+
+			rc = RsMetadataAPIPostProcessing::sqlTablesPostProcessing(phstmt, table_type, retEmpty, intermediateRS);
+			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlTablesPostProcessing fail", 0, NULL);
+				return rc;
+			}
+		}
+	}
+	else{
+		// Old code path is retained for supporting legacy cluster version which doesn't not support Server API SHOW command
+		char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
+		if (isNullOrEmptyString(pSchemaName) && isNullOrEmptyString(pTableName) && isSqlAllCatalogs(pCatalogName, cbCatalogName))
 		{
 			if (isSingleDatabaseMetaData(pStmt))
+				rs_strncpy(szCatalogQuery, SQLTABLES_ALL_CATALOG_QUERY, sizeof(szCatalogQuery));
+			else
+				rs_strncpy(szCatalogQuery, SQLTABLES_ALL_CATALOG_QUERY_DATASHARE, sizeof(szCatalogQuery));
+		}
+		else 
+		if(isNullOrEmptyString(pCatalogName) && isNullOrEmptyString(pTableName) && isSqlAllSchemas(pSchemaName, cbSchemaName))
+		{
+			if (isSingleDatabaseMetaData(pStmt))
+				rs_strncpy(szCatalogQuery, SQLTABLES_ALL_SCHEMAS_QUERY, sizeof(szCatalogQuery));
+			else
+				rs_strncpy(szCatalogQuery, SQLTABLES_ALL_SCHEMAS_QUERY_DATASHARE, sizeof(szCatalogQuery));
+		}
+		else
+		if(isNullOrEmptyString(pCatalogName) && isNullOrEmptyString(pSchemaName) && isNullOrEmptyString(pTableName) && isSqlAllTableTypes(pTableType, cbTableType))
+		{
+			rs_strncpy(szCatalogQuery, SQLTABLES_ALL_TABLE_TYPES_QUERY, sizeof(szCatalogQuery));
+		}
+		else
+		{
+			int schemaPatternType = getExtSchemaPatternMatch(pStmt, pSchemaName, cbSchemaName);
+
+			if (schemaPatternType == LOCAL_SCHEMA_QUERY)
 			{
-				// svv_tables
-				buildUniversalSchemaTablesQuery(szCatalogQuery, pStmt,
-												pCatalogName,
-												cbCatalogName,
-												pSchemaName,
-												cbSchemaName,
-												pTableName,
-												cbTableName,
-												pTableType,
-												cbTableType);
-			}
-			else {
-				// svv_all_tables
-				buildUniversalAllSchemaTablesQuery(szCatalogQuery, pStmt,
+				// Join on pg_catalog
+				buildLocalSchemaTablesQuery(szCatalogQuery, pStmt,
 					pCatalogName,
 					cbCatalogName,
 					pSchemaName,
@@ -608,27 +637,53 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 					pTableType,
 					cbTableType);
 			}
+			else if (schemaPatternType == NO_SCHEMA_UNIVERSAL_QUERY) 
+			{
+				if (isSingleDatabaseMetaData(pStmt))
+				{
+					// svv_tables
+					buildUniversalSchemaTablesQuery(szCatalogQuery, pStmt,
+													pCatalogName,
+													cbCatalogName,
+													pSchemaName,
+													cbSchemaName,
+													pTableName,
+													cbTableName,
+													pTableType,
+													cbTableType);
+				}
+				else {
+					// svv_all_tables
+					buildUniversalAllSchemaTablesQuery(szCatalogQuery, pStmt,
+						pCatalogName,
+						cbCatalogName,
+						pSchemaName,
+						cbSchemaName,
+						pTableName,
+						cbTableName,
+						pTableType,
+						cbTableType);
+				}
+			}
+			else if (schemaPatternType == EXTERNAL_SCHEMA_QUERY) {
+				// svv_external_tables
+				buildExternalSchemaTablesQuery(szCatalogQuery, pStmt,
+					pCatalogName,
+					cbCatalogName,
+					pSchemaName,
+					cbSchemaName,
+					pTableName,
+					cbTableName,
+					pTableType,
+					cbTableType);
+			}
+
 		}
-		else if (schemaPatternType == EXTERNAL_SCHEMA_QUERY) {
-			// svv_external_tables
-			buildExternalSchemaTablesQuery(szCatalogQuery, pStmt,
-				pCatalogName,
-				cbCatalogName,
-				pSchemaName,
-				cbSchemaName,
-				pTableName,
-				cbTableName,
-				pTableType,
-				cbTableType);
-		}
 
-    }
-
-    setCatalogQueryBuf(pStmt, szCatalogQuery);
-    rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
-    resetCatalogQueryFlag(pStmt);
-
-error:
+		setCatalogQueryBuf(pStmt, szCatalogQuery);
+		rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
+		resetCatalogQueryFlag(pStmt);
+	}
 
     return rc;
 }
@@ -649,25 +704,44 @@ SQLRETURN SQL_API SQLTablesW(SQLHSTMT          phstmt,
                                 SQLSMALLINT    cchTableType)
 {
     SQLRETURN rc;
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    if (!VALID_HSTMT(phstmt)) {
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Clear error list
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
+    // Parameter input check
+    for (const auto &name : {pwCatalogName, pwSchemaName, pwTableName}) {
+        if (name && !sanitizeParameterW(name, SQL_NTS)) {
+            addError(&pStmt->pErrorList, "HY000", "Invalid parameter input", 0, NULL);
+            RS_LOG_DEBUG("RsMetadataServerAPIHelper", "Invalid parameter: %s", name);
+            return SQL_ERROR;
+        }
+    }
+
     char szCatalogName[MAX_IDEN_LEN] = {0};
     char szSchemaName[MAX_IDEN_LEN] = {0};
-    char szTableName[MAX_IDEN_LEN] = {0}; 
-    char szTableType[MAX_TEMP_BUF_LEN] = {0}; 
-    
-    if(IS_TRACE_LEVEL_API_CALL())
+    char szTableName[MAX_IDEN_LEN] = {0};
+    char szTableType[MAX_TEMP_BUF_LEN] = {0};
+
+    if (IS_TRACE_LEVEL_API_CALL())
         TraceSQLTablesW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, pwTableType, cchTableType);
 
-	wchar16_to_utf8_char(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
+    wchar16_to_utf8_char(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
     wchar16_to_utf8_char(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
     wchar16_to_utf8_char(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
     wchar16_to_utf8_char(pwTableType, cchTableType, szTableType, MAX_TEMP_BUF_LEN);
 
     rc = RsCatalog::RS_SQLTables(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
-                                (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
-                                (SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS,
-                                (SQLCHAR *)((pwTableType) ? szTableType : NULL), SQL_NTS);
+        (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
+        (SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS,
+        (SQLCHAR *)((pwTableType) ? szTableType : NULL), SQL_NTS);
 
-    if(IS_TRACE_LEVEL_API_CALL())
+    if (IS_TRACE_LEVEL_API_CALL())
         TraceSQLTablesW(FUNC_RETURN, rc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, pwTableType, cchTableType);
 
     return rc;
@@ -691,7 +765,26 @@ SQLRETURN  SQL_API SQLColumns(SQLHSTMT phstmt,
 {
     SQLRETURN rc;
 
-    if(IS_TRACE_LEVEL_API_CALL())
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    if (!VALID_HSTMT(phstmt)) {
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Clear error list
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
+    // Parameter input check
+    for (const auto &name :
+         {pCatalogName, pSchemaName, pTableName, pColumnName}) {
+        if (name && !sanitizeParameter(name)) {
+            addError(&pStmt->pErrorList, "HY000", "Invalid parameter input", 0, NULL);
+            RS_LOG_DEBUG("RsMetadataServerAPIHelper", "Invalid parameter: %s", name);
+            return SQL_ERROR;
+        }
+    }
+
+    if (IS_TRACE_LEVEL_API_CALL())
         TraceSQLColumns(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, pColumnName, cbColumnName);
 
     rc = RsCatalog::RS_SQLColumns(phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, pColumnName, cbColumnName);
@@ -719,98 +812,113 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
-	int schemaPatternType;
-
-    if(!VALID_HSTMT(phstmt))
-    {
-        rc = SQL_INVALID_HANDLE;
-        goto error;
-    }
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if(isSingleDatabaseMetaData(pStmt)
-		&& !checkForValidCatalogName(pStmt, pCatalogName))
-    {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLColumns", 0, NULL);
-        goto error; 
+    if (showDiscoveryVersion(pStmt) >= 1) {
+        RS_LOG_DEBUG("RS_SQLColumns", "Current connected cluster support SHOW command");
+
+        // Parameter validation check
+        std::string catalogName = {0};
+        /*if (pCatalogName == NULL) {
+            // return error when user put null as catalog name
+            addError(&pStmt->pErrorList, "HY000", "Invalid arguments provided to SQLColumns(): The catalog parameter can't be null", 0, NULL);
+            return SQL_ERROR;
+        } else {
+            // Map empty string to wildcard internally but will block them in the near future
+            catalogName = (isNullOrEmptyString(pCatalogName)) ? "%" : char2String(pCatalogName);
+        }*/
+
+        // Map NULL to wildcard internally but will block them in the near future
+        // Map empty string to wildcard internally but will block them in the near future
+        catalogName = (isNullOrEmptyString(pCatalogName)) ? "%" : char2String(pCatalogName);
+
+        // Map NULL to wildcard internally since ODBC accept NULL as schema name pattern 
+        // Map empty string to wildcard internally but will block them in the near future
+        std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "%" : char2String(pSchemaName);
+
+        // Map NULL to wildcard internally since ODBC accept NULL as table name pattern 
+        // Map empty string to wildcard internally but will block them in the near future
+        std::string tableName = (isNullOrEmptyString(pTableName)) ? "%" : char2String(pTableName);
+
+        // Map NULL to wildcard internally since ODBC accept NULL as column name pattern 
+        // Map empty string to wildcard internally but will block them in the near future
+        std::string columnName = (isNullOrEmptyString(pColumnName)) ? "%" : char2String(pColumnName);
+
+        // Return Empty ResultSet if catalog || schemaPattern || tableNamePattern || columnNamePattern is empty string
+        // bool retEmpty = isEmptyString(pCatalogName) || isEmptyString(pSchemaName) || isEmptyString(pTableName) || isEmptyString(pColumnName);
+        bool retEmpty = false; // Map empty string to wildcard internally but will block them in the near future
+
+        std::vector<SHOWCOLUMNSResult> intermediateRS;
+        rc = RsMetadataServerAPIHelper::sqlColumnsServerAPI(phstmt, catalogName, schemaName, tableName, columnName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
+        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+            addError(&pStmt->pErrorList, "HY000", "RsMetadataServerAPIHelper.sqlColumnsServerAPI fail", 0, NULL);
+            return rc;
+        }
+
+        rc = RsMetadataAPIPostProcessing::sqlColumnsPostProcessing(phstmt, retEmpty, intermediateRS);
+        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+            addError(&pStmt->pErrorList, "HY000", "RsMetadataAPIPostProcessing.sqlColumnsPostProcessing fail", 0, NULL);
+            return rc;
+        }
+    } else {
+        // Old code path is retained for supporting legacy cluster version which doesn't not support Server API SHOW command
+        int schemaPatternType = getExtSchemaPatternMatch(pStmt, pSchemaName, cbSchemaName);
+        char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
+
+        if (schemaPatternType == LOCAL_SCHEMA_QUERY) {
+            // Join on pg_catalog union with pg_late_binding_view
+            buildLocalSchemaColumnsQuery(szCatalogQuery, pStmt, 
+				pCatalogName, 
+				cbCatalogName, 
+				pSchemaName, 
+				cbSchemaName, 
+				pTableName, 
+				cbTableName, 
+				pColumnName, 
+				cbColumnName);
+        } else if (schemaPatternType == NO_SCHEMA_UNIVERSAL_QUERY) {
+            if (isSingleDatabaseMetaData(pStmt)) {
+                // svv_columns
+                buildUniversalSchemaColumnsQuery(szCatalogQuery, pStmt, 
+					pCatalogName, 
+					cbCatalogName, 
+					pSchemaName, 
+					cbSchemaName, 
+					pTableName, 
+					cbTableName, 
+					pColumnName, 
+					cbColumnName);
+            } else {
+                // svv_all_columns
+                buildUniversalAllSchemaColumnsQuery(szCatalogQuery, pStmt, 
+					pCatalogName, 
+					cbCatalogName, 
+					pSchemaName, 
+					cbSchemaName, 
+					pTableName, 
+					cbTableName, 
+					pColumnName, 
+					cbColumnName);
+            }
+        } else if (schemaPatternType == EXTERNAL_SCHEMA_QUERY) {
+            // svv_external_columns
+            buildExternalSchemaColumnsQuery(szCatalogQuery, pStmt, 
+				pCatalogName, 
+				cbCatalogName, 
+				pSchemaName, 
+				cbSchemaName, 
+				pTableName, 
+				cbTableName, 
+				pColumnName, 
+				cbColumnName);
+        }
+
+        setCatalogQueryBuf(pStmt, szCatalogQuery);
+        rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
+        resetCatalogQueryFlag(pStmt);
     }
-
-	schemaPatternType = getExtSchemaPatternMatch(pStmt, pSchemaName, cbSchemaName);
-
-	if (IS_TRACE_ON())
-	{
-		RS_LOG_INFO("RSCATALOG", "schemaPatternType=%d", schemaPatternType);
-	}
-
-	if (schemaPatternType == LOCAL_SCHEMA_QUERY)
-	{
-		// Join on pg_catalog union with pg_late_binding_view
-		buildLocalSchemaColumnsQuery(szCatalogQuery, pStmt,
-			pCatalogName,
-			cbCatalogName,
-			pSchemaName,
-			cbSchemaName,
-			pTableName,
-			cbTableName,
-			pColumnName,
-			cbColumnName);
-	}
-	else 
-	if (schemaPatternType == NO_SCHEMA_UNIVERSAL_QUERY) 
-	{
-		if (isSingleDatabaseMetaData(pStmt)) 
-		{
-			// svv_columns
-			buildUniversalSchemaColumnsQuery(szCatalogQuery, pStmt,
-				pCatalogName,
-				cbCatalogName,
-				pSchemaName,
-				cbSchemaName,
-				pTableName,
-				cbTableName,
-				pColumnName,
-				cbColumnName);
-		}
-		else 
-		{
-			// svv_all_columns
-			buildUniversalAllSchemaColumnsQuery(szCatalogQuery, pStmt,
-				pCatalogName,
-				cbCatalogName,
-				pSchemaName,
-				cbSchemaName,
-				pTableName,
-				cbTableName,
-				pColumnName,
-				cbColumnName);
-		}
-	}
-	else 
-	if (schemaPatternType == EXTERNAL_SCHEMA_QUERY) 
-	{
-		// svv_external_columns
-		buildExternalSchemaColumnsQuery(szCatalogQuery, pStmt,
-			pCatalogName,
-			cbCatalogName,
-			pSchemaName,
-			cbSchemaName,
-			pTableName,
-			cbTableName,
-			pColumnName,
-			cbColumnName);
-	}
-
-
-    setCatalogQueryBuf(pStmt, szCatalogQuery);
-    rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
-    resetCatalogQueryFlag(pStmt);
-
-error:
-
     return rc;
 }
 
@@ -831,6 +939,26 @@ SQLRETURN SQL_API SQLColumnsW(SQLHSTMT     phstmt,
                                 SQLSMALLINT  cchColumnName)
 {
     SQLRETURN rc;
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    if (!VALID_HSTMT(phstmt)) {
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Clear error list
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
+    // Parameter input check
+    for (const auto &name :
+         {pwCatalogName, pwSchemaName, pwTableName, pwColumnName}) {
+        if (name && !sanitizeParameterW(name, SQL_NTS)) {
+            addError(&pStmt->pErrorList, "HY000", "Invalid parameter input", 0, NULL);
+            RS_LOG_DEBUG("RsMetadataServerAPIHelper", "Invalid parameter: %s", name);
+            return SQL_ERROR;
+        }
+    }
+
     char szCatalogName[MAX_IDEN_LEN] = {0};
     char szSchemaName[MAX_IDEN_LEN] = {0};
     char szTableName[MAX_IDEN_LEN] = {0};

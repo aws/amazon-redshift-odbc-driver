@@ -3,7 +3,6 @@
 #include <sstream>
 #include <string>
 
-
 // Test printHexSQLCHAR and printHexSQLWCHR
 class PrintHexSQLCharAndWCharTest : public ::testing::Test {
   protected:
@@ -377,4 +376,135 @@ TEST(DoesEmbedInDoubleQuotesTest, NestedDoubleQuotes) {
 TEST(DoesEmbedInDoubleQuotesTest, UnbalancedDoubleQuotes) {
     char input[] = "SELECT * FROM \"table WHERE id = 1";
     ASSERT_EQ(DoesEmbedInDoubleQuotes(input, input + strlen(input)), 1);
+}
+
+// Unit test for Helper function isEmpty()
+TEST(RSUTIL, test_isEmptyString) {
+    ASSERT_EQ(true, isEmptyString((SQLCHAR *)""));
+    ASSERT_EQ(false, isEmptyString(NULL));
+    ASSERT_EQ(false, isEmptyString((SQLCHAR *)"not empty"));
+}
+
+// Unit test for Helper function isNullOrEmpty()
+TEST(RSUTIL, test_isNullOrEmptyString) {
+    ASSERT_EQ(true, isNullOrEmptyString((SQLCHAR *)""));
+    ASSERT_EQ(true, isNullOrEmptyString(NULL));
+    ASSERT_EQ(false, isNullOrEmptyString((SQLCHAR *)"not empty"));
+}
+
+// Unit test for Helper function sanitizeParameter()
+TEST(RSUTIL, test_sanitizerParameter) {
+    std::vector<std::string> utf8StrsBad = {"user' OR '1'='1", "test;",
+                                            "tes  t", "tes\"t"};
+
+    for (const auto &utf8 : utf8StrsBad) {
+        ASSERT_EQ(false, sanitizeParameter(utf8));
+    }
+
+    std::vector<std::string> utf8StrsGood = {"", "%", "Hello123_%^*+?{},$"};
+
+    for (const auto &utf8 : utf8StrsGood) {
+        ASSERT_EQ(true, sanitizeParameter(utf8));
+    }
+}
+
+// Unit test for Heper function sanitizeParameter with different input data type
+TEST(RSUTIL, test_sanitizerParameter_input_type) {
+    ASSERT_EQ(false, sanitizeParameter((char *)"test;"));
+    ASSERT_EQ(false, sanitizeParameter((const char *)"test;"));
+    ASSERT_EQ(false, sanitizeParameter((const unsigned char *)"test;"));
+    ASSERT_EQ(true, sanitizeParameter((char *)"test"));
+    ASSERT_EQ(true, sanitizeParameter((const char *)"test"));
+    ASSERT_EQ(true, sanitizeParameter((const unsigned char *)"test"));
+}
+
+// Unit test for Helper function sanitizeParameterW()
+TEST(RSUTIL, test_sanitizerParameterW) {
+    std::vector<std::string> utf8StrsBad = {
+        "user' OR '1'='1", 
+        "test;",   // Contains semicolon
+        "tes  t",  // Contains empty string
+        "tes\tt",  // Contains tab
+        "tes\nt",  // Contains new line
+        "tes\"t",  // Contains quote
+        "invalid'", // Contains single quote
+        "hello#world", // Contains special character
+        "hello!world", // Contains special character
+    };
+
+    for (const auto &utf8 : utf8StrsBad) {
+        ASSERT_EQ(false, sanitizeParameterW(utf8));
+    }
+
+    std::vector<std::string> utf8StrsGood = {
+        "",   
+        "%",
+        "Hello123_%^*+?{},$", 
+        "世界",
+        "employëestãblé密户",
+        "é",
+        "ñ"
+    };
+
+    for (const auto &utf8 : utf8StrsGood) {
+        ASSERT_EQ(true, sanitizeParameterW(utf8));
+    }
+}
+
+// Unit test for Helper function sanitizeParameterW with different input data type
+TEST(RSUTIL, test_sanitizerParameterW_input_type) {
+    std::string strGood = "Hello123_%^*+?{},$";
+    std::string strBad = "Hello 123_%^*+?{},$";
+    std::u16string strWGood = u"employëestãblé密户";
+    std::u16string strWBad = u"employëestãblé 密户";
+
+    ASSERT_EQ(true, sanitizeParameterW(strGood));
+    ASSERT_EQ(false, sanitizeParameterW(strBad));
+
+    ASSERT_EQ(true, sanitizeParameterW((SQLWCHAR *)strWGood.data(), SQL_NTS));
+    ASSERT_EQ(false, sanitizeParameterW((SQLWCHAR *)strWBad.data(), SQL_NTS));
+}
+
+// Unit test to check the return data type for helper function char2String
+TEST(RSUTIL, test_char2String) {
+    ASSERT_EQ(true, (std::is_same<decltype(char2String((SQLCHAR *)"test")),
+                                  std::string>::value));
+}
+
+// Unit test to check the return data type for helper function char2StringView
+TEST(RSUTIL, test_char2StringView) {
+    ASSERT_EQ(true, (std::is_same<decltype(char2StringView((SQLCHAR *)"test")),
+                                  std::string_view>::value));
+}
+
+// Unit test for helper function checkNameIsNotPattern
+TEST(RSUTIL, test_checkNameIsNotPattern) {
+    std::vector<std::string> utf8StrsNotPattern = {"", "%"};
+
+    for (const auto &utf8 : utf8StrsNotPattern) {
+        ASSERT_EQ(true, checkNameIsNotPattern(utf8));
+    }
+
+    std::vector<std::string> utf8StrsPattern = {"pattern%", "%pattern",
+                                                "pattern"};
+
+    for (const auto &utf8 : utf8StrsPattern) {
+        ASSERT_EQ(false, checkNameIsNotPattern(utf8));
+    }
+}
+
+// Unit test for helper funtion checkNameIsExactName
+TEST(RSUTIL, test_checkNameIsExactName) {
+    std::vector<std::string> utf8StrsNotExact = {"", "%", "pattern%",
+                                                 "%pattern"};
+
+    for (const auto &utf8 : utf8StrsNotExact) {
+        ASSERT_EQ(false, checkNameIsExactName(utf8));
+    }
+
+    std::vector<std::string> utf8StrsExact = {"exactName", "testName"};
+
+    for (const auto &utf8 : utf8StrsExact) {
+        ASSERT_EQ(true, checkNameIsExactName(utf8));
+    }
 }
