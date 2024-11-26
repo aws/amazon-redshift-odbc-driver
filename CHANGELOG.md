@@ -3,9 +3,7 @@ Changelog
 
 v2.1.5 (2024-11-21)
 ---------------------
-1. Introduced token caching support for the Browser IdC Auth plugin.
-2. Increased buffer size of MAX_IDEN_LEN to support connection parameter inputs up to 1024 characters.
-3. Updated the logic for retrieving database metadata through the SQLTables() and SQLColumns() API methods.
+1. This driver version has been recalled. ODBC Driver version 2.1.4 is recommended for use instead.
 
 v2.1.4 (2024-11-12)
 ---------------------
