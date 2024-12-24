@@ -1,6 +1,15 @@
 Changelog
 =========
 
+v2.1.6 (2024-12-23)
+---------------------
+1. Introduced token caching support for Browser IdC Auth plugin.
+2. Updated the logic for retrieving database metadata through the SQLTables() and SQLColumns() API methods.
+3. Addressed security issues as detailed in CVE-2024-12746
+4. Fixed an issue where data types returned for the BUFFER_LENGTH, DECIMAL_DIGITS, NUM_PREC_RADIX, and NULLABLE columns= in the SQLColumns ODBC API call result set for external schema did not conform to the ODBC specification.
+5. Increased buffer size of MAX_IDEN_LEN to support connection parameter inputs up to 1024 characters.
+6. Improved build system, removed prebuilt dependencies and introduced an automated script to build driver dependencies from source.
+
 v2.1.5 (2024-11-21)
 ---------------------
 1. This driver version has been recalled. ODBC Driver version 2.1.4 is recommended for use instead.
