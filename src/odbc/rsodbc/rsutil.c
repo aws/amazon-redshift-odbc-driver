@@ -13722,9 +13722,14 @@ int showDiscoveryVersion(RS_STMT_INFO *pStmt) {
 
     // param not available, return early
     if (!paramValueStr) {
+        RS_LOG_DEBUG("RSUTIL",
+                    "showDiscoveryVersion version 0");
         return 0;
     } else {
         try {
+            RS_LOG_DEBUG("RSUTIL",
+                    "showDiscoveryVersion version %d",
+                    std::stoi(paramValueStr));
             return std::stoi(paramValueStr);
         } catch (const std::invalid_argument &e) {
             throw ExceptionInvalidParameter(
@@ -13739,58 +13744,6 @@ bool getCaseSensitive(RS_STMT_INFO *pStmt) {
     char *paramValueStr = libpqParameterStatus(pConn, "case_sensitive");
 
     if (paramValueStr && (strcmp(paramValueStr, "on") == 0)) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-bool sanitizeParameter(const char *input) {
-    return sanitizeParameter(
-        char2StringView(reinterpret_cast<const unsigned char *>(input)));
-}
-
-bool sanitizeParameter(const unsigned char *input) {
-    return sanitizeParameter(char2StringView(input));
-}
-
-bool sanitizeParameter(const std::string_view input) {
-    if (input.empty()) {
-        return true;
-    }
-
-    std::regex whitelist("^[a-zA-Z0-9_%^*+?{},$]{0,126}$");
-    if (std::regex_match(input.begin(), input.end(), whitelist)) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-bool sanitizeParameterW(const SQLWCHAR *input, int inputLen) {
-    if (!input || (inputLen < 0 && inputLen != SQL_NTS)) {
-        return true;
-    }
-    std::string utf8str;
-    size_t strLen = wchar16_to_utf8_str(input, inputLen, utf8str);
-    return sanitizeParameterW(utf8str);
-}
-
-bool sanitizeParameterW(const std::string input) {
-    if (input.empty()) {
-        return true;
-    }
-
-    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converterW;
-    std::wstring wtest = converterW.from_bytes(input);
-    // 2 bytes: U+0080 to U+07FF
-    // 3 bytes: U+0800 to U+FFFF
-    // 4 bytes: U+10000 to U+10FFFF
-    std::wstring wexpr = converterW.from_bytes(
-        "^(?!.*[\"\';])([a-zA-Z0-9_%^*+?{},$]|[\\u0080-\\u07FF]|[\\u0800-"
-        "\\uFFFF]|[\\U00010000-\\U0010FFFF]){0,126}$");
-    std::wregex whitelist(wexpr);
-    if (std::regex_match(wtest, whitelist)) {
         return true;
     } else {
         return false;
@@ -13826,12 +13779,22 @@ bool isSqlAllTableTypes(SQLCHAR *pTableType, SQLSMALLINT cbTableType){
     return pTableType && ((cbTableType == SQL_NTS && _stricmp((char *)pTableType, SQL_ALL_TABLE_TYPES) == 0) || (cbTableType != SQL_NTS && _strnicmp((char *)pTableType, SQL_ALL_TABLE_TYPES, cbTableType) == 0));
 }
 
-// Helper function to check if name was null/wildcard/empty string to determine if we want to specify LIKE in SHOW command
-bool checkNameIsNotPattern(const std::string &name){
-    return name.empty() || name == "%";
-}
+std::string escapedFilter(const std::string& input)
+{
+    std::string output;
+    output.reserve(input.length() * 2); // Allocate extra space to avoid reallocations
 
-// Helper function to check if name was exact name to determine if we can skip corresponding SHOW API call
-bool checkNameIsExactName(const std::string &name){
-    return !name.empty() && (name.find("%") == std::string::npos);
+    for (char c : input)
+    {
+        if (c == '\'')
+        {
+            output += "''"; // Double the single quote
+        }
+        else
+        {
+            output += c;
+        }
+    }
+
+    return output;
 }

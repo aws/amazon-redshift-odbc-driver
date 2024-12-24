@@ -22,6 +22,8 @@
 #include "rstrace.h"
 #include "rsunicode.h"
 #include "rsutil.h"
+#include "rsprepare.h"
+#include "rsparameter.h"
 
 /*----------------
  * RsMetadataServerAPIHelper
@@ -31,73 +33,6 @@
  */
 class RsMetadataServerAPIHelper {
   public:
-    /* ----------------
-     * getCatalogs
-     *
-     * helper function to retrieve a list of catalog for given catalog name
-     * (pattern)
-     *
-     * Parameters:
-     *   phstmt (SQLHSTMT): statement handler
-     *   catalogName (const std::string &): catalog name (pattern)
-     *   catalogs (std::vector<std::string> &): the vector to store the
-     *     result
-     *   isSingleDatabaseMetaData (bool): a boolean to determine returning
-     *     result from single database or all database
-     *
-     * Return:
-     *   SQLRETURN
-     * ----------------
-     */
-    static SQLRETURN getCatalogs(SQLHSTMT phstmt,
-                                 const std::string &catalogName,
-                                 std::vector<std::string> &catalogs,
-                                 bool isSingleDatabaseMetaData);
-
-    /* ----------------
-     * getSchemas
-     *
-     * helper function to retrieve a list of schema for given catalog name and
-     * schema name (pattern)
-     *
-     * Parameters:
-     *   phstmt (SQLHSTMT): statement handler
-     *   catalogName (const std::string &): catalog name
-     *   schemaName (const std::string &): schema name (pattern)
-     *   schemas (std::vector<std::string> &): the vector to store the
-     *     result
-     *
-     * Return:
-     *   SQLRETURN
-     * ----------------
-     */
-    static SQLRETURN getSchemas(SQLHSTMT phstmt, const std::string &catalogName,
-                                const std::string &schemaName,
-                                std::vector<std::string> &schemas);
-
-    /* ----------------
-     * getTables
-     *
-     * helper function to retrieve a list of table for given catalog name,
-     * schema name and table name (pattern)
-     *
-     * Parameters:
-     *   phstmt (SQLHSTMT): statement handler
-     *   catalogName (const std::string &): catalog name
-     *   schemaName (const std::string &): schema name
-     *   tableName (const std::string &): table name (pattern)
-     *   tables (std::vector<std::string> &): the vector to store the
-     *     result
-     *
-     * Return:
-     *   SQLRETURN
-     * ----------------
-     */
-    static SQLRETURN getTables(SQLHSTMT phstmt, const std::string &catalogName,
-                               const std::string &schemaName,
-                               const std::string &tableName,
-                               std::vector<std::string> &tables);
-
     /* ----------------
      * sqlCatalogsServerAPI
      *
@@ -201,14 +136,32 @@ class RsMetadataServerAPIHelper {
                         bool isSingleDatabaseMetaData);
 
     /* ----------------
-     * call_show_schema
+     * callShowDatabases
      *
-     * helper function to call SHOW SCHEMAS and return a full result instead of
-     * just return a list of schema
+     * helper function to call SHOW DATABASES and return a list of catalog
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   catalog (const std::string &): catalog name / pattern
+     *   catalogs (std::vector<std::string>): a vector to store catalog list
+     *   isSingleDatabaseMetaData (bool): a boolean to determine returning
+     *     result from single database or all database
+     *
+     * Return:
+     *   SQLRETURN
+     * ----------------
+     */
+    static SQLRETURN callShowDatabases(SQLHSTMT phstmt, const std::string &catalog, std::vector<std::string> &catalogs, bool isSingleDatabaseMetaData);
+
+    /* ----------------
+     * callShowSchemas
+     *
+     * helper function to call SHOW SCHEMAS and return intermediate result set
      *
      * Parameters:
      *   phstmt (SQLHSTMT): statement handler
      *   catalog (const std::string &): Exact name of catalog
+     *   schema (const std::string&): schema name / pattern
      *   intermediateRS (std::vector<SHOWSCHEMASResult> &): a vector to store
      *     intermediate result set for post-processing
      *
@@ -217,20 +170,19 @@ class RsMetadataServerAPIHelper {
      * ----------------
      */
     static SQLRETURN
-    call_show_schema(SQLHSTMT phstmt, const std::string &catalog,
+    callShowSchemas(SQLHSTMT phstmt, const std::string &catalog, const std::string &schema, 
                      std::vector<SHOWSCHEMASResult> &intermediateRS);
 
     /* ----------------
-     * call_show_table
+     * callShowTables
      *
-     * helper function to call SHOW TABLES and return a full result instead of
-     * just return a list of table
+     * helper function to call SHOW TABLES and return intermediate result set
      *
      * Parameters:
      *   phstmt (SQLHSTMT): statement handler
      *   catalog (const std::string &): Exact name of catalog
      *   schema (const std::string &): Exact name of schema
-     *   table (const std::string &): Exact name of table
+     *   table (const std::string &): table name / pattern
      *   intermediateRS (std::vector<SHOWTABLESResult> &): a vector to store
      *     intermediate result set for post-processing
      *
@@ -239,22 +191,21 @@ class RsMetadataServerAPIHelper {
      * ----------------
      */
     static SQLRETURN
-    call_show_table(SQLHSTMT phstmt, const std::string &catalog,
+    callShowTables(SQLHSTMT phstmt, const std::string &catalog,
                     const std::string &schema, const std::string &table,
                     std::vector<SHOWTABLESResult> &intermediateRS);
 
     /* ----------------
-     * call_show_column
+     * callShowColumns
      *
-     * helper function to call SHOW COLUMNS and return a full result instead of
-     * just return a list of column
+     * helper function to call SHOW COLUMNS and return intermediate result set
      *
      * Parameters:
      *   phstmt (SQLHSTMT): statement handler
      *   catalog (const std::string &): Exact name of catalog
      *   schema (const std::string &): Exact name of schema
      *   table (const std::string &): Exact name of table
-     *   column (const std::string &): Exact name of column
+     *   column (const std::string &): column name / pattern
      *   intermediateRS (std::vector<SHOWCOLUMNSResult> &): a vector to store
      *     intermediate result set for post-processing
      *
@@ -263,10 +214,28 @@ class RsMetadataServerAPIHelper {
      * ----------------
      */
     static SQLRETURN
-    call_show_column(SQLHSTMT phstmt, const std::string &catalog,
+    callShowColumns(SQLHSTMT phstmt, const std::string &catalog,
                      const std::string &schema, const std::string &table,
                      const std::string &column,
                      std::vector<SHOWCOLUMNSResult> &intermediateRS);
+
+    /* ----------------
+     * callQuoteFunc
+     *
+     * helper function to call QUOTE* function to do proper quoting
+     * and escaping for identifier and literal
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   input (const std::string &): the input string to be quoted
+     *   output (const std::string &): quoted input string
+     *   quotedQuery (const std::string &): sql query for QUOTE function
+     *
+     * Return:
+     *   SQLRETURN
+     * ----------------
+     */
+    static SQLRETURN callQuoteFunc(SQLHSTMT phstmt, const std::string &input, std::string &output, const std::string &quotedQuery);
 };
 
 #endif // __METADATASERVERAPIHELPER_H__

@@ -11,267 +11,6 @@
 #include "rsutil.h"
 
 //
-// Helper function to retrieve a list of catalog for given catalog name
-// (pattern)
-//
-SQLRETURN RsMetadataServerAPIHelper::getCatalogs(
-    SQLHSTMT phstmt, const std::string &catalogName,
-    std::vector<std::string> &catalogs, bool isSingleDatabaseMetaData) {
-
-    SQLRETURN rc = SQL_SUCCESS;
-    SQLLEN catalogLen;
-    SQLCHAR buf[MAX_IDEN_LEN];
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    std::string sql;
-
-    std::string database = getDatabase(pStmt);
-    if (database.empty()) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getCatalogs: Error when retrieving current database name", 0,
-                 NULL);
-        return SQL_ERROR;
-    }
-
-    // Call Server API SHOW DATABASES to get a list of Catalog
-    if (checkNameIsNotPattern(catalogName)) {
-        sql = "SHOW DATABASES;";
-    } else {
-        sql = "SHOW DATABASES LIKE '" + catalogName + "';";
-    }
-
-    // Execute Server API call
-    RS_LOG_DEBUG("getCatalogs", "Execute SHOW DATABASES for catalog = %s",
-                 catalogName.c_str());
-    setCatalogQueryBuf(pStmt, (char *)sql.c_str());
-    // TODO: Support for prepare not ready yet
-    rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)sql.c_str(), SQL_NTS,
-                                     TRUE, FALSE, FALSE, TRUE);
-    resetCatalogQueryFlag(pStmt);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getCatalogs: Fail to execute SHOW DATABASES ... ", 0, NULL);
-        return rc;
-    }
-
-    // Clean up the column binding
-    rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getCatalogs: Fail to clean up the column binding", 0, NULL);
-        return rc;
-    }
-
-    // Bind columns for SHOW DATABASES result set
-    rc = RS_STMT_INFO::RS_SQLBindCol(
-        pStmt,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_DATABASES_database_name),
-        SQL_C_CHAR, buf, sizeof(buf), &catalogLen);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getCatalogs: Fail to bind column for SHOW DATABASES "
-                 "result ... ",
-                 0, NULL);
-        return SQL_ERROR;
-    }
-
-    // Retrieve result from SHOW DATABASES
-    while (SQL_SUCCEEDED(
-        rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0))) {
-        std::string cur = char2String(buf);
-        if (!isSingleDatabaseMetaData || cur == database) {
-            catalogs.push_back(cur);
-        }
-    }
-
-    // Unbind columns for SHOW TABLES result set
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_DATABASES_database_name));
-
-    RS_LOG_TRACE("getCatalogs", "number of catalog: %d", catalogs.size());
-
-    // While loop will end if there's no more result to fetch. Therefore, rc
-    // will be changed to SQL_ERROR Simply return SQL_SUCCESS since while loop
-    // is finished with no issue
-    return SQL_SUCCESS;
-}
-
-//
-// Helper function to retrieve a list of schema for given catalog name and
-// schema name (pattern)
-//
-SQLRETURN RsMetadataServerAPIHelper::getSchemas(
-    SQLHSTMT phstmt, const std::string &catalogName,
-    const std::string &schemaName, std::vector<std::string> &schemas) {
-
-    SQLRETURN rc = SQL_SUCCESS;
-    SQLLEN schemaLen;
-    SQLCHAR buf[MAX_IDEN_LEN];
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    std::string sql;
-
-    // Input parameter check
-    if (!checkNameIsExactName(catalogName)) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getSchemas: catalog name should be exact name", 0,
-                 NULL);
-        return SQL_ERROR;
-    }
-
-    // Call Server API SHOW SCHEMAS to get a list of Schema
-    if (checkNameIsNotPattern(schemaName)) {
-        sql = "SHOW SCHEMAS FROM DATABASE " + catalogName + ";";
-    } else {
-        sql = "SHOW SCHEMAS FROM DATABASE " + catalogName + " LIKE '" +
-              schemaName + "';";
-    }
-
-    // Execute Server API call
-    RS_LOG_DEBUG("getSchemas",
-                 "Execute SHOW SCHEMAS for catalog = %s, schema = %s",
-                 catalogName.c_str(), schemaName.c_str());
-    setCatalogQueryBuf(pStmt, (char *)sql.c_str());
-    // TODO: Support for prepare not ready yet
-    rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)sql.c_str(), SQL_NTS,
-                                     TRUE, FALSE, FALSE, TRUE);
-    resetCatalogQueryFlag(pStmt);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getSchemas: Fail to execute SHOW SCHEMAS ... ", 0, NULL);
-        return rc;
-    }
-
-    // Clean up the column binding
-    rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getSchemas: Fail to clean up the column binding", 0, NULL);
-        return rc;
-    }
-
-    // Bind columns for SHOW SCHEMAS result set
-    rc = RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_SCHEMAS_schema_name),
-        SQL_C_CHAR, buf, sizeof(buf), &schemaLen);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getSchemas: Fail to bind column for SHOW SCHEMAS result ... ",
-                 0, NULL);
-        return SQL_ERROR;
-    }
-
-    // Retrieve result from SHOW SCHEMAS
-    while (SQL_SUCCEEDED(
-        rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0))) {
-        schemas.push_back(char2String(buf));
-    }
-
-    // Unbind columns for SHOW SCHEMAS result set
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_SCHEMAS_schema_name));
-
-    RS_LOG_TRACE("getSchemas", "number of schema: %d", schemas.size());
-
-    // While loop will end if there's no more result to fetch. Therefore, rc
-    // will be changed to SQL_ERROR Simply return SQL_SUCCESS since while loop
-    // is finished with no issue
-    return SQL_SUCCESS;
-}
-
-//
-// Helper function to retrieve a list of table for given catalog name, schema
-// name and table name (pattern)
-//
-SQLRETURN RsMetadataServerAPIHelper::getTables(
-    SQLHSTMT phstmt, const std::string &catalogName,
-    const std::string &schemaName, const std::string &tableName,
-    std::vector<std::string> &tables) {
-
-    SQLRETURN rc = SQL_SUCCESS;
-    SQLLEN tableLen;
-    SQLCHAR buf[MAX_IDEN_LEN];
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    std::string sql;
-
-    // Input parameter check
-    if (!checkNameIsExactName(catalogName)) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getTables: catalog name should be exact name", 0,
-                 NULL);
-        return SQL_ERROR;
-    }
-
-    if (!checkNameIsExactName(schemaName)) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getTables: schema name should be exact name", 0,
-                 NULL);
-        return SQL_ERROR;
-    }
-
-    // Call Server API SHOW TABLES to get a list of Table
-    if (checkNameIsNotPattern(tableName)) {
-        sql = "SHOW TABLES FROM SCHEMA " + catalogName + "." + schemaName + ";";
-    } else {
-        sql = "SHOW TABLES FROM SCHEMA " + catalogName + "." + schemaName +
-              " LIKE '" + tableName + "';";
-    }
-
-    // Execute Server API call
-    RS_LOG_DEBUG(
-        "getTables",
-        "Execute SHOW TABLES for catalog = %s, schema = %s, table = %s",
-        catalogName.c_str(), schemaName.c_str(), tableName.c_str());
-    setCatalogQueryBuf(pStmt, (char *)sql.c_str());
-    // TODO: Support for prepare not ready yet
-    rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)sql.c_str(), SQL_NTS,
-                                     TRUE, FALSE, FALSE, TRUE);
-    resetCatalogQueryFlag(pStmt);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getTables: Fail to execute SHOW TABLES ... ", 0, NULL);
-        return rc;
-    }
-
-    // Clean up the column binding
-    rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getTables: Fail to clean up the column binding", 0, NULL);
-        return rc;
-    }
-
-    // Bind columns for SHOW TABLES result set
-    rc = RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_table_name),
-        SQL_C_CHAR, buf, sizeof(buf), &tableLen);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "getTables: Fail to bind column for SHOW TABLES result ... ",
-                 0, NULL);
-        return SQL_ERROR;
-    }
-
-    // Retrieve result from SHOW TABLES
-    while (SQL_SUCCEEDED(
-        rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0))) {
-        tables.push_back(char2String(buf));
-    }
-
-    // Unbind columns for SHOW TABLES result set
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_table_name));
-
-    RS_LOG_TRACE("getTables", "number of table: %d", tables.size());
-
-    // While loop will end if there's no more result to fetch. Therefore, rc
-    // will be changed to SQL_ERROR Simply return SQL_SUCCESS since while loop
-    // is finished with no issue
-    return SQL_SUCCESS;
-}
-
-//
 // Helper function to return intermediate result set for SQLTables special call
 // to retrieve a list of catalog
 //
@@ -281,14 +20,24 @@ SQLRETURN RsMetadataServerAPIHelper::sqlCatalogsServerAPI(
 
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    std::string catalog = "";
 
-    rc = getCatalogs(phstmt, catalog, catalogs, isSingleDatabaseMetaData);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "sqlCatalogsServerAPI: Error in getCatalogs ", 0, NULL);
+    // Return current connected database name
+    if (isSingleDatabaseMetaData) {
+        catalogs.push_back(getDatabase(pStmt));
         return rc;
     }
+
+    // Get a list of catalog name from SHOW DATABASES
+    rc = callShowDatabases(phstmt, RsMetadataAPIHelper::SQL_ALL, catalogs, isSingleDatabaseMetaData);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        RS_LOG_ERROR("sqlCatalogsServerAPI", "Error in callShowDatabases");
+        addError(&pStmt->pErrorList, "HY000",
+                 "sqlCatalogsServerAPI: Error in callShowDatabases ", 0, NULL);
+        return rc;
+    }
+
+    RS_LOG_TRACE("sqlCatalogsServerAPI", "Total number of return rows: %d", catalogs.size());
+    
     return rc;
 }
 
@@ -303,29 +52,31 @@ SQLRETURN RsMetadataServerAPIHelper::sqlSchemasServerAPI(
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
     std::vector<std::string> catalogs;
-    std::string catalog = "";
 
-    // Get a list of catalog
-    rc = getCatalogs(phstmt, catalog, catalogs, isSingleDatabaseMetaData);
+    // Get a list of catalog name from SHOW DATABASES
+    rc = callShowDatabases(phstmt, RsMetadataAPIHelper::SQL_ALL, catalogs, isSingleDatabaseMetaData);
     if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        RS_LOG_ERROR("sqlSchemasServerAPI", "Error in callShowDatabases");
         addError(&pStmt->pErrorList, "HY000",
-                 "sqlSchemasServerAPI: Error in getCatalogs ", 0, NULL);
+                 "sqlSchemasServerAPI: Error in callShowDatabases ", 0, NULL);
         return rc;
     }
 
     for (int i = 0; i < catalogs.size(); i++) {
-        rc = call_show_schema(phstmt, catalogs[i], intermediateRS);
+        // Get a list of schema name from SHOW SCHEMAS
+        rc = callShowSchemas(phstmt, catalogs[i], RsMetadataAPIHelper::SQL_ALL, intermediateRS);
         if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+            RS_LOG_ERROR("sqlSchemasServerAPI", "Error in callShowSchemas");
             addError(&pStmt->pErrorList, "HY000",
-                     "sqlSchemasServerAPI: Error in call_show_schema ", 0,
+                     "sqlSchemasServerAPI: Error in callShowSchemas ", 0,
                      NULL);
             return rc;
         }
     }
     catalogs.clear();
-    RS_LOG_TRACE("sqlSchemasServerAPI",
-                 "Successfully executed SHOW SCHEMAS. Number of rows: %d",
-                 intermediateRS.size());
+
+    RS_LOG_TRACE("sqlSchemasServerAPI", "Total number of return rows: %d", intermediateRS.size());
+    
     return rc;
 }
 
@@ -341,93 +92,45 @@ SQLRETURN RsMetadataServerAPIHelper::sqlTablesServerAPI(
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
     std::vector<std::string> catalogs;
-    std::vector<std::string> schemas;
-
-    RS_LOG_DEBUG("sqlTablesServerAPI",
-                 "Calling Server API SHOW TABLES for catalog = %s, schema = "
-                 "%s, tableName = %s",
-                 catalogName.c_str(), schemaName.c_str(), tableName.c_str());
+    std::vector<SHOWSCHEMASResult> schemas;
 
     if (!retEmpty) {
-        // Skip SHOW DATABASES API call if catalog name is specified
-        if (checkNameIsExactName(catalogName)) {
-            // Skip SHOW SCHEMA API call if schema name is specified
-            if (checkNameIsExactName(schemaName)) {
-                // Skip SHOW DATABASES & SHOW SCHEMAS
-                // Call SHOW TABLES directly
-                rc = call_show_table(phstmt, catalogName, schemaName, tableName,
-                                     intermediateRS);
-                if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                    addError(&pStmt->pErrorList, "HY000",
-                             "sqlTablesServerAPI: Error in call_show_table ", 0,
-                             NULL);
-                    return rc;
-                }
-            } else {
-                // Skip SHOW DATABASES
-                // Get a list of schema
-                rc = getSchemas(phstmt, catalogName, schemaName, schemas);
-                if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                    addError(&pStmt->pErrorList, "HY000",
-                             "sqlTablesServerAPI: Error in getSchemas ", 0,
-                             NULL);
-                    return rc;
-                }
-                for (int j = 0; j < schemas.size(); j++) {
-                    // Skip SHOW DATABASES
-                    // Call SHOW TABLES per schema
-                    rc = call_show_table(phstmt, catalogName, schemas[j],
-                                         tableName, intermediateRS);
-                    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                        addError(
-                            &pStmt->pErrorList, "HY000",
-                            "sqlTablesServerAPI: Error in call_show_table ", 0,
-                            NULL);
-                        return rc;
-                    }
-                }
-                schemas.clear();
-            }
-        } else {
-            // Get a list of Catalog
-            rc = getCatalogs(phstmt, catalogName, catalogs,
-                             isSingleDatabaseMetaData);
+        // Get a list of catalog name from SHOW DATABASES
+        rc = callShowDatabases(phstmt, catalogName, catalogs,
+                         isSingleDatabaseMetaData);
+        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+            RS_LOG_ERROR("sqlTablesServerAPI", "Error in callShowDatabases");
+            addError(&pStmt->pErrorList, "HY000",
+                     "sqlTablesServerAPI: Error in callShowDatabases ", 0, NULL);
+            return rc;
+        }
+        for (int i = 0; i < catalogs.size(); i++) {
+            // Get a list of schema name from SHOW SCHEMAS
+            rc = callShowSchemas(phstmt, catalogs[i], schemaName, schemas);
             if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+                RS_LOG_ERROR("sqlTablesServerAPI", "Error in callShowSchemas");
                 addError(&pStmt->pErrorList, "HY000",
-                         "sqlTablesServerAPI: Error in getCatalogs ", 0, NULL);
+                         "sqlTablesServerAPI: Error in callShowSchemas ", 0, NULL);
                 return rc;
             }
-            for (int i = 0; i < catalogs.size(); i++) {
-                // Can't skip SHOW SCHEMAS if catalog is not specified to
-                // prevent calling SHOW TABLES with catalog which required
-                // additional permission
-                // Get a list of schema per catalog
-                rc = getSchemas(phstmt, catalogs[i], schemaName, schemas);
+            for (int j = 0; j < schemas.size(); j++) {
+                // Get a list of table name from SHOW TABLES
+                rc = callShowTables(phstmt, catalogs[i],
+                                     char2String(schemas[j].schema_name),
+                                     tableName, intermediateRS);
                 if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+                    RS_LOG_ERROR("sqlTablesServerAPI", "Error in callShowTables");
                     addError(&pStmt->pErrorList, "HY000",
-                             "sqlTablesServerAPI: Error in getSchemas ", 0,
+                             "sqlTablesServerAPI: Error in callShowTables ", 0,
                              NULL);
                     return rc;
                 }
-                for (int j = 0; j < schemas.size(); j++) {
-                    // Call SHOW TABLES per catalog/schema
-                    rc = call_show_table(phstmt, catalogs[i], schemas[j],
-                                         tableName, intermediateRS);
-                    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                        addError(
-                            &pStmt->pErrorList, "HY000",
-                            "sqlTablesServerAPI: Error in call_show_table ", 0,
-                            NULL);
-                        return rc;
-                    }
-                }
-                schemas.clear();
             }
-            catalogs.clear();
+            schemas.clear();
         }
-        RS_LOG_TRACE("sqlTablesServerAPI",
-                     "Successfully executed SHOW TABLES. Number of rows: %d",
-                     intermediateRS.size());
+        catalogs.clear();
+
+        RS_LOG_TRACE("sqlTablesServerAPI", "Total number of return rows: %d", intermediateRS.size());
     } else {
         RS_LOG_TRACE("sqlTablesServerAPI", "Return empty intermediateRS");
     }
@@ -448,187 +151,64 @@ SQLRETURN RsMetadataServerAPIHelper::sqlColumnsServerAPI(
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
     std::vector<std::string> catalogs;
-    std::vector<std::string> schemas;
-    std::vector<std::string> tables;
+    std::vector<SHOWSCHEMASResult> schemas;
+    std::vector<SHOWTABLESResult> tables;
     std::string sql;
 
-    RS_LOG_DEBUG("sqlColumnsServerAPI",
-                 "Calling Server API SHOW COLUMNS for catalog = %s, schema = "
-                 "%s, tableName = %s, columnName = %s",
-                 catalogName.c_str(), schemaName.c_str(), tableName.c_str(),
-                 columnName.c_str());
-
     if (!retEmpty) {
-        // Skip SHOW DATABASES API call if catalog name is specified
-        if (checkNameIsExactName(catalogName)) {
-            // Skip SHOW SCHEMAS API call if schema name is specified
-            if (checkNameIsExactName(schemaName)) {
-                // Skip SHOW TABLES API call if table name is specified
-                if (checkNameIsExactName(tableName)) {
-                    // Skip SHOW DATABASES & SHOW SCHEMAS & SHOW TABLES
-                    // Call SHOW COLUMNS directly
-                    rc =
-                        call_show_column(phstmt, catalogName, schemaName,
-                                         tableName, columnName, intermediateRS);
-                    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                        addError(
-                            &pStmt->pErrorList, "HY000",
-                            "sqlColumnsServerAPI: Error in call_show_column ",
-                            0, NULL);
-                        return rc;
-                    }
-                } else {
-                    // SKip SHOW DATABASES & SHOW SCHEMAS
-                    // Get a list of table
-                    rc = getTables(phstmt, catalogName, schemaName, tableName,
-                                   tables);
-                    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                        addError(&pStmt->pErrorList, "HY000",
-                                 "sqlColumnsServerAPI: Error in getTables ", 0,
-                                 NULL);
-                        return rc;
-                    }
-                    for (int k = 0; k < tables.size(); k++) {
-                        // SKip SHOW DATABASES & SHOW SCHEMAS
-                        // Call SHOW COLUMNS per table
-                        rc = call_show_column(phstmt, catalogName, schemaName,
-                                              tables[k], columnName,
-                                              intermediateRS);
-                        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                            addError(&pStmt->pErrorList, "HY000",
-                                     "sqlColumnsServerAPI: Error in "
-                                     "call_show_column ",
-                                     0, NULL);
-                            return rc;
-                        }
-                    }
-                    tables.clear();
-                }
-            } else {
-                // Skip SHOW DATABASES
-                // Get a list of schema
-                rc = getSchemas(phstmt, catalogName, schemaName, schemas);
-                if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                    addError(&pStmt->pErrorList, "HY000",
-                             "sqlColumnsServerAPI: Error in getSchemas ", 0,
-                             NULL);
-                    return rc;
-                }
-                for (int j = 0; j < schemas.size(); j++) {
-                    if (checkNameIsExactName(tableName)) {
-                        // Skip SHOW DATABASES & SHOW TABLES
-                        // Call SHOW COLUMNS per schema
-                        rc = call_show_column(phstmt, catalogName, schemas[j],
-                                              tableName, columnName,
-                                              intermediateRS);
-                        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                            addError(&pStmt->pErrorList, "HY000",
-                                     "sqlColumnsServerAPI: Error in "
-                                     "call_show_column ",
-                                     0, NULL);
-                            return rc;
-                        }
-                    } else {
-                        // SKip SHOW DATABASES
-                        // Get a list of table per schema
-                        rc = getTables(phstmt, catalogName, schemas[j],
-                                       tableName, tables);
-                        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                            addError(&pStmt->pErrorList, "HY000",
-                                     "sqlColumnsServerAPI: Error in getTables ",
-                                     0, NULL);
-                            return rc;
-                        }
-                        for (int k = 0; k < tables.size(); k++) {
-                            // SKip SHOW DATABASES
-                            // Call SHOW COLUMNS per schema/table
-                            rc = call_show_column(phstmt, catalogName,
-                                                  schemas[j], tables[k],
-                                                  columnName, intermediateRS);
-                            if (rc != SQL_SUCCESS &&
-                                rc != SQL_SUCCESS_WITH_INFO) {
-                                addError(&pStmt->pErrorList, "HY000",
-                                         "sqlColumnsServerAPI: Error in "
-                                         "call_show_column ",
-                                         0, NULL);
-                                return rc;
-                            }
-                        }
-                        tables.clear();
-                    }
-                }
-                schemas.clear();
-            }
-        } else {
-            // Get a list of Catalog
-            rc = getCatalogs(phstmt, catalogName, catalogs,
-                             isSingleDatabaseMetaData);
+        // Get a list of catalog name from SHOW DATABASES
+        rc = callShowDatabases(phstmt, catalogName, catalogs,
+                         isSingleDatabaseMetaData);
+        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+            RS_LOG_ERROR("sqlColumnsServerAPI", "Error in callShowDatabases");
+            addError(&pStmt->pErrorList, "HY000",
+                     "sqlColumnsServerAPI: Error in callShowDatabases ", 0, NULL);
+            return rc;
+        }
+
+        for (int i = 0; i < catalogs.size(); i++) {
+            // Get a list of schema name from SHOW SCHEMAS
+            rc = callShowSchemas(phstmt, catalogs[i], schemaName, schemas);
             if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+                RS_LOG_ERROR("sqlColumnsServerAPI", "Error in callShowSchemas");
                 addError(&pStmt->pErrorList, "HY000",
-                         "sqlColumnsServerAPI: Error in getCatalogs ", 0, NULL);
+                         "sqlColumnsServerAPI: Error in callShowSchemas ", 0, NULL);
                 return rc;
             }
-
-            for (int i = 0; i < catalogs.size(); i++) {
-                // Can't skip SHOW SCHEMAS if catalog is not specified to
-                // prevent calling SHOW TABLES with catalog which required
-                // additional permission Get list of schema per catalog
-                rc = getSchemas(phstmt, catalogs[i], schemaName, schemas);
+            for (int j = 0; j < schemas.size(); j++) {
+                // Get a list of table name from SHOW TABLES
+                rc = callShowTables(phstmt, catalogs[i],
+                                     char2String(schemas[j].schema_name),
+                                     tableName, tables);
                 if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+                    RS_LOG_ERROR("sqlColumnsServerAPI", "Error in callShowTables");
                     addError(&pStmt->pErrorList, "HY000",
-                             "sqlColumnsServerAPI: Error in getSchemas ", 0,
+                             "sqlColumnsServerAPI: Error in callShowTables ", 0,
                              NULL);
                     return rc;
                 }
-                for (int j = 0; j < schemas.size(); j++) {
-                    // Skip SHOW TABLES API call if table name is specified
-                    if (checkNameIsExactName(tableName)) {
-                        // Skip SHOW TABLES
-                        // Call SHOW COLUMNS per catalog/schema
-                        rc = call_show_column(phstmt, catalogs[i], schemas[j],
-                                              tableName, columnName,
-                                              intermediateRS);
-                        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                            addError(&pStmt->pErrorList, "HY000",
-                                     "sqlColumnsServerAPI: Error in "
-                                     "call_show_column ",
-                                     0, NULL);
-                            return rc;
-                        }
-                    } else {
-                        // Get a list of table per catalog/schema
-                        rc = getTables(phstmt, catalogs[i], schemas[j],
-                                       tableName, tables);
-                        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                            addError(&pStmt->pErrorList, "HY000",
-                                     "sqlColumnsServerAPI: Error in getTables ",
-                                     0, NULL);
-                            return rc;
-                        }
-                        for (int k = 0; k < tables.size(); k++) {
-                            // Call SHOW COLUMNS per catalog/schema/table
-                            rc = call_show_column(phstmt, catalogs[i],
-                                                  schemas[j], tables[k],
-                                                  columnName, intermediateRS);
-                            if (rc != SQL_SUCCESS &&
-                                rc != SQL_SUCCESS_WITH_INFO) {
-                                addError(&pStmt->pErrorList, "HY000",
-                                         "sqlColumnsServerAPI: Error in "
-                                         "call_show_column ",
-                                         0, NULL);
-                                return rc;
-                            }
-                        }
-                        tables.clear();
+                for (int k = 0; k < tables.size(); k++) {
+                    // Get a list of column name from SHOW COLUMNS
+                    rc = callShowColumns(phstmt, catalogs[i],
+                                          char2String(schemas[j].schema_name),
+                                          char2String(tables[k].table_name),
+                                          columnName, intermediateRS);
+                    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+                        RS_LOG_ERROR("sqlColumnsServerAPI", "Error in callShowColumns");
+                        addError(&pStmt->pErrorList, "HY000",
+                                 "sqlColumnsServerAPI: Error in "
+                                 "callShowColumns ",
+                                 0, NULL);
+                        return rc;
                     }
                 }
-                schemas.clear();
+                tables.clear();
             }
-            catalogs.clear();
+            schemas.clear();
         }
-        RS_LOG_TRACE("sqlColumnsServerAPI",
-                     "Successfully executed SHOW COLUMNS. Number of rows: %d",
-                     intermediateRS.size());
+        catalogs.clear();
+
+        RS_LOG_TRACE("sqlColumnsServerAPI", "Total number of return rows: %d", intermediateRS.size());
     } else {
         RS_LOG_TRACE("sqlColumnsServerAPI", "Return empty intermediateRS");
     }
@@ -637,27 +217,43 @@ SQLRETURN RsMetadataServerAPIHelper::sqlColumnsServerAPI(
 }
 
 //
-// Helper function to retrieve intermediate result set for SHOW SCHEMAS
+// Helper function to retrieve intermediate result set for SHOW DATABASES
 //
-SQLRETURN RsMetadataServerAPIHelper::call_show_schema(
+SQLRETURN RsMetadataServerAPIHelper::callShowDatabases(
     SQLHSTMT phstmt, const std::string &catalog,
-    std::vector<SHOWSCHEMASResult> &intermediateRS) {
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    std::vector<std::string> &catalogs, bool isSingleDatabaseMetaData) {
     SQLRETURN rc = SQL_SUCCESS;
-    std::string sql = {0};
+    SQLLEN catalogLen;
+    SQLCHAR buf[MAX_IDEN_LEN];
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    std::string sql;
 
-    // Input parameter check
-    if (!checkNameIsExactName(catalog)) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "call_show_schema: catalog name should be exact name", 0,
-                 NULL);
+    std::string database = getDatabase(pStmt);
+    if (database.empty()) {
+        addError(
+            &pStmt->pErrorList, "HY000",
+            "callShowDatabases: Error when retrieving current database name",
+            0, NULL);
         return SQL_ERROR;
     }
 
-    // Build query for SHOW SCHEMAS
-    sql = "SHOW SCHEMAS FROM DATABASE " + catalog + ";";
+    // Call Server API SHOW DATABASES to get a list of Catalog
+    if (catalog.empty()) {
+        sql = "SHOW DATABASES;";
+    } else {
+        std::string quotedCatalog;
+        rc = callQuoteFunc(phstmt, catalog, quotedCatalog, RsMetadataAPIHelper::quotedLiteralQuery);
+        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+            addError(&pStmt->pErrorList, "HY000",
+                    "callShowTables: Fail to call QUOTE_LITERAL on catalog name", 0,
+                    NULL);
+            return rc;
+        }
+        sql = "SHOW DATABASES LIKE " + quotedCatalog + ";";
+    }
 
     // Execute Server API call
+    RS_LOG_DEBUG("callShowDatabases", "Execute SHOW query: %s", sql.c_str());
     setCatalogQueryBuf(pStmt, (char *)sql.c_str());
     // TODO: Support for prepare not ready yet
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)sql.c_str(), SQL_NTS,
@@ -665,7 +261,8 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_schema(
     resetCatalogQueryFlag(pStmt);
     if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_schema: Fail to execute SHOW TABLES ... ", 0, NULL);
+                 "callShowDatabases: Fail to execute SHOW DATABASES ... ", 0,
+                 NULL);
         return rc;
     }
 
@@ -673,7 +270,110 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_schema(
     rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
     if (rc != SQL_SUCCESS) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_schema: Fail to clean up the column binding", 0,
+                 "callShowDatabases: Fail to clean up the column binding", 0,
+                 NULL);
+        return rc;
+    }
+
+    // Bind columns for SHOW DATABASES result set
+    rc = RS_STMT_INFO::RS_SQLBindCol(
+        pStmt,
+        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_DATABASES_database_name),
+        SQL_C_CHAR, buf, sizeof(buf), &catalogLen);
+    if (rc != SQL_SUCCESS) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callShowDatabases: Fail to bind column for SHOW DATABASES "
+                 "result ... ",
+                 0, NULL);
+        return SQL_ERROR;
+    }
+
+    // Retrieve result from SHOW DATABASES
+    while (SQL_SUCCEEDED(
+        rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0))) {
+        std::string cur = char2String(buf);
+        if (!isSingleDatabaseMetaData || cur == database) {
+            catalogs.push_back(cur);
+        }
+    }
+
+    // Unbind columns for SHOW DATABASES result set
+    releaseDescriptorRecByNum(
+        pStmt->pStmtAttr->pARD,
+        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_DATABASES_database_name));
+
+    RS_LOG_TRACE("callShowDatabases", "number of catalog: %d",
+                 catalogs.size());
+
+    // While loop will end if there's no more result to fetch. Therefore, rc
+    // will be changed to SQL_ERROR 
+    // Simply return SQL_SUCCESS since while loop was finished with no issue
+    return SQL_SUCCESS;
+}
+
+//
+// Helper function to retrieve intermediate result set for SHOW SCHEMAS
+//
+SQLRETURN RsMetadataServerAPIHelper::callShowSchemas(
+    SQLHSTMT phstmt, const std::string &catalog, const std::string &schema,
+    std::vector<SHOWSCHEMASResult> &intermediateRS) {
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    SQLRETURN rc = SQL_SUCCESS;
+    std::string sql;
+    std::string quotedCatalog;
+
+    // Input parameter check
+    if (catalog.empty()) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callShowSchemas: catalog name should not be null or empty", 0,
+                 NULL);
+        return SQL_ERROR;
+    }
+
+    // Apply proper quoting and escaping for identifier
+    rc = callQuoteFunc(phstmt, catalog, quotedCatalog, RsMetadataAPIHelper::quotedIdentQuery);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callShowColumns: Fail to call QUOTE_IDENT on catalog name", 0,
+                 NULL);
+        return rc;
+    }
+
+    // Build query for SHOW SCHEMAS
+    if (schema.empty()) {
+        sql = "SHOW SCHEMAS FROM DATABASE " + quotedCatalog + ";";
+    } else {
+        // Apply proper quoting and escaping for literal
+        std::string quotedSchema;
+        rc = callQuoteFunc(phstmt, schema, quotedSchema, RsMetadataAPIHelper::quotedLiteralQuery);
+        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+            addError(&pStmt->pErrorList, "HY000",
+                    "callShowTables: Fail to call QUOTE_LITERAL on schema name", 0,
+                    NULL);
+            return rc;
+        }
+        sql = "SHOW SCHEMAS FROM DATABASE " + quotedCatalog + " LIKE " + quotedSchema + ";";
+    }
+
+    // Execute Server API call
+    RS_LOG_DEBUG("callShowSchemas", "Execute SHOW query: %s", sql.c_str());
+    setCatalogQueryBuf(pStmt, (char *)sql.c_str());
+    // TODO: Support for prepare not ready yet
+    rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)sql.c_str(), SQL_NTS,
+                                     TRUE, FALSE, FALSE, TRUE);
+    resetCatalogQueryFlag(pStmt);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callShowSchemas: Fail to execute SHOW SCHEMAS ... ", 0,
+                 NULL);
+        return rc;
+    }
+
+    // Clean up the column binding
+    rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
+    if (rc != SQL_SUCCESS) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callShowSchemas: Fail to clean up the column binding", 0,
                  NULL);
         return rc;
     }
@@ -692,7 +392,7 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_schema(
 
     if (rc != SQL_SUCCESS) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_schema: Fail to bind column for SHOW SCHEMAS "
+                 "callShowSchemas: Fail to bind column for SHOW SCHEMAS "
                  "result ... ",
                  0, NULL);
         return SQL_ERROR;
@@ -712,41 +412,73 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_schema(
         pStmt->pStmtAttr->pARD,
         getIndex(pStmt, RsMetadataAPIHelper::kSHOW_SCHEMAS_schema_name));
 
+    
+    // While loop will end if there's no more result to fetch. Therefore, rc
+    // will be changed to SQL_ERROR 
+    // Simply return SQL_SUCCESS since while loop was finished with no issue
     return SQL_SUCCESS;
 }
 
 //
 // Helper function to retrieve intermediate result set for SHOW TABLES
 //
-SQLRETURN RsMetadataServerAPIHelper::call_show_table(
+SQLRETURN RsMetadataServerAPIHelper::callShowTables(
     SQLHSTMT phstmt, const std::string &catalog, const std::string &schema,
     const std::string &table, std::vector<SHOWTABLESResult> &intermediateRS) {
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
     SQLRETURN rc = SQL_SUCCESS;
-    std::string sql = {0};
+    std::string sql;
+    std::string quotedCatalog;
+    std::string quotedSchema;
 
     // Input parameter check
-    if (!checkNameIsExactName(catalog)) {
+    if (catalog.empty()) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_table: catalog name should be exact name", 0, NULL);
+                 "callShowTables: catalog name should not be null or empty", 0, NULL);
         return SQL_ERROR;
     }
 
-    if (!checkNameIsExactName(schema)) {
+    if (schema.empty()) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_table: schema name should be exact name", 0, NULL);
+                 "callShowTables: schema name should not be null or empty", 0, NULL);
         return SQL_ERROR;
     }
+
+    // Apply proper quoting and escaping for identifier
+    rc = callQuoteFunc(phstmt, catalog, quotedCatalog, RsMetadataAPIHelper::quotedIdentQuery);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callShowColumns: Fail to call QUOTE_IDENT on catalog name", 0,
+                 NULL);
+        return rc;
+    }
+    rc = callQuoteFunc(phstmt, schema, quotedSchema, RsMetadataAPIHelper::quotedIdentQuery);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callShowColumns: Fail to call QUOTE_IDENT on schema name", 0,
+                 NULL);
+        return rc;
+    }
+    
 
     // Build query for SHOW TABLES
-    if (checkNameIsNotPattern(table)) {
-        sql = "SHOW TABLES FROM SCHEMA " + catalog + "." + schema + ";";
+    if (table.empty()) {
+        sql = "SHOW TABLES FROM SCHEMA " + quotedCatalog + "." + quotedSchema + ";";
     } else {
-        sql = "SHOW TABLES FROM SCHEMA " + catalog + "." + schema + " LIKE '" +
-              table + "';";
+        // Apply proper quoting and escaping for literal
+        std::string quotedTable;
+        rc = callQuoteFunc(phstmt, table, quotedTable, RsMetadataAPIHelper::quotedLiteralQuery);
+        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+            addError(&pStmt->pErrorList, "HY000",
+                    "callShowTables: Fail to call QUOTE_LITERAL on table name", 0,
+                    NULL);
+            return rc;
+        }
+        sql = "SHOW TABLES FROM SCHEMA " + quotedCatalog + "." + quotedSchema + " LIKE " + quotedTable + ";";
     }
 
     // Execute Server API call
+    RS_LOG_DEBUG("callShowTables", "Execute SHOW query: %s", sql.c_str());
     setCatalogQueryBuf(pStmt, (char *)sql.c_str());
     // TODO: Support for prepare not ready yet
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)sql.c_str(), SQL_NTS,
@@ -754,7 +486,7 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_table(
     resetCatalogQueryFlag(pStmt);
     if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_table: Fail to execute SHOW TABLES ... ", 0, NULL);
+                 "callShowTables: Fail to execute SHOW TABLES ... ", 0, NULL);
         return rc;
     }
 
@@ -762,7 +494,7 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_table(
     rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
     if (rc != SQL_SUCCESS) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_table: Fail to clean up the column binding", 0,
+                 "callShowTables: Fail to clean up the column binding", 0,
                  NULL);
         return rc;
     }
@@ -790,7 +522,7 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_table(
         SQL_C_CHAR, cur.remarks, sizeof(cur.remarks), &cur.remarks_Len);
     if (rc != SQL_SUCCESS) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_table: Fail to bind column for SHOW TABLES "
+                 "callShowTables: Fail to bind column for SHOW TABLES "
                  "result ... ",
                  0, NULL);
         return SQL_ERROR;
@@ -819,50 +551,90 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_table(
         pStmt->pStmtAttr->pARD,
         getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_remarks));
 
+    
+    // While loop will end if there's no more result to fetch. Therefore, rc
+    // will be changed to SQL_ERROR 
+    // Simply return SQL_SUCCESS since while loop was finished with no issue
     return SQL_SUCCESS;
 }
 
 //
 // Helper function to retrieve intermediate result set for SHOW COLUMNS
 //
-SQLRETURN RsMetadataServerAPIHelper::call_show_column(
+SQLRETURN RsMetadataServerAPIHelper::callShowColumns(
     SQLHSTMT phstmt, const std::string &catalog, const std::string &schema,
     const std::string &table, const std::string &column,
     std::vector<SHOWCOLUMNSResult> &intermediateRS) {
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
     SQLRETURN rc = SQL_SUCCESS;
-    std::string sql = {0};
+    std::string sql;
+    std::string quotedCatalog;
+    std::string quotedSchema;
+    std::string quotedTable;
 
     // Input parameter check
-    if (!checkNameIsExactName(catalog)) {
+    if (catalog.empty()) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_column: catalog name should be exact name", 0,
+                 "callShowColumns: catalog name should not be null or empty", 0,
                  NULL);
         return SQL_ERROR;
     }
 
-    if (!checkNameIsExactName(schema)) {
+    if (schema.empty()) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_column: schema name should be exact name", 0, NULL);
+                 "callShowColumns: schema name should not be null or empty", 0, NULL);
         return SQL_ERROR;
     }
 
-    if (!checkNameIsExactName(table)) {
+    if (table.empty()) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_column: table name should be exact name", 0, NULL);
+                 "callShowColumns: table name should not be null or empty", 0, NULL);
         return SQL_ERROR;
+    }
+
+    // Apply proper quoting and escaping for identifier
+    rc = callQuoteFunc(phstmt, catalog, quotedCatalog, RsMetadataAPIHelper::quotedIdentQuery);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callShowColumns: Fail to call QUOTE_IDENT on catalog name", 0,
+                 NULL);
+        return rc;
+    }
+
+    rc = callQuoteFunc(phstmt, schema, quotedSchema, RsMetadataAPIHelper::quotedIdentQuery);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callShowColumns: Fail to call QUOTE_IDENT on schema name", 0,
+                 NULL);
+        return rc;
+    }
+
+    rc = callQuoteFunc(phstmt, table, quotedTable, RsMetadataAPIHelper::quotedIdentQuery);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callShowColumns: Fail to call QUOTE_IDENT on table name", 0,
+                 NULL);
+        return rc;
     }
 
     // Build query for SHOW COLUMNS
-    if (checkNameIsNotPattern(column)) {
-        sql = "SHOW COLUMNS FROM TABLE " + catalog + "." + schema + "." +
-              table + ";";
+    if (column.empty()) {
+        sql = "SHOW COLUMNS FROM TABLE " + quotedCatalog + "." + quotedSchema + "." + quotedTable + ";";
     } else {
-        sql = "SHOW COLUMNS FROM TABLE " + catalog + "." + schema + "." +
-              table + " LIKE '" + column + "';";
+        // Apply proper quoting and escaping for literal
+        std::string quotedColumn;
+        rc = callQuoteFunc(phstmt, column, quotedColumn, RsMetadataAPIHelper::quotedLiteralQuery);
+        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+            addError(&pStmt->pErrorList, "HY000",
+                    "callShowColumns: Fail to call QUOTE_LITERAL on column name", 0,
+                    NULL);
+            return rc;
+        }
+        sql = "SHOW COLUMNS FROM TABLE " + quotedCatalog + "." + quotedSchema + "." + quotedTable + " LIKE " + quotedColumn + ";";
     }
 
     // Execute Server API call
+    RS_LOG_DEBUG("callShowColumns", "Execute SHOW query: %s", sql.c_str());
     setCatalogQueryBuf(pStmt, (char *)sql.c_str());
     // TODO: Support for prepare not ready yet
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)sql.c_str(), SQL_NTS,
@@ -870,7 +642,7 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_column(
     resetCatalogQueryFlag(pStmt);
     if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_column: Fail to execute SHOW COLUMNS ... ", 0,
+                 "callShowColumns: Fail to execute SHOW COLUMNS ... ", 0,
                  NULL);
         return rc;
     }
@@ -879,7 +651,7 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_column(
     rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
     if (rc != SQL_SUCCESS) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_column: Fail to clean up the column binding", 0,
+                 "callShowColumns: Fail to clean up the column binding", 0,
                  NULL);
         return rc;
     }
@@ -943,7 +715,7 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_column(
 
     if (rc != SQL_SUCCESS) {
         addError(&pStmt->pErrorList, "HY000",
-                 "call_show_column: Fail to bind column for SHOW COLUMNS "
+                 "callShowColumns: Fail to bind column for SHOW COLUMNS "
                  "result ... ",
                  0, NULL);
         return SQL_ERROR;
@@ -994,5 +766,82 @@ SQLRETURN RsMetadataServerAPIHelper::call_show_column(
         pStmt->pStmtAttr->pARD,
         getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_remarks));
 
+    
+    // While loop will end if there's no more result to fetch. Therefore, rc
+    // will be changed to SQL_ERROR 
+    // Simply return SQL_SUCCESS since while loop was finished with no issue
     return SQL_SUCCESS;
+}
+
+SQLRETURN RsMetadataServerAPIHelper::callQuoteFunc(
+    SQLHSTMT phstmt, const std::string &input, std::string& output, const std::string &quotedQuery) { // output should be the last argument
+    SQLRETURN rc = SQL_SUCCESS;
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    SQLLEN lenIndex = input.size();
+    SQLCHAR buf[MAX_IDEN_LEN] = {0};
+
+    RS_LOG_TRACE("callQuoteFunc", "input string: %s, len: %d", input.c_str(), input.size());
+
+    rc = RsPrepare::RS_SQLPrepare(phstmt, (SQLCHAR *)quotedQuery.c_str(),
+                                  SQL_NTS, FALSE, FALSE, FALSE, TRUE);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callQuoteFunc: Fail to prepare QUOTE function ... ", 0,
+                 NULL);
+        return rc;
+    }
+
+     // Clean up the column binding
+    rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
+    if (rc != SQL_SUCCESS) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callQuoteFunc: Fail to clean up the column binding", 0,
+                 NULL);
+        return rc;
+    }
+
+    rc = RsParameter::RS_SQLBindParameter(
+        phstmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR, MAX_IDEN_LEN, 0,
+        (SQLCHAR *)input.c_str(), input.size(), &lenIndex);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(
+            &pStmt->pErrorList, "HY000",
+            "callQuoteFunc: Fail to bind parameter for QUOTE function ... ",
+            0, NULL);
+        return rc;
+    }
+
+    rc = RsExecute::RS_SQLExecDirect(phstmt, NULL, 0, FALSE, TRUE, FALSE, TRUE);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callQuoteFunc: Fail to execute prepare statement for "
+                 "QUOTE function ... ",
+                 0, NULL);
+        return rc;
+    }
+
+    releaseDescriptorRecByNum(pStmt->pStmtAttr->pARD, 1);
+
+    rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(
+            &pStmt->pErrorList, "HY000",
+            "callQuoteFunc: Fail to fetch result for QUOTE funcion ... ", 0,
+            NULL);
+        return rc;
+    }
+
+    rc = RS_STMT_INFO::RS_SQLGetData(pStmt, 1, SQL_C_CHAR, buf, sizeof(buf),
+                                     &lenIndex, TRUE);
+    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "callQuoteFunc: Fail to get data for QUOTE funcion ... ", 0,
+                 NULL);
+        return rc;
+    }
+
+    RS_LOG_TRACE("callQuoteFunc", "Quoted string: %s", buf);
+
+    output = char2String(buf);
+    return rc;
 }

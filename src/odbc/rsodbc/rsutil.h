@@ -57,6 +57,7 @@
 #define TEXT_FORMAT		0
 #define BINARY_FORMAT	1
 
+#define ENABLE_SANITIZER 0
 
 #define INT_LEN(cbStrLen) ((int)cbStrLen)
 #define IS_TEXT_FORMAT(format)  ((format == TEXT_FORMAT))
@@ -578,18 +579,12 @@ std::string char2String(const unsigned char* str);
 std::string_view char2StringView(const unsigned char* str);
 int showDiscoveryVersion(RS_STMT_INFO *pStmt);
 bool getCaseSensitive(RS_STMT_INFO *pStmt);
-bool sanitizeParameter(const char* input);
-bool sanitizeParameter(const unsigned char* input);
-bool sanitizeParameter(const std::string_view input);
-bool sanitizeParameterW(const SQLWCHAR *input, int inputLen);
-bool sanitizeParameterW(const std::string input);
 std::string getDatabase(RS_STMT_INFO *pStmt);
 int getIndex(RS_STMT_INFO *pStmt, std::string columnName);
 bool isSqlAllCatalogs(SQLCHAR *pCatalogName, SQLSMALLINT cbCatalogName);
 bool isSqlAllSchemas(SQLCHAR *pSchemaName, SQLSMALLINT cbSchemaName);
 bool isSqlAllTableTypes(SQLCHAR *pTableType, SQLSMALLINT cbTableType);
-bool checkNameIsNotPattern(const std::string &name);
-bool checkNameIsExactName(const std::string &name);
+std::string escapedFilter(const std::string& input);
 
 char* sqlTypeNameMap(short value);
 

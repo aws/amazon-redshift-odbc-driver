@@ -52,7 +52,6 @@ class RsParameter {
                                               SQLULEN  iCrow,
                                               SQLULEN  *piRow);
 };
-SQLMAP RsParameter::sqlTypeMap = {0};
 #endif // __RS_PARAMETER_H__
 
 

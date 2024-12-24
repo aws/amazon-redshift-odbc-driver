@@ -8,6 +8,7 @@
 #include "rsparameter.h"
 #include "rsoptions.h"
 
+SQLMAP RsParameter::sqlTypeMap = {0};
 
 void initSQLTypeMap(SQLMAP& map){
     std::fill(map, map+SQL_MAP_SIZE, SQL_NO_TYPE);

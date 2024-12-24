@@ -12,8 +12,6 @@
 #include "rsMetadataAPIPostProcessing.h"
 #include "rsMetadataServerAPIHelper.h"
 
-#include <regex>
-
 #define MAX_CATALOG_QUERY_LEN (16*1024)
 #define MAX_CATALOG_QUERY_FILTER_LEN (4*1024)
 
@@ -25,6 +23,8 @@
 #define LOCAL_SCHEMA_QUERY			1
 #define EXTERNAL_SCHEMA_QUERY		2
 
+// The minimum show discovery version for RS_SQLTables / RS_SQLColumns was version 2
+#define MIN_SHOW_DISCOVERY_VERSION 2
 
 #define MAX_TYPES 21
 
@@ -464,24 +464,6 @@ SQLRETURN  SQL_API SQLTables(SQLHSTMT phstmt,
 {
     SQLRETURN rc;
 
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-
-    if (!VALID_HSTMT(phstmt)) {
-        return SQL_INVALID_HANDLE;
-    }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
-
-    // Parameter input check
-    for (const auto &name : {pCatalogName, pSchemaName, pTableName}) {
-        if (name && !sanitizeParameter(name)) {
-            addError(&pStmt->pErrorList, "HY000", "Invalid parameter input", 0, NULL);
-            RS_LOG_DEBUG("RsMetadataServerAPIHelper", "Invalid parameter: %s", name);
-            return SQL_ERROR;
-        }
-    }
-
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLTables(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, pTableType, cbTableType);
 
@@ -515,21 +497,36 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-	if(showDiscoveryVersion(pStmt) >= 1){
-		RS_LOG_TRACE("RS_SQLTables","Current connected cluster support SHOW command");
-
+	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION){
 		if (isNullOrEmptyString(pSchemaName) && isNullOrEmptyString(pTableName) && isSqlAllCatalogs(pCatalogName, cbCatalogName))
 		{
+			SQLHSTMT internalStmt;
+			rc = RS_CONN_INFO::RS_SQLAllocStmt(pStmt->phdbc, &internalStmt);
+			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+				RS_LOG_ERROR("RS_CONN_INFO::RS_SQLAllocStmt", "Fail to allocate new statement for internal use");
+				addError(&pStmt->pErrorList, "HY000", "RS_CONN_INFO::RS_SQLAllocStmt, Fail to allocate new statement for internal use", 0, NULL);
+				return rc;
+			}
+
 			//  Special SQLTables call : get catalog list
 			std::vector<std::string> intermediateRS;
-			rc = RsMetadataServerAPIHelper::sqlCatalogsServerAPI(phstmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
+			rc = RsMetadataServerAPIHelper::sqlCatalogsServerAPI(internalStmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				RS_LOG_ERROR("RsMetadataServerAPIHelper.sqlCatalogsServerAPI", "Fail get intermediate result set for SQLTables");
 				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerAPIHelper.sqlCatalogsServerAPI fail", 0, NULL);
+				return rc;
+			}
+
+			rc = RS_STMT_INFO::RS_SQLFreeStmt(internalStmt,SQL_DROP, TRUE);
+			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+				RS_LOG_ERROR("RS_STMT_INFO::RS_SQLFreeStmt", "Fail to free statement for internal use");
+				addError(&pStmt->pErrorList, "HY000", "RS_STMT_INFO::RS_SQLFreeStmt, Fail to free statement for internal use", 0, NULL);
 				return rc;
 			}
 
 			rc = RsMetadataAPIPostProcessing::sqlCatalogsPostProcessing(phstmt, intermediateRS);
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				RS_LOG_ERROR("RsMetadataAPIPostProcessing.sqlCatalogsPostProcessing", "Fail call post-processing for SQLTables");
 				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlCatalogsPostProcessing fail", 0, NULL);
 				return rc;
 			}
@@ -537,16 +534,33 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 		else 
 		if(isNullOrEmptyString(pCatalogName) && isNullOrEmptyString(pTableName) && isSqlAllSchemas(pSchemaName, cbSchemaName))
 		{
+			SQLHSTMT internalStmt;
+			rc = RS_CONN_INFO::RS_SQLAllocStmt(pStmt->phdbc, &internalStmt);
+			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+				RS_LOG_ERROR("RS_CONN_INFO::RS_SQLAllocStmt", "Fail to allocate new statement for internal use");
+				addError(&pStmt->pErrorList, "HY000", "RS_CONN_INFO::RS_SQLAllocStmt, Fail to allocate new statement for internal use", 0, NULL);
+				return rc;
+			}
+
 			//  Special SQLTables call : get schema list
 			std::vector<SHOWSCHEMASResult> intermediateRS;
-			rc = RsMetadataServerAPIHelper::sqlSchemasServerAPI(phstmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
+			rc = RsMetadataServerAPIHelper::sqlSchemasServerAPI(internalStmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				RS_LOG_ERROR("RsMetadataServerAPIHelper.sqlSchemasServerAPI", "Fail get intermediate result set for SQLTables");
 				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerAPIHelper.sqlSchemasServerAPI fail", 0, NULL);
+				return rc;
+			}
+
+			rc = RS_STMT_INFO::RS_SQLFreeStmt(internalStmt,SQL_DROP, TRUE);
+			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+				RS_LOG_ERROR("RS_STMT_INFO::RS_SQLFreeStmt", "Fail to free statement for internal use");
+				addError(&pStmt->pErrorList, "HY000", "RS_STMT_INFO::RS_SQLFreeStmt, Fail to free statement for internal use", 0, NULL);
 				return rc;
 			}
 
 			rc = RsMetadataAPIPostProcessing::sqlSchemasPostProcessing(phstmt, intermediateRS);
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				RS_LOG_ERROR("RsMetadataAPIPostProcessing.sqlSchemasPostProcessing", "Fail call post-processing for SQLTables");
 				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlSchemasPostProcessing fail", 0, NULL);
 				return rc;
 			}
@@ -558,6 +572,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 			// Special SQLTables call : get table type list
 			rc = RsMetadataAPIPostProcessing::sqlTableTypesPostProcessing(phstmt);
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				RS_LOG_ERROR("RsMetadataAPIPostProcessing.sqlTableTypesPostProcessing", "Fail call post-processing for SQLTables");
 				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlTableTypesPostProcessing fail", 0, NULL);
 				return rc;
 			}
@@ -565,33 +580,44 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 		else{
 			// Normal SQLTables call
 
-			// Map NULL to wildcard internally since ODBC accept NULL as catalog but SHOW command doesn't
-			// Map empty string to wildcard internally but will block them in the near future
-			std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "%" : char2String(pCatalogName);
+			std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
 
-			// Map NULL to wildcard internally since ODBC accept NULL as schema name pattern but SHOW command doesn't
-			// Map empty string to wildcard internally but will block them in the near future
-			std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "%" : char2String(pSchemaName);
+			std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);
 
-			// Map NULL to wildcard internally since ODBC accept NULL as table name pattern but SHOW command doesn't
-			// Map empty string to wildcard internally but will block them in the near future
-			std::string tableName = (isNullOrEmptyString(pTableName)) ? "%" : char2String(pTableName);
+			std::string tableName = (isNullOrEmptyString(pTableName)) ? "" : char2String(pTableName);
 
 			// Return Empty ResultSet if catalog or schemaPattern or tableNamePattern is empty string
 			//bool retEmpty = isEmptyString(pCatalogName) || isEmptyString(pSchemaName) || isEmptyString(pTableName); // comment this out since the Driver will still accept empty string for now
 			bool retEmpty = false; // Map empty string to wildcard internally but will block them in the near future
 
+			SQLHSTMT internalStmt;
+			rc = RS_CONN_INFO::RS_SQLAllocStmt(pStmt->phdbc, &internalStmt);
+			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+				RS_LOG_ERROR("RS_CONN_INFO::RS_SQLAllocStmt", "Fail to allocate new statement for internal use");
+				addError(&pStmt->pErrorList, "HY000", "RS_CONN_INFO::RS_SQLAllocStmt, Fail to allocate new statement for internal use", 0, NULL);
+				return rc;
+			}
+
 			std::vector<SHOWTABLESResult> intermediateRS;
-			rc = RsMetadataServerAPIHelper::sqlTablesServerAPI(phstmt, catalogName, schemaName, tableName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
+			rc = RsMetadataServerAPIHelper::sqlTablesServerAPI(internalStmt, catalogName, schemaName, tableName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				RS_LOG_ERROR("RsMetadataServerAPIHelper.sqlTablesServerAPI", "Fail get intermediate result set for SQLTables");
 				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerAPIHelper.sqlTablesServerAPI fail", 0, NULL);
 				return rc;
 			}
 
-			std::string table_type = pTableType == NULL ? "" : char2String(pTableType);
+			rc = RS_STMT_INFO::RS_SQLFreeStmt(internalStmt,SQL_DROP, TRUE);
+			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+				RS_LOG_ERROR("RS_STMT_INFO::RS_SQLFreeStmt", "Fail to free statement for internal use");
+				addError(&pStmt->pErrorList, "HY000", "RS_STMT_INFO::RS_SQLFreeStmt, Fail to free statement for internal use", 0, NULL);
+				return rc;
+			}
+
+			std::string table_type = (!pTableType) ? "" : char2String(pTableType);
 
 			rc = RsMetadataAPIPostProcessing::sqlTablesPostProcessing(phstmt, table_type, retEmpty, intermediateRS);
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
+				RS_LOG_ERROR("RsMetadataAPIPostProcessing.sqlTablesPostProcessing", "Fail call post-processing for SQLTables");
 				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlTablesPostProcessing fail", 0, NULL);
 				return rc;
 			}
@@ -705,24 +731,6 @@ SQLRETURN SQL_API SQLTablesW(SQLHSTMT          phstmt,
 {
     SQLRETURN rc;
 
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-
-    if (!VALID_HSTMT(phstmt)) {
-        return SQL_INVALID_HANDLE;
-    }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
-
-    // Parameter input check
-    for (const auto &name : {pwCatalogName, pwSchemaName, pwTableName}) {
-        if (name && !sanitizeParameterW(name, SQL_NTS)) {
-            addError(&pStmt->pErrorList, "HY000", "Invalid parameter input", 0, NULL);
-            RS_LOG_DEBUG("RsMetadataServerAPIHelper", "Invalid parameter: %s", name);
-            return SQL_ERROR;
-        }
-    }
-
     char szCatalogName[MAX_IDEN_LEN] = {0};
     char szSchemaName[MAX_IDEN_LEN] = {0};
     char szTableName[MAX_IDEN_LEN] = {0};
@@ -765,25 +773,6 @@ SQLRETURN  SQL_API SQLColumns(SQLHSTMT phstmt,
 {
     SQLRETURN rc;
 
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-
-    if (!VALID_HSTMT(phstmt)) {
-        return SQL_INVALID_HANDLE;
-    }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
-
-    // Parameter input check
-    for (const auto &name :
-         {pCatalogName, pSchemaName, pTableName, pColumnName}) {
-        if (name && !sanitizeParameter(name)) {
-            addError(&pStmt->pErrorList, "HY000", "Invalid parameter input", 0, NULL);
-            RS_LOG_DEBUG("RsMetadataServerAPIHelper", "Invalid parameter: %s", name);
-            return SQL_ERROR;
-        }
-    }
-
     if (IS_TRACE_LEVEL_API_CALL())
         TraceSQLColumns(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, pColumnName, cbColumnName);
 
@@ -816,9 +805,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if (showDiscoveryVersion(pStmt) >= 1) {
-        RS_LOG_DEBUG("RS_SQLColumns", "Current connected cluster support SHOW command");
-
+    if (showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION) {
         // Parameter validation check
         std::string catalogName = {0};
         /*if (pCatalogName == NULL) {
@@ -830,35 +817,44 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
             catalogName = (isNullOrEmptyString(pCatalogName)) ? "%" : char2String(pCatalogName);
         }*/
 
-        // Map NULL to wildcard internally but will block them in the near future
-        // Map empty string to wildcard internally but will block them in the near future
-        catalogName = (isNullOrEmptyString(pCatalogName)) ? "%" : char2String(pCatalogName);
+        catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
 
-        // Map NULL to wildcard internally since ODBC accept NULL as schema name pattern 
-        // Map empty string to wildcard internally but will block them in the near future
-        std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "%" : char2String(pSchemaName);
+        std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);
 
-        // Map NULL to wildcard internally since ODBC accept NULL as table name pattern 
-        // Map empty string to wildcard internally but will block them in the near future
-        std::string tableName = (isNullOrEmptyString(pTableName)) ? "%" : char2String(pTableName);
+        std::string tableName = (isNullOrEmptyString(pTableName)) ? "" : char2String(pTableName);
 
-        // Map NULL to wildcard internally since ODBC accept NULL as column name pattern 
-        // Map empty string to wildcard internally but will block them in the near future
-        std::string columnName = (isNullOrEmptyString(pColumnName)) ? "%" : char2String(pColumnName);
+        std::string columnName = (isNullOrEmptyString(pColumnName)) ? "" : char2String(pColumnName);
 
         // Return Empty ResultSet if catalog || schemaPattern || tableNamePattern || columnNamePattern is empty string
         // bool retEmpty = isEmptyString(pCatalogName) || isEmptyString(pSchemaName) || isEmptyString(pTableName) || isEmptyString(pColumnName);
         bool retEmpty = false; // Map empty string to wildcard internally but will block them in the near future
 
+		SQLHSTMT internalStmt;
+		rc = RS_CONN_INFO::RS_SQLAllocStmt(pStmt->phdbc, &internalStmt);
+		if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+			RS_LOG_ERROR("RS_CONN_INFO::RS_SQLAllocStmt", "Fail to allocate new statement for internal use");
+            addError(&pStmt->pErrorList, "HY000", "RS_CONN_INFO::RS_SQLAllocStmt, Fail to allocate new statement for internal use", 0, NULL);
+            return rc;
+        }
+
         std::vector<SHOWCOLUMNSResult> intermediateRS;
-        rc = RsMetadataServerAPIHelper::sqlColumnsServerAPI(phstmt, catalogName, schemaName, tableName, columnName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
+        rc = RsMetadataServerAPIHelper::sqlColumnsServerAPI(internalStmt, catalogName, schemaName, tableName, columnName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
         if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+			RS_LOG_ERROR("RsMetadataServerAPIHelper.sqlColumnsServerAPI", "Fail get intermediate result set for SQLColumns");
             addError(&pStmt->pErrorList, "HY000", "RsMetadataServerAPIHelper.sqlColumnsServerAPI fail", 0, NULL);
+            return rc;
+        }
+
+		rc = RS_STMT_INFO::RS_SQLFreeStmt(internalStmt,SQL_DROP, TRUE);
+		if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+			RS_LOG_ERROR("RS_STMT_INFO::RS_SQLFreeStmt", "Fail to free statement for internal use");
+            addError(&pStmt->pErrorList, "HY000", "RS_STMT_INFO::RS_SQLFreeStmt, Fail to free statement for internal use", 0, NULL);
             return rc;
         }
 
         rc = RsMetadataAPIPostProcessing::sqlColumnsPostProcessing(phstmt, retEmpty, intermediateRS);
         if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+			RS_LOG_ERROR("RsMetadataAPIPostProcessing.sqlColumnsPostProcessing", "Fail call post-processing for SQLColumns");
             addError(&pStmt->pErrorList, "HY000", "RsMetadataAPIPostProcessing.sqlColumnsPostProcessing fail", 0, NULL);
             return rc;
         }
@@ -939,25 +935,6 @@ SQLRETURN SQL_API SQLColumnsW(SQLHSTMT     phstmt,
                                 SQLSMALLINT  cchColumnName)
 {
     SQLRETURN rc;
-
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-
-    if (!VALID_HSTMT(phstmt)) {
-        return SQL_INVALID_HANDLE;
-    }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
-
-    // Parameter input check
-    for (const auto &name :
-         {pwCatalogName, pwSchemaName, pwTableName, pwColumnName}) {
-        if (name && !sanitizeParameterW(name, SQL_NTS)) {
-            addError(&pStmt->pErrorList, "HY000", "Invalid parameter input", 0, NULL);
-            RS_LOG_DEBUG("RsMetadataServerAPIHelper", "Invalid parameter: %s", name);
-            return SQL_ERROR;
-        }
-    }
 
     char szCatalogName[MAX_IDEN_LEN] = {0};
     char szSchemaName[MAX_IDEN_LEN] = {0};
@@ -4771,8 +4748,8 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN external_type = 'intervaly2m' THEN 32"
 		 " WHEN external_type = 'intervald2s' THEN 64"
 		 " ELSE 2147483647 END AS COLUMN_SIZE,"
-		 " NULL AS BUFFER_LENGTH,"
-		 " CASE WHEN external_type = 'real'THEN 8"
+		 " CAST(NULL as INTEGER) AS BUFFER_LENGTH,"
+		 " CAST(CASE WHEN external_type = 'real'THEN 8"
 		 " WHEN external_type = 'float4' THEN 8"
 		 " WHEN external_type = 'double' THEN 17"
 		 " WHEN external_type = 'double precision' THEN 17"
@@ -4793,8 +4770,8 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " WHEN external_type = 'geography' THEN NULL"
 		 " WHEN external_type = 'intervaly2m' THEN 0"
 		 " WHEN external_type = 'intervald2s' THEN 6"
-		 " ELSE 0 END AS DECIMAL_DIGITS,"
-		 " CASE WHEN external_type = 'varbyte' THEN 2"
+		 " ELSE 0 END AS SMALLINT) AS DECIMAL_DIGITS,"
+		 " CAST(CASE WHEN external_type = 'varbyte' THEN 2"
 		 " WHEN external_type = 'geography' THEN 2"
 		 " when external_type = 'varchar' THEN 0 "
 		 " when external_type = 'character varying' THEN 0 "
@@ -4804,7 +4781,7 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 		 " when external_type = 'bpchar' THEN 0 "
 		 " when external_type = 'nvarchar' THEN 0 "
 		 " ELSE 10"
-		 " END AS NUM_PREC_RADIX,"
+		 " END AS SMALLINT) AS NUM_PREC_RADIX,"
 		 " CAST(CASE is_nullable WHEN 'true' THEN 1 WHEN 'false' THEN 0 ELSE NULL END AS SMALLINT) AS NULLABLE,"
 		 " NULL AS REMARKS,"
 		 " NULL AS COLUMN_DEF,"

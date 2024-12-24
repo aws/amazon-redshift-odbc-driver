@@ -48,6 +48,10 @@ const std::vector<std::string> RsMetadataAPIHelper::tableTypeList = {
     "SYSTEM TABLE",    "SYSTEM VIEW",    "TABLE",
     "TEMPORARY TABLE", "TEMPORARY VIEW", "VIEW"};
 
+const std::string RsMetadataAPIHelper::quotedIdentQuery = "select pg_catalog.QUOTE_IDENT(?);";
+const std::string RsMetadataAPIHelper::quotedLiteralQuery = "select pg_catalog.QUOTE_LITERAL(?);";
+const std::string RsMetadataAPIHelper::SQL_ALL = "";
+
 //
 // Helper function to initialize column field from given column name and data
 // type

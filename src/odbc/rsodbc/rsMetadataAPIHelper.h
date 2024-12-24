@@ -196,6 +196,15 @@ class RsMetadataAPIHelper {
     // Define set for character data type and binary data type
     static const std::unordered_set<std::string> charOctetLenSet;
 
+    // Define QUOTE_IDENT query for prepare statement
+    static const std::string quotedIdentQuery;
+
+    // Define QUOTE_LITERAL query for prepare statement
+    static const std::string quotedLiteralQuery;
+
+    // Define empty string
+    static const std::string SQL_ALL;
+
     /* ----------------
      * initializeColumnField
      *

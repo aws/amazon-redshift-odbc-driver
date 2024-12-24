@@ -3518,10 +3518,8 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
             std::regex_match(dataType, intervalRegex)) {
             std::string cleanedDataType =
                 std::regex_replace(dataType, std::regex("\\(\\d+\\)"), "");
-            cleanedDataType =
-                std::regex_replace(cleanedDataType, std::regex("\\s++$"), "");
-            auto it = RsMetadataAPIHelper::typeInfoMap.find(
-                (char *)cleanedDataType.c_str());
+            trim(cleanedDataType);
+            auto it = RsMetadataAPIHelper::typeInfoMap.find(cleanedDataType);
             if (it != RsMetadataAPIHelper::typeInfoMap.end()) {
                 const auto &typeInfo = it->second;
                 sqlType = typeInfo.sqlType;

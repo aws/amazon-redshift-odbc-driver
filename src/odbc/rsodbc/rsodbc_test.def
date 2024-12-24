@@ -147,14 +147,7 @@ EXPORTS
 	?isEmptyString@@YA_NPEAE@Z
 	?isNullOrEmptyString@@YA_NPEAE@Z
 	?isNullOrEmptyString@@YA_NPEAE@Z
-	?sanitizeParameter@@YA_NPEBD@Z
-	?sanitizeParameter@@YA_NPEBE@Z
 	?getNullable@RsMetadataAPIHelper@@SAFAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
-	?sanitizeParameter@@YA_NV?$basic_string_view@DU?$char_traits@D@std@@@std@@@Z
-	?sanitizeParameterW@@YA_NPEB_WH@Z
-	?sanitizeParameterW@@YA_NV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
-	?checkNameIsNotPattern@@YA_NAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
-	?checkNameIsExactName@@YA_NAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?getTypeInfoMap@RsMetadataAPIHelper@@SA?BV?$unordered_map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@UDATA_TYPE_INFO@@U?$hash@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@U?$equal_to@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@UDATA_TYPE_INFO@@@std@@@2@@std@@XZ
 
 
