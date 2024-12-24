@@ -1,9 +1,10 @@
 # Make the version file
+set(TARGET_NAME "rsodbcsetup")
 configure_file(version.h.in ${CMAKE_CURRENT_SOURCE_DIR}/version.h @ONLY)
-add_library(rsodbcsetup SHARED setup.c rsodbcsetup.def rsodbcsetup.rc)
+add_library(${TARGET_NAME} SHARED setup.c rsodbcsetup.def rsodbcsetup.rc)
 
 target_compile_definitions(
-  rsodbcsetup
+  ${TARGET_NAME}
   PRIVATE NDEBUG
           WIN32
           _WINDOWS
@@ -16,7 +17,7 @@ target_compile_definitions(
           _CRT_SECURE_NO_DEPRECATE)
 
 target_link_libraries(
-  rsodbcsetup
+  ${TARGET_NAME}
   PRIVATE kernel32
           user32
           gdi32
@@ -40,16 +41,11 @@ include_and_link_openssl(rsodbcsetup)
 
 
 # Set the output directories for the target
-set_target_properties(
-  rsodbcsetup
-  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>"
-             LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>"
-             ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 
-# Get the expanded value of RUNTIME_OUTPUT_DIRECTORY for rsodbcsetup
-get_target_property(RUNTIME_OUTPUT_DIR rsodbcsetup RUNTIME_OUTPUT_DIRECTORY)
 
-# Print the value
-message(STATUS "rsodbcsetup RUNTIME_OUTPUT_DIRECTORY: ${RUNTIME_OUTPUT_DIR}")
+install(TARGETS ${TARGET_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
 
-install(TARGETS rsodbcsetup DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+if ( WIN32 )
+    message(STARTUS "Targeting${CMAKE_CURRENT_BINARY_DIR}")
+    set_output_directory(${TARGET_NAME})                    
+endif (  )

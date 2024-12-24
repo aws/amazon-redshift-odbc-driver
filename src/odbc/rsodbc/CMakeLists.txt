@@ -52,10 +52,6 @@ foreach(TARGET_NAME_ ${RSODBC_TARGETS})
     add_library(${TARGET_NAME} STATIC $<TARGET_OBJECTS:objects>)
     basic_settings(${TARGET_NAME})
     target_link_libraries_rsodbc(${TARGET_NAME})
-    set_target_properties(${TARGET_NAME} PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-        OUTPUT_NAME ${TARGET_NAME}
-        )
     install(TARGETS ${TARGET_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
 endforeach()
 set(RSODBC_TARGETS "")
@@ -72,10 +68,10 @@ foreach(TARGET_NAME_ ${RSODBC_TARGETS})
     basic_settings(${TARGET_NAME})
     target_link_libraries_rsodbc(${TARGET_NAME})
     export_signatures(${TARGET_NAME})
-    set_target_properties(${TARGET_NAME} PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-        OUTPUT_NAME ${TARGET_NAME}
-        )
+    if ( WIN32 )
+        message(STARTUS "Targeting${CMAKE_CURRENT_BINARY_DIR}")
+        set_output_directory(${TARGET_NAME})                    
+    endif (  )
     install(TARGETS ${TARGET_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
 endforeach()
 

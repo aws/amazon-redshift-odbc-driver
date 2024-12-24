@@ -270,7 +270,7 @@ function(get_rsodbc_deps rsodbc_deps)
   message(STATUS "INSIDE get_rsodbc_deps")
   # s2n only in Linux, not in Darwin
   set(${rsodbc_deps}
-      gtest gmock cares_static gssapi64 ${AWS_DEPENDENCIES}
+      gtest gmock cares gssapi64 ${AWS_DEPENDENCIES}
       PARENT_SCOPE)
 
   message(STATUS "INSIDE get_rsodbc_deps=> ${rsodbc_deps}")

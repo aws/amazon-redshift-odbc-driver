@@ -37,7 +37,7 @@ if (WIN32)
 endif()
 # Set include directories for the library(for openssl)
 if(RS_OPENSSL_DIR)
-    target_include_directories(pq PRIVATE ${RS_OPENSSL_DIR}/include)
+    target_include_directories(pq PRIVATE ${RS_OPENSSL_DIR}/${RS_BUILD_TYPE}/include)
 endif()
 
 target_include_directories(pq PRIVATE ${PGCLIENT_INCLUDE_DIR})
@@ -62,8 +62,3 @@ target_compile_definitions_pq()
 
 # Optionally, specify additional dependencies
 # target_link_libraries(mylibrary PUBLIC otherlibrary)
-
-# Set the output directory for the library
-set_target_properties(pq PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-)

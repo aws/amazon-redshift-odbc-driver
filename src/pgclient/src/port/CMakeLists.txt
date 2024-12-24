@@ -22,8 +22,3 @@ target_sources(pqport PRIVATE ${PG_CONFIG_PATHS_H_FILE})
 include_directories_libpqport()
 target_compile_options_pgport()
 target_compile_definitions_pgport()
-
-# Set the output directory for the library
-set_target_properties(pqport PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-)
