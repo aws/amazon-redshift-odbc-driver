@@ -83,6 +83,8 @@ rm ${spec_file}
 echo Moving the 64 bit rpm to the rpm folder..
 rm ./rpm/$rpm_new_name
 mv $rpm_src ./rpm/$rpm_new_name
+echo "sha256sum=$(sha256sum ./rpm/$rpm_new_name)"
+echo "sha512sum=$(sha512sum ./rpm/$rpm_new_name)"
 if [ $? -ne 0 ]
 then
     exit $?

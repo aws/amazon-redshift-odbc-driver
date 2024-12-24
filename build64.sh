@@ -2,14 +2,6 @@
 #./build64.sh [n.n.n n]
 #CMAKE=/path-to/Cmake/bin/cmake ENABLE_TESTING=1 ./build64.sh [n.n.n n]
 
-function checkExitCode {
-  retVal=$1;
-
-  if [ "$retVal" != 0 ]; then
-    exit $retVal;
-  fi
-}
-
 echo Building 64 bit Linux Redshift ODBC Driver
 
 #Process package version

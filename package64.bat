@@ -39,7 +39,11 @@ call ModifyMsi.exe AmazonRedshiftODBC64-%VERSION%.msi
 if errorlevel 1 goto baderrorlevel
 
 set WIN_ODBC_BUILD_MSI=%CD%\AmazonRedshiftODBC64-%VERSION%.msi
-echo Please get installer MSI in %WIN_ODBC_BUILD_MSI% 
+echo Please get installer MSI in %WIN_ODBC_BUILD_MSI%
+
+certutil -hashfile "%WIN_ODBC_BUILD_MSI%" SHA384
+certutil -hashfile "%WIN_ODBC_BUILD_MSI%" SHA256
+
 popd || exit /b %ERRORLEVEL%
 echo %WIN_ODBC_BUILD_MSI% > odbcmsi.tmp
 :baderrorlevel

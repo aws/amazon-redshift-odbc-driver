@@ -29,7 +29,8 @@ set MERGEPOLICY=%MSVCCFG%/Common Files/Merge Modules/policy_9_0_Microsoft_VC90_C
 echo.
 echo Building Amazon Redshift x64 ODBC merge module
 set PROJECT_DIR=../../../..
-candle -dProjectDir=%PROJECT_DIR% -nologo -dVERSION=%VERSION% rsodbcm_x64.wxs
+set 
+candle -dProjectDir=%PROJECT_DIR% -dDependenciesDir=%DEPENDENCIES_INSTALL_DIR% -dBuildType=%RS_BUILD_TYPE% -nologo -dVERSION=%VERSION% rsodbcm_x64.wxs
 IF ERRORLEVEL 1 GOTO ERR_HANDLER
 echo Built candle
 light -dProjectDir=%PROJECT_DIR% -nologo -sw -out rsodbc_x64.msm rsodbcm_x64.wixobj

@@ -1,43 +1,254 @@
 @echo off
 setlocal enabledelayedexpansion
-rem ./build64.bat [n.n.n n] [Debug/Release]
-rem CMAKE=^"path-to\Cmake\bin\cmake^" ENABLE_TESTING=1 ./build64.bat [n.n.n n]
 
-set argC=0
-for %%x in (%*) do Set /A argC+=1
-echo "Number of args is %argC%"
+rem Check for help argument
+if "%1"=="/?" goto :show_help
+if "%1"=="-h" goto :show_help
+if "%1"=="--help" goto :show_help
 
 set startTime=%time%
 
+echo Create a symlink to overcome CMake error FTK1011
+set "LINK_PKG_PATH=C:\ProgramData\BTW\workplace\RSODBCDriver"
+:: Ensure parent directory exists
+mkdir "C:\ProgramData\BTW\workplace"
+:: Check if the path already exists and delete if necessary
+IF EXIST "!LINK_PKG_PATH!" (
+    echo Deleting the directory or junction: !LINK_PKG_PATH!
+    rmdir /s /q "!LINK_PKG_PATH!"
+) else (
+    echo Directory or junction does not exist: !LINK_PKG_PATH!
+)
+:: Create the directory junction
+echo Creating the directory junction: !LINK_PKG_PATH! and %CD%
+mklink /j "!LINK_PKG_PATH!" "%CD%"
+dir "!LINK_PKG_PATH!"
+
+echo Create a clean public directory for artifacts
+set "RS_ARTIFACTS_DIR=!LINK_PKG_PATH!\public\windows"
+mkdir !RS_ARTIFACTS_DIR!
+rmdir /s/q !RS_ARTIFACTS_DIR!\*
+
+rem Initialize variables
 set WIN_ODBC_BUILD_MSI=""
 set "CMAKE_ARGS_ODBC_VERSION="
 set RS_BUILD_DIR=
 set INSTALL_DIR=
-set RS_ROOT_DIR=
+set RS_ROOT_DIR=!LINK_PKG_PATH!
 set ENABLE_TESTING=
-set CMAKE=
 set RS_OPENSSL_DIR=
 set RS_MULTI_DEPS_DIRS=
 set RS_DEPS_DIRS=
 set RS_ODBC_DIR=
+set "RS_VERSION="
+set "RS_BUILD_TYPE=Release"
+set "BUILD_DEPENDENCIES=yes"
+set PYTHON_CMD=
+set PERL_CMD=
+
+echo "LINK_PKG_PATH====== dir !LINK_PKG_PATH! ========"
+@REM dir !LINK_PKG_PATH!
+
+rem Parse command line arguments
+rem https://stackoverflow.com/questions/28103532/how-to-parse-command-line-arguments-with-switch-in-batch-file
+:parse_args
+if "%~1"=="" goto :end_parse_args
+set "temp_option="
+for %%a in (%*) do (
+   if not defined temp_option (
+      set arg=%%a
+      if "!arg:~0,1!" equ "-" (
+        set "temp_option=!arg!"
+      )
+   ) else (
+      echo arg=!arg!
+      echo value=%%a
+      if "!arg!"=="--version" set "RS_VERSION=%%a"
+      if "!arg!"=="--build-type" set "RS_BUILD_TYPE=%%a"
+      if "!arg!"=="--build-dependencies" set "BUILD_DEPENDENCIES=%%a"
+      if "!arg!"=="--dependencies-src-dir" set "DEPENDENCIES_SRC_DIR=%%a"
+      if "!arg!"=="--dependencies-build-dir" set "DEPENDENCIES_BUILD_DIR=%%a"
+      if "!arg!"=="--dependencies-install-dir" set "DEPENDENCIES_INSTALL_DIR=%%a"
+      set "temp_option!temp_option!=%%a"
+      set "temp_option="
+   )
+)
+:end_parse_args
+
+if not defined DEPENDENCIES_SRC_DIR if "!BUILD_DEPENDENCIES!"=="yes" (
+    if exist "!LINK_PKG_PATH!\find-dependencies-src-dir.bat" (
+        :: Hoping to find DEPENDENCIES_SRC_DIR from a helper script
+        echo "DEPENDENCIES_SRC_DIR does not exist. Finding by Calling !LINK_PKG_PATH!\find-dependencies-src-dir.bat ..."
+        call !LINK_PKG_PATH!\find-dependencies-src-dir.bat
+    )
+    :: Default behavior
+    if not defined DEPENDENCIES_SRC_DIR (
+        echo "DEPENDENCIES_SRC_DIR still does not exist. Falling back to default location.
+        set "DEPENDENCIES_SRC_DIR=!LINK_PKG_PATH!\..\RedshiftODBCDriverDependencies\src\tp"
+    )
+) else (
+    if defined DEPENDENCIES_SRC_DIR (
+        echo "skip setting DEPENDENCIES_SRC_DIR because it is already defined."
+    ) else (
+        echo "skip setting DEPENDENCIES_SRC_DIR because '!BUILD_DEPENDENCIES!' does not equal 'yes'."
+    )
+)
+
+if defined DEPENDENCIES_SRC_DIR (
+    echo "DEPENDENCIES_SRC_DIR====== dir: !DEPENDENCIES_SRC_DIR! ========"
+    @REM dir !DEPENDENCIES_SRC_DIR!
+
+    echo Try Shortening path using a symbolic link
+    @REM set "DEPENDENCIES_SRC_DIR_SHORT_PATH=!LINK_PKG_PATH!\depsdir"
+    set "DEPENDENCIES_SRC_DIR_SHORT_PATH=C:\ProgramData\BTW\workplace\depsdir"
+    echo "Try Shortening DEPENDENCIES_SRC_DIR(!DEPENDENCIES_SRC_DIR!) to !DEPENDENCIES_SRC_DIR_SHORT_PATH! using a symbolic link
+
+    :: Create the symbolic link (if it doesn't exist)
+    if exist "!DEPENDENCIES_SRC_DIR_SHORT_PATH!" (
+        echo "Removing existing Symbolic link !DEPENDENCIES_SRC_DIR_SHORT_PATH!"
+        rmdir !DEPENDENCIES_SRC_DIR_SHORT_PATH!
+    )
+    echo "Creating Symbolic link !DEPENDENCIES_SRC_DIR_SHORT_PATH!"
+    mklink /j "!DEPENDENCIES_SRC_DIR_SHORT_PATH!" "!DEPENDENCIES_SRC_DIR!"
+    echo "Symbolic link created: !DEPENDENCIES_SRC_DIR_SHORT_PATH! -> !DEPENDENCIES_SRC_DIR!"
+
+    :: Reassign DEPENDENCIES_SRC_DIR to the shortened DEPENDENCIES_SRC_DIR_SHORT_PATH
+    echo "Reassign !DEPENDENCIES_SRC_DIR! to the shortened !DEPENDENCIES_SRC_DIR_SHORT_PATH!"
+    set "DEPENDENCIES_SRC_DIR=!DEPENDENCIES_SRC_DIR_SHORT_PATH!"
+    echo "DEPENDENCIES_SRC_DIR is now: !DEPENDENCIES_SRC_DIR!:"
+
+    if not exist "!DEPENDENCIES_SRC_DIR!" (
+        echo "Warning DEPENDENCIES_SRC_DIR (!DEPENDENCIES_SRC_DIR!) does not exist "
+    ) else (
+        echo "Contents of !DEPENDENCIES_SRC_DIR!:"
+        dir !DEPENDENCIES_SRC_DIR!
+    )
+)
+
+:: Where to build if the need be
+if not defined DEPENDENCIES_BUILD_DIR if !BUILD_DEPENDENCIES!=="yes" (
+    set "DEPENDENCIES_BUILD_DIR=!LINK_PKG_PATH!\tpbuild"
+)
+
+:: Default install directory for installation and/or consumption
+if not defined DEPENDENCIES_INSTALL_DIR if defined DEPENDENCIES_SRC_DIR (
+    set "DEPENDENCIES_INSTALL_DIR=!DEPENDENCIES_SRC_DIR!\install"
+)
+
+rem Display parsed arguments
+echo Version: !RS_VERSION!
+echo Build Type: !RS_BUILD_TYPE!
+echo Build Dependencies: !BUILD_DEPENDENCIES!
+echo Dependencies Source: !DEPENDENCIES_SRC_DIR!
+echo Dependencies Build: !DEPENDENCIES_BUILD_DIR!
+echo Dependencies Install: !DEPENDENCIES_INSTALL_DIR!
+
+rem Visual Studio environment settings
+set "VS_PATH="
+set "cmake_generator=Visual Studio 17 2022"
+if "!VS_PATH!"=="" (
+    echo checking vs candidates
+    set "vs_path_candidates="
+    rem List of paths to check
+    set "vs_path_candidates=!vs_path_candidates!C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools;"
+    set "vs_path_candidates=!vs_path_candidates!C:\Program Files (x86)\Microsoft Visual Studio\2022\Community;"
+    set "vs_path_candidates=!vs_path_candidates!C:\Program Files\Microsoft Visual Studio\2022\BuildTools;"
+    set "vs_path_candidates=!vs_path_candidates!C:\Program Files\Microsoft Visual Studio\2022\Community"
+    rem Loop through paths and find the first valid one
+    FOR %%p IN ("!vs_path_candidates:;=";"!") do (
+        echo checking %%p
+        if exist "%%p" (
+            echo setting %%p
+            set "VS_PATH=%%p"
+            echo done setting !VS_PATH!
+            goto :vs_path_found
+        ) else (
+            echo not found %%p
+        )
+    )
+) else (
+    goto :vs_path_found
+)
+
+
+if "!VS_PATH!"=="" (
+    echo No Visual Studio installation found.
+) else (
+    echo Visual Studio Path using candiates paths: !VS_PATH!
+)
+:vs_path_found
+set "VS_PATH=!VS_PATH:"=!"
+echo calling !VS_PATH!\VC\Auxiliary\Build\vcvarsall.bat
+call "!VS_PATH!\VC\Auxiliary\Build\vcvarsall.bat" x64
+where nmake
+rem Absolute paths to the required build tool directories
+set "CMAKE_BIN_DIR=!VS_PATH!\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+set "MSBUILD_BIN_DIR=!VS_PATH!\MSBuild\Current\Bin\amd64"
+set "VS170COMNTOOLS=!VS_PATH!\Common7\Tools"
+
+rem Find the latest Wix, used for creating MSI
+for /d %%D in ("C:\Program Files (x86)\WiX Toolset*") do (
+    rem Extract the version number
+    for /f "tokens=1-2 delims=. " %%A in ("%%~nD") do (
+        if "%%A"=="WiX" (
+            set CURRENT_VERSION=%%B
+            rem Compare versions numerically
+            if !CURRENT_VERSION! GTR !HIGHEST_VERSION! (
+                set HIGHEST_VERSION=!CURRENT_VERSION!
+                set HIGHEST_PATH=%%D
+            )
+        )
+    )
+)
+echo Highest WiX version path: !HIGHEST_PATH!
+set "WIX_BIN_DIR=!HIGHEST_PATH!\bin"
+
+rem Ensure that the directories and executables exist
+if not exist "!CMAKE_BIN_DIR!\cmake.exe" (
+    echo Error: cmake.exe not found in "!CMAKE_BIN_DIR!"
+    exit /b 1
+)
+if not exist "!MSBUILD_BIN_DIR!\msbuild.exe" (
+    echo Error: msbuild.exe not found in "!MSBUILD_BIN_DIR!"
+    exit /b 1
+)
+if not exist "!WIX_BIN_DIR!\candle.exe" (
+    echo Error: WiX tools not found in "!WIX_BIN_DIR!"
+    exit /b 1
+)
+
+rem Add build tool directories to the PATH for this script
+set "PATH=!CMAKE_BIN_DIR!;!MSBUILD_BIN_DIR!;!WIX_BIN_DIR!;!VS170COMNTOOLS!;!PATH!"
+
+rem Setting few environment variables required for build
+SET "SystemDrive=C:"
+SET "TMP=C:\Windows\TEMP"
+SET "windir=C:\Windows"
+
+rem Process command-line arguments
+set argC=0
+for %%x in (%*) do Set /A argC+=1
+echo "Number of args is %argC%"
 
 echo Building 64 bit Windows Redshift ODBC Driver
 rem Process package version
 
-if "%RS_ROOT_DIR%" == "" set "RS_ROOT_DIR=%CD%"
-set BUILD_TYPE=Release
-if "%1" == "" if "%2" == "" goto :noargs
-set "odbc_version=%1"
-set "svn_rev=%2"
-if not "%2" == "" set "CMAKE_ARGS_ODBC_VERSION=-DODBC_VERSION=%odbc_version%.%svn_rev%"
-if not "%3" == "" set "BUILD_TYPE=%3"
+if not "!RS_VERSION!"=="" (
+    set "CMAKE_ARGS_ODBC_VERSION=-DODBC_VERSION=!RS_VERSION!"
+)
 
-goto :noargs
-echo Error: Either don't supply any version argument, or supply like the usage: ./build64.bat [n.n.n n]
-exit /b 1
+REM A separate python based script for building dependencies is provided.
+REM You may use it separately or call it within this batch script.
+REM Eitherway, we put this clause as a placeholder to invoke the python script
+REM from builddeps.bat. You are welcome to replace builddeps.bat with scripts\builddeps.py
+if "!BUILD_DEPENDENCIES!"=="yes" (
+    if exist "builddeps.bat" (
+        echo "=== Building dependencies ====="
+        call builddeps.bat
+    )    
+)
 
-:noargs
-echo "-BUILD_TYPE=%BUILD_TYPE%"
+rem Load environment variables from exports files if they exist
 if exist ".\exports_basic.bat" (
     call .\exports_basic.bat
     echo Loaded exports_basic.bat
@@ -50,18 +261,18 @@ echo "batch ENABLE_TESTING=%ENABLE_TESTING%"
 rem cmake options
 if "%ENABLE_TESTING%" == "" set ENABLE_TESTING=0
 rem build and install options
-if "%RS_BUILD_DIR%" == "" set "RS_BUILD_DIR=%CD%\cmake-build\%BUILD_TYPE%"
-if "%INSTALL_DIR%" == "" set "INSTALL_DIR=%CD%\cmake-build\install"
-if "%CMAKE%" == "" set "CMAKE=cmake"
+if "%RS_BUILD_DIR%" == "" set "RS_BUILD_DIR=%LINK_PKG_PATH%\cmake-build\%RS_BUILD_TYPE%"
+if "%INSTALL_DIR%" == "" set "INSTALL_DIR=%LINK_PKG_PATH%\cmake-build\install"
 
 if not exist "%RS_BUILD_DIR%" mkdir "%RS_BUILD_DIR%" || exit /b %ERRORLEVEL%
 
-set "cmake_command=%CMAKE% -B %RS_BUILD_DIR% -S %RS_ROOT_DIR% -DRS_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_INSTALL_PREFIX=%INSTALL_DIR% %CMAKE_ARGS_ODBC_VERSION%"
+@REM Start creating cmake command with various arguments
+set "cmake_command=cmake -G "%cmake_generator%" -B "%RS_BUILD_DIR%" -S "%RS_ROOT_DIR%" -DRS_BUILD_TYPE=%RS_BUILD_TYPE% -DCMAKE_INSTALL_PREFIX=%INSTALL_DIR% %CMAKE_ARGS_ODBC_VERSION%"
 
-if "%BUILD_TYPE%"=="Debug" (
-    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebug "
+if "%RS_BUILD_TYPE%"=="Debug" (
+    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebug"
 ) else (
-    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded "
+    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"
 )
 
 if defined RS_OPENSSL_DIR (
@@ -90,7 +301,7 @@ if defined ENABLE_TESTING (
     set "cmake_command=!cmake_command! -DENABLE_TESTING=%ENABLE_TESTING%"
 )
 
-echo %cmake_command%
+echo "RSODBC CMAKE COMMAND: %cmake_command%"
 call %cmake_command%
 if %ERRORLEVEL% neq 0 (
     echo Error occurred during CMake! Error code: %ERRORLEVEL%
@@ -99,16 +310,16 @@ if %ERRORLEVEL% neq 0 (
     echo CMake completed successfully.
 )
 
-@REM "%CMAKE%" --build  %RS_BUILD_DIR% --config %BUILD_TYPE%    
-msbuild %RS_BUILD_DIR%\ALL_BUILD.vcxproj /p:Configuration=%BUILD_TYPE% /t:build /m:5
+@REM "%CMAKE%" --build  %RS_BUILD_DIR% --config %RS_BUILD_TYPE%    
+msbuild %RS_BUILD_DIR%\ALL_BUILD.vcxproj /p:Configuration=%RS_BUILD_TYPE% /t:build /m:5
 if %ERRORLEVEL% neq 0 (
     echo Error occurred during Build! Error code: %ERRORLEVEL%
     exit /b %ERRORLEVEL%
 ) else (
     echo Build completed successfully.
 )
-@REM "%CMAKE%" --install  %RS_BUILD_DIR% --config %BUILD_TYPE%
-msbuild %RS_BUILD_DIR%\INSTALL.vcxproj /p:Configuration=%BUILD_TYPE% /m  /verbosity:normal
+@REM "%CMAKE%" --install  %RS_BUILD_DIR% --config %RS_BUILD_TYPE%
+msbuild %RS_BUILD_DIR%\INSTALL.vcxproj /p:Configuration=%RS_BUILD_TYPE% /m  /verbosity:normal
 if %ERRORLEVEL% neq 0 (
     echo Error occurred during Install! Error code: %ERRORLEVEL%
     exit /b %ERRORLEVEL%
@@ -119,6 +330,81 @@ if %ERRORLEVEL% neq 0 (
 :GOT_INSTALLER
 call package64.bat
 
+echo "RS_ARTIFACTS_DIR is !RS_ARTIFACTS_DIR!"
+echo "RS_BUILD_DIR is !RS_BUILD_DIR!"
+REM Copy artifacts
+copy version.txt !RS_ARTIFACTS_DIR!
+echo "========== running: copy !WIN_ODBC_BUILD_MSI! !RS_ARTIFACTS_DIR!"
+copy !WIN_ODBC_BUILD_MSI! !RS_ARTIFACTS_DIR!
+REM Compress and Copy the test artifacts to a public folder
+echo "========== running dir !RS_BUILD_DIR!(RS_BUILD_DIR)"
+if exist "!RS_BUILD_DIR!" (
+    echo "==========!RS_BUILD_DIR! exists"
+    dir !RS_BUILD_DIR!
+)
+set "TEST_ARCHIVER_SCRIPT=!LINK_PKG_PATH!\scripts\tests_archiver.ps1"
+echo "========== running set TEST_ARCHIVER_SCRIPT=!LINK_PKG_PATH!\scripts\tests_archiver.ps1"
+if exist "%TEST_ARCHIVER_SCRIPT%" (
+    echo "========== running powershell !TEST_ARCHIVER_SCRIPT!  -testFolder !RS_BUILD_DIR! -zipFileName tests.zip (RS_ARTIFACTS_DIR)"
+    powershell !TEST_ARCHIVER_SCRIPT! -testFolder !RS_BUILD_DIR! -zipFileName tests.zip
+    copy tests.zip !RS_ARTIFACTS_DIR!
+) else (
+    echo File "%TEST_ARCHIVER_SCRIPT%" not found. Skipping execution safely.
+)
+
+echo "========== running dir !RS_ARTIFACTS_DIR!(RS_ARTIFACTS_DIR)"
+dir !RS_ARTIFACTS_DIR!
+
+echo "========== running where /r !RS_BUILD_DIR! *.exe (RS_BUILD_DIR)"
+cmd /C "where /r !RS_BUILD_DIR! *.exe"
+
+tree /F !RS_ARTIFACTS_DIR!
+
+
+rem Calculate elapsed time
+set endTime=%time%
+for /F "tokens=1-4 delims=:.," %%a in ("%startTime%") do (
+   set /A "start=(((%%a*60)+1%%b %% 100)*60+1%%c %% 100)*100+1%%d %% 100"
+)
+for /F "tokens=1-4 delims=:.," %%a in ("%endTime%") do (
+   set /A "end=(((%%a*60)+1%%b %% 100)*60+1%%c %% 100)*100+1%%d %% 100"
+)
+set /A elapsed=end-start
+
+rem Calculate hours, minutes, seconds
+set /A hh=elapsed/(60*60*100), rest=elapsed%%(60*60*100), mm=rest/(60*100), ss=rest%%(60*100), cc=rest%%100
+
+if %hh% lss 10 set hh=0%hh%
+if %mm% lss 10 set mm=0%mm%
+if %ss% lss 10 set ss=0%ss%
+if %cc% lss 10 set cc=0%cc%
+
 echo Start Time: %startTime%
-echo Finish Time: %time%
+echo Finish Time: %endTime%
+echo Elapsed Time: %hh%:%mm%:%ss%.%cc%
+
+@REM The script end here
 exit /b %ERRORLEVEL%
+
+:show_help
+echo Usage: %~nx0 [OPTIONS]
+echo Build the 64-bit Windows Redshift ODBC Driver
+echo.
+echo Options:
+echo   --version=X.X.X.X               Set the version number (optional)
+echo   --build-type=TYPE               Set the build type (default: Release)
+echo   --build-dependencies=BOOL       Build dependencies (default: no)
+echo   --dependencies-src-dir=PATH         Set the dependencies source path
+echo                                   (default: %%RS_ROOT_DIR%%\tp)
+echo   --dependencies-build-dir=PATH   Dependency build directory
+echo                                   (default: %%DEPENDENCIES_BUILD_DIR%%)
+echo   --dependencies-install-dir=PATH Path to store and/or use dependency libraries 
+echo.
+echo   /?, -h, --help            Show this help message
+echo.
+echo Examples:
+echo   %~nx0 --version=1.1.1.1 --build-type=Debug
+echo   %~nx0 --build-dependencies=yes --dependencies-src-dir=%%CD%%\tp
+echo   %~nx0 --build-dependencies=yes --dependencies-src-dir=%%CD%%\tp --dependencies-build-dir=%%CD%%\tpbuild
+echo   %~nx0 --build-dependencies=no --dependencies-install-dir=%%CD%%\tp\install
+exit /b 0
