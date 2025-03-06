@@ -1,6 +1,15 @@
 Changelog
 =========
 
+v2.1.7 (2025-03-06)
+---------------------
+1. Fixed an issue with batch insertion parameters where SQL_ATTR_PARAMSET_SIZE updates were not being properly applied between SQLPrepare and SQLExecute calls.
+2. Updated to latest OpenSSL 1.1.1.
+3. Fixed SQLTables metadata API to properly include external schemas when listing all schemas in the current database.
+4. Corrected SQLTables metadata API result ordering to properly sort by catalog name.
+5. Added support for serverless cluster authentication via GetClusterCredentials API - connect to workgroups by prefixing “redshift-serverless” to ClusterId field (server field optional).
+6. Added support for network load balancer (NLB) hostnames in server name fields.
+
 v2.1.6 (2024-12-23)
 ---------------------
 1. Introduced token caching support for Browser IdC Auth plugin.
