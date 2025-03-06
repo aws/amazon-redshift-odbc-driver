@@ -45,7 +45,7 @@ const std::string RsMetadataAPIHelper::kSHOW_COLUMNS_numeric_scale =
 const std::string RsMetadataAPIHelper::kSHOW_COLUMNS_remarks = "remarks";
 
 const std::vector<std::string> RsMetadataAPIHelper::tableTypeList = {
-    "SYSTEM TABLE",    "SYSTEM VIEW",    "TABLE",
+    "EXTERNAL TABLE", "SYSTEM TABLE",    "SYSTEM VIEW",    "TABLE",
     "TEMPORARY TABLE", "TEMPORARY VIEW", "VIEW"};
 
 const std::string RsMetadataAPIHelper::quotedIdentQuery = "select pg_catalog.QUOTE_IDENT(?);";

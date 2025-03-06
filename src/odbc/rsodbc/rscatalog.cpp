@@ -62,18 +62,23 @@
 							 " LEFT JOIN pg_catalog.pg_namespace dn ON (dn.oid=dc.relnamespace AND dn.nspname='pg_catalog') " \
                              " WHERE n.oid=c.relnamespace " 
 
-#define SQLTABLES_ALL_SCHEMAS_QUERY " SELECT DISTINCT current_database() as TABLE_CAT,n.nspname as TABLE_SCHEM,NULL as TABLE_NAME," \
+#define SQLTABLES_ALL_SCHEMAS_QUERY "WITH all_oids AS (" \
+                                     " SELECT c.relnamespace obj_id "\
+                                     " FROM pg_class c "\
+                                     " WHERE (has_table_privilege(OID,'SELECT') OR has_table_privilege(OID,'INSERT') OR has_table_privilege(OID,'UPDATE') OR has_table_privilege(OID,'DELETE')) "\
+                                     " AND   relkind IN ('r','v') "\
+                                     " UNION ALL "\
+                                     " SELECT b.esoid obj_id "\
+                                     " FROM pg_external_schema b )"\
+                                     " SELECT DISTINCT current_database() as TABLE_CAT,n.nspname as TABLE_SCHEM,NULL as TABLE_NAME," \
                                      " NULL  as TABLE_TYPE, NULL as REMARKS " \
-                                     " FROM pg_namespace n,pg_class c LEFT JOIN pg_description d ON (c.oid=d.objoid AND d.objsubid=0) " \
-                                     " WHERE n.oid=c.relnamespace " \
-									 " AND n.nspname <> 'pg_toast' " \
-									 " AND (n.nspname !~ '^pg_temp_' " \
-									 "		OR n.nspname = (pg_catalog.current_schemas(true))[1]) AND (n.nspname !~ '^pg_toast_temp_' " \
-									 "		OR n.nspname = replace((pg_catalog.current_schemas(true))[1], 'pg_temp_', 'pg_toast_temp_')) " \
-                                     " AND(has_table_privilege(c.oid, 'SELECT') OR has_table_privilege(c.oid,'INSERT') " \
-                                     "        OR has_table_privilege(c.oid,'UPDATE') OR has_table_privilege(c.oid,'DELETE')) " \
+                                     " FROM pg_namespace n, all_oids o "\
+                                     " LEFT JOIN pg_description d ON (o.obj_id = d.objoid AND d.objsubid = 0) " \
+                                     " WHERE n.oid = o.obj_id "\
+                                     " AND n.nspname <> 'pg_toast' " \
+                                     " AND (n.nspname !~ '^pg_temp_' OR n.nspname = (pg_catalog.current_schemas(TRUE))[1]) " \
+                                     " AND (n.nspname !~ '^pg_toast_temp_' OR n.nspname = REPLACE((pg_catalog.current_schemas(TRUE))[1],'pg_temp_','pg_toast_temp_')) " \
                                      " AND has_schema_privilege(n.oid, 'USAGE'::text) " \
-                                     " AND c.relkind in ('r','v') " \
                                      " ORDER BY TABLE_SCHEM "
 
 #define SQLTABLES_ALL_SCHEMAS_QUERY_DATASHARE " SELECT DISTINCT CAST(database_name AS varchar(124)) AS TABLE_CAT, CAST(schema_name AS varchar(124)) AS TABLE_SCHEM,NULL as TABLE_NAME," \
@@ -3394,7 +3399,7 @@ static void buildUniversalAllSchemaTablesQuery(char *pszCatalogQuery,
 		pTableName, cbTableName, pTableType, cbTableType, NO_SCHEMA_UNIVERSAL_QUERY, FALSE, "TABLE_CAT");
 
 	rs_strncat(pszCatalogQuery, filterClause, MAX_CATALOG_QUERY_LEN - strlen(pszCatalogQuery));
-	addOrderByClause(pszCatalogQuery, "TABLE_TYPE,TABLE_SCHEM,TABLE_NAME");
+	addOrderByClause(pszCatalogQuery, "TABLE_TYPE,TABLE_CAT,TABLE_SCHEM,TABLE_NAME");
 }
 
 /*====================================================================================================================================================*/
