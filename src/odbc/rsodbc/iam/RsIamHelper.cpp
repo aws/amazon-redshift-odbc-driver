@@ -34,6 +34,7 @@ static std::unordered_map<rs_string, RsCredentials> s_iamCredentialsCache;
 
 std::regex hostPattern("(.+)\\.(.+)\\.(.+).redshift(-dev)?\\.amazonaws\\.com(.)*");
 std::regex serverlessWorkgroupHostPattern("(.+)\\.(.+)\\.(.+).redshift-serverless(-dev)?\\.amazonaws\\.com(.)*");
+std::regex nlbHostPattern("(.+)\\.elb\\.(.+)\\.amazonaws\\.com(.)*");
 
 
 RsSettings RsIamHelper::s_rsSettings;
@@ -312,7 +313,6 @@ void RsIamHelper::SetIamSettings(
         rs_string workGroup;
         rs_string acctId;
         rs_string requiredClusterId;
-        rs_string requiredAwsRegion;
         if (hostnameTokens.size() >= 6 && (hostnameTokens[3].find("serverless") != rs_string::npos))
             {
                 /*Serverless_cluster's host examples:
@@ -320,7 +320,11 @@ void RsIamHelper::SetIamSettings(
                 */ 
                 workGroup = hostnameTokens[0];
                 acctId = hostnameTokens[1];
-                settings.m_isServerless = true; 
+                settings.m_isServerless = true;
+                if (settings.m_awsRegion.empty()) {
+                    settings.m_awsRegion = hostnameTokens[2];
+                }
+
             }
             else if (hostnameTokens.size() >= 6)
             {
@@ -329,16 +333,20 @@ void RsIamHelper::SetIamSettings(
                 e.g., redshiftj-iam-test.c2mf5zd3u3sv.us-west-2.redshift.amazonaws.com.cn
                 */
                 requiredClusterId = hostnameTokens[0];
-                requiredAwsRegion = hostnameTokens[2];
+                if (settings.m_awsRegion.empty()) {
+                    settings.m_awsRegion = hostnameTokens[2];
+                }
             }
 
         settings.m_isServerless = pIamProps->isServerless;
         settings.m_workGroup = pIamProps->szWorkGroup;
         std::smatch mProvisioned;
         std::smatch mServerless;
+        std::smatch mNlb;
 
         bool provisionedMatches = std::regex_match(settings.m_host, mProvisioned, hostPattern);
         bool serverlessMatches = std::regex_match(settings.m_host, mServerless, serverlessWorkgroupHostPattern);
+        bool nlbMatches = std::regex_match(settings.m_host, mNlb, nlbHostPattern);
         rs_string clusterId;
 
         // replace host value if user has provided a managed VPC URL.
@@ -364,6 +372,13 @@ void RsIamHelper::SetIamSettings(
             RS_LOG_DEBUG("IAMHLP", "Code flow for regular serverless cluster");
             settings.m_isServerless=true;
         }
+        else if (nlbMatches && !settings.m_isServerless) {
+            // Workflow for connection with NLB for provisioned clusters
+            RS_LOG_DEBUG("IAMHLP", "Code flow for nlb provisioned cluster");
+            if (strlen(pIamProps->szClusterId) > 0) {
+                clusterId = pIamProps->szClusterId;
+            }
+        }
         else if(settings.m_isServerless){
             // hostname doesn't match serverless regex but serverless set to true explicitly by user
             // when ready for implementation, remove setting of the isServerless property automatically in parseUrl(),
@@ -374,6 +389,12 @@ void RsIamHelper::SetIamSettings(
                 // currently do nothing as regular code flow is sufficient
                 RS_LOG_DEBUG("IAMHLP", "Code flow for nlb serverless cluster");
             }
+            else if (strlen(pIamProps->szClusterId) > 0) {
+                // Workflow for using GetClusterCredentials API with serverless cluster
+                RS_LOG_DEBUG("IAMHLP", "Code flow for using GetClusterCredentials with serverless cluster");
+                clusterId = pIamProps->szClusterId;
+                settings.m_isServerless = false;
+            }
             else{
                 // attempt serverless cname call
                 // currently sets isCname to true which will be asserted on later
@@ -382,9 +403,8 @@ void RsIamHelper::SetIamSettings(
             }
         }
         else {
-            // clusterID specified by user - provisioned nlb call
-            // regular logic flow, no change needed
-            RS_LOG_DEBUG("IAMHLP", "Code flow for nlb/cname provisioned cluster");
+            // Workflow for using CNAME with provisioned cluster
+            RS_LOG_DEBUG("IAMHLP", "Code flow for cname provisioned cluster");
             clusterId = pIamProps->szClusterId;
             // attempt provisioned cname call
             // cluster id will be fetched upon describing custom domain name

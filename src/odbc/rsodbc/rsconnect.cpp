@@ -582,11 +582,7 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
             iPrompt = FALSE;
         else 
         {
-            if(pConnectProps->szHost[0] == '\0'
-                || pConnectProps->szPort[0] == '\0'
-                || pConnectProps->szDatabase[0] == '\0'
-                || pConnectProps->szUser[0] == '\0'
-                || pConnectProps->szPassword[0] == '\0')
+            if(pConnectProps->szPort[0] == '\0' || pConnectProps->szDatabase[0] == '\0')
             {
                 iPrompt = TRUE;
             }
@@ -656,14 +652,22 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
 
                 if(pConnectProps->szHost[0] == '\0')
                 {
-                    if (pConnectProps->pIamProps->szManagedVpcUrl[0] == '\0') {
-                        addError(&pConn->pErrorList,"HY000", "Required keyword Server or Managed VPC URL not found in connection string", 0, NULL);
-					    rc = SQL_ERROR;
+                    // When host is empty, the workgroup or cluster ID must be present. With managed VPC value
+                    // the parameters should be supplied in order to identify the corrent instance to connect to.
+                    // If managed VPC is not supplied, the parameters should present because we are making serverless
+                    // connection using the GetClusterCredentials API.
+                    if ((pConnectProps->pIamProps->szClusterId[0] == '\0') &&
+                        (pConnectProps->pIamProps->szWorkGroup[0] == '\0')) 
+                    {
+                        addError(
+                            &pConn->pErrorList,
+                            "HY000",
+                            "Required keyword ClusterID or Workgroup not found in connection string for managed VPC connection",
+                            0,
+                            NULL
+                        );
+                        rc = SQL_ERROR;
                     }
-                    else if ((pConnectProps->pIamProps->szClusterId[0] == '\0') && (pConnectProps->pIamProps->szWorkGroup[0] == '\0')) {
-                        addError(&pConn->pErrorList,"HY000", "Required keyword ClusterID or Workgroup not found in connection string for managed VPC connection", 0, NULL);
-					    rc = SQL_ERROR;
-                    } 
                     else {
                         rc = doConnection(pConn);
                     }

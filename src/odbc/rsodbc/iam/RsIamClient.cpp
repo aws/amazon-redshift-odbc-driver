@@ -166,8 +166,7 @@ void RsIamClient::Connect()
 	if (!isNativeAuth)
 	{
 		// Support serverless Redshift end point
-		std::vector<rs_string> hostnameTokens = IAMUtils::TokenizeSetting(m_settings.m_host, ".");
-		if (((hostnameTokens.size() >= 6) && (hostnameTokens[3].find("serverless") != rs_string::npos)) || (m_settings.m_isServerless))
+		if (m_settings.m_isServerless)
 		{
 			// serverless connection
 			GetServerlessCredentials(credentialsProvider);
