@@ -85,6 +85,7 @@ void WEBServer::ListenerThread()
 
     if (!WEBServerInit())
     {
+        RS_LOG_DEBUG("IAMHTTP", "WEBServer::WEBServerInit Failed");
         return;
     }
 

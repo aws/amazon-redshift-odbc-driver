@@ -30,7 +30,7 @@ namespace Redshift
 
         private:
             // @brief Client to call IdC functions
-            Aws::SSOOIDC::SSOOIDCClient idc_client;
+            std::shared_ptr<Aws::SSOOIDC::SSOOIDCClient> pIdcClient_;
 
             // @brief Initialize the arguments map
             void InitArgumentsMap() override;
@@ -42,7 +42,7 @@ namespace Redshift
             std::string GetIdcToken();
 
             // @brief Initialize the IdC client
-            Aws::SSOOIDC::SSOOIDCClient InitializeIdcClient(const std::string& in_region);
+            void InitializeIdcClient(const std::string& in_region);
 
             // @brief Register the client with IdC
             Aws::SSOOIDC::Model::RegisterClientResult GetRegisterClientResult();

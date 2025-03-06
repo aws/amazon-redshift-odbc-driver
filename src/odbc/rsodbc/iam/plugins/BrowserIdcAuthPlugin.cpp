@@ -210,7 +210,7 @@ std::string BrowserIdcAuthPlugin::GetIdcToken() {
     RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::GetIdcToken");
     ValidateArgumentsMap();
 
-    idc_client = InitializeIdcClient(m_argsMap[KEY_IDC_REGION]);
+    InitializeIdcClient(m_argsMap[KEY_IDC_REGION]);
     RegisterClientResult registerClientResult = GetRegisterClientResult();
     std::string codeVerifier = GenerateCodeVerifier();
     std::string codeChallenge = GenerateCodeChallenge(codeVerifier);
@@ -220,12 +220,11 @@ std::string BrowserIdcAuthPlugin::GetIdcToken() {
     return accessToken;
 }
 
-SSOOIDCClient BrowserIdcAuthPlugin::InitializeIdcClient(const std::string& in_region) {
+void BrowserIdcAuthPlugin::InitializeIdcClient(const std::string& in_region) {
     RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::InitializeIdcClient");
     Aws::Client::ClientConfiguration client_config;
     client_config.region = in_region;
-    SSOOIDCClient client(client_config);
-    return client;
+    pIdcClient_ = std::make_shared<SSOOIDCClient>(client_config);
 }
 
 RegisterClientResult BrowserIdcAuthPlugin:: GetRegisterClientResult() {
@@ -257,7 +256,7 @@ RegisterClientResult BrowserIdcAuthPlugin:: GetRegisterClientResult() {
     Aws::Vector<Aws::String> grantTypes(1, AUTH_CODE_GRANT_TYPE);
     request.SetGrantTypes(grantTypes);
 
-    RegisterClientOutcome outcome = idc_client.RegisterClient(request);
+    RegisterClientOutcome outcome = pIdcClient_->RegisterClient(request);
 
     if(!outcome.IsSuccess()) {
         RS_LOG_DEBUG("IAMIDC", "Failed to register client with IdC");
@@ -419,7 +418,7 @@ void BrowserIdcAuthPlugin::LaunchBrowser(const std::string &uri)
 
     request.WithRedirectUri(redirectUri);
     while (system_clock::now() < pollingEndTime) {
-        CreateTokenOutcome createTokenOutcome = idc_client.CreateToken(request);
+        CreateTokenOutcome createTokenOutcome = pIdcClient_->CreateToken(request);
 
         if(createTokenOutcome.IsSuccess()) {
             std::string access_token =
