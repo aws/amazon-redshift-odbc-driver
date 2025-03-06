@@ -473,7 +473,7 @@ char *getNextTokenForCopyOrUnloadCommand(char **ppSrc, size_t cbLen, int *pi, in
 SQLRETURN copyFromLocalFile(RS_STMT_INFO *pStmt, FILE *fp, int iLockRequired);
 SQLRETURN checkAndHandleCopyStdinOrClient(RS_STMT_INFO *pStmt, SQLRETURN rc, int iLockRequired);
 
-char *parseForMultiInsertCommand(RS_STMT_INFO *pStmt, char *pCmd, size_t cbLen, int iCallFromPrepare, char **ppLastBatchMultiInsertCmd);
+char *parseForMultiInsertCommand(RS_STMT_INFO *pStmt, char *pCmd, SQLINTEGER cbLen, char **ppLastBatchMultiInsertCmd);
 char *getNextTokenForInsertCommand(char **ppSrc, size_t cbLen, int *pi, char delimiter);
 int getNumberOfParams(RS_STMT_INFO *pStmt);
 int getTotalMultiTuples(int numOfParamMarkers, long lArraySize, int *piLastBatchTotalMultiTuples);

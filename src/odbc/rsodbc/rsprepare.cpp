@@ -64,10 +64,7 @@ SQLRETURN SQL_API SQLPrepareW(SQLHSTMT  phstmt,
     releasePaStrBuf(pStmt->pCmdBuf);
     setParamMarkerCount(pStmt,0);
     pStmt->iFunctionCall = FALSE;
-
-    pStmt->pszUserInsertCmd = (char *)rs_free(pStmt->pszUserInsertCmd);
-    releasePaStrBuf(pStmt->pszLastBatchMultiInsertCmd);
-    pStmt->pszLastBatchMultiInsertCmd = (struct _RS_STR_BUF *)rs_free(pStmt->pszLastBatchMultiInsertCmd);
+    pStmt->resetMultiInsertInfo();
 
     if(pwCmd == NULL)
     {
@@ -83,7 +80,8 @@ SQLRETURN SQL_API SQLPrepareW(SQLHSTMT  phstmt,
     if(szCmd)
     {
         // Look for INSERT command with array binding, which can convert into Multi INSERT
-        char *pszMultiInsertCmd = parseForMultiInsertCommand(pStmt, szCmd, SQL_NTS, TRUE, &pLastBatchMultiInsertCmd);
+        char *pszMultiInsertCmd = parseForMultiInsertCommand(
+            pStmt, szCmd, SQL_NTS, &pLastBatchMultiInsertCmd);
 
         if(pszMultiInsertCmd)
         {
@@ -559,7 +557,8 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLPrepare(SQLHSTMT phstmt,
         setParamMarkerCount(pStmt,0);
 
         // Look for INSERT command with array binding, which can convert into Multi INSERT
-        pszMultiInsertCmd = parseForMultiInsertCommand(pStmt, (char *)pCmd, cbLen, TRUE, &pLastBatchMultiInsertCmd);
+        pszMultiInsertCmd = parseForMultiInsertCommand(
+            pStmt, (char *)pCmd, cbLen, &pLastBatchMultiInsertCmd);
 
         if(!pszMultiInsertCmd)
         {

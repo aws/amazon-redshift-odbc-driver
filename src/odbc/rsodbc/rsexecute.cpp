@@ -70,7 +70,7 @@ SQLRETURN SQL_API SQLExecDirectW(SQLHSTMT   phstmt,
     {
         // Look for INSERT command with array binding, which can convert into Multi INSERT
         char *pLastBatchMultiInsertCmd = NULL;
-        char *pszMultiInsertCmd = parseForMultiInsertCommand(pStmt, szCmd, SQL_NTS, FALSE, &pLastBatchMultiInsertCmd);
+        char *pszMultiInsertCmd = parseForMultiInsertCommand(pStmt, szCmd, SQL_NTS, &pLastBatchMultiInsertCmd);
 
         if(pszMultiInsertCmd)
         {
@@ -143,6 +143,28 @@ SQLRETURN  SQL_API SQLExecDirect(SQLHSTMT phstmt,
 }
 
 /*====================================================================================================================================================*/
+
+bool RS_STMT_INFO::shouldRePrepareArrayBinding() {
+    if (pStmtAttr == nullptr || pStmtAttr->pAPD == nullptr) {
+        return false;
+    }
+    const RS_DESC_HEADER &pAPDDescHeader = pStmtAttr->pAPD->pDescHeader;
+    if (!pAPDDescHeader.valid || pszUserInsertCmd == NULL) {
+        return false;
+    }
+    return lArraySizeMultiInsert != pAPDDescHeader.lArraySize;
+}
+
+void RS_STMT_INFO::resetMultiInsertInfo() {
+    pszUserInsertCmd = (char *)rs_free(pszUserInsertCmd);
+    lArraySizeMultiInsert = 0;
+    iMultiInsert = 0;
+    // Release last batch multi-insert command, if any.
+    releasePaStrBuf(pszLastBatchMultiInsertCmd);
+    pszLastBatchMultiInsertCmd =
+        (struct _RS_STR_BUF *)rs_free(pszLastBatchMultiInsertCmd);
+    iLastBatchMultiInsert = 0;
+}
 
 //---------------------------------------------------------------------------------------------------------igarish
 // Common function for SQLExecDirect and SQLExecDirectW.
@@ -251,7 +273,8 @@ SQLRETURN  SQL_API RsExecute::RS_SQLExecDirect(SQLHSTMT phstmt,
             setParamMarkerCount(pStmt,0);
 
             // Look for INSERT command with array binding, which can convert into Multi INSERT
-            pszMultiInsertCmd = parseForMultiInsertCommand(pStmt, (char *)pCmd, cbLen, FALSE, &pLastBatchMultiInsertCmd);
+            pszMultiInsertCmd = parseForMultiInsertCommand(
+                pStmt, (char *)pCmd, cbLen, &pLastBatchMultiInsertCmd);
 
             if(!pszMultiInsertCmd)
             {
@@ -306,29 +329,13 @@ SQLRETURN  SQL_API RsExecute::RS_SQLExecDirect(SQLHSTMT phstmt,
         pszCmd = NULL;
 
         // Check for INSERT and ARRAY binding, which can happen after SQLPrepare call
-        if((pStmt->iMultiInsert == 0) && (pStmt->pszUserInsertCmd != NULL))
-        {
-            // Is it array binding?
-            RS_DESC_HEADER &pAPDDescHeader = pStmt->pStmtAttr->pAPD->pDescHeader;
-
-            if(pAPDDescHeader.valid)
-            {
-                // Bind array/single value
-                long lArraySize = pAPDDescHeader.lArraySize <= 0 ? 1 : pAPDDescHeader.lArraySize;
-                int  iArrayBinding = (lArraySize > 1);
-
-                if(iArrayBinding)
-                {
-                    // Re-prepare the statement
-                    rc = pStmt->InternalSQLPrepare((SQLCHAR *)(pStmt->pszUserInsertCmd), SQL_NTS, FALSE, FALSE, TRUE, FALSE);
-                    if(rc == SQL_ERROR)
-                        goto error;
-
-                    // Free the user command, if we converted INSERT to multi-INSERT
-                    if(pStmt->iMultiInsert > 0)
-                        pStmt->pszUserInsertCmd = (char *)rs_free(pStmt->pszUserInsertCmd);
-                }
-            }
+        if (pStmt->shouldRePrepareArrayBinding()) {
+            RS_LOG_DEBUG("EXECUTE", "Re-prepare the statement...");
+            // Re-prepare the statement
+            rc = pStmt->InternalSQLPrepare((SQLCHAR *)(pStmt->pszUserInsertCmd),
+                                           SQL_NTS, FALSE, FALSE, TRUE, FALSE);
+            if (rc == SQL_ERROR)
+                goto error;
         }
     }
 

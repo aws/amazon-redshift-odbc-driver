@@ -547,6 +547,8 @@ class RS_STMT_INFO
 
     // > 0 means INSERT converted to multi INSERT. It shows mutlipier factor.
     int iMultiInsert;
+    // Records the lArraySize when iMultiInsert was updated
+    int lArraySizeMultiInsert;
 
     // > 0 means Multi-Insert has remainder which is less than iMultiInsert.
     int iLastBatchMultiInsert;
@@ -618,8 +620,8 @@ class RS_STMT_INFO
                                         int iSQLPrepareW,
                                         int iReprepareForMultiInsert,
                                         int iLockRequired);
-
-
+    bool shouldRePrepareArrayBinding();
+    void resetMultiInsertInfo();
 };
 
 /*

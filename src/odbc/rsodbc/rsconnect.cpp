@@ -1782,11 +1782,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFreeStmt(SQLHSTMT phstmt,
             }
 
             // Release user insert command, if any.
-            pStmt->pszUserInsertCmd = (char *)rs_free(pStmt->pszUserInsertCmd);
-
-            // Release last batch multi-insert command, if any.
-            releasePaStrBuf(pStmt->pszLastBatchMultiInsertCmd);
-            pStmt->pszLastBatchMultiInsertCmd = (struct _RS_STR_BUF *)rs_free(pStmt->pszLastBatchMultiInsertCmd);
+            pStmt->resetMultiInsertInfo();
 
             // Free statement
             if (pStmt != NULL) {

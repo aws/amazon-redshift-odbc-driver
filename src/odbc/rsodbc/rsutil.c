@@ -9312,12 +9312,6 @@ void makeItReadyForNewQueryExecution(RS_STMT_INFO *pStmt, int executePrepared, i
             releasePaStrBuf(pStmt->pszLastBatchMultiInsertCmd);
             pStmt->pszLastBatchMultiInsertCmd = (RS_STR_BUF *)rs_free(pStmt->pszLastBatchMultiInsertCmd);
         }
-
-        if(!iReprepareForMultiInsert)
-        {
-            // Release user insert command, if any.
-            pStmt->pszUserInsertCmd = (char *)rs_free(pStmt->pszUserInsertCmd);
-        }
     }
 }
 
@@ -11766,7 +11760,7 @@ error:
 // Parse for INSERT command for multi insert conversion. Looking for INSERT...VALUES. If it found INSERT command and successfully convert 
 // INSERT into multi INSERT, it will return new command, otherwise returns NULL.
 //
-char *parseForMultiInsertCommand(RS_STMT_INFO *pStmt, char *pCmd, size_t cbLen, int iCallFromPrepare, char **ppLastBatchMultiInsertCmd)
+char *parseForMultiInsertCommand(RS_STMT_INFO *pStmt, char *pCmd, SQLINTEGER cbLen, char **ppLastBatchMultiInsertCmd)
 {
     char *pMultiInsertCmd = NULL;
     char *pLastBatchMultiInsertCmd = NULL;
@@ -11801,6 +11795,14 @@ char *parseForMultiInsertCommand(RS_STMT_INFO *pStmt, char *pCmd, size_t cbLen, 
 
                 // Bind array/single value
                 long lArraySize = (pAPDDescHeader.valid == false || pAPDDescHeader.lArraySize <= 0) ? 1 : pAPDDescHeader.lArraySize;
+
+                // Store insert command the and the respective state
+                if (pCmd != pStmt->pszUserInsertCmd) { // we are re-prepareing
+                    pStmt->resetMultiInsertInfo();
+                    pStmt->pszUserInsertCmd = rs_strdup(pCmd, cbLen);
+                }
+                pStmt->lArraySizeMultiInsert = lArraySize;
+
                 int  iArrayBinding = (lArraySize > 1);
 
                 if(iArrayBinding)
@@ -11913,14 +11915,11 @@ char *parseForMultiInsertCommand(RS_STMT_INFO *pStmt, char *pCmd, size_t cbLen, 
 
                    } // Temp CMD
                 } // ARRAY binding
-                else
-                if(iCallFromPrepare)
-                {
-                    // Store user command for application may call ARRAY binding after Prepare call
-                    pStmt->pszUserInsertCmd = (char *)rs_free(pStmt->pszUserInsertCmd);
-                    pStmt->pszUserInsertCmd = rs_strdup(pCmd, cbLen);
-                }
            } // INSERT
+           else {
+                // Remove previous traces, if any.
+                pStmt->resetMultiInsertInfo();
+           }
         }
     }
 
