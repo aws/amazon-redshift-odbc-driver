@@ -79,6 +79,8 @@ if(pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion == SQL_OV_ODBC2) \
     } \
 } 
 
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 // Control allocation of string data by small array, app buffer or new allocation buffer.
 typedef struct _RS_STR_BUF
@@ -291,9 +293,9 @@ char *stristr(const char *str, const char *subStr);
 
 SQLRETURN copyStrDataSmallLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLSMALLINT cbLen, SQLSMALLINT *pcbLen);
 SQLRETURN copyStrDataLargeLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLINTEGER cbLen, SQLINTEGER *pcbLen);
-SQLRETURN copyStrDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
+SQLRETURN copyStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *cbLenOffset, SQLLEN *pcbLenInd);
 
-SQLRETURN copyWStrDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
+SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *cbLenOffset, SQLLEN *pcbLenInd);
 
 SQLRETURN copyBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
 SQLRETURN copyWBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);

@@ -403,3 +403,421 @@ TEST(RSUTIL, test_char2StringView) {
     ASSERT_EQ(true, (std::is_same<decltype(char2StringView((SQLCHAR *)"test")),
                                   std::string_view>::value));
 }
+
+// Tests that copyWStrDataBigLen correctly handles zero-length input strings
+TEST(CopyWStrDataBigLen, ZeroLengthInput) {
+    char src[] = ""; // 0-length UTF-8
+    WCHAR dest[2] = {L'X', L'X'};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 1;
+
+    auto rc = copyWStrDataBigLen(nullptr, src, 0, dest, sizeof(dest), &offset,
+                                 &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(dest[0], L'\0');
+    EXPECT_EQ(lenInd, 0);
+    EXPECT_EQ(offset, 0);
+}
+
+// Tests that copyWStrDataBigLen correctly handles null input with SQL_NULL_DATA
+TEST(CopyWStrDataBigLen, NullInput) {
+    WCHAR dest[2] = {L'X', L'X'};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 1;
+
+    auto rc = copyWStrDataBigLen(nullptr, nullptr, SQL_NULL_DATA, dest,
+                                 sizeof(dest), &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(dest[0], L'X'); // should be untouched
+    EXPECT_EQ(dest[1], L'X'); // should be untouched
+    EXPECT_EQ(lenInd, SQL_NULL_DATA);
+    EXPECT_EQ(offset, 0);
+}
+
+// Tests that copyWStrDataBigLen correctly copies a string that completely fits
+// in the destination buffer
+TEST(CopyWStrDataBigLen, FullStringFitsInBuffer) {
+    const char *src = "abc";
+    WCHAR dest[10] = {0};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc = copyWStrDataBigLen(nullptr, src, SQL_NTS, dest, sizeof(dest),
+                                 &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(std::u16string((char16_t *)dest), u"abc");
+    EXPECT_EQ(dest[3], L'\0');  // Explicitly check for null terminator
+    EXPECT_EQ(lenInd, 3 * sizeof(WCHAR));
+    EXPECT_EQ(offset, 0); // reset
+}
+
+// Tests that copyWStrDataBigLen correctly handles truncation when the string is
+// larger than the destination buffer
+TEST(CopyWStrDataBigLen, StringTruncated) {
+    const char *src = "abcdef";
+    WCHAR dest[4] = {0};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    // dest can hold only 3 + 1 null = 4 WCHARs
+    auto rc = copyWStrDataBigLen(nullptr, src, SQL_NTS, dest, sizeof(dest),
+                                 &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_EQ(std::u16string((char16_t *)dest), u"abc"); // truncated
+    EXPECT_EQ(dest[3], L'\0');
+    EXPECT_EQ(lenInd, 6 * sizeof(WCHAR));                // full length
+    EXPECT_EQ(offset, 3);                                // updated
+}
+
+// Tests that copyWStrDataBigLen correctly handles sequential fetching of
+// remaining data after truncation
+TEST(CopyWStrDataBigLen, SequentialFetchRemainder) {
+    const char *src = "abcdef";
+    WCHAR dest[4] = {0};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 3; // continue from previous test
+
+    auto rc = copyWStrDataBigLen(nullptr, src, SQL_NTS, dest, sizeof(dest),
+                                 &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(std::u16string((char16_t *)dest), u"def");
+    EXPECT_EQ(dest[3], L'\0');
+    EXPECT_EQ(offset, 0); // reset after full
+}
+
+// Tests that copyWStrDataBigLen correctly handles cases where the buffer can
+// only hold the null terminator
+TEST(CopyWStrDataBigLen, BufferTooSmallForData) {
+    const char *src = "abc";
+    WCHAR dest[1] = {0};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    // Only space for null terminator
+    auto rc = copyWStrDataBigLen(nullptr, src, SQL_NTS, dest, sizeof(WCHAR),
+                                 &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_EQ(dest[0], L'\0');
+    EXPECT_EQ(offset, 0);                             // offset unchanged
+}
+
+// Tests that copyWStrDataBigLen correctly sets rc when no destination buffer is
+// provided
+TEST(CopyWStrDataBigLen, NoDestinationBuffer) {
+    const char *src = "abc";
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc =
+        copyWStrDataBigLen(nullptr, src, SQL_NTS, nullptr, 0, &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_ERROR);
+}
+
+// Tests that copyWStrDataBigLen correctly sets rc when destination buffer is
+// negative
+TEST(CopyWStrDataBigLen, NegativeBufferLength) {
+    const char *src = "abc";
+    WCHAR dest[1] = {0};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc =
+        copyWStrDataBigLen(nullptr, src, SQL_NTS, dest, -1, &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_ERROR);
+}
+
+// Tests that copyWStrDataBigLen correctly handles cases where the string
+// exactly fits in the destination buffer
+TEST(CopyWStrDataBigLen, ExactFitBuffer) {
+    const char *src = "abc";
+    WCHAR dest[4] = {0}; // 3 chars + null
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc = copyWStrDataBigLen(nullptr, src, SQL_NTS, dest, sizeof(dest),
+                                 &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(std::u16string((char16_t *)dest), u"abc");
+    EXPECT_EQ(dest[3], L'\0');
+    EXPECT_EQ(lenInd, 3 * sizeof(WCHAR));
+}
+
+// Tests that copyWStrDataBigLen correctly handles explicit length parameter
+// instead of SQL_NTS
+TEST(CopyWStrDataBigLen, ExplicitLengthInput) {
+    const char *src = "abcdef";
+    int len = 3; // Only "abc"
+    WCHAR dest[5] = {0};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc = copyWStrDataBigLen(nullptr, src, len, dest, sizeof(dest), &offset,
+                                 &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(std::u16string((char16_t *)dest), u"abc");
+    EXPECT_EQ(dest[3], L'\0');
+    EXPECT_EQ(lenInd, 3 * sizeof(WCHAR));
+}
+
+// Tests copyWStrDataBigLen with non-null terminated input string
+TEST(CopyWStrDataBigLen, NonNullTerminatedInput) {
+    const char src[5] = {'H', 'e', 'l', 'l', 'o'}; // No null terminator
+    int length = 3;
+    WCHAR dest[5] = {0}; // 3 chars + null
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc = copyWStrDataBigLen(nullptr, src, 5, dest, 6, &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_EQ(std::u16string((char16_t *)dest), u"He");
+    EXPECT_EQ(dest[2], L'\0');
+    EXPECT_EQ(lenInd, 10);
+
+    rc = copyWStrDataBigLen(nullptr, src, 5, dest, 6, &offset, &lenInd);
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_EQ(std::u16string((char16_t *)dest), u"ll");
+    EXPECT_EQ(dest[2], L'\0');
+    EXPECT_EQ(lenInd, 6);
+
+    rc = copyWStrDataBigLen(nullptr, src, 5, dest, 6, &offset, &lenInd);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(std::u16string((char16_t *)dest), u"o");
+    EXPECT_EQ(dest[1], L'\0');
+    EXPECT_EQ(lenInd, 2);
+}
+
+// Tests copyWStrDataBigLen with wide characters (emoji, special symbols)
+TEST(CopyWStrDataBigLen, WideCharacters) {
+    // String with emoji and special characters using std::string
+    std::string src =
+        "I am smiling 🙂©👀"; // 24 characters: I am smiling : 13 + 🙂: 4 + ©: 2
+                              // + 👀: 4 + null character: 1 = 24 bytes
+    WCHAR dest[5] = {0}; // Small buffer to force multiple chunks
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    // First call - should get partial string
+    auto rc = copyWStrDataBigLen(nullptr, src.data(), src.size(), dest,
+                                 sizeof(dest), &offset, &lenInd);
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_EQ(lenInd, 36); // Number of wide bytes: I am smiling : 13 + 🙂: 2 +
+                           // ©: 1 + 👀: 2 = 18 wide chars * 2 = 36 bytes
+    EXPECT_EQ(dest[4], L'\0');
+    EXPECT_EQ(offset, 4); // 4 characters read
+
+    rc = copyWStrDataBigLen(nullptr, src.data(), src.size(), dest, sizeof(dest),
+                            &offset, &lenInd);
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_EQ(lenInd, 28);
+    EXPECT_EQ(dest[4], L'\0');
+    EXPECT_EQ(offset, 8); // 4 more characters read
+
+    rc = copyWStrDataBigLen(nullptr, src.data(), src.size(), dest, sizeof(dest),
+                            &offset, &lenInd);
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_EQ(lenInd, 20);
+    EXPECT_EQ(dest[4], L'\0');
+    EXPECT_EQ(offset, 12); // 4 more characters read
+
+    rc = copyWStrDataBigLen(nullptr, src.data(), src.size(), dest, sizeof(dest),
+                            &offset, &lenInd);
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_EQ(lenInd, 12);
+    EXPECT_EQ(dest[4], L'\0');
+    EXPECT_EQ(offset, 16); // 4 more characters read
+
+    // Last call to read the remaining data
+    rc = copyWStrDataBigLen(nullptr, src.data(), src.size(), dest, sizeof(dest),
+                            &offset, &lenInd);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(lenInd, 4);
+    EXPECT_EQ(dest[2], L'\0');
+    EXPECT_EQ(offset, 0); // Offset should be reset after completion
+}
+
+// Tests that copyStrDataBigLen correctly handles null source with SQL_NULL_DATA
+TEST(CopyStrDataBigLen, NullSrcAndSQLNullData) {
+    char dest[2] = {'X', 'X'};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 1;
+
+    auto rc = copyStrDataBigLen(nullptr, nullptr, SQL_NULL_DATA, dest,
+                                sizeof(dest), &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    // ensure buffer is untouched
+    EXPECT_EQ(dest[0], 'X'); 
+    EXPECT_EQ(dest[1], 'X');
+    EXPECT_EQ(lenInd, SQL_NULL_DATA);
+    EXPECT_EQ(offset, 0);
+}
+
+// Tests that copyStrDataBigLen correctly handles empty string input with zero
+// length
+TEST(CopyStrDataBigLen, EmptyStringInput) {
+    const char *src = "";
+    char dest[5] = {'X', 'X', 'X', 'X', 'X'};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 1;
+
+    auto rc = copyStrDataBigLen(nullptr, src, 0, dest, sizeof(dest), &offset,
+                                &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(dest[0], '\0');
+    EXPECT_EQ(lenInd, 0);
+    EXPECT_EQ(offset, 0);
+}
+
+// Tests that copyStrDataBigLen correctly copies a string that completely fits
+// in the destination buffer
+TEST(CopyStrDataBigLen, FullStringFitsInBuffer) {
+    const char *src = "abc";
+    char dest[10] = {0};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc = copyStrDataBigLen(nullptr, src, SQL_NTS, dest, sizeof(dest),
+                                &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_STREQ(dest, "abc");
+    EXPECT_EQ(dest[3], '\0');
+    EXPECT_EQ(lenInd, 3);
+    EXPECT_EQ(offset, 0);
+}
+
+// Tests that copyStrDataBigLen correctly handles truncation when the string is
+// larger than the destination buffer
+TEST(CopyStrDataBigLen, TruncatedString) {
+    const char *src = "abcdef";
+    char dest[4] = {0}; // can hold 3 chars + null
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc = copyStrDataBigLen(nullptr, src, SQL_NTS, dest, sizeof(dest),
+                                &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_STREQ(dest, "abc");
+    EXPECT_EQ(dest[3], '\0');
+    EXPECT_EQ(lenInd, 6);
+    EXPECT_EQ(offset, 3);
+}
+
+// Tests that copyStrDataBigLen correctly handles sequential fetching of
+// remaining data after truncation
+TEST(CopyStrDataBigLen, SequentialFetch) {
+    const char *src = "abcdef";
+    char dest[4] = {0}; // can hold 3 chars + null
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 3;
+
+    auto rc = copyStrDataBigLen(nullptr, src, SQL_NTS, dest, sizeof(dest),
+                                &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_STREQ(dest, "def");
+    EXPECT_EQ(dest[3], '\0');
+    EXPECT_EQ(offset, 0);
+}
+
+// Tests that copyStrDataBigLen correctly handles cases where the buffer can
+// only hold the null terminator
+TEST(CopyStrDataBigLen, OneByteBufferOnlyNull) {
+    const char *src = "abc";
+    char dest[1] = {'X'};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc =
+        copyStrDataBigLen(nullptr, src, SQL_NTS, dest, 1, &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_EQ(dest[0], '\0'); // Only null terminator
+    EXPECT_EQ(offset, 0);   // No progress made
+}
+
+// Tests that copyStrDataBigLen correctly sets rc when destination buffer is
+// null
+TEST(CopyStrDataBigLen, NullDestPointer) {
+    const char *src = "abc";
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc =
+        copyStrDataBigLen(nullptr, src, SQL_NTS, nullptr, 0, &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_ERROR);
+}
+
+// Tests that copyStrDataBigLen correctly sets rc when destination buffer length
+// is negative
+TEST(CopyStrDataBigLen, NegativeBufferLength) {
+    const char *src = "abc";
+    char dest[1] = {0};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc =
+        copyStrDataBigLen(nullptr, src, SQL_NTS, dest, -1, &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_ERROR);
+}
+
+// Tests that copyStrDataBigLen correctly handles explicit length parameter
+// instead of SQL_NTS
+TEST(CopyStrDataBigLen, ExplicitLengthInput) {
+    const char *src = "abcdef";
+    int length = 3;
+    char dest[5] = {0};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc = copyStrDataBigLen(nullptr, src, length, dest, sizeof(dest),
+                                &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_STREQ(dest, "abc");
+    EXPECT_EQ(dest[3], '\0');
+    EXPECT_EQ(lenInd, 3);
+}
+
+// Tests copyStrDataBigLen with non-null terminated input string
+TEST(CopyStrDataBigLen, NonNullTerminatedInput) {
+    const char src[5] = {'H', 'e', 'l', 'l', 'o'}; // No null terminator
+    int length = 3;
+    char dest[5] = {0};
+    SQLLEN lenInd = -1;
+    SQLLEN offset = 0;
+
+    auto rc = copyStrDataBigLen(nullptr, src, 5, dest, 3, &offset, &lenInd);
+
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_STREQ(dest, "He");
+    EXPECT_EQ(dest[2], '\0');
+    EXPECT_EQ(lenInd, 5);
+
+    rc = copyStrDataBigLen(nullptr, src, 5, dest, 3, &offset, &lenInd);
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_STREQ(dest, "ll");
+    EXPECT_EQ(dest[2], '\0');
+    EXPECT_EQ(lenInd, 3);
+
+    rc = copyStrDataBigLen(nullptr, src, 5, dest, 3, &offset, &lenInd);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_STREQ(dest, "o");
+    EXPECT_EQ(dest[1], '\0');
+    EXPECT_EQ(lenInd, 1);
+}

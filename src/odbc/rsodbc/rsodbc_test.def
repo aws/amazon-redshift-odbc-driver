@@ -138,6 +138,8 @@ EXPORTS
 	DoesEmbedInDoubleQuotes
 	printHexSQLWCHR
 	printHexSQLCHAR
+	copyStrDataBigLen
+	copyWStrDataBigLen
 	?ValidateURL@IAMUtils@IamSupport@Redshift@@SAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?sqlTypeNameMap@@YAPEADF@Z
 	?getColumnSize@RsMetadataAPIHelper@@SAHAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@FF@Z

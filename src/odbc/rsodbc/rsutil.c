@@ -834,49 +834,164 @@ SQLRETURN copyStrDataLargeLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest,
 //---------------------------------------------------------------------------------------------------------igarish
 // Copy big string data.
 //
-SQLRETURN copyStrDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
-{
-    SQLRETURN rc = SQL_SUCCESS;
-    int len = (pSrc && (iSrcLen != SQL_NULL_DATA)) 
-                ? ((iSrcLen == SQL_NTS) ? (int) strlen(pSrc) : iSrcLen) 
-                : 0;
-
-    if(pDest != NULL)
-    {
-        if(len > 0)
-        {
-            if(len < cbLen)
-            {
-                strncpy(pDest, pSrc, len);
-                pDest[len] = '\0';
-            }
-            else
-            {
-                if(cbLen > 0)
-                {
-                    strncpy(pDest,pSrc, cbLen-1);
-                    pDest[cbLen-1] = '\0';
-                    rc = SQL_SUCCESS_WITH_INFO;
-                }
-                else
-                    rc = SQL_SUCCESS_WITH_INFO;
-            }
+SQLRETURN copyStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
+                            SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen,
+                            SQLLEN *cbLenOffset, SQLLEN *pcbLenInd) {
+    // TODO: Move the check for cbLen and pDest to SQLGetData API
+    if (cbLen < 0) {
+        if (pStmt) {
+            addError(&pStmt->pErrorList, "HY090",
+                     "Invalid buffer length specified (length must be greater "
+                     "than or equal to 0) ",
+                     0, NULL);
         }
-        else
-        {
-            if(cbLen > 0)
-                pDest[0] = '\0';
+        RS_LOG_ERROR("RSUTIL", "Invalid buffer length specified (length "
+                               "must be greater than or equal to 0) ");
+        return SQL_ERROR;
+    }
+
+    if (pDest == NULL) {
+        if (pStmt) {
+            addError(
+                &pStmt->pErrorList, "HY009",
+                "Invalid buffer pointer: NULL pointer provided for data buffer",
+                0, NULL);
+        }
+        RS_LOG_ERROR("RSUTIL", "Invalid buffer pointer: NULL pointer "
+                               "provided for data buffer");
+        return SQL_ERROR;
+    }
+
+    SQLRETURN rc = SQL_SUCCESS;
+
+    // Calculate the length of source data
+    int len = (pSrc && (iSrcLen != SQL_NULL_DATA))
+                  ? ((iSrcLen == SQL_NTS) ? (int)strlen(pSrc) : iSrcLen)
+                  : 0;
+    // Handle case where source is NULL or NULL data is being returned
+    if (pSrc == NULL || iSrcLen == SQL_NULL_DATA) {
+        if (cbLenOffset) {
+            *cbLenOffset = 0; // Reset offset for next column
+        }
+        if (pcbLenInd) {
+            *pcbLenInd = SQL_NULL_DATA;
+        }
+        return SQL_SUCCESS;
+    }
+
+    // Handle the case where source is empty string
+    if (len == 0) {
+        if (cbLenOffset) {
+            *cbLenOffset = 0;
+        }
+        if (pcbLenInd) {
+            *pcbLenInd = 0; // empty data
+        }
+        // if valid buffer length is provided add a null terminator
+        if (cbLen > 0) {
+            pDest[0] = '\0';
+            return SQL_SUCCESS;
+        }
+        // not able to add a null terminator for empty string
+        if (pStmt) {
+            addWarning(&pStmt->pErrorList, "01004",
+                       "String data, right truncation occurred: Buffer too "
+                       "small to hold the entire data.",
+                       0, NULL);
+        }
+        RS_LOG_DEBUG("RSUTIL", "String data, right truncation occurred: Buffer "
+                               "too small to hold the entire data.");
+        return SQL_SUCCESS_WITH_INFO;
+    }
+
+    // Get current fetch position for sequential fetches
+    int currentOffset = (cbLenOffset) ? *cbLenOffset : 0;
+
+    // Check if we've already fetched everything
+    if (currentOffset >= len) {
+        if (cbLenOffset) {
+            *cbLenOffset = 0; // Reset offset for next column
+        }
+        return SQL_SUCCESS;
+    }
+
+    // Calculate remaining data and how much we can copy now
+    int remainingLen = len - currentOffset;
+
+    // Set the indicator to length of data available at the start of current
+    // call
+    if (pcbLenInd) {
+        *pcbLenInd = remainingLen;
+    }
+
+    // Calculate how many bytes to copy, ensuring:
+    // 1. We only copy if we have a valid destination buffer (cbLen > 0)
+    // 2. We leave room for the null terminator (cbLen - 1)
+    // 3. We don't copy more than the remaining data (MIN with remainingLen)
+    // 4. We never try to copy a negative amount (MAX with 0)
+    int copyLen = (cbLen > 0) ? MAX(0, MIN(remainingLen, (int)(cbLen - 1))) : 0;
+
+    // Copy data if destination buffer is provided
+    if (cbLen > 0) {
+        if (copyLen > 0) {
+            memcpy(pDest, pSrc + currentOffset, copyLen);
+        }
+        pDest[MIN(copyLen, (int)(cbLen - 1))] =
+            '\0'; // always null-terminate within bounds
+    }
+
+    // Handle sequential fetch offset updating
+    if (cbLenOffset) {
+        if (remainingLen > copyLen) {
+            // More data remains, update offset and signal truncation
+            *cbLenOffset += copyLen;
+            if (pStmt) {
+                addWarning(&pStmt->pErrorList, "01004",
+                           "String data, right truncation occurred: Buffer too "
+                           "small to hold the entire data.",
+                           0, NULL);
+            }
+            RS_LOG_DEBUG("RSUTIL",
+                         "String data, right truncation occurred: Buffer "
+                         "too small to hold the entire data.");
+            return SQL_SUCCESS_WITH_INFO;
+        } else {
+            // All data fetched, reset offset
+            *cbLenOffset = 0;
+            return SQL_SUCCESS;
+        }
+    } else {
+        // Not using sequential fetches
+        if (remainingLen > copyLen && cbLen > 0) {
+            // Truncation occurred
+            if (pStmt) {
+                addWarning(&pStmt->pErrorList, "01004",
+                           "String data, right truncation occurred: Buffer too "
+                           "small to hold the entire data.",
+                           0, NULL);
+            }
+            RS_LOG_DEBUG("RSUTIL",
+                         "String data, right truncation occurred: Buffer "
+                         "too small to hold the entire data.");
+            return SQL_SUCCESS_WITH_INFO;
         }
     }
-    else
-        rc = SQL_SUCCESS_WITH_INFO;
 
-    if(pcbLen != NULL)
-        *pcbLen = len;
-    else
-        rc = SQL_SUCCESS;
+    // If no destination was provided, signal truncation
+    if (cbLen == 0) {
+        // Truncation occurred
+        if (pStmt) {
+            addWarning(&pStmt->pErrorList, "01004",
+                       "String data, right truncation occurred: Buffer too "
+                       "small to hold the entire data.",
+                       0, NULL);
+        }
+        RS_LOG_DEBUG("RSUTIL", "String data, right truncation occurred: Buffer "
+                               "too small to hold the entire data.");
+        return SQL_SUCCESS_WITH_INFO;
+    }
 
-    return rc;
+    return SQL_SUCCESS;
 }
 
 /*====================================================================================================================================================*/
@@ -1088,48 +1203,175 @@ SQLRETURN copyBinaryToHexDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *
 // Copy big WCHAR string data.
 //
 // cbLen and pcbLen are in bytes
-SQLRETURN copyWStrDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
-{
-    SQLRETURN rc = SQL_SUCCESS;
-    int len = (pSrc && (iSrcLen != SQL_NULL_DATA)) 
-                ? ((iSrcLen == SQL_NTS) ? (int) strlen(pSrc) : iSrcLen) 
-                : 0;
-    int cchLen = (int)((cbLen > 0 ) ? cbLen/sizeof(WCHAR) : cbLen);
+SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
+                             SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen,
+                             SQLLEN *cbLenOffset, SQLLEN *pcbLenInd) {
 
-    if(pDest != NULL)
-    {
-        if(len > 0)
-        {
-            if(len < cchLen)
-            {
-                utf8_to_wchar(pSrc, len, pDest, cchLen);
-            }
-            else
-            {
-                if(cchLen > 0)
-                {
-                    utf8_to_wchar(pSrc, cchLen-1, pDest, cchLen);
-                    rc = SQL_SUCCESS_WITH_INFO;
-                }
-                else
-                    rc = SQL_SUCCESS_WITH_INFO;
-            }
+    // TODO: Move the check for cbLen and pDest to SQLGetData API
+    if (cbLen < 0) {
+        if (pStmt) {
+            addError(&pStmt->pErrorList, "HY090",
+                     "Invalid buffer length specified (length must be greater "
+                     "than or equal to 0) ",
+                     0, NULL);
         }
-        else
-        {
-            if(cchLen > 0)
-                pDest[0] = L'\0';
+        RS_LOG_ERROR("RSUTIL", "Invalid buffer length specified (length "
+                               "must be greater than or equal to 0) ");
+        return SQL_ERROR;
+    }
+    if (pDest == NULL) {
+        if (pStmt) {
+            addError(
+                &pStmt->pErrorList, "HY009",
+                "Invalid buffer pointer: NULL pointer provided for data buffer",
+                0, NULL);
+        }
+        RS_LOG_ERROR("RSUTIL", "Invalid buffer pointer: NULL pointer "
+                               "provided for data buffer");
+        return SQL_ERROR;
+    }
+
+    SQLRETURN rc = SQL_SUCCESS;
+
+    // Calculate the length of source data in bytes
+    int bytesLen = (pSrc && (iSrcLen != SQL_NULL_DATA))
+                       ? ((iSrcLen == SQL_NTS) ? (int)strlen(pSrc) : iSrcLen)
+                       : 0;
+
+    // Maximum number of wide characters the buffer can hold
+    int cchLen = (int)(cbLen / sizeof(WCHAR));
+
+    // Handle NULL data case
+    if (pSrc == NULL || iSrcLen == SQL_NULL_DATA) {
+        if (cbLenOffset) {
+            *cbLenOffset = 0;
+        }
+
+        if (pcbLenInd) {
+            *pcbLenInd = SQL_NULL_DATA;
+        }
+        return SQL_SUCCESS;
+    }
+
+    // Handle the case where source is empty string
+    if (bytesLen == 0) {
+        if (cbLenOffset) {
+            *cbLenOffset = 0;
+        }
+
+        if (pcbLenInd) {
+            *pcbLenInd = 0; // Empty string has length 0
+        }
+        if (cchLen > 0) {
+            pDest[0] = L'\0';
+            return SQL_SUCCESS; // Return SUCCESS even with zero buffer
+        }
+        // We can't even fit NULL
+        if (pStmt) {
+            addWarning(&pStmt->pErrorList, "01004",
+                       "String data, right truncation occurred: Buffer too "
+                       "small to hold the entire data.",
+                       0, NULL);
+        }
+        RS_LOG_DEBUG("RSUTIL", "String data, right truncation occurred: Buffer "
+                               "too small to hold the entire data.");
+        return SQL_SUCCESS_WITH_INFO;
+    }
+
+    // Determine character count and length after conversion
+    std::u16string wcharStr;
+    int wcharLen = char_utf8_to_utf16_str(pSrc, bytesLen, wcharStr);
+    int totalWcharBytes = wcharLen * sizeof(WCHAR);
+
+    // Get current position for sequential fetches (in characters)
+    int currentChar = (cbLenOffset) ? *cbLenOffset : 0;
+
+    // Set the indicator to length of data available at the start of current
+    // call
+    if (pcbLenInd) {
+        *pcbLenInd = (wcharLen - currentChar) * sizeof(WCHAR);
+    }
+
+    // Check if we've already fetched everything
+    if (currentChar >= wcharLen) {
+        if (cbLenOffset) {
+            *cbLenOffset = 0; // Reset offset
+        }
+        return SQL_SUCCESS;
+    }
+
+    // Calculate remaining characters and how many we can copy
+    int remainingChars = wcharLen - currentChar;
+
+    // Calculate the safe number of wide characters to copy, ensuring:
+    // 1. We have a valid destination buffer (cchLen > 0)
+    // 2. We reserve space for null terminator (cchLen - 1)
+    // 3. We don't copy more than available remaining characters (MIN with
+    // remainingChars)
+    // 4. We never attempt to copy a negative number of characters (MAX with 0)
+    int copyChars = MAX(0, MIN(remainingChars, cchLen > 0 ? cchLen - 1 : 0));
+
+    // Copy data if destination buffer is provided
+    if (cchLen > 0) {
+        if (copyChars > 0) {
+            std::u16string portion = wcharStr.substr(currentChar, copyChars);
+            memcpy(pDest, portion.c_str(), copyChars * sizeof(WCHAR));
+        }
+        pDest[copyChars] = L'\0'; // always null-terminate
+    }
+
+    // Handle sequential fetch offset updating
+    if (cbLenOffset) {
+        if (remainingChars > copyChars) {
+            // More data remains, update offset and signal truncation
+            *cbLenOffset += copyChars;
+            if (pStmt) {
+                addWarning(&pStmt->pErrorList, "01004",
+                           "String data, right truncation occurred: Buffer too "
+                           "small to hold the entire data.",
+                           0, NULL);
+            }
+            RS_LOG_DEBUG("RSUTIL",
+                         "String data, right truncation occurred: Buffer "
+                         "too small to hold the entire data.");
+            return SQL_SUCCESS_WITH_INFO;
+        } else {
+            // All data fetched, reset offset
+            *cbLenOffset = 0;
+            return SQL_SUCCESS;
+        }
+    } else {
+        // Not using sequential fetches
+        if (remainingChars > copyChars && cchLen > 0) {
+            // Truncation occurred
+            if (pStmt) {
+                addWarning(&pStmt->pErrorList, "01004",
+                           "String data, right truncation occurred: Buffer too "
+                           "small to hold the entire data.",
+                           0, NULL);
+            }
+            RS_LOG_DEBUG("RSUTIL",
+                         "String data, right truncation occurred: Buffer "
+                         "too small to hold the entire data.");
+            return SQL_SUCCESS_WITH_INFO;
         }
     }
-    else
-        rc = SQL_SUCCESS_WITH_INFO;
 
-    if(pcbLen != NULL)
-        *pcbLen = len * sizeof(WCHAR);
-    else
-        rc = SQL_SUCCESS;
+    // If no destination was provided, signal truncation
+    if (cchLen == 0) {
+        // Truncation occurred
+        if (pStmt) {
+            addWarning(&pStmt->pErrorList, "01004",
+                       "String data, right truncation occurred: Buffer too "
+                       "small to hold the entire data.",
+                       0, NULL);
+        }
+        RS_LOG_DEBUG("RSUTIL", "String data, right truncation occurred: Buffer "
+                               "too small to hold the entire data.");
+        return SQL_SUCCESS_WITH_INFO;
+    }
 
-    return rc;
+    return SQL_SUCCESS;
 }
 
 /*====================================================================================================================================================*/
@@ -1785,7 +2027,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
             {
                 case SQL_CHAR:
                 {
-                    rc = copyStrDataBigLen(rsVal.pcVal, iColDataLen,(char *)pBuf, cbLen, pcbLenInd);
+                    rc = copyStrDataBigLen(pStmt, rsVal.pcVal, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
                     break;
                 }
 
@@ -1796,10 +2038,11 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                     {
                         // As per getRsVal(), when getRsVal() returns false,
                         // we should process the value as string directly.
-						rc = copyStrDataBigLen(iConversion ? rsVal.pcVal : pColData,
+						rc = copyStrDataBigLen(pStmt, iConversion ? rsVal.pcVal : pColData,
                                                iColDataLen,
                                                (char *)pBuf,
                                                cbLen,
+                                               cbLenOffset,
                                                 pcbLenInd);
                     }
 					else {
@@ -1826,7 +2069,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 
 				case SQL_LONGVARCHAR:
 				{
-					rc = copyStrDataBigLen(rsVal.pcVal, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+					rc = copyStrDataBigLen(pStmt, rsVal.pcVal, iColDataLen, (char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					break;
 				}
 
@@ -1866,7 +2109,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                             *(char *)pBuf = (rsVal.bVal == 1) ? '1' : '0';
                     }
                     else 
-                        rc = copyStrDataBigLen(pColData, iColDataLen,(char *)pBuf, cbLen, pcbLenInd);
+                        rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 
                     break;
                 }
@@ -1874,7 +2117,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_SMALLINT:
 				{
 					if(IS_TEXT_FORMAT(format))
-						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 						if (iColDataLen > 0)
@@ -1892,7 +2135,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_INTEGER:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 						if (iColDataLen > 0)
@@ -1910,7 +2153,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_BIGINT:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 						if (iColDataLen > 0)
@@ -1928,7 +2171,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_REAL:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 						if (iColDataLen > 0)
@@ -1948,7 +2191,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DOUBLE:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 						if (iColDataLen > 0)
@@ -1968,7 +2211,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_DATE:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 						if (iColDataLen > 0)
@@ -1987,7 +2230,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_TIMESTAMP:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 						if (iColDataLen > 0)
@@ -2007,7 +2250,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_INTERVAL_DAY_TO_SECOND:
 				{
 					if (IS_TEXT_FORMAT(format)) {
-						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					}
 					else
 					{
@@ -2031,7 +2274,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				{
 					if (IS_TEXT_FORMAT(format))
 					{
-						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					}
 					else
 					{
@@ -2069,7 +2312,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 {
 					if (IS_TEXT_FORMAT(format))
 					{
-						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					}
 					else
 					{
@@ -2102,65 +2345,20 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
             {
                 case SQL_CHAR:
 				{
-                    rc = copyWStrDataBigLen(rsVal.pcVal, iColDataLen,(WCHAR *)pBuf, cbLen, pcbLenInd);
+                    rc = copyWStrDataBigLen(pStmt, rsVal.pcVal, iColDataLen,(WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
                     break;
                 }
 
                 case SQL_VARCHAR: {
                     if ((IS_TEXT_FORMAT(format)) || (hRsSpecialType != TIMETZOID &&
                                                     hRsSpecialType != TIMESTAMPTZOID)) {
-                        // rc = copyWStrDataBigLen(rsVal.pcVal, iColDataLen,(WCHAR
-                        // *)pBuf, cbLen, pcbLenInd);
-                        /*
-                            We are replacing the above(commented) function with
-                        the following hotfixes which include: 1- Unicode
-                        conversion. 2- Incrementa write to output buffer for
-                        larger data(Redshift-10107). Once we are certain of
-                        correct functionality as well as generality of the
-                        implementation, they should be moved to their own
-                        function(s).
-                        */
-                        std::u16string wchar16;
-                        static const int wsize = sizeof(WCHAR);
-                        int wchar16Size = char_utf8_to_utf16_str(
-                            iConversion ? rsVal.pcVal : pColData, iColDataLen,
-                            wchar16);
-                        // How many bytes we'd like to write:
-                        *pcbLenInd = wchar16.size() * wsize;
-                        // How many bytes we can actually write.
-                        // We assign space for null termination.
-                        int limit =
-                            std::min<SQLLEN>(*pcbLenInd - *cbLenOffset, cbLen - wsize);
-                        limit = limit > 0 ? limit : 0;
-                        if (*cbLenOffset > 0) {
-                            // We need to write from where we left
-                            // off.
-                            wchar16 = wchar16.substr(*cbLenOffset / wsize);
-                        }
-                        // Actual write
-                        memcpy(pBuf, wchar16.c_str(), limit);
-                        // Null termination
-                        memset((char *)pBuf + limit, '\0', wsize);
-                        if (*cbLenOffset + limit == *pcbLenInd) {
-                            rc = SQL_SUCCESS;
-                            // reset state
-                            *cbLenOffset = 0;
-                            // report how many data bytes written
-                            *pcbLenInd = limit;
-                        } else {
-                            // Another attempt to read rest of data is
-                            // needed.
-                            rc = SQL_SUCCESS_WITH_INFO;
-                            // Keep state of how much was written this
-                            // time.
-                            *cbLenOffset += limit;
-                        }
-                        RS_LOG_DEBUG("RSUTIL", 
-                            "SQL_C_WCHAR->SQL_VARCHAR "
-                            "iColDataLen=%d, cbLen=%d, "
-                            "wchar16Size=%d, "
-                            "limit=%d, pcbLenInd=%d, cbLenOffset=%d, rc=%d",
-                            iColDataLen, cbLen, wchar16Size, limit, *pcbLenInd, *cbLenOffset, rc);
+                        rc = copyWStrDataBigLen(pStmt, 
+                            iConversion ? rsVal.pcVal : pColData, 
+                            iColDataLen, 
+                            (WCHAR *)pBuf, 
+                            cbLen, 
+                            cbLenOffset, 
+                            pcbLenInd);
                     } else {
                         // Binary TIMETZOID or TIMESTAMPTZOID
 #ifdef WIN32
@@ -2195,8 +2393,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 
 								len = timestamp_out(rsVal.llVal, (char *)tempBuf, sizeof(tempBuf), pTimeZone);
 							}
-
-							rc = copyWStrDataBigLen(tempBuf, len, (WCHAR *)pBuf, cbLen, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2214,7 +2411,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 
 				case SQL_LONGVARCHAR:
 				{
-					rc = copyWStrDataBigLen(rsVal.pcVal, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
+					rc = copyWStrDataBigLen(pStmt, rsVal.pcVal, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					break;
 				}
 
@@ -2247,10 +2444,10 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                     // Now put bit into app buf
                     if(cbLen > 0)
                     {
-                        rc = copyWStrDataBigLen((char *)((rsVal.bVal == 1) ? "1" : "0"), 1,(WCHAR *)pBuf, cbLen, pcbLenInd);
+                        rc = copyWStrDataBigLen(pStmt, (char *)((rsVal.bVal == 1) ? "1" : "0"), 1, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
                     }
                     else 
-                        rc = copyWStrDataBigLen(pColData, iColDataLen,(WCHAR *)pBuf, cbLen, pcbLenInd);
+                        rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd); 
 
                     break;
                 }
@@ -2258,7 +2455,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_SMALLINT:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pColData, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
@@ -2276,7 +2473,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = snprintf((char *)tempBuf, sizeof(tempBuf), "%hd", rsVal.hVal);
-							rc = copyWStrDataBigLen(tempBuf, len, (WCHAR *)pBuf, cbLen, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2296,7 +2493,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_INTEGER:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pColData, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
@@ -2314,7 +2511,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = snprintf((char *)tempBuf, sizeof(tempBuf), "%d", rsVal.iVal);
-							rc = copyWStrDataBigLen(tempBuf, len, (WCHAR *)pBuf, cbLen, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2333,7 +2530,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_BIGINT:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pColData, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
@@ -2351,7 +2548,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = snprintf((char *)tempBuf, sizeof(tempBuf), "%lld", rsVal.llVal);
-							rc = copyWStrDataBigLen(tempBuf, len, (WCHAR *)pBuf, cbLen, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2370,7 +2567,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_REAL:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pColData, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
@@ -2388,7 +2585,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = snprintf((char *)tempBuf, sizeof(tempBuf), "%g", rsVal.fVal);
-							rc = copyWStrDataBigLen(tempBuf, len, (WCHAR *)pBuf, cbLen, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2407,7 +2604,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DOUBLE:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pColData, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
@@ -2425,7 +2622,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = snprintf((char *)tempBuf, sizeof(tempBuf), "%g", rsVal.dVal);
-							rc = copyWStrDataBigLen(tempBuf, len, (WCHAR *)pBuf, cbLen, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2443,7 +2640,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_TYPE_DATE:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pColData, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
@@ -2461,7 +2658,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = date_out(rsVal.iVal, (char *)tempBuf, sizeof(tempBuf));
-							rc = copyWStrDataBigLen(tempBuf, len, (WCHAR *)pBuf, cbLen, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2480,7 +2677,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_TYPE_TIMESTAMP:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pColData, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
@@ -2498,7 +2695,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = timestamp_out(rsVal.llVal, (char *)tempBuf, sizeof(tempBuf), NULL);
-							rc = copyWStrDataBigLen(tempBuf, len, (WCHAR *)pBuf, cbLen, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2518,7 +2715,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_INTERVAL_DAY_TO_SECOND:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyStrDataBigLen(pColData, iColDataLen, (char *)pBuf, cbLen, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen,(WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
@@ -2541,7 +2738,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 								len = intervaly2m_out(&(rsVal.y2mVal), (char *)tempBuf, sizeof(tempBuf));
 							else
 								len = intervald2s_out(&(rsVal.d2sVal), (char *)tempBuf, sizeof(tempBuf));
-							rc = copyWStrDataBigLen(tempBuf, len, (WCHAR *)pBuf, cbLen, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2560,7 +2757,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_DECIMAL:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pColData, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 						if (iColDataLen > 0)
@@ -2576,7 +2773,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							len = swprintf((WCHAR *)pBuf, INT_LEN(cbLen), L"%s", tempBuf);
 #endif
 #if defined LINUX 
-							rc = copyWStrDataBigLen(tempBuf, strlen(tempBuf), (WCHAR *)pBuf, cbLen, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, strlen(tempBuf), (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 							if (pcbLenInd)
 								len = *pcbLenInd;
 #endif
@@ -2597,7 +2794,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_TYPE_TIME:
                 {
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pColData, iColDataLen,(WCHAR *)pBuf, cbLen, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
@@ -2615,7 +2812,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = time_out(rsVal.llVal, (char *)tempBuf, sizeof(tempBuf), NULL);
-							rc = copyWStrDataBigLen(tempBuf, len, (WCHAR *)pBuf, cbLen, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -3913,15 +4110,16 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_VARCHAR:
 				case SQL_LONGVARCHAR:
 				{
-                    rc = copyStrDataBigLen(rsVal.pcVal, iColDataLen,(char *)pBuf, cbLen, pcbLenInd);
+                    rc = copyStrDataBigLen(pStmt, rsVal.pcVal, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
                     break;
                 }
-
+                // TODO: Modify this case to separate out SQL_BIGINT from
+                // SQL_NUMERIC/SQL_DECIMAL SQL_BIGINT should appropriately call getBigIntData
                 case SQL_BIGINT:
                 case SQL_NUMERIC:
                 case SQL_DECIMAL:
                 {
-                    rc = copyStrDataBigLen(pColData, iColDataLen,(char *)pBuf, cbLen, pcbLenInd);
+                    rc = copyStrDataBigLen(pStmt, pColData, iColDataLen,(char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
                     break;
                 }
 
