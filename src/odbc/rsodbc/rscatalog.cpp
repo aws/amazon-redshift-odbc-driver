@@ -503,7 +503,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
 	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION){
-		if (isNullOrEmptyString(pSchemaName) && isNullOrEmptyString(pTableName) && isSqlAllCatalogs(pCatalogName, cbCatalogName))
+		if (isEmptyString(pSchemaName) && isEmptyString(pTableName) && isSqlAllCatalogs(pCatalogName, cbCatalogName))
 		{
 			SQLHSTMT internalStmt;
 			rc = RS_CONN_INFO::RS_SQLAllocStmt(pStmt->phdbc, &internalStmt);
@@ -535,9 +535,14 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlCatalogsPostProcessing fail", 0, NULL);
 				return rc;
 			}
+
+			// Reset the streaming cursor state
+			if(pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)){
+				libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
+			}
 		}
 		else 
-		if(isNullOrEmptyString(pCatalogName) && isNullOrEmptyString(pTableName) && isSqlAllSchemas(pSchemaName, cbSchemaName))
+		if(isEmptyString(pCatalogName) && isEmptyString(pTableName) && isSqlAllSchemas(pSchemaName, cbSchemaName))
 		{
 			SQLHSTMT internalStmt;
 			rc = RS_CONN_INFO::RS_SQLAllocStmt(pStmt->phdbc, &internalStmt);
@@ -572,7 +577,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 
 		}
 		else
-		if(isNullOrEmptyString(pCatalogName) && isNullOrEmptyString(pSchemaName) && isNullOrEmptyString(pTableName) && isSqlAllTableTypes(pTableType, cbTableType))
+		if(isEmptyString(pCatalogName) && isEmptyString(pSchemaName) && isEmptyString(pTableName) && isSqlAllTableTypes(pTableType, cbTableType))
 		{
 			// Special SQLTables call : get table type list
 			rc = RsMetadataAPIPostProcessing::sqlTableTypesPostProcessing(phstmt);
@@ -580,6 +585,11 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 				RS_LOG_ERROR("RsMetadataAPIPostProcessing.sqlTableTypesPostProcessing", "Fail call post-processing for SQLTables");
 				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlTableTypesPostProcessing fail", 0, NULL);
 				return rc;
+			}
+			
+			// Reset the streaming cursor state
+			if(pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)){
+				libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
 			}
 		}
 		else{
@@ -631,7 +641,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 	else{
 		// Old code path is retained for supporting legacy cluster version which doesn't not support Server API SHOW command
 		char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
-		if (isNullOrEmptyString(pSchemaName) && isNullOrEmptyString(pTableName) && isSqlAllCatalogs(pCatalogName, cbCatalogName))
+		if (isEmptyString(pSchemaName) && isEmptyString(pTableName) && isSqlAllCatalogs(pCatalogName, cbCatalogName))
 		{
 			if (isSingleDatabaseMetaData(pStmt))
 				rs_strncpy(szCatalogQuery, SQLTABLES_ALL_CATALOG_QUERY, sizeof(szCatalogQuery));
@@ -639,7 +649,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 				rs_strncpy(szCatalogQuery, SQLTABLES_ALL_CATALOG_QUERY_DATASHARE, sizeof(szCatalogQuery));
 		}
 		else 
-		if(isNullOrEmptyString(pCatalogName) && isNullOrEmptyString(pTableName) && isSqlAllSchemas(pSchemaName, cbSchemaName))
+		if(isEmptyString(pCatalogName) && isEmptyString(pTableName) && isSqlAllSchemas(pSchemaName, cbSchemaName))
 		{
 			if (isSingleDatabaseMetaData(pStmt))
 				rs_strncpy(szCatalogQuery, SQLTABLES_ALL_SCHEMAS_QUERY, sizeof(szCatalogQuery));
@@ -647,7 +657,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 				rs_strncpy(szCatalogQuery, SQLTABLES_ALL_SCHEMAS_QUERY_DATASHARE, sizeof(szCatalogQuery));
 		}
 		else
-		if(isNullOrEmptyString(pCatalogName) && isNullOrEmptyString(pSchemaName) && isNullOrEmptyString(pTableName) && isSqlAllTableTypes(pTableType, cbTableType))
+		if(isEmptyString(pCatalogName) && isEmptyString(pSchemaName) && isEmptyString(pTableName) && isSqlAllTableTypes(pTableType, cbTableType))
 		{
 			rs_strncpy(szCatalogQuery, SQLTABLES_ALL_TABLE_TYPES_QUERY, sizeof(szCatalogQuery));
 		}

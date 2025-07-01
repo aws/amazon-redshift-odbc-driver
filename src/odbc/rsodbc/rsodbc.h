@@ -1769,6 +1769,7 @@ void *libpqFreemem(void *ptr);
 ConnStatusType libpqConnectionStatus(RS_CONN_INFO *pConn);
 
 void libpqSetStreamingCursorRows(RS_STMT_INFO *pStmt);
+void libpqSetEndOfStreamingCursorQuery(RS_STMT_INFO *pStmt, int flag);
 int libpqIsEndOfStreamingCursor(RS_STMT_INFO *pStmt);
 int libpqIsEndOfStreamingCursorQuery(RS_STMT_INFO *pStmt);
 int isForwardOnlyCursor(void *pCallerContext);

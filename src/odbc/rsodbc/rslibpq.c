@@ -2948,6 +2948,15 @@ void libpqSetStreamingCursorRows(RS_STMT_INFO *pStmt)
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
+// Set end of stream indicator
+//
+void libpqSetEndOfStreamingCursorQuery(RS_STMT_INFO *pStmt, int flag)
+{
+    setEndOfStreamingCursorQuery(pStmt->pCscStatementContext, flag);
+}
+
+
+//---------------------------------------------------------------------------------------------------------igarish
 // Get end of stream indicator
 //
 int libpqIsEndOfStreamingCursor(RS_STMT_INFO *pStmt)
