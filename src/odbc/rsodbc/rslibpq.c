@@ -3310,10 +3310,12 @@ SQLRETURN libpqInitializeResultSetField(RS_STMT_INFO *pStmt, char **colName,
         addError(&pStmt->pErrorList, "HY000",
                  "createEmptyResultSet: Fail to set result Attributes ... ", 0,
                  NULL);
-        free(column);
+        PQcleanupCustomizeAttrs(column, colNum);
+        column = NULL;
         return SQL_ERROR;
     }
-    free(column);
+    PQcleanupCustomizeAttrs(column, colNum);
+    column = NULL;
     return rc;
 }
 

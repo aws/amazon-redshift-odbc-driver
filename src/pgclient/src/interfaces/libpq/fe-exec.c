@@ -3380,10 +3380,20 @@ PQsetNumAttributes(PGresult *res, short columnNum)
 	res->numAttributes = columnNum;
 }
 
-/*
- * PQcreateCustomizeAttrs:
- *	create customize PG result Attribute description for given column name
- *  and column data type
+/**
+ * @brief Creates an array of custom PGresAttDesc structures with allocated memory
+ *
+ * This function creates and initializes an array of PGresAttDesc structures,
+ * allocating memory for the array and for each column's name field.
+ *
+ * @param colName Array of column names to be copied into the structures
+ * @param colNum Number of columns to be created
+ * @param colDatatype Array of data types corresponding to each column
+ *
+ * @return PGresAttDesc* Pointer to the allocated array of PGresAttDesc structures
+ *         Returns NULL if memory allocation fails
+ *
+ * @note Caller is responsible for freeing the memory using PQcleanupCustomizeAttrs
  */
 PGresAttDesc *PQcreateCustomizeAttrs(char **colName, int colNum,
                                      int *colDatatype) {
@@ -3401,6 +3411,32 @@ PGresAttDesc *PQcreateCustomizeAttrs(char **colName, int colNum,
         column[i].format = 0;
     }
     return column;
+}
+
+/**
+ * @brief Frees memory allocated for PGresAttDesc structures
+ *
+ * This function performs a deep cleanup of the memory allocated by PQcreateCustomizeAttrs,
+ * freeing both the individual name fields and the main array.
+ *
+ * @param column Pointer to the array of PGresAttDesc structures to be freed
+ * @param colNum Number of columns in the array
+ *
+ * @note After calling this function, the caller should set their pointer to NULL
+ * @note This function safely handles NULL input by returning without action
+ */
+void PQcleanupCustomizeAttrs(PGresAttDesc *column, int colNum) {
+    if (column == NULL) {
+        return;
+    }
+
+    // Free individual name allocations for each column
+    for (int i = 0; i < colNum; i++) {
+        free(column[i].name);
+    }
+
+    // Free the main column array
+    free(column);
 }
 
 /*
