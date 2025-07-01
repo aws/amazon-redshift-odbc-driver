@@ -891,6 +891,35 @@ public:
     static SQLRETURN  SQL_API RS_SQLFreeDesc(SQLHDESC phdesc);
 };
 
+/* ----------------
+ * DATA_TYPE_INFO
+ *
+ * Structure to store the data type info mapping
+ * ----------------
+ */
+struct DATA_TYPE_INFO {
+    short sqlType;
+    short sqlDataType;
+    short sqlDateSub;
+    std::string typeName;
+};
+
+/* ----------------
+ * TypeInfoResult
+ *
+ * Contains both the type information and a flag indicating if the type was found
+ * ----------------
+ */
+struct TypeInfoResult {
+    DATA_TYPE_INFO typeInfo;    // Holds the actual type information
+    bool found;                 // Indicates if the type was successfully found
+    
+    TypeInfoResult(DATA_TYPE_INFO i, bool f) : typeInfo(i), found(f) {}
+    static TypeInfoResult notFound() { 
+        return TypeInfoResult(DATA_TYPE_INFO(), false); 
+    }
+};
+
 typedef struct _tuple {
     int len = 0;
     char *value;

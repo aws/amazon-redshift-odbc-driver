@@ -64,6 +64,125 @@ SQLRETURN RsMetadataAPIHelper::initializeColumnField(RS_STMT_INFO *pStmt,
 }
 
 //
+// Checks if ODBC2 datetime format should be used
+//
+bool RsMetadataAPIHelper::returnODBC2DateTime(SQLINTEGER odbcVersion) {
+    return (odbcVersion == SQL_OV_ODBC2);
+}
+
+// 
+// Gets appropriate datetime data type information based on data type and ODBC version
+//
+TypeInfoResult RsMetadataAPIHelper::getAppropriateDateTime(const std::string& type, const bool isODBC_SpecV2) {
+    auto dataTypeName = RsMetadataAPIHelper::getDataTypeNameStruct();
+    auto redshiftTypeName = RsMetadataAPIHelper::getRedshiftTypeNameStruct();
+    if (type == dataTypeName.kdate) {
+        return TypeInfoResult(
+            {
+                (isODBC_SpecV2) ? SQL_DATE : SQL_TYPE_DATE,
+                SQL_DATETIME,
+                SQL_CODE_DATE,
+                redshiftTypeName.kdate
+            },
+            true
+        );
+    }
+    else if (type == dataTypeName.ktime || type == dataTypeName.ktime_without_time_zone) {
+        return TypeInfoResult(
+            {
+                (isODBC_SpecV2) ? SQL_TIME : SQL_TYPE_TIME,
+                SQL_DATETIME,
+                SQL_CODE_TIME,
+                redshiftTypeName.ktime
+            },
+            true
+        );
+    }
+    else if (type == dataTypeName.ktimetz || type == dataTypeName.ktime_with_time_zone) {
+        return TypeInfoResult(
+            {
+                (isODBC_SpecV2) ? SQL_TIME : SQL_TYPE_TIME,
+                SQL_DATETIME,
+                SQL_CODE_TIME,
+                redshiftTypeName.ktimetz
+            },
+            true
+        );
+    }
+    else if (type == dataTypeName.ktimestamp || type == dataTypeName.ktimestamp_without_time_zone) {
+        return TypeInfoResult(
+            {
+                (isODBC_SpecV2) ? SQL_TIMESTAMP : SQL_TYPE_TIMESTAMP,
+                SQL_DATETIME,
+                SQL_CODE_TIMESTAMP,
+                redshiftTypeName.ktimestamp
+            },
+            true
+        );
+    }
+    else if (type == dataTypeName.ktimestamptz || type == dataTypeName.ktimestamp_with_time_zone) {
+        return TypeInfoResult(
+            {
+                (isODBC_SpecV2) ? SQL_TIMESTAMP : SQL_TYPE_TIMESTAMP,
+                SQL_DATETIME,
+                SQL_CODE_TIMESTAMP,
+                redshiftTypeName.ktimestamptz
+            },
+            true
+        );
+    }
+    return TypeInfoResult::notFound();
+}
+
+
+//
+// Checks if a given type is a datetime type
+//
+bool RsMetadataAPIHelper::isDateTimeType(const std::string& type) {
+    return RsMetadataAPIHelper::dateTimeDataTypes.find(type) != RsMetadataAPIHelper::dateTimeDataTypes.end();
+}
+
+const std::unordered_set<std::string> RsMetadataAPIHelper::dateTimeDataTypes = {
+    getDataTypeNameStruct().kdate,
+    getDataTypeNameStruct().ktime,
+    getDataTypeNameStruct().ktime_without_time_zone,
+    getDataTypeNameStruct().ktimetz,
+    getDataTypeNameStruct().ktime_with_time_zone,
+    getDataTypeNameStruct().ktimestamp,
+    getDataTypeNameStruct().ktimestamp_without_time_zone,
+    getDataTypeNameStruct().ktimestamptz,
+    getDataTypeNameStruct().ktimestamp_with_time_zone
+};
+
+//
+// Gets type information for a given data type
+//
+TypeInfoResult RsMetadataAPIHelper::getTypeInfo(const std::string& type, const bool isODBC_SpecV2) {
+    // Check for Glue super data type
+    if (std::regex_match(type, RsMetadataAPIHelper::glueSuperTypeRegex)){
+        return TypeInfoResult(
+            {
+                SQL_LONGVARCHAR,
+                SQL_LONGVARCHAR,
+                kNotApplicable,
+                type
+            },
+            true
+        );
+    }
+
+    if (isDateTimeType(type)) {
+        return getAppropriateDateTime(type, isODBC_SpecV2);
+    }
+
+    auto it = RsMetadataAPIHelper::typeInfoMap.find(type);
+    if (it != RsMetadataAPIHelper::typeInfoMap.end()){
+        return TypeInfoResult(it->second, true);
+    }
+    return TypeInfoResult::notFound();
+}
+
+//
 //  Mapping between data type and its type info
 //  DATA_TYPE_INFO:
 //      SQL type (concise data type)
@@ -85,21 +204,6 @@ const std::unordered_map<std::string, DATA_TYPE_INFO>
          {SQL_DOUBLE, SQL_DOUBLE, kNotApplicable, "float8"}},
         {"numeric", {SQL_NUMERIC, SQL_NUMERIC, kNotApplicable, "numeric"}},
         {"boolean", {SQL_BIT, SQL_BIT, kNotApplicable, "bool"}},
-        {"date", {SQL_TYPE_DATE, SQL_DATETIME, SQL_CODE_DATE, "date"}},
-        {"time", {SQL_TYPE_TIME, SQL_DATETIME, SQL_CODE_TIME, "time"}},
-        {"time without time zone",
-         {SQL_TYPE_TIME, SQL_DATETIME, SQL_CODE_TIME, "time"}},
-        {"timetz", {SQL_TYPE_TIME, SQL_DATETIME, SQL_CODE_TIME, "timetz"}},
-        {"time with time zone",
-         {SQL_TYPE_TIME, SQL_DATETIME, SQL_CODE_TIME, "timetz"}},
-        {"timestamp",
-         {SQL_TYPE_TIMESTAMP, SQL_DATETIME, SQL_CODE_TIMESTAMP, "timestamp"}},
-        {"timestamp without time zone",
-         {SQL_TYPE_TIMESTAMP, SQL_DATETIME, SQL_CODE_TIMESTAMP, "timestamp"}},
-        {"timestamptz",
-         {SQL_TYPE_TIMESTAMP, SQL_DATETIME, SQL_CODE_TIMESTAMP, "timestamptz"}},
-        {"timestamp with time zone",
-         {SQL_TYPE_TIMESTAMP, SQL_DATETIME, SQL_CODE_TIMESTAMP, "timestamptz"}},
         {"interval year to month",
          {SQL_INTERVAL_YEAR_TO_MONTH, SQL_INTERVAL, SQL_CODE_YEAR_TO_MONTH,
           "intervaly2m"}},
@@ -129,6 +233,8 @@ const std::unordered_map<std::string, DATA_TYPE_INFO>
          {SQL_UNKNOWN_TYPE, SQL_UNKNOWN_TYPE, kNotApplicable, "hllsketch"}}};
 
 const std::unordered_map<std::string, DATA_TYPE_INFO> RsMetadataAPIHelper::getTypeInfoMap() { return RsMetadataAPIHelper::typeInfoMap;}
+const RsMetadataAPIHelper::DataTypeName RsMetadataAPIHelper::getDataTypeNameStruct(){ return RsMetadataAPIHelper::DataTypeName();}
+const RsMetadataAPIHelper::RedshiftTypeName RsMetadataAPIHelper::getRedshiftTypeNameStruct(){ return RsMetadataAPIHelper::RedshiftTypeName();}
 
 //
 // Define the column size for different data type defined in ODBC spec:

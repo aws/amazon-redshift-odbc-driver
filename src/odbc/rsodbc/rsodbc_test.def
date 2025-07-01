@@ -149,10 +149,6 @@ EXPORTS
 	?isNullOrEmptyString@@YA_NPEAE@Z
 	?getNullable@RsMetadataAPIHelper@@SAFAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?getTypeInfoMap@RsMetadataAPIHelper@@SA?BV?$unordered_map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@UDATA_TYPE_INFO@@U?$hash@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@U?$equal_to@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@UDATA_TYPE_INFO@@@std@@@2@@std@@XZ
-
-
-
-
-
-
-
+	?getTypeInfo@RsMetadataAPIHelper@@SA?AUTypeInfoResult@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@_N@Z
+	?getDataTypeNameStruct@RsMetadataAPIHelper@@SA?BUDataTypeName@1@XZ
+	?getRedshiftTypeNameStruct@RsMetadataAPIHelper@@SA?BURedshiftTypeName@1@XZ

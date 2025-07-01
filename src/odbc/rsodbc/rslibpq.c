@@ -3483,6 +3483,10 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
     int columnSize = 0, bufferLen = 0, charOctetLen = 0;
     short sqlType = 0, sqlDataType = 0, sqlDateSub = 0, precisions = 0,
           decimalDigit = 0, num_pre_radix = 0;
+    
+    SQLINTEGER ODBCVer = pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion;
+
+    RS_LOG_DEBUG("RSLIBPQ", "ODBC spec version: %d", ODBCVer);
 
     std::string intStr = {0};
     std::string shortStr = {0};
@@ -3519,9 +3523,11 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
             std::string cleanedDataType =
                 std::regex_replace(dataType, std::regex("\\(\\d+\\)"), "");
             trim(cleanedDataType);
-            auto it = RsMetadataAPIHelper::typeInfoMap.find(cleanedDataType);
-            if (it != RsMetadataAPIHelper::typeInfoMap.end()) {
-                const auto &typeInfo = it->second;
+            TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(
+                cleanedDataType,
+                RsMetadataAPIHelper::returnODBC2DateTime(ODBCVer));
+            if (typeInfoResult.found) {
+                DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
                 sqlType = typeInfo.sqlType;
                 sqlDataType = typeInfo.sqlDataType;
                 sqlDateSub = typeInfo.sqlDateSub;
@@ -3537,10 +3543,11 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
                 dateTimeCustomizePrecision = true;
             }
         } else {
-            auto it = RsMetadataAPIHelper::typeInfoMap.find(
-                (char *)intermediateRS[i].data_type);
-            if (it != RsMetadataAPIHelper::typeInfoMap.end()) {
-                const auto &typeInfo = it->second;
+            TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(
+                (char *)intermediateRS[i].data_type,
+                RsMetadataAPIHelper::returnODBC2DateTime(ODBCVer));
+            if (typeInfoResult.found) {
+                DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
                 sqlType = typeInfo.sqlType;
                 sqlDataType = typeInfo.sqlDataType;
                 sqlDateSub = typeInfo.sqlDateSub;

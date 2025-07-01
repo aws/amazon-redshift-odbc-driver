@@ -24,27 +24,7 @@ int expectedSQLColumnsDatatype[expectedSQLColumnsColNum] = {VARCHAROID, VARCHARO
 #define character_maximum_length 512
 #define numeric_precision 5
 #define numeric_scale 5
-std::map<std::string, std::string> dataType2RsTypeMap = {
-    {"smallint", "int2"},
-    {"integer", "int4"},
-    {"bigint", "int8"},
-    {"numeric", "numeric"},
-    {"real", "float4"},
-    {"double precision", "float8"},
-    {"boolean", "bool"},
-    {"character", "char"},
-    {"character varying", "varchar"},
-    {"date", "date"},
-    {"time without time zone", "time"},
-    {"time with time zone", "timetz"},
-    {"timestamp without time zone", "timestamp"},
-    {"timestamp with time zone", "timestamptz"},
-    {"interval year to month", "intervaly2m"},
-    {"interval day to second", "intervald2s"},
-    {"super", "super"},
-    {"geometry", "geometry"},
-    {"geography", "geography"}
-};
+
 
 #define SQLTYPE 0
 #define SQLDATATYPE 1
@@ -53,33 +33,12 @@ std::map<std::string, std::string> dataType2RsTypeMap = {
 #define DECIMALDIGIT 4
 struct DATA_TYPE_RES{
   short sqlType;
+  short sqlTypeODBC2;
   short sqlDataType;
   short sqlDateSub;
   short colSize;
   short decimalDigit;
   int bufferLen;
-};
-
-std::map<std::string, DATA_TYPE_RES> dataTypeMap = {
-    {"smallint", {SQL_SMALLINT, SQL_SMALLINT, kNotApplicable, 5, kNotApplicable, sizeof(short)}},
-    {"integer", {SQL_INTEGER, SQL_INTEGER, kNotApplicable, 10, kNotApplicable, sizeof(int)}},
-    {"bigint", {SQL_BIGINT, SQL_BIGINT, kNotApplicable, 19, kNotApplicable, sizeof(long long)}},
-    {"numeric", {SQL_NUMERIC, SQL_NUMERIC, kNotApplicable, numeric_precision, numeric_scale, 8}},
-    {"real", {SQL_REAL, SQL_REAL, kNotApplicable, 7, 6, sizeof(float)}},
-    {"double precision", {SQL_DOUBLE, SQL_DOUBLE, kNotApplicable, 15, 15, sizeof(double)}},
-    {"boolean", {SQL_BIT, SQL_BIT, kNotApplicable, 1, kNotApplicable, sizeof(bool)}},
-    {"character", {SQL_CHAR, SQL_CHAR, kNotApplicable, character_maximum_length, kNotApplicable, character_maximum_length}},
-    {"character varying", {SQL_VARCHAR, SQL_VARCHAR, kNotApplicable, character_maximum_length, kNotApplicable, character_maximum_length}},
-    {"date", {SQL_TYPE_DATE, SQL_DATETIME, SQL_CODE_DATE, 10, kNotApplicable, sizeof(SQL_DATE_STRUCT)}},
-    {"time without time zone", {SQL_TYPE_TIME, SQL_DATETIME, SQL_CODE_TIME, 15, 6, sizeof(SQL_TIME_STRUCT)}},
-    {"time with time zone", {SQL_TYPE_TIME, SQL_DATETIME, SQL_CODE_TIME, 21, 6, sizeof(SQL_TIME_STRUCT)}},
-    {"timestamp without time zone", {SQL_TYPE_TIMESTAMP, SQL_DATETIME, SQL_CODE_TIMESTAMP, 29, 6, sizeof(SQL_TIMESTAMP_STRUCT)}},
-    {"timestamp with time zone", {SQL_TYPE_TIMESTAMP, SQL_DATETIME, SQL_CODE_TIMESTAMP, 35, 6, sizeof(SQL_TIMESTAMP_STRUCT)}},
-    {"interval year to month", {SQL_INTERVAL_YEAR_TO_MONTH, SQL_INTERVAL, SQL_CODE_YEAR_TO_MONTH, 32, kNotApplicable, sizeof(INTERVALY2M_STRUCT)}},
-    {"interval day to second", {SQL_INTERVAL_DAY_TO_SECOND, SQL_INTERVAL, SQL_CODE_DAY_TO_SECOND, 64, 6, sizeof(INTERVALD2S_STRUCT)}},
-    {"super", {SQL_LONGVARCHAR, SQL_LONGVARCHAR, kNotApplicable, 0, kNotApplicable, kUnknownColumnSize}},
-    {"geometry", {SQL_LONGVARCHAR, SQL_LONGVARCHAR, kNotApplicable, 0, kNotApplicable, kUnknownColumnSize}},
-    {"geography", {SQL_LONGVARCHAR, SQL_LONGVARCHAR, kNotApplicable, 0, kNotApplicable, kUnknownColumnSize}}
 };
 
 
@@ -133,18 +92,97 @@ TEST(METADATA_API_HELPER_TEST_SUITE, test_getnullable) {
 }
 
 // Unit test for helper function getRSType
-class test_getrstype :public ::testing::TestWithParam<std::string> {
+class TestGetRsType :public ::testing::TestWithParam<std::tuple<std::string, bool>> {
+    protected:
+        static std::map<std::string, std::string> dataType2RsTypeMap;
+        static std::map<std::string, DATA_TYPE_RES> dataTypeMap;
+        static void SetUpTestSuite();
 
+        void SetUp() override {
+            std::tie(dataType, isODBC_SpecV2) = GetParam();
+        }
+        
+        std::string dataType;
+        bool isODBC_SpecV2;
 };
 
-TEST_P(test_getrstype, test_rsType) {
-    std::string dataType = GetParam();
+std::map<std::string, std::string> TestGetRsType::dataType2RsTypeMap;
+std::map<std::string, DATA_TYPE_RES> TestGetRsType::dataTypeMap;
+
+
+void TestGetRsType::SetUpTestSuite() {
+    auto dataTypeName = RsMetadataAPIHelper::getDataTypeNameStruct();
+    auto redshiftTypeName = RsMetadataAPIHelper::getRedshiftTypeNameStruct();
+
+    dataType2RsTypeMap = {
+        {dataTypeName.ksmallint, redshiftTypeName.kint2},
+        {dataTypeName.kinteger, redshiftTypeName.kint4},
+        {dataTypeName.kbigint, redshiftTypeName.kint8},
+        {dataTypeName.knumeric, redshiftTypeName.knumeric},
+        {dataTypeName.kreal, redshiftTypeName.kfloat4},
+        {dataTypeName.kdouble_precision, redshiftTypeName.kfloat8},
+        {dataTypeName.kboolean, redshiftTypeName.kbool},
+        {dataTypeName.kcharacter, redshiftTypeName.kchar},
+        {dataTypeName.kcharacter_varying, redshiftTypeName.kvarchar},
+        {dataTypeName.kdate, redshiftTypeName.kdate},
+        {dataTypeName.ktime_without_time_zone, redshiftTypeName.ktime},
+        {dataTypeName.ktime, redshiftTypeName.ktime},
+        {dataTypeName.ktime_with_time_zone, redshiftTypeName.ktimetz},
+        {dataTypeName.ktimetz, redshiftTypeName.ktimetz},
+        {dataTypeName.ktimestamp_without_time_zone, redshiftTypeName.ktimestamp},
+        {dataTypeName.ktimestamp, redshiftTypeName.ktimestamp},
+        {dataTypeName.ktimestamp_with_time_zone, redshiftTypeName.ktimestamptz},
+        {dataTypeName.ktimestamptz, redshiftTypeName.ktimestamptz},
+        {dataTypeName.kinterval_year_to_month, redshiftTypeName.kintervaly2m},
+        {dataTypeName.kinterval_day_to_second, redshiftTypeName.kintervald2s},
+        {dataTypeName.ksuper, redshiftTypeName.ksuper},
+        {dataTypeName.kgeometry, redshiftTypeName.kgeometry},
+        {dataTypeName.kgeography, redshiftTypeName.kgeography},
+        {dataTypeName.kstring, dataTypeName.kstring},
+        {dataTypeName.kbinary, dataTypeName.kbinary},
+        {dataTypeName.karray, dataTypeName.karray},
+        {dataTypeName.kmap, dataTypeName.kmap},
+        {dataTypeName.kstruct, dataTypeName.kstruct}
+    };
+
+    dataTypeMap = {
+        {dataTypeName.ksmallint, {SQL_SMALLINT, SQL_SMALLINT, SQL_SMALLINT, kNotApplicable, 5, kNotApplicable, sizeof(short)}},
+        {dataTypeName.kinteger, {SQL_INTEGER, SQL_INTEGER, SQL_INTEGER, kNotApplicable, 10, kNotApplicable, sizeof(int)}},
+        {dataTypeName.kbigint, {SQL_BIGINT, SQL_BIGINT, SQL_BIGINT, kNotApplicable, 19, kNotApplicable, sizeof(long long)}},
+        {dataTypeName.knumeric, {SQL_NUMERIC, SQL_NUMERIC, SQL_NUMERIC, kNotApplicable, numeric_precision, numeric_scale, 8}},
+        {dataTypeName.kreal, {SQL_REAL, SQL_REAL, SQL_REAL, kNotApplicable, 7, 6, sizeof(float)}},
+        {dataTypeName.kdouble_precision, {SQL_DOUBLE, SQL_DOUBLE, SQL_DOUBLE, kNotApplicable, 15, 15, sizeof(double)}},
+        {dataTypeName.kboolean, {SQL_BIT, SQL_BIT, SQL_BIT, kNotApplicable, 1, kNotApplicable, sizeof(bool)}},
+        {dataTypeName.kcharacter, {SQL_CHAR, SQL_CHAR, SQL_CHAR, kNotApplicable, character_maximum_length, kNotApplicable, character_maximum_length}},
+        {dataTypeName.kcharacter_varying, {SQL_VARCHAR, SQL_VARCHAR, SQL_VARCHAR, kNotApplicable, character_maximum_length, kNotApplicable, character_maximum_length}},
+        {dataTypeName.kstring, {SQL_VARCHAR, SQL_VARCHAR, SQL_VARCHAR, kNotApplicable, character_maximum_length, kNotApplicable, character_maximum_length}},
+        {dataTypeName.kdate, {SQL_TYPE_DATE, SQL_DATE, SQL_DATETIME, SQL_CODE_DATE, 10, kNotApplicable, sizeof(SQL_DATE_STRUCT)}},
+        {dataTypeName.ktime_without_time_zone, {SQL_TYPE_TIME, SQL_TIME, SQL_DATETIME, SQL_CODE_TIME, 15, 6, sizeof(SQL_TIME_STRUCT)}},
+        {dataTypeName.ktime, {SQL_TYPE_TIME, SQL_TIME, SQL_DATETIME, SQL_CODE_TIME, 15, 6, sizeof(SQL_TIME_STRUCT)}},
+        {dataTypeName.ktime_with_time_zone, {SQL_TYPE_TIME, SQL_TIME, SQL_DATETIME, SQL_CODE_TIME, 21, 6, sizeof(SQL_TIME_STRUCT)}},
+        {dataTypeName.ktimetz, {SQL_TYPE_TIME, SQL_TIME, SQL_DATETIME, SQL_CODE_TIME, 21, 6, sizeof(SQL_TIME_STRUCT)}},
+        {dataTypeName.ktimestamp_without_time_zone, {SQL_TYPE_TIMESTAMP, SQL_TIMESTAMP, SQL_DATETIME, SQL_CODE_TIMESTAMP, 29, 6, sizeof(SQL_TIMESTAMP_STRUCT)}},
+        {dataTypeName.ktimestamp, {SQL_TYPE_TIMESTAMP, SQL_TIMESTAMP, SQL_DATETIME, SQL_CODE_TIMESTAMP, 29, 6, sizeof(SQL_TIMESTAMP_STRUCT)}},
+        {dataTypeName.ktimestamp_with_time_zone, {SQL_TYPE_TIMESTAMP, SQL_TIMESTAMP, SQL_DATETIME, SQL_CODE_TIMESTAMP, 35, 6, sizeof(SQL_TIMESTAMP_STRUCT)}},
+        {dataTypeName.ktimestamptz, {SQL_TYPE_TIMESTAMP, SQL_TIMESTAMP, SQL_DATETIME, SQL_CODE_TIMESTAMP, 35, 6, sizeof(SQL_TIMESTAMP_STRUCT)}},
+        {dataTypeName.kinterval_year_to_month, {SQL_INTERVAL_YEAR_TO_MONTH, SQL_INTERVAL_YEAR_TO_MONTH, SQL_INTERVAL, SQL_CODE_YEAR_TO_MONTH, 32, kNotApplicable, sizeof(INTERVALY2M_STRUCT)}},
+        {dataTypeName.kinterval_day_to_second, {SQL_INTERVAL_DAY_TO_SECOND, SQL_INTERVAL_DAY_TO_SECOND, SQL_INTERVAL, SQL_CODE_DAY_TO_SECOND, 64, 6, sizeof(INTERVALD2S_STRUCT)}},
+        {dataTypeName.kbinary, {SQL_LONGVARBINARY, SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}},
+        {dataTypeName.ksuper, {SQL_LONGVARCHAR, SQL_LONGVARCHAR, SQL_LONGVARCHAR, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}},
+        {dataTypeName.karray, {SQL_LONGVARCHAR, SQL_LONGVARCHAR, SQL_LONGVARCHAR, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}},
+        {dataTypeName.kmap, {SQL_LONGVARCHAR, SQL_LONGVARCHAR, SQL_LONGVARCHAR, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}},
+        {dataTypeName.kstruct, {SQL_LONGVARCHAR, SQL_LONGVARCHAR, SQL_LONGVARCHAR, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}},
+        {dataTypeName.kgeometry, {SQL_LONGVARBINARY, SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}},
+        {dataTypeName.kgeography, {SQL_LONGVARBINARY, SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}}
+    };
+}
+
+TEST_P(TestGetRsType, test_rsType) {
     short sqlType = 0, sqlDataType = 0, sqlDateSub = 0;
     std::string rsType;
-    auto typeInfoMap_ = RsMetadataAPIHelper::getTypeInfoMap();
-    auto it = typeInfoMap_.find(dataType);
-    if(it != typeInfoMap_.end()){
-        const auto& typeInfo = it->second;
+    TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(dataType, isODBC_SpecV2);
+    if(typeInfoResult.found){
+        DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
         sqlType = typeInfo.sqlType;
         sqlDataType = typeInfo.sqlDataType;
         sqlDateSub = typeInfo.sqlDateSub;
@@ -156,13 +194,11 @@ TEST_P(test_getrstype, test_rsType) {
     ASSERT_EQ(rsType, dataType2RsTypeMap[dataType]);
 }
 
-TEST_P(test_getrstype, test_rsTypeLen) {
-    std::string dataType = GetParam();
+TEST_P(TestGetRsType, test_rsTypeLen) {
     std::string rsType;
-    auto typeInfoMap_ = RsMetadataAPIHelper::getTypeInfoMap();
-    auto it = typeInfoMap_.find(dataType);
-    if(it != typeInfoMap_.end()){
-        const auto& typeInfo = it->second;
+    TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(dataType, isODBC_SpecV2);
+    if(typeInfoResult.found){
+        DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
         rsType = typeInfo.typeName;
     }
     else{
@@ -171,49 +207,47 @@ TEST_P(test_getrstype, test_rsTypeLen) {
     ASSERT_EQ(rsType.size(), dataType2RsTypeMap[dataType].size());
 }
 
-TEST_P(test_getrstype, test_sqlType) {
-    std::string dataType = GetParam();
+TEST_P(TestGetRsType, test_sqlType) {
     short sqlType = 0;
-    auto typeInfoMap_ = RsMetadataAPIHelper::getTypeInfoMap();
-    auto it = typeInfoMap_.find(dataType);
-    if(it != typeInfoMap_.end()){
-        const auto& typeInfo = it->second;
+    TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(dataType, isODBC_SpecV2);
+    if(typeInfoResult.found){
+        DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
         sqlType = typeInfo.sqlType;
     }
-    ASSERT_EQ(sqlType, dataTypeMap[dataType].sqlType);
+    if(isODBC_SpecV2){
+        ASSERT_EQ(sqlType, dataTypeMap[dataType].sqlTypeODBC2);
+    }
+    else{
+        ASSERT_EQ(sqlType, dataTypeMap[dataType].sqlType);
+    }
+    
 }
 
-TEST_P(test_getrstype, test_sqlDataType) {
-    std::string dataType = GetParam();
+TEST_P(TestGetRsType, test_sqlDataType) {
     short sqlDataType = 0;
-    auto typeInfoMap_ = RsMetadataAPIHelper::getTypeInfoMap();
-    auto it = typeInfoMap_.find(dataType);
-    if(it != typeInfoMap_.end()){
-        const auto& typeInfo = it->second;
+    TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(dataType, isODBC_SpecV2);
+    if(typeInfoResult.found){
+        DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
         sqlDataType = typeInfo.sqlDataType;
     }
     ASSERT_EQ(sqlDataType, dataTypeMap[dataType].sqlDataType);
 }
 
-TEST_P(test_getrstype, test_sqlDateSub) {
-    std::string dataType = GetParam();
+TEST_P(TestGetRsType, test_sqlDateSub) {
     short sqlDateSub = 0;
-    auto typeInfoMap_ = RsMetadataAPIHelper::getTypeInfoMap();
-    auto it = typeInfoMap_.find(dataType);
-    if(it != typeInfoMap_.end()){
-        const auto& typeInfo = it->second;
+    TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(dataType, isODBC_SpecV2);
+    if(typeInfoResult.found){
+        DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
         sqlDateSub = typeInfo.sqlDateSub;
     }
     ASSERT_EQ(sqlDateSub, dataTypeMap[dataType].sqlDateSub);
 }
 
-TEST_P(test_getrstype, test_columnSize) {
-    std::string dataType = GetParam();
+TEST_P(TestGetRsType, test_columnSize) {
     std::string rsType;
-    auto typeInfoMap_ = RsMetadataAPIHelper::getTypeInfoMap();
-    auto it = typeInfoMap_.find(dataType);
-    if(it != typeInfoMap_.end()){
-        const auto& typeInfo = it->second;
+    TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(dataType, isODBC_SpecV2);
+    if(typeInfoResult.found){
+        DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
         rsType = typeInfo.typeName;
     }
     else{
@@ -223,13 +257,11 @@ TEST_P(test_getrstype, test_columnSize) {
     ASSERT_EQ(columnSize, dataTypeMap[dataType].colSize);
 }
 
-TEST_P(test_getrstype, test_decimalDigit) {
-    std::string dataType = GetParam();
+TEST_P(TestGetRsType, test_decimalDigit) {
     std::string rsType;
-    auto typeInfoMap_ = RsMetadataAPIHelper::getTypeInfoMap();
-    auto it = typeInfoMap_.find(dataType);
-    if(it != typeInfoMap_.end()){
-        const auto& typeInfo = it->second;
+    TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(dataType, isODBC_SpecV2);
+    if(typeInfoResult.found){
+        DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
         rsType = typeInfo.typeName;
     }
     else{
@@ -238,13 +270,11 @@ TEST_P(test_getrstype, test_decimalDigit) {
     ASSERT_EQ(RsMetadataAPIHelper::getDecimalDigit(rsType, numeric_scale, 0, false), dataTypeMap[dataType].decimalDigit);
 }
 
-TEST_P(test_getrstype, test_bufferLen) {
-    std::string dataType = GetParam();
+TEST_P(TestGetRsType, test_bufferLen) {
     std::string rsType;
-    auto typeInfoMap_ = RsMetadataAPIHelper::getTypeInfoMap();
-    auto it = typeInfoMap_.find(dataType);
-    if(it != typeInfoMap_.end()){
-        const auto& typeInfo = it->second;
+    TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(dataType, isODBC_SpecV2);
+    if(typeInfoResult.found){
+        DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
         rsType = typeInfo.typeName;
     }
     else{
@@ -253,7 +283,39 @@ TEST_P(test_getrstype, test_bufferLen) {
     ASSERT_EQ(RsMetadataAPIHelper::getBufferLen(rsType, character_maximum_length, numeric_precision), dataTypeMap[dataType].bufferLen);
 }
 
-INSTANTIATE_TEST_SUITE_P(METADATA_API_HELPER_TEST_SUITE, test_getrstype, ::testing::Values("smallint","integer","bigint","numeric","real","double precision","boolean","character","character varying","date","time without time zone","time with time zone","timestamp without time zone","timestamp with time zone", "interval year to month", "interval day to second"));
-
+INSTANTIATE_TEST_SUITE_P(METADATA_API_HELPER_TEST_SUITE, TestGetRsType, 
+    ::testing::Combine(
+        ::testing::Values(
+            RsMetadataAPIHelper::getDataTypeNameStruct().ksmallint,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kinteger,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kbigint,
+            RsMetadataAPIHelper::getDataTypeNameStruct().knumeric,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kreal,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kdouble_precision,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kboolean,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kcharacter,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kcharacter_varying,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kstring,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kdate,
+            RsMetadataAPIHelper::getDataTypeNameStruct().ktime,
+            RsMetadataAPIHelper::getDataTypeNameStruct().ktime_without_time_zone,
+            RsMetadataAPIHelper::getDataTypeNameStruct().ktimetz,
+            RsMetadataAPIHelper::getDataTypeNameStruct().ktime_with_time_zone,
+            RsMetadataAPIHelper::getDataTypeNameStruct().ktimestamp,
+            RsMetadataAPIHelper::getDataTypeNameStruct().ktimestamp_without_time_zone,
+            RsMetadataAPIHelper::getDataTypeNameStruct().ktimestamptz,
+            RsMetadataAPIHelper::getDataTypeNameStruct().ktimestamp_with_time_zone,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kinterval_year_to_month,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kinterval_day_to_second,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kbinary,
+            RsMetadataAPIHelper::getDataTypeNameStruct().ksuper,
+            RsMetadataAPIHelper::getDataTypeNameStruct().karray,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kmap,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kstruct,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kgeometry,
+            RsMetadataAPIHelper::getDataTypeNameStruct().kgeography
+        ),
+        ::testing::Values(true, false)
+    ));
 
 

@@ -70,18 +70,6 @@
 
 #define kUnknownColumnSize 2147483647
 
-/* ----------------
- * DATA_TYPE_INFO
- *
- * Structure to store the data type info mapping
- * ----------------
- */
-struct DATA_TYPE_INFO {
-    short sqlType;
-    short sqlDataType;
-    short sqlDateSub;
-    std::string typeName;
-};
 
 /*----------------
  * RsMetadataAPIHelper
@@ -178,6 +166,103 @@ class RsMetadataAPIHelper {
 
     // Define the list of table type Redshift support
     static const std::vector<std::string> tableTypeList;
+
+    struct DataTypeName {
+        const std::string ksmallint = "smallint";
+        const std::string kinteger = "integer";
+        const std::string kbigint = "bigint";
+        const std::string knumeric = "numeric";
+        const std::string kreal = "real";
+        const std::string kdouble_precision = "double precision";
+        const std::string kboolean = "boolean";
+        const std::string kcharacter = "character";
+        const std::string kcharacter_varying = "character varying";
+        const std::string kstring = "string";
+        const std::string kdate = "date";
+        const std::string ktime = "time";
+        const std::string ktime_without_time_zone = "time without time zone";
+        const std::string ktimetz = "timetz";
+        const std::string ktime_with_time_zone = "time with time zone";
+        const std::string ktimestamp = "timestamp";
+        const std::string ktimestamp_without_time_zone = "timestamp without time zone";
+        const std::string ktimestamptz = "timestamptz";
+        const std::string ktimestamp_with_time_zone = "timestamp with time zone";
+        const std::string kinterval_year_to_month = "interval year to month";
+        const std::string kinterval_day_to_second = "interval day to second";
+        const std::string kbinary = "binary";
+        const std::string ksuper = "super";
+        const std::string kgeometry = "geometry";
+        const std::string kgeography = "geography";
+        const std::string karray = "array";
+        const std::string kmap = "map";
+        const std::string kstruct = "struct";
+    };
+    static const DataTypeName getDataTypeNameStruct();
+
+    struct RedshiftTypeName {
+        const std::string kint2 = "int2";
+        const std::string kint4 = "int4";
+        const std::string kint8 = "int8";
+        const std::string knumeric = "numeric";
+        const std::string kfloat4 = "float4";
+        const std::string kfloat8 = "float8";
+        const std::string kbool = "bool";
+        const std::string kchar = "char";
+        const std::string kvarchar = "varchar";
+        const std::string kdate = "date";
+        const std::string ktime = "time";
+        const std::string ktimetz = "timetz";
+        const std::string ktimestamp = "timestamp";
+        const std::string ktimestamptz = "timestamptz";
+        const std::string kintervaly2m = "intervaly2m";
+        const std::string kintervald2s = "intervald2s";
+        const std::string kvarbyte = "varbyte";
+        const std::string ksuper = "super";
+        const std::string kgeometry = "geometry";
+        const std::string kgeography = "geography";
+    };
+    static const RedshiftTypeName getRedshiftTypeNameStruct();
+
+    static const std::regex glueSuperTypeRegex;
+
+    /**
+     * @brief Checks if ODBC2 datetime format should be used
+     * 
+     * @param odbcVersion The ODBC version being used
+     * @return true if ODBC2 datetime format should be used, false otherwise
+     */
+    static bool returnODBC2DateTime(SQLINTEGER odbcVersion);
+    
+    /**
+     * @brief Gets appropriate datetime data type information based on data type and ODBC version
+     * 
+     * @param type The data type name
+     * @param isODBC_SpecV2 Flag indicating if ODBC2 format should be used
+     * @return TypeInfoResult containing the mapped type information
+     */
+    static TypeInfoResult getAppropriateDateTime(const std::string& type, const bool isODBC_SpecV2);
+
+    /**
+     * @brief Checks if a given type is a datetime type
+     * 
+     * @param type The database type name to check
+     * @return true if the type is a datetime type, false otherwise
+     */
+    static bool isDateTimeType(const std::string& type);
+
+    /**
+     * @brief Gets type information for a given data type
+     * @param type Database type name
+     * @param isODBC_SpecV2 ODBC version to determine datetime type
+     * @return TypeInfoResult containing type information and success status
+     */
+    static TypeInfoResult getTypeInfo(const std::string& type, const bool isODBC_SpecV2);
+
+    /**
+     * @brief Set of all supported datetime types
+     * Includes both with and without timezone variants
+     */
+    static const std::unordered_set<std::string> dateTimeDataTypes;
 
     // Define the data type info mapping between rsType and DATA_TYPE_INFO
     static const std::unordered_map<std::string, DATA_TYPE_INFO> typeInfoMap;
