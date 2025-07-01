@@ -6,7 +6,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include "rsMetadataAPIPostProcessing.h"
+#include "rsMetadataAPIPostProcessor.h"
 #include "rsexecute.h"
 #include "rsutil.h"
 
@@ -14,12 +14,12 @@
 // Helper function to apply post-processing on intermediate result set for
 // SQLTables special call to retrieve catalog list
 //
-SQLRETURN RsMetadataAPIPostProcessing::sqlCatalogsPostProcessing(
+SQLRETURN RsMetadataAPIPostProcessor::sqlCatalogsPostProcessing(
     SQLHSTMT phstmt, const std::vector<std::string> &intermediateRS) {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    RS_LOG_TRACE("rsMetadataAPIPostProcessing",
+    RS_LOG_TRACE("rsMetadataAPIPostProcessor",
                  "Calling sqlCatalogsPostProcessing");
 
     // Column number and column name are same as SQLTables
@@ -47,7 +47,7 @@ SQLRETURN RsMetadataAPIPostProcessing::sqlCatalogsPostProcessing(
         return rc;
     }
 
-    RS_LOG_TRACE("rsMetadataAPIPostProcessing",
+    RS_LOG_TRACE("rsMetadataAPIPostProcessor",
                  "sqlCatalogsPostProcessing done");
     return rc;
 }
@@ -56,12 +56,12 @@ SQLRETURN RsMetadataAPIPostProcessing::sqlCatalogsPostProcessing(
 // Helper function to apply post-processing on intermediate result set for
 // SQLTables special call to retrieve schema list
 //
-SQLRETURN RsMetadataAPIPostProcessing::sqlSchemasPostProcessing(
+SQLRETURN RsMetadataAPIPostProcessor::sqlSchemasPostProcessing(
     SQLHSTMT phstmt, const std::vector<SHOWSCHEMASResult> &intermediateRS) {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    RS_LOG_TRACE("rsMetadataAPIPostProcessing",
+    RS_LOG_TRACE("rsMetadataAPIPostProcessor",
                  "Calling sqlSchemasPostProcessing");
 
     // Column number and column name are same as SQLTables
@@ -89,7 +89,7 @@ SQLRETURN RsMetadataAPIPostProcessing::sqlSchemasPostProcessing(
         return rc;
     }
 
-    RS_LOG_TRACE("rsMetadataAPIPostProcessing",
+    RS_LOG_TRACE("rsMetadataAPIPostProcessor",
                  "sqlSchemasPostProcessing done");
     return rc;
 }
@@ -98,11 +98,11 @@ SQLRETURN RsMetadataAPIPostProcessing::sqlSchemasPostProcessing(
 // Helper function to apply post-processing on pre-defined table type list
 //
 SQLRETURN
-RsMetadataAPIPostProcessing::sqlTableTypesPostProcessing(SQLHSTMT phstmt) {
+RsMetadataAPIPostProcessor::sqlTableTypesPostProcessing(SQLHSTMT phstmt) {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    RS_LOG_TRACE("rsMetadataAPIPostProcessing",
+    RS_LOG_TRACE("rsMetadataAPIPostProcessor",
                  "Calling sqlTableTypesPostProcessing");
 
     // Column number and column name are same as SQLTables
@@ -130,7 +130,7 @@ RsMetadataAPIPostProcessing::sqlTableTypesPostProcessing(SQLHSTMT phstmt) {
         return rc;
     }
 
-    RS_LOG_TRACE("rsMetadataAPIPostProcessing",
+    RS_LOG_TRACE("rsMetadataAPIPostProcessor",
                  "sqlTableTypesPostProcessing done");
     return rc;
 }
@@ -139,13 +139,13 @@ RsMetadataAPIPostProcessing::sqlTableTypesPostProcessing(SQLHSTMT phstmt) {
 // Helper function to apply post-processing on intermediate result set for
 // SQLTables
 //
-SQLRETURN RsMetadataAPIPostProcessing::sqlTablesPostProcessing(
+SQLRETURN RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
     SQLHSTMT phstmt, std::string pTableType, bool retEmpty,
     const std::vector<SHOWTABLESResult> &intermediateRS) {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    RS_LOG_TRACE("rsMetadataAPIPostProcessing",
+    RS_LOG_TRACE("rsMetadataAPIPostProcessor",
                  "Calling sqlTablesPostProcessing");
 
     rc = metadataAPIHelper.initializeColumnField(
@@ -185,7 +185,7 @@ SQLRETURN RsMetadataAPIPostProcessing::sqlTablesPostProcessing(
         return rc;
     }
 
-    RS_LOG_TRACE("rsMetadataAPIPostProcessing", "sqlTablesPostProcessing done");
+    RS_LOG_TRACE("rsMetadataAPIPostProcessor", "sqlTablesPostProcessing done");
     return rc;
 }
 
@@ -193,13 +193,13 @@ SQLRETURN RsMetadataAPIPostProcessing::sqlTablesPostProcessing(
 // Helper function to apply post-processing on intermediate result set for
 // SQLColumns
 //
-SQLRETURN RsMetadataAPIPostProcessing::sqlColumnsPostProcessing(
+SQLRETURN RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(
     SQLHSTMT phstmt, bool retEmpty,
     const std::vector<SHOWCOLUMNSResult> &intermediateRS) {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    RS_LOG_TRACE("rsMetadataAPIPostProcessing",
+    RS_LOG_TRACE("rsMetadataAPIPostProcessor",
                  "Calling sqlColumnsPostProcessing");
 
     rc = metadataAPIHelper.initializeColumnField(
@@ -233,7 +233,7 @@ SQLRETURN RsMetadataAPIPostProcessing::sqlColumnsPostProcessing(
         return rc;
     }
 
-    RS_LOG_TRACE("rsMetadataAPIPostProcessing",
+    RS_LOG_TRACE("rsMetadataAPIPostProcessor",
                  "sqlColumnsPostProcessing Done");
 
     return rc;

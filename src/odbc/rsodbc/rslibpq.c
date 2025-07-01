@@ -13,7 +13,7 @@
 #include "rstrace.h"
 #include "rslock.h"
 #include "rsdrvinfo.h"
-#include "rsMetadataAPIPostProcessing.h"
+#include "rsMetadataAPIPostProcessor.h"
 #include <regex>
 
 #ifdef LINUX
@@ -42,6 +42,8 @@ void initCscLib(FILE    *fpTrace);
 void uninitCscLib();
 int getUnknownTypeSize(Oid pgType);
 void setStreamingCursorRows(void *_pCscStatementContext, int iStreamingCursorRows);
+
+void setEndOfStreamingCursorQuery(void *_pCscStatementContext, int flag);
 int isEndOfStreamingCursor(void *_pCscStatementContext);
 int isEndOfStreamingCursorQuery(void *_pCscStatementContext);
 

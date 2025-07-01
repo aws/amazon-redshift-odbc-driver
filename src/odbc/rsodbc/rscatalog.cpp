@@ -9,8 +9,8 @@
 #include "rscatalog.h"
 #include "rsexecute.h"
 #include "rsutil.h"
-#include "rsMetadataAPIPostProcessing.h"
-#include "rsMetadataServerAPIHelper.h"
+#include "rsMetadataAPIPostProcessor.h"
+#include "rsMetadataServerProxy.h"
 
 #define MAX_CATALOG_QUERY_LEN (16*1024)
 #define MAX_CATALOG_QUERY_FILTER_LEN (4*1024)
@@ -515,10 +515,10 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 
 			//  Special SQLTables call : get catalog list
 			std::vector<std::string> intermediateRS;
-			rc = RsMetadataServerAPIHelper::sqlCatalogsServerAPI(internalStmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
+			rc = RsMetadataServerProxy::sqlCatalogs(internalStmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataServerAPIHelper.sqlCatalogsServerAPI", "Fail get intermediate result set for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerAPIHelper.sqlCatalogsServerAPI fail", 0, NULL);
+				RS_LOG_ERROR("RsMetadataServerProxy.sqlCatalogs", "Fail get intermediate result set for SQLTables");
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerProxy.sqlCatalogs fail", 0, NULL);
 				return rc;
 			}
 
@@ -529,10 +529,10 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 				return rc;
 			}
 
-			rc = RsMetadataAPIPostProcessing::sqlCatalogsPostProcessing(phstmt, intermediateRS);
+			rc = RsMetadataAPIPostProcessor::sqlCatalogsPostProcessing(phstmt, intermediateRS);
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataAPIPostProcessing.sqlCatalogsPostProcessing", "Fail call post-processing for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlCatalogsPostProcessing fail", 0, NULL);
+				RS_LOG_ERROR("RsMetadataAPIPostProcessor.sqlCatalogsPostProcessing", "Fail call post-processing for SQLTables");
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessor.sqlCatalogsPostProcessing fail", 0, NULL);
 				return rc;
 			}
 
@@ -554,10 +554,10 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 
 			//  Special SQLTables call : get schema list
 			std::vector<SHOWSCHEMASResult> intermediateRS;
-			rc = RsMetadataServerAPIHelper::sqlSchemasServerAPI(internalStmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
+			rc = RsMetadataServerProxy::sqlSchemas(internalStmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataServerAPIHelper.sqlSchemasServerAPI", "Fail get intermediate result set for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerAPIHelper.sqlSchemasServerAPI fail", 0, NULL);
+				RS_LOG_ERROR("RsMetadataServerProxy.sqlSchemas", "Fail get intermediate result set for SQLTables");
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerProxy.sqlSchemas fail", 0, NULL);
 				return rc;
 			}
 
@@ -568,10 +568,10 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 				return rc;
 			}
 
-			rc = RsMetadataAPIPostProcessing::sqlSchemasPostProcessing(phstmt, intermediateRS);
+			rc = RsMetadataAPIPostProcessor::sqlSchemasPostProcessing(phstmt, intermediateRS);
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataAPIPostProcessing.sqlSchemasPostProcessing", "Fail call post-processing for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlSchemasPostProcessing fail", 0, NULL);
+				RS_LOG_ERROR("RsMetadataAPIPostProcessor.sqlSchemasPostProcessing", "Fail call post-processing for SQLTables");
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessor.sqlSchemasPostProcessing fail", 0, NULL);
 				return rc;
 			}
 
@@ -580,10 +580,10 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 		if(isEmptyString(pCatalogName) && isEmptyString(pSchemaName) && isEmptyString(pTableName) && isSqlAllTableTypes(pTableType, cbTableType))
 		{
 			// Special SQLTables call : get table type list
-			rc = RsMetadataAPIPostProcessing::sqlTableTypesPostProcessing(phstmt);
+			rc = RsMetadataAPIPostProcessor::sqlTableTypesPostProcessing(phstmt);
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataAPIPostProcessing.sqlTableTypesPostProcessing", "Fail call post-processing for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlTableTypesPostProcessing fail", 0, NULL);
+				RS_LOG_ERROR("RsMetadataAPIPostProcessor.sqlTableTypesPostProcessing", "Fail call post-processing for SQLTables");
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessor.sqlTableTypesPostProcessing fail", 0, NULL);
 				return rc;
 			}
 			
@@ -614,10 +614,10 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 			}
 
 			std::vector<SHOWTABLESResult> intermediateRS;
-			rc = RsMetadataServerAPIHelper::sqlTablesServerAPI(internalStmt, catalogName, schemaName, tableName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
+			rc = RsMetadataServerProxy::sqlTables(internalStmt, catalogName, schemaName, tableName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataServerAPIHelper.sqlTablesServerAPI", "Fail get intermediate result set for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerAPIHelper.sqlTablesServerAPI fail", 0, NULL);
+				RS_LOG_ERROR("RsMetadataServerProxy.sqlTables", "Fail get intermediate result set for SQLTables");
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerProxy.sqlTables fail", 0, NULL);
 				return rc;
 			}
 
@@ -630,10 +630,10 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 
 			std::string table_type = (!pTableType) ? "" : char2String(pTableType);
 
-			rc = RsMetadataAPIPostProcessing::sqlTablesPostProcessing(phstmt, table_type, retEmpty, intermediateRS);
+			rc = RsMetadataAPIPostProcessor::sqlTablesPostProcessing(phstmt, table_type, retEmpty, intermediateRS);
 			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataAPIPostProcessing.sqlTablesPostProcessing", "Fail call post-processing for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessing.sqlTablesPostProcessing fail", 0, NULL);
+				RS_LOG_ERROR("RsMetadataAPIPostProcessor.sqlTablesPostProcessing", "Fail call post-processing for SQLTables");
+				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessor.sqlTablesPostProcessing fail", 0, NULL);
 				return rc;
 			}
 		}
@@ -853,10 +853,10 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
         }
 
         std::vector<SHOWCOLUMNSResult> intermediateRS;
-        rc = RsMetadataServerAPIHelper::sqlColumnsServerAPI(internalStmt, catalogName, schemaName, tableName, columnName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
+        rc = RsMetadataServerProxy::sqlColumns(internalStmt, catalogName, schemaName, tableName, columnName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
         if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-			RS_LOG_ERROR("RsMetadataServerAPIHelper.sqlColumnsServerAPI", "Fail get intermediate result set for SQLColumns");
-            addError(&pStmt->pErrorList, "HY000", "RsMetadataServerAPIHelper.sqlColumnsServerAPI fail", 0, NULL);
+			RS_LOG_ERROR("RsMetadataServerProxy.sqlColumns", "Fail get intermediate result set for SQLColumns");
+            addError(&pStmt->pErrorList, "HY000", "RsMetadataServerProxy.sqlColumns fail", 0, NULL);
             return rc;
         }
 
@@ -867,10 +867,10 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
             return rc;
         }
 
-        rc = RsMetadataAPIPostProcessing::sqlColumnsPostProcessing(phstmt, retEmpty, intermediateRS);
+        rc = RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(phstmt, retEmpty, intermediateRS);
         if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-			RS_LOG_ERROR("RsMetadataAPIPostProcessing.sqlColumnsPostProcessing", "Fail call post-processing for SQLColumns");
-            addError(&pStmt->pErrorList, "HY000", "RsMetadataAPIPostProcessing.sqlColumnsPostProcessing fail", 0, NULL);
+			RS_LOG_ERROR("RsMetadataAPIPostProcessor.sqlColumnsPostProcessing", "Fail call post-processing for SQLColumns");
+            addError(&pStmt->pErrorList, "HY000", "RsMetadataAPIPostProcessor.sqlColumnsPostProcessing fail", 0, NULL);
             return rc;
         }
     } else {

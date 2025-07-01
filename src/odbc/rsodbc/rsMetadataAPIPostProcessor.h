@@ -25,12 +25,12 @@
 #include "rsutil.h"
 
 /*----------------
- * RsMetadataAPIPostProcessing
+ * RsMetadataAPIPostProcessor
  *
  * A class which contains helper function related to post-processing
  * ----------------
  */
-class RsMetadataAPIPostProcessing {
+class RsMetadataAPIPostProcessor {
   public:
     static const RsMetadataAPIHelper metadataAPIHelper;
 
@@ -43,7 +43,7 @@ class RsMetadataAPIPostProcessing {
      * Parameters:
      *   phstmt (SQLHSTMT): statement handler
      *   intermediateRS (const std::vector<std::string> &): intermediate result
-     *     set from RsMetadataServerAPIHelper::sqlCatalogsServerAPI
+     *     set from RsMetadataServerProxy::sqlCatalogs
      *
      * Return:
      *   SQLRETURN
@@ -62,7 +62,7 @@ class RsMetadataAPIPostProcessing {
      * Parameters:
      *   phstmt (SQLHSTMT): statement handler
      *   intermediateRS (const std::vector<SHOWSCHEMASResult> &): intermediate
-     *     result set from RsMetadataServerAPIHelper::sqlSchemasServerAPI
+     *     result set from RsMetadataServerProxy::sqlSchemas
      *
      * Return:
      *   SQLRETURN
@@ -96,7 +96,7 @@ class RsMetadataAPIPostProcessing {
      *   retEmpty (bool): a boolean to determine return empty result set
      *     directly without calling any Server API SHOW command
      *   intermediateRS (const std::vector<SHOWTABLESResult> &): intermediate
-     *     result set from RsMetadataServerAPIHelper::sqlTablesServerAPI
+     *     result set from RsMetadataServerProxy::sqlTables
      *
      * Return:
      *   SQLRETURN
@@ -117,7 +117,7 @@ class RsMetadataAPIPostProcessing {
      *   retEmpty (bool): a boolean to determine return empty result set
      *     directly without calling any Server API SHOW command
      *   intermediateRS (const std::vector<SHOWCOLUMNSResult> &): intermediate
-     *     result set from RsMetadataServerAPIHelper::sqlColumnsServerAPI
+     *     result set from RsMetadataServerProxy::sqlColumns
      *
      * Return:
      *   SQLRETURN

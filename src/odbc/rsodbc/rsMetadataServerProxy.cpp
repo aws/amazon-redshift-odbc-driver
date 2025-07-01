@@ -6,7 +6,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include "rsMetadataServerAPIHelper.h"
+#include "rsMetadataServerProxy.h"
 #include "rsexecute.h"
 #include "rsutil.h"
 
@@ -14,7 +14,7 @@
 // Helper function to return intermediate result set for SQLTables special call
 // to retrieve a list of catalog
 //
-SQLRETURN RsMetadataServerAPIHelper::sqlCatalogsServerAPI(
+SQLRETURN RsMetadataServerProxy::sqlCatalogs(
     SQLHSTMT phstmt, std::vector<std::string> &catalogs,
     bool isSingleDatabaseMetaData) {
 
@@ -30,13 +30,13 @@ SQLRETURN RsMetadataServerAPIHelper::sqlCatalogsServerAPI(
     // Get a list of catalog name from SHOW DATABASES
     rc = callShowDatabases(phstmt, RsMetadataAPIHelper::SQL_ALL, catalogs, isSingleDatabaseMetaData);
     if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        RS_LOG_ERROR("sqlCatalogsServerAPI", "Error in callShowDatabases");
+        RS_LOG_ERROR("sqlCatalogs", "Error in callShowDatabases");
         addError(&pStmt->pErrorList, "HY000",
-                 "sqlCatalogsServerAPI: Error in callShowDatabases ", 0, NULL);
+                 "sqlCatalogs: Error in callShowDatabases ", 0, NULL);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlCatalogsServerAPI", "Total number of return rows: %d", catalogs.size());
+    RS_LOG_TRACE("sqlCatalogs", "Total number of return rows: %d", catalogs.size());
     
     return rc;
 }
@@ -45,7 +45,7 @@ SQLRETURN RsMetadataServerAPIHelper::sqlCatalogsServerAPI(
 // Helper function to return intermediate result set for SQLTables special call
 // to retrieve a list of schema
 //
-SQLRETURN RsMetadataServerAPIHelper::sqlSchemasServerAPI(
+SQLRETURN RsMetadataServerProxy::sqlSchemas(
     SQLHSTMT phstmt, std::vector<SHOWSCHEMASResult> &intermediateRS,
     bool isSingleDatabaseMetaData) {
 
@@ -56,9 +56,9 @@ SQLRETURN RsMetadataServerAPIHelper::sqlSchemasServerAPI(
     // Get a list of catalog name from SHOW DATABASES
     rc = callShowDatabases(phstmt, RsMetadataAPIHelper::SQL_ALL, catalogs, isSingleDatabaseMetaData);
     if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        RS_LOG_ERROR("sqlSchemasServerAPI", "Error in callShowDatabases");
+        RS_LOG_ERROR("sqlSchemas", "Error in callShowDatabases");
         addError(&pStmt->pErrorList, "HY000",
-                 "sqlSchemasServerAPI: Error in callShowDatabases ", 0, NULL);
+                 "sqlSchemas: Error in callShowDatabases ", 0, NULL);
         return rc;
     }
 
@@ -66,16 +66,16 @@ SQLRETURN RsMetadataServerAPIHelper::sqlSchemasServerAPI(
         // Get a list of schema name from SHOW SCHEMAS
         rc = callShowSchemas(phstmt, catalogs[i], RsMetadataAPIHelper::SQL_ALL, intermediateRS);
         if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-            RS_LOG_ERROR("sqlSchemasServerAPI", "Error in callShowSchemas");
+            RS_LOG_ERROR("sqlSchemas", "Error in callShowSchemas");
             addError(&pStmt->pErrorList, "HY000",
-                     "sqlSchemasServerAPI: Error in callShowSchemas ", 0,
+                     "sqlSchemas: Error in callShowSchemas ", 0,
                      NULL);
             return rc;
         }
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlSchemasServerAPI", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlSchemas", "Total number of return rows: %d", intermediateRS.size());
     
     return rc;
 }
@@ -83,7 +83,7 @@ SQLRETURN RsMetadataServerAPIHelper::sqlSchemasServerAPI(
 //
 // Helper function to return intermediate result set for SQLTables
 //
-SQLRETURN RsMetadataServerAPIHelper::sqlTablesServerAPI(
+SQLRETURN RsMetadataServerProxy::sqlTables(
     SQLHSTMT phstmt, const std::string &catalogName,
     const std::string &schemaName, const std::string &tableName, bool retEmpty,
     std::vector<SHOWTABLESResult> &intermediateRS,
@@ -99,18 +99,18 @@ SQLRETURN RsMetadataServerAPIHelper::sqlTablesServerAPI(
         rc = callShowDatabases(phstmt, catalogName, catalogs,
                          isSingleDatabaseMetaData);
         if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-            RS_LOG_ERROR("sqlTablesServerAPI", "Error in callShowDatabases");
+            RS_LOG_ERROR("sqlTables", "Error in callShowDatabases");
             addError(&pStmt->pErrorList, "HY000",
-                     "sqlTablesServerAPI: Error in callShowDatabases ", 0, NULL);
+                     "sqlTables: Error in callShowDatabases ", 0, NULL);
             return rc;
         }
         for (int i = 0; i < catalogs.size(); i++) {
             // Get a list of schema name from SHOW SCHEMAS
             rc = callShowSchemas(phstmt, catalogs[i], schemaName, schemas);
             if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                RS_LOG_ERROR("sqlTablesServerAPI", "Error in callShowSchemas");
+                RS_LOG_ERROR("sqlTables", "Error in callShowSchemas");
                 addError(&pStmt->pErrorList, "HY000",
-                         "sqlTablesServerAPI: Error in callShowSchemas ", 0, NULL);
+                         "sqlTables: Error in callShowSchemas ", 0, NULL);
                 return rc;
             }
             for (int j = 0; j < schemas.size(); j++) {
@@ -119,9 +119,9 @@ SQLRETURN RsMetadataServerAPIHelper::sqlTablesServerAPI(
                                      char2String(schemas[j].schema_name),
                                      tableName, intermediateRS);
                 if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                    RS_LOG_ERROR("sqlTablesServerAPI", "Error in callShowTables");
+                    RS_LOG_ERROR("sqlTables", "Error in callShowTables");
                     addError(&pStmt->pErrorList, "HY000",
-                             "sqlTablesServerAPI: Error in callShowTables ", 0,
+                             "sqlTables: Error in callShowTables ", 0,
                              NULL);
                     return rc;
                 }
@@ -130,9 +130,9 @@ SQLRETURN RsMetadataServerAPIHelper::sqlTablesServerAPI(
         }
         catalogs.clear();
 
-        RS_LOG_TRACE("sqlTablesServerAPI", "Total number of return rows: %d", intermediateRS.size());
+        RS_LOG_TRACE("sqlTables", "Total number of return rows: %d", intermediateRS.size());
     } else {
-        RS_LOG_TRACE("sqlTablesServerAPI", "Return empty intermediateRS");
+        RS_LOG_TRACE("sqlTables", "Return empty intermediateRS");
     }
 
     return rc;
@@ -141,7 +141,7 @@ SQLRETURN RsMetadataServerAPIHelper::sqlTablesServerAPI(
 //
 // Helper function to return intermediate result set for SQLColumns
 //
-SQLRETURN RsMetadataServerAPIHelper::sqlColumnsServerAPI(
+SQLRETURN RsMetadataServerProxy::sqlColumns(
     SQLHSTMT phstmt, const std::string &catalogName,
     const std::string &schemaName, const std::string &tableName,
     const std::string &columnName, bool retEmpty,
@@ -160,9 +160,9 @@ SQLRETURN RsMetadataServerAPIHelper::sqlColumnsServerAPI(
         rc = callShowDatabases(phstmt, catalogName, catalogs,
                          isSingleDatabaseMetaData);
         if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-            RS_LOG_ERROR("sqlColumnsServerAPI", "Error in callShowDatabases");
+            RS_LOG_ERROR("sqlColumns", "Error in callShowDatabases");
             addError(&pStmt->pErrorList, "HY000",
-                     "sqlColumnsServerAPI: Error in callShowDatabases ", 0, NULL);
+                     "sqlColumns: Error in callShowDatabases ", 0, NULL);
             return rc;
         }
 
@@ -170,9 +170,9 @@ SQLRETURN RsMetadataServerAPIHelper::sqlColumnsServerAPI(
             // Get a list of schema name from SHOW SCHEMAS
             rc = callShowSchemas(phstmt, catalogs[i], schemaName, schemas);
             if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                RS_LOG_ERROR("sqlColumnsServerAPI", "Error in callShowSchemas");
+                RS_LOG_ERROR("sqlColumns", "Error in callShowSchemas");
                 addError(&pStmt->pErrorList, "HY000",
-                         "sqlColumnsServerAPI: Error in callShowSchemas ", 0, NULL);
+                         "sqlColumns: Error in callShowSchemas ", 0, NULL);
                 return rc;
             }
             for (int j = 0; j < schemas.size(); j++) {
@@ -181,9 +181,9 @@ SQLRETURN RsMetadataServerAPIHelper::sqlColumnsServerAPI(
                                      char2String(schemas[j].schema_name),
                                      tableName, tables);
                 if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                    RS_LOG_ERROR("sqlColumnsServerAPI", "Error in callShowTables");
+                    RS_LOG_ERROR("sqlColumns", "Error in callShowTables");
                     addError(&pStmt->pErrorList, "HY000",
-                             "sqlColumnsServerAPI: Error in callShowTables ", 0,
+                             "sqlColumns: Error in callShowTables ", 0,
                              NULL);
                     return rc;
                 }
@@ -194,9 +194,9 @@ SQLRETURN RsMetadataServerAPIHelper::sqlColumnsServerAPI(
                                           char2String(tables[k].table_name),
                                           columnName, intermediateRS);
                     if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                        RS_LOG_ERROR("sqlColumnsServerAPI", "Error in callShowColumns");
+                        RS_LOG_ERROR("sqlColumns", "Error in callShowColumns");
                         addError(&pStmt->pErrorList, "HY000",
-                                 "sqlColumnsServerAPI: Error in "
+                                 "sqlColumns: Error in "
                                  "callShowColumns ",
                                  0, NULL);
                         return rc;
@@ -208,9 +208,9 @@ SQLRETURN RsMetadataServerAPIHelper::sqlColumnsServerAPI(
         }
         catalogs.clear();
 
-        RS_LOG_TRACE("sqlColumnsServerAPI", "Total number of return rows: %d", intermediateRS.size());
+        RS_LOG_TRACE("sqlColumns", "Total number of return rows: %d", intermediateRS.size());
     } else {
-        RS_LOG_TRACE("sqlColumnsServerAPI", "Return empty intermediateRS");
+        RS_LOG_TRACE("sqlColumns", "Return empty intermediateRS");
     }
 
     return rc;
@@ -219,7 +219,7 @@ SQLRETURN RsMetadataServerAPIHelper::sqlColumnsServerAPI(
 //
 // Helper function to retrieve intermediate result set for SHOW DATABASES
 //
-SQLRETURN RsMetadataServerAPIHelper::callShowDatabases(
+SQLRETURN RsMetadataServerProxy::callShowDatabases(
     SQLHSTMT phstmt, const std::string &catalog,
     std::vector<std::string> &catalogs, bool isSingleDatabaseMetaData) {
     SQLRETURN rc = SQL_SUCCESS;
@@ -314,7 +314,7 @@ SQLRETURN RsMetadataServerAPIHelper::callShowDatabases(
 //
 // Helper function to retrieve intermediate result set for SHOW SCHEMAS
 //
-SQLRETURN RsMetadataServerAPIHelper::callShowSchemas(
+SQLRETURN RsMetadataServerProxy::callShowSchemas(
     SQLHSTMT phstmt, const std::string &catalog, const std::string &schema,
     std::vector<SHOWSCHEMASResult> &intermediateRS) {
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
@@ -422,7 +422,7 @@ SQLRETURN RsMetadataServerAPIHelper::callShowSchemas(
 //
 // Helper function to retrieve intermediate result set for SHOW TABLES
 //
-SQLRETURN RsMetadataServerAPIHelper::callShowTables(
+SQLRETURN RsMetadataServerProxy::callShowTables(
     SQLHSTMT phstmt, const std::string &catalog, const std::string &schema,
     const std::string &table, std::vector<SHOWTABLESResult> &intermediateRS) {
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
@@ -561,7 +561,7 @@ SQLRETURN RsMetadataServerAPIHelper::callShowTables(
 //
 // Helper function to retrieve intermediate result set for SHOW COLUMNS
 //
-SQLRETURN RsMetadataServerAPIHelper::callShowColumns(
+SQLRETURN RsMetadataServerProxy::callShowColumns(
     SQLHSTMT phstmt, const std::string &catalog, const std::string &schema,
     const std::string &table, const std::string &column,
     std::vector<SHOWCOLUMNSResult> &intermediateRS) {
@@ -773,7 +773,7 @@ SQLRETURN RsMetadataServerAPIHelper::callShowColumns(
     return SQL_SUCCESS;
 }
 
-SQLRETURN RsMetadataServerAPIHelper::callQuoteFunc(
+SQLRETURN RsMetadataServerProxy::callQuoteFunc(
     SQLHSTMT phstmt, const std::string &input, std::string& output, const std::string &quotedQuery) { // output should be the last argument
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;

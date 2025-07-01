@@ -26,15 +26,15 @@
 #include "rsparameter.h"
 
 /*----------------
- * RsMetadataServerAPIHelper
+ * RsMetadataServerProxy
  *
  * A class which contains helper function related to Server API SHOW command
  * ----------------
  */
-class RsMetadataServerAPIHelper {
+class RsMetadataServerProxy {
   public:
     /* ----------------
-     * sqlCatalogsServerAPI
+     * sqlCatalogs
      *
      * helper function to return intermediate result set for SQLTables special
      * call to retrieve a list of catalog
@@ -51,12 +51,12 @@ class RsMetadataServerAPIHelper {
      * ----------------
      */
     static SQLRETURN
-    sqlCatalogsServerAPI(SQLHSTMT phstmt,
+    sqlCatalogs(SQLHSTMT phstmt,
                          std::vector<std::string> &intermediateRS,
                          bool isSingleDatabaseMetaData);
 
     /* ----------------
-     * sqlSchemasServerAPI
+     * sqlSchemas
      *
      * helper function to return intermediate result set for SQLTables special
      * call to retrieve a list of schema
@@ -73,12 +73,12 @@ class RsMetadataServerAPIHelper {
      * ----------------
      */
     static SQLRETURN
-    sqlSchemasServerAPI(SQLHSTMT phstmt,
+    sqlSchemas(SQLHSTMT phstmt,
                         std::vector<SHOWSCHEMASResult> &intermediateRS,
                         bool isSingleDatabaseMetaData);
 
     /* ----------------
-     * sqlTablesServerAPI
+     * sqlTables
      *
      * helper function to return intermediate result set for SQLTables
      *
@@ -99,14 +99,14 @@ class RsMetadataServerAPIHelper {
      * ----------------
      */
     static SQLRETURN
-    sqlTablesServerAPI(SQLHSTMT phstmt, const std::string &catalogName,
+    sqlTables(SQLHSTMT phstmt, const std::string &catalogName,
                        const std::string &schemaName,
                        const std::string &tableName, bool retEmpty,
                        std::vector<SHOWTABLESResult> &intermediateRS,
                        bool isSingleDatabaseMetaData);
 
     /* ----------------
-     * sqlColumnsServerAPI
+     * sqlColumns
      *
      * helper function to return intermediate result set for SQLColumns
      *
@@ -128,7 +128,7 @@ class RsMetadataServerAPIHelper {
      * ----------------
      */
     static SQLRETURN
-    sqlColumnsServerAPI(SQLHSTMT phstmt, const std::string &catalogName,
+    sqlColumns(SQLHSTMT phstmt, const std::string &catalogName,
                         const std::string &schemaName,
                         const std::string &tableName,
                         const std::string &columnName, bool retEmpty,
