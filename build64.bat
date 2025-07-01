@@ -17,7 +17,7 @@ IF EXIST "!LINK_PKG_PATH!" (
     echo Deleting the directory or junction: !LINK_PKG_PATH!
     rmdir /s /q "!LINK_PKG_PATH!"
 ) else (
-    echo Directory or junction does not exist: !LINK_PKG_PATH!
+    echo Confirmed that directory or junction does not exist: !LINK_PKG_PATH!
 )
 :: Create the directory junction
 echo Creating the directory junction: !LINK_PKG_PATH! and %CD%
@@ -25,7 +25,7 @@ mklink /j "!LINK_PKG_PATH!" "%CD%"
 dir "!LINK_PKG_PATH!"
 
 echo Create a clean public directory for artifacts
-set "RS_ARTIFACTS_DIR=!LINK_PKG_PATH!\public\windows"
+set "RS_ARTIFACTS_DIR=!LINK_PKG_PATH!\public"
 mkdir !RS_ARTIFACTS_DIR!
 rmdir /s/q !RS_ARTIFACTS_DIR!\*
 
@@ -42,7 +42,6 @@ set RS_DEPS_DIRS=
 set RS_ODBC_DIR=
 set "RS_VERSION="
 set "RS_BUILD_TYPE=Release"
-set "BUILD_DEPENDENCIES=yes"
 set PYTHON_CMD=
 set PERL_CMD=
 
@@ -65,9 +64,6 @@ for %%a in (%*) do (
       echo value=%%a
       if "!arg!"=="--version" set "RS_VERSION=%%a"
       if "!arg!"=="--build-type" set "RS_BUILD_TYPE=%%a"
-      if "!arg!"=="--build-dependencies" set "BUILD_DEPENDENCIES=%%a"
-      if "!arg!"=="--dependencies-src-dir" set "DEPENDENCIES_SRC_DIR=%%a"
-      if "!arg!"=="--dependencies-build-dir" set "DEPENDENCIES_BUILD_DIR=%%a"
       if "!arg!"=="--dependencies-install-dir" set "DEPENDENCIES_INSTALL_DIR=%%a"
       set "temp_option!temp_option!=%%a"
       set "temp_option="
@@ -75,72 +71,22 @@ for %%a in (%*) do (
 )
 :end_parse_args
 
-if not defined DEPENDENCIES_SRC_DIR if "!BUILD_DEPENDENCIES!"=="yes" (
-    if exist "!LINK_PKG_PATH!\find-dependencies-src-dir.bat" (
-        :: Hoping to find DEPENDENCIES_SRC_DIR from a helper script
-        echo "DEPENDENCIES_SRC_DIR does not exist. Finding by Calling !LINK_PKG_PATH!\find-dependencies-src-dir.bat ..."
-        call !LINK_PKG_PATH!\find-dependencies-src-dir.bat
+if not defined DEPENDENCIES_INSTALL_DIR (
+    if exist "!LINK_PKG_PATH!\find-dependencies-install-dir.bat" (
+        :: Hoping to find DEPENDENCIES_INSTALL_DIR from a helper script
+        echo "DEPENDENCIES_INSTALL_DIR does not exist. Finding by Calling !LINK_PKG_PATH!\find-dependencies-install-dir.bat ..."
+        call !LINK_PKG_PATH!\find-dependencies-install-dir.bat
     )
     :: Default behavior
-    if not defined DEPENDENCIES_SRC_DIR (
-        echo "DEPENDENCIES_SRC_DIR still does not exist. Falling back to default location.
-        set "DEPENDENCIES_SRC_DIR=!LINK_PKG_PATH!\..\RedshiftODBCDriverDependencies\src\tp"
+    if not defined DEPENDENCIES_INSTALL_DIR (
+        echo "DEPENDENCIES_INSTALL_DIR still does not exist. Falling back to default !RS_ARTIFACTS_DIR!.
+        set "DEPENDENCIES_INSTALL_DIR=!RS_ARTIFACTS_DIR!"
     )
-) else (
-    if defined DEPENDENCIES_SRC_DIR (
-        echo "skip setting DEPENDENCIES_SRC_DIR because it is already defined."
-    ) else (
-        echo "skip setting DEPENDENCIES_SRC_DIR because '!BUILD_DEPENDENCIES!' does not equal 'yes'."
-    )
-)
-
-if defined DEPENDENCIES_SRC_DIR (
-    echo "DEPENDENCIES_SRC_DIR====== dir: !DEPENDENCIES_SRC_DIR! ========"
-    @REM dir !DEPENDENCIES_SRC_DIR!
-
-    echo Try Shortening path using a symbolic link
-    @REM set "DEPENDENCIES_SRC_DIR_SHORT_PATH=!LINK_PKG_PATH!\depsdir"
-    set "DEPENDENCIES_SRC_DIR_SHORT_PATH=C:\ProgramData\BTW\workplace\depsdir"
-    echo "Try Shortening DEPENDENCIES_SRC_DIR(!DEPENDENCIES_SRC_DIR!) to !DEPENDENCIES_SRC_DIR_SHORT_PATH! using a symbolic link
-
-    :: Create the symbolic link (if it doesn't exist)
-    if exist "!DEPENDENCIES_SRC_DIR_SHORT_PATH!" (
-        echo "Removing existing Symbolic link !DEPENDENCIES_SRC_DIR_SHORT_PATH!"
-        rmdir !DEPENDENCIES_SRC_DIR_SHORT_PATH!
-    )
-    echo "Creating Symbolic link !DEPENDENCIES_SRC_DIR_SHORT_PATH!"
-    mklink /j "!DEPENDENCIES_SRC_DIR_SHORT_PATH!" "!DEPENDENCIES_SRC_DIR!"
-    echo "Symbolic link created: !DEPENDENCIES_SRC_DIR_SHORT_PATH! -> !DEPENDENCIES_SRC_DIR!"
-
-    :: Reassign DEPENDENCIES_SRC_DIR to the shortened DEPENDENCIES_SRC_DIR_SHORT_PATH
-    echo "Reassign !DEPENDENCIES_SRC_DIR! to the shortened !DEPENDENCIES_SRC_DIR_SHORT_PATH!"
-    set "DEPENDENCIES_SRC_DIR=!DEPENDENCIES_SRC_DIR_SHORT_PATH!"
-    echo "DEPENDENCIES_SRC_DIR is now: !DEPENDENCIES_SRC_DIR!:"
-
-    if not exist "!DEPENDENCIES_SRC_DIR!" (
-        echo "Warning DEPENDENCIES_SRC_DIR (!DEPENDENCIES_SRC_DIR!) does not exist "
-    ) else (
-        echo "Contents of !DEPENDENCIES_SRC_DIR!:"
-        dir !DEPENDENCIES_SRC_DIR!
-    )
-)
-
-:: Where to build if the need be
-if not defined DEPENDENCIES_BUILD_DIR if !BUILD_DEPENDENCIES!=="yes" (
-    set "DEPENDENCIES_BUILD_DIR=!LINK_PKG_PATH!\tpbuild"
-)
-
-:: Default install directory for installation and/or consumption
-if not defined DEPENDENCIES_INSTALL_DIR if defined DEPENDENCIES_SRC_DIR (
-    set "DEPENDENCIES_INSTALL_DIR=!DEPENDENCIES_SRC_DIR!\install"
 )
 
 rem Display parsed arguments
 echo Version: !RS_VERSION!
 echo Build Type: !RS_BUILD_TYPE!
-echo Build Dependencies: !BUILD_DEPENDENCIES!
-echo Dependencies Source: !DEPENDENCIES_SRC_DIR!
-echo Dependencies Build: !DEPENDENCIES_BUILD_DIR!
 echo Dependencies Install: !DEPENDENCIES_INSTALL_DIR!
 
 rem Visual Studio environment settings
@@ -187,21 +133,33 @@ set "MSBUILD_BIN_DIR=!VS_PATH!\MSBuild\Current\Bin\amd64"
 set "VS170COMNTOOLS=!VS_PATH!\Common7\Tools"
 
 rem Find the latest Wix, used for creating MSI
-for /d %%D in ("C:\Program Files (x86)\WiX Toolset*") do (
-    rem Extract the version number
-    for /f "tokens=1-2 delims=. " %%A in ("%%~nD") do (
-        if "%%A"=="WiX" (
-            set CURRENT_VERSION=%%B
-            rem Compare versions numerically
-            if !CURRENT_VERSION! GTR !HIGHEST_VERSION! (
-                set HIGHEST_VERSION=!CURRENT_VERSION!
-                set HIGHEST_PATH=%%D
+set "WIX_HIGHEST_VERSION=0"
+set "WIX_HIGHEST_PATH="
+
+rem Search both Program Files (x86) and Program Files
+for %%R in ("C:\Program Files (x86)","C:\Program Files") do (
+    for /d %%D in ("%%~R\WiX Toolset*") do (
+        rem Extract the version number from the folder name
+        for /f "tokens=1-2 delims=. " %%A in ("%%~nD") do (
+            if /i "%%A"=="WiX" (
+                set "WIX_CURRENT_VERSION=%%B"
+                rem Compare versions numerically
+                if !WIX_CURRENT_VERSION! GTR !WIX_HIGHEST_VERSION! (
+                    set "WIX_HIGHEST_VERSION=!WIX_CURRENT_VERSION!"
+                    set "WIX_HIGHEST_PATH=%%D"
+                )
             )
         )
     )
 )
-echo Highest WiX version path: !HIGHEST_PATH!
-set "WIX_BIN_DIR=!HIGHEST_PATH!\bin"
+
+if defined WIX_HIGHEST_PATH (
+    echo Highest WiX version path: !WIX_HIGHEST_PATH!
+    set "WIX_BIN_DIR=!WIX_HIGHEST_PATH!\bin"
+) else (
+    echo Error: No WiX Toolset installation found under Program Files.
+    exit /b 1
+)
 
 rem Ensure that the directories and executables exist
 if not exist "!CMAKE_BIN_DIR!\cmake.exe" (
@@ -235,17 +193,6 @@ rem Process package version
 
 if not "!RS_VERSION!"=="" (
     set "CMAKE_ARGS_ODBC_VERSION=-DODBC_VERSION=!RS_VERSION!"
-)
-
-REM A separate python based script for building dependencies is provided.
-REM You may use it separately or call it within this batch script.
-REM Eitherway, we put this clause as a placeholder to invoke the python script
-REM from builddeps.bat. You are welcome to replace builddeps.bat with scripts\builddeps.py
-if "!BUILD_DEPENDENCIES!"=="yes" (
-    if exist "builddeps.bat" (
-        echo "=== Building dependencies ====="
-        call builddeps.bat
-    )    
 )
 
 rem Load environment variables from exports files if they exist
@@ -393,18 +340,11 @@ echo.
 echo Options:
 echo   --version=X.X.X.X               Set the version number (optional)
 echo   --build-type=TYPE               Set the build type (default: Release)
-echo   --build-dependencies=BOOL       Build dependencies (default: no)
-echo   --dependencies-src-dir=PATH         Set the dependencies source path
-echo                                   (default: %%RS_ROOT_DIR%%\tp)
-echo   --dependencies-build-dir=PATH   Dependency build directory
-echo                                   (default: %%DEPENDENCIES_BUILD_DIR%%)
 echo   --dependencies-install-dir=PATH Path to store and/or use dependency libraries 
 echo.
 echo   /?, -h, --help            Show this help message
 echo.
 echo Examples:
 echo   %~nx0 --version=1.1.1.1 --build-type=Debug
-echo   %~nx0 --build-dependencies=yes --dependencies-src-dir=%%CD%%\tp
-echo   %~nx0 --build-dependencies=yes --dependencies-src-dir=%%CD%%\tp --dependencies-build-dir=%%CD%%\tpbuild
-echo   %~nx0 --build-dependencies=no --dependencies-install-dir=%%CD%%\tp\install
+echo   %~nx0 --dependencies-install-dir=%%CD%%\tp\install
 exit /b 0

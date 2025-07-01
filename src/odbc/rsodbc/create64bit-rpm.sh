@@ -5,6 +5,7 @@
 odbc_version=$1
 svn_rev=$2
 arch_name=$3
+echo "create64bit-rpm.sh: odbc_version=$odbc_version, svn_rev=$svn_rev, arch_name=$arch_name"
 
 echo "RS_ROOT_DIR=${RS_ROOT_DIR}"
 INSTALL_DIR=${INSTALL_DIR:="${RS_ROOT_DIR}/cmake-build/install/"}

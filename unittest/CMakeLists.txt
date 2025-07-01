@@ -31,6 +31,9 @@ target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/pg
 target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/pgclient/src/include)
 target_compile_definitions_rsodbc(${EXECUTABLE_NAME})
 
-add_test(NAME ${TEST_NAME} COMMAND "${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE_NAME}")
+add_test(NAME ${TEST_NAME} COMMAND "${EXECUTABLE_NAME}")
 
 post_build_copy_dependency_files(${EXECUTABLE_NAME} ${CMAKE_CURRENT_BINARY_DIR})
+
+install(TARGETS ${EXECUTABLE_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/unittest")
+install(TARGETS rsodbc64-test DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/unittest")

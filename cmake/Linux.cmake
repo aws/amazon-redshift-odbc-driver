@@ -179,8 +179,8 @@ function(get_rsodbc_deps rsodbc_deps)
       nghttp2
       cares
       z
-      krb5
       gssapi_krb5
+      krb5
       k5crypto
       krb5support
       com_err
