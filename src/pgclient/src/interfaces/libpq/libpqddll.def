@@ -88,7 +88,6 @@ EXPORTS
     PQsetClientEncoding       @ 85
     PQsetnonblocking          @ 86
     PQfreeNotify              @ 87
-    PQescapeString            @ 88
     PQescapeBytea             @ 89
     printfPQExpBuffer         @ 90
     appendPQExpBuffer         @ 91
@@ -126,7 +125,6 @@ EXPORTS
     lo_create                 @ 123
     PQinitSSL                 @ 124
     PQregisterThreadLock      @ 125
-    PQescapeStringConn        @ 126
     PQescapeByteaConn         @ 127
     PQencryptPassword         @ 128
     PQisthreadsafe            @ 129
@@ -154,8 +152,6 @@ EXPORTS
     PQfireResultCreateEvents  @ 151
     PQconninfoParse           @ 152
     PQinitOpenSSL             @ 153
-    PQescapeLiteral           @ 154
-    PQescapeIdentifier        @ 155
     PQconnectdbParams         @ 156
     PQconnectStartParams      @ 157
     PQping                    @ 158

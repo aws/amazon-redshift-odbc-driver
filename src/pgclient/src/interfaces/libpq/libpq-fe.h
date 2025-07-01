@@ -535,12 +535,6 @@ extern int	PQsetResultAttrs(PGresult *res, int numAttributes, PGresAttDesc *attD
 extern void *PQresultAlloc(PGresult *res, size_t nBytes);
 extern int	PQsetvalue(PGresult *res, int tup_num, int field_num, char *value, int len);
 
-/* Quoting strings before inclusion in queries. */
-extern size_t PQescapeStringConn(PGconn *conn,
-				   char *to, const char *from, size_t length,
-				   int *error);
-extern char *PQescapeLiteral(PGconn *conn, const char *str, size_t len);
-extern char *PQescapeIdentifier(PGconn *conn, const char *str, size_t len);
 extern unsigned char *PQescapeByteaConn(PGconn *conn,
 				  const unsigned char *from, size_t from_length,
 				  size_t *to_length);
@@ -548,7 +542,6 @@ extern unsigned char *PQunescapeBytea(const unsigned char *strtext,
 				size_t *retbuflen);
 
 /* These forms are deprecated! */
-extern size_t PQescapeString(char *to, const char *from, size_t length);
 extern unsigned char *PQescapeBytea(const unsigned char *from, size_t from_length,
 			  size_t *to_length);
 

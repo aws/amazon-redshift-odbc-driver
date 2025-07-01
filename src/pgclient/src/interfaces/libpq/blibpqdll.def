@@ -88,7 +88,6 @@ EXPORTS
     _PQsetClientEncoding       @ 85
     _PQsetnonblocking          @ 86
     _PQfreeNotify              @ 87
-    _PQescapeString            @ 88
     _PQescapeBytea             @ 89
     _printfPQExpBuffer         @ 90
     _appendPQExpBuffer         @ 91
@@ -126,7 +125,6 @@ EXPORTS
     _lo_create                 @ 123
     _PQinitSSL                 @ 124
     _PQregisterThreadLock      @ 125
-    _PQescapeStringConn        @ 126
     _PQescapeByteaConn         @ 127
     _PQencryptPassword         @ 128
     _PQisthreadsafe            @ 129
@@ -154,8 +152,6 @@ EXPORTS
     _PQfireResultCreateEvents  @ 151
     _PQconninfoParse           @ 152
     _PQinitOpenSSL             @ 153
-    _PQescapeLiteral           @ 154
-    _PQescapeIdentifier        @ 155
     _PQconnectdbParams         @ 156
     _PQconnectStartParams      @ 157
     _PQping                    @ 158
@@ -250,7 +246,6 @@ EXPORTS
     PQsetClientEncoding       = _PQsetClientEncoding
     PQsetnonblocking          = _PQsetnonblocking
     PQfreeNotify              = _PQfreeNotify
-    PQescapeString            = _PQescapeString
     PQescapeBytea             = _PQescapeBytea
     printfPQExpBuffer         = _printfPQExpBuffer
     appendPQExpBuffer         = _appendPQExpBuffer
@@ -288,7 +283,6 @@ EXPORTS
     lo_create                 = _lo_create
     PQinitSSL                 = _PQinitSSL
     PQregisterThreadLock      = _PQregisterThreadLock
-    PQescapeStringConn        = _PQescapeStringConn
     PQescapeByteaConn         = _PQescapeByteaConn
     PQencryptPassword         = _PQencryptPassword
     PQisthreadsafe            = _PQisthreadsafe
@@ -316,8 +310,6 @@ EXPORTS
     PQfireResultCreateEvents  = _PQfireResultCreateEvents
     PQconninfoParse           = _PQconninfoParse
     PQinitOpenSSL             = _PQinitOpenSSL
-    PQescapeLiteral           = _PQescapeLiteral
-    PQescapeIdentifier        = _PQescapeIdentifier
     PQconnectdbParams         = _PQconnectdbParams
     PQconnectStartParams      = _PQconnectStartParams
     PQping                    = _PQping
