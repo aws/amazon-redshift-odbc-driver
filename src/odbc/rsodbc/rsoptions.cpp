@@ -980,12 +980,12 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
 
             pConnAttr->iAccessMode = iVal;
 
-			if (pConn->iStatus == RS_OPEN_CONNECTION
-					&& iVal == SQL_MODE_READ_ONLY)
-			{
-				// Set readonly mode
-				rc = onConnectExecute(pConn, "SET READONLY=1");
-			}
+            if (pConn->iStatus == RS_OPEN_CONNECTION) {
+                const std::string query = (iVal == SQL_MODE_READ_ONLY)
+                                              ? "SET READONLY=1"
+                                              : "SET READONLY=0";
+                rc = onConnectExecute(pConn, (char *)query.c_str());
+            }
 
             break;
         }
