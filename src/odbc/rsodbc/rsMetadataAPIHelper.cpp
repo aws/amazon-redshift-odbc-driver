@@ -230,11 +230,18 @@ const std::unordered_map<std::string, DATA_TYPE_INFO>
         {"geography",
          {SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, "geography"}},
         {"hllsketch",
-         {SQL_UNKNOWN_TYPE, SQL_UNKNOWN_TYPE, kNotApplicable, "hllsketch"}}};
+         {SQL_UNKNOWN_TYPE, SQL_UNKNOWN_TYPE, kNotApplicable, "hllsketch"}},
+        
+         // Additional Glue data type
+        {"binary", {SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, "binary"}},
+        {"string", {SQL_VARCHAR, SQL_VARCHAR, kNotApplicable, "string"}},
+    };
 
 const std::unordered_map<std::string, DATA_TYPE_INFO> RsMetadataAPIHelper::getTypeInfoMap() { return RsMetadataAPIHelper::typeInfoMap;}
 const RsMetadataAPIHelper::DataTypeName RsMetadataAPIHelper::getDataTypeNameStruct(){ return RsMetadataAPIHelper::DataTypeName();}
 const RsMetadataAPIHelper::RedshiftTypeName RsMetadataAPIHelper::getRedshiftTypeNameStruct(){ return RsMetadataAPIHelper::RedshiftTypeName();}
+
+const std::regex RsMetadataAPIHelper::glueSuperTypeRegex("(array|map|struct).*");
 
 //
 // Define the column size for different data type defined in ODBC spec:
@@ -291,10 +298,12 @@ int RsMetadataAPIHelper::getColumnSize(const std::string &rsType,
     } else {
         if (rsType == "numeric") {
             return numeric_precision;
-        } else if (rsType == "char" || rsType == "varchar") {
+        } else if (rsType == "char" || rsType == "varchar" || rsType == "string") {
             return character_maximum_length;
         } else if (rsType == "super" || rsType == "geometry" ||
-                   rsType == "geography") {
+                   rsType == "geography" || rsType == "varbyte" || rsType == "binary") {
+            return kNotApplicable;
+        } else if (std::regex_match(rsType, RsMetadataAPIHelper::glueSuperTypeRegex)){
             return kNotApplicable;
         } else {
             return kUnknownColumnSize;
@@ -318,11 +327,13 @@ int RsMetadataAPIHelper::getBufferLen(const std::string &rsType,
             // significant digits of precision are stored internally as 16-byte
             // integer
             return numeric_precision <= 19 ? 8 : 16;
-        } else if (rsType == "char" || rsType == "varchar") {
+        } else if (rsType == "char" || rsType == "varchar" || rsType == "string") {
             return character_maximum_length;
         } else if (rsType == "super" || rsType == "geometry" ||
                    rsType == "geography" || rsType == "varbyte" ||
-                   rsType == "hllsketch") {
+                   rsType == "hllsketch" || rsType == "binary") {
+            return kNotApplicable;
+        } else if (std::regex_match(rsType, RsMetadataAPIHelper::glueSuperTypeRegex)){
             return kNotApplicable;
         } else {
             return kUnknownColumnSize;

@@ -21,6 +21,7 @@
 #include "rstrace.h"
 #include "rsunicode.h"
 #include "rsutil.h"
+#include <regex>
 
 // Define constant for SQLTables
 // Spec:
