@@ -1,6 +1,18 @@
 Changelog
 =========
 
+v2.1.8 (2025-07-01)
+---------------------
+1. Added support to change the connection to read-write using mode SQL_ATTR_ACCESS_MODE after the connection was established.
+2. Fixed the return data type for Date/Time columns in SQLColumns API to match the configured ODBC version set via SQL_ATTR_ODBC_VERSION.
+3. Fixed incorrect streaming cursor state handling after SQLTables API catalog list retrieval. 
+4. Fixed an issue where the driver incorrectly treated NULL parameters as empty strings in SQLTables when using SQL_ALL_CATALOGS, which caused it to return a catalog list instead of the expected table list.
+5. Removed legacy code containing unused libpq quoting functions.
+6. Resolved build issues when compiling the Windows driver from GitHub source code.
+7. Added support for all Glue Data type in the SQLColumns metadata API, enabling accurate column type information retrieval from AWS Glue catalogs.
+8. Enhanced the ODBC driver's data retrieval functionality by implementing proper offset tracking and buffer management through SQLGetData API to correctly handle large data sets retrieved in chunks, ensuring sequential data access rather than repeated retrieval of initial data segments.
+9. Fixed a memory leak issue that occurred when initializing result set fields in SQLTables and SQLColumns API calls.
+
 v2.1.7 (2025-03-06)
 ---------------------
 1. Fixed an issue with batch insertion parameters where SQL_ATTR_PARAMSET_SIZE updates were not being properly applied between SQLPrepare and SQLExecute calls.

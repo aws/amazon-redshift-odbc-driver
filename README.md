@@ -11,49 +11,65 @@ The driver has many Redshift specific features such as,
 
 Amazon Redshift provides 64-bit ODBC drivers for Linux, and Windows operating systems. 
 
+
+## Download Driver
+You can download the latest release of Redshift ODBC drivers from AWS Redshift documentation links below:
+
+Windows: https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install-win.html
+
+Linux: https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install-linux.html
+
 ## Build Driver
+Amazon Redshift recommends downloading and using the prebuilt driver installer from [AWS Redshift documentation](https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install-win.html) for the best experience.
+
+If you choose to build from source, please note that the Redshift ODBC driver does not include pre-built binaries or complementary build script for building driver dependencies.
+Building Redshift ODBC driver from source requires pre-built binaries for following dependencies:
+* OpenSSL 1.1.1x latest version (requires OpenSSL Premium support)
+* AWS SDK for CPP
+* C-ares
+* GoogleTest
+* Curl (Linux only)
+
 ### Prerequisites
+#### Common:
 * https://git-lfs.com/ (for correctly cloning this repository)
-* Visual Stuido 2022 Community Edition (For Windows)
-* gcc (For Linux)
-* cmake >= 3.20 (For Linux)
-* Dependencies: To see a list of Linux dependencies, please look into src/odbc/rsodbc/CMakeLists.txt (windows: Dependencies are already included).
+* CMake >= 3.20
 
-### Build Artifacts
-On Windows system run:
-```
-build64.bat n.n.n n 
-e.g. build64.bat 2.0.1 0
+#### Linux:
+* gcc
 
-```
-It builds **rsodbc.dll** file under **src\odbc\rsodbc\x64\Release** directory. 
+#### Windows:
+* Wix 3.14
+* Build Tools for Visual Studio
 
+### Build Steps
+For Building on Windows:
+1. Ensure Cmake (3.20+), Wix 3.14 and Build Tools for Visual Studio 2022 are installed on your Machine and added to system PATH.
+2. Build above mentioned platform specific dependencies and keep their pre-built binaries in a specific directory. This directory path is later required for `dependencies-install-dir` option while building the driver.
+3. Cd to cloned `amazon-redshift-odbc-driver` package home and build the driver using following command:
+> .\build64.bat --dependencies-install-dir=absolute-path-to-dependencies-installation-directory
 
-export DEPENDENCY_DIR=
-Ensure proper dependencies are provided on Unix systems by configuring the dependency variable: Set the `DEPENDENCY_DIR` variable in the `exports_basic.sh`` file. For further details, consult the `BUILD.CMAKE.md` file.
-Then run:
-```
-build64.sh n.n.n n
-e.g. build64.sh 2.0.1 0
-```
+Optionally you can also provide the desired driver version number in the build command. It outputs the installer MSI under `amazon-redshift-odbc-driver\src\odbc\rsodbc\install\` directory. You can find the built `rsodbc64.dll` in `cmake-build/install/lib/` directory.
 
-It builds **librsodbc64.so** file under **src/odbc/rsodbc/Release** directory. 
+For building on Linux:
+1. Build above mentioned platform specific dependencies and keep their pre-built binaries in a specific directory.
+2. Export `DEPENDENCY_DIR=absolute-path-to-dependencies-installation-directory` or set the `DEPENDENCY_DIR` variable in the `exports_basic.sh` file. For more details, refer `BUILD.CMAKE.md`. 
+3. Cd to cloned `amazon-redshift-odbc-driver` package home and build the driver using following command:
+> build64.sh n.n.n n
+
+e.g. build64.sh 2.1.8 0
+
+It builds `librsodbc64.so` file under `src/odbc/rsodbc/Release` directory.
 
 ### Installation and Configuration of Driver
 
 Driver Name: Amazon Redshift ODBC Driver (x64)
 
 Default Installation Directory:
-* C:\Program Files\Amazon Redshift ODBC Driver x64\ (For Windows)
-* /opt/amazon/redshiftodbcx64/ (For Linux)
+* Windows: `C:\Program Files\Amazon Redshift ODBC Driver x64\`
+* Linux: `/opt/amazon/redshiftodbcx64/`
 
 See [Amazon Redshift ODBC Driver Installation and Configuration Guide](https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install.html) for more information.
-
-Here are download links for the latest release:
-* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.1.7.0/AmazonRedshiftODBC64-2.1.7.0.msi (For Windows)
-* https://s3.amazonaws.com/redshift-downloads/drivers/odbc/2.1.7.0/AmazonRedshiftODBC-64-bit-2.1.7.0.x86_64.rpm (For Linux)
-
-⚠️ ODBC Driver version 2.1.5 has been recalled. ODBC Driver version 2.1.7 is recommended for use instead.
 
 ## Report Bugs
 
