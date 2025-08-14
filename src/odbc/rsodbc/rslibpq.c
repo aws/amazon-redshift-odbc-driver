@@ -853,7 +853,7 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
             long lParamsToBind = (pAPDDescHeader.lArraySize <= 0) ? 1 : pAPDDescHeader.lArraySize;
             long lParamProcessed = 0;
             int  iArrayBinding = (lParamsToBind > 1);
-            SQLLEN  iBindOffset = (pAPDDescHeader.plBindOffsetPtr) ? *(pAPDDescHeader.plBindOffsetPtr) : 0;
+            int  iBindOffset = (pAPDDescHeader.plBindOffsetPtr) ?  *((int*)pAPDDescHeader.plBindOffsetPtr) : 0;
             int  iMultiInsert = pStmt->iMultiInsert;
             int  iLastBatchMultiInsert = pStmt->iLastBatchMultiInsert;
             int  iOffset = 0;
@@ -925,7 +925,8 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
 
                         for(iBindParam = 0; iBindParam < iNumBindParams; iBindParam++)
                         {
-                            int iValOffset = 0;
+                            // iValOffset is a stride = how many bytes to jump to reach the next row’s data or indicator.
+                            SQLLEN iValOffset = 0;
 
                             pDescRec = findDescRec(pStmt->pStmtAttr->pAPD, iBindParam + 1);
                             pIPDRec  = findDescRec(pStmt->pIPD, iBindParam + 1);
@@ -937,24 +938,24 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                                 goto error;
                             }
 
-                            if(iArrayBinding)
-                            {
-                                if(pAPDDescHeader.lBindType == SQL_BIND_BY_COLUMN)
-                                {
+                            if (iArrayBinding) {
+                                if (pAPDDescHeader.lBindType == SQL_BIND_BY_COLUMN) {
                                     // Column wise binding
+                                    // If you are in column‑wise binding, iValOffset is handled per column (iOctetLen) which is the column size.
                                     iValOffset = pDescRec->iOctetLen;
-
-                                    if(!iValOffset)
-                                    {
-                                        rc = SQL_ERROR;
-                                        addError(&pStmt->pErrorList,"HY000", "Array element length is zero.", 0, NULL);
-                                        goto error;
-                                    }
                                 }
-                                else
-                                {
+                                else {
                                     // Row wise binding
-                                    iValOffset = pAPDDescHeader.lBindType;
+                                    // If you are in row‑wise binding, lBindType is set to the size of your row structure 
+                                    iValOffset = pAPDDescHeader.lBindType;   // how far to jump to get to next row
+                                }
+                                
+                                if (iValOffset <= 0) {
+                                    rc = SQL_ERROR;
+                                    std::string err = "Invalid Array element length :" + std::to_string(iValOffset);
+                                    RS_LOG_ERROR("rslibpq", err.data());
+                                    addError(&pStmt->pErrorList, "HY000", err.data(), 0, NULL);
+                                    goto error;
                                 }
                             }
 
@@ -966,6 +967,7 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                             }
                             else
                             {
+                                // -------- VALUE POINTER --------
                                 char *pParamData = NULL;
                                 if (pDescRec->pDataAtExec) {
                                     pParamData = pDescRec->pDataAtExec->pValue;
@@ -976,27 +978,29 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                                         pParamData = NULL;
                                     }
                                 }
-                                int iParamDataLen = 0;
+                                // -------- DATA LENGTH --------
+                                SQLLEN iParamDataLen = 0;
                                 if (pDescRec->pDataAtExec) {
                                     iParamDataLen = pDescRec->pDataAtExec->cbLen;
                                 } else {//pcbLenInd
                                     iParamDataLen = pDescRec->cbLen;
                                 }
+                                // -------- INDICATOR POINTER --------
                                 SQLLEN *plParamDataStrLenInd = NULL;
                                 if (pDescRec->pDataAtExec) {
                                     plParamDataStrLenInd = (SQLLEN *)(void *)(&(
                                         pDescRec->pDataAtExec->cbLen));
-                                } else {
-                                    if (pDescRec->pcbLenInd) {
-                                        plParamDataStrLenInd =
-                                            (SQLLEN *)(void *)(pDescRec
-                                                                   ->pcbLenInd +
-                                                               lParamProcessed);
-                                    } else {
-
-                                        plParamDataStrLenInd = NULL;
+                                } else if (pDescRec->pcbLenInd) {
+                                    if (pAPDDescHeader.lBindType == SQL_BIND_BY_COLUMN) {
+                                        plParamDataStrLenInd = (SQLLEN *)(pDescRec->pcbLenInd + lParamProcessed);
+                                    }
+                                    else {
+                                        plParamDataStrLenInd = (SQLLEN *)((char *)pDescRec->pcbLenInd +
+                                                                        iBindOffset +
+                                                                        (lParamProcessed * iValOffset));
                                     }
                                 }
+                                // -------- CONVERT --------
                                 short hPrepSQLType;
                                 if (pIPDRec && pIPDRec->hType != 0) {
                                     hPrepSQLType = pIPDRec->hType;

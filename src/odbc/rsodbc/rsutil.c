@@ -6813,7 +6813,7 @@ void clearBindParamList(RS_STMT_INFO *pStmt)
 //---------------------------------------------------------------------------------------------------------igarish
 // Convert C data into SQL data.
 //
-char *convertCParamDataToSQLData(RS_STMT_INFO *pStmt, char *pParamData, int iParamDataLen, SQLLEN *plParamDataStrLenInd, short hCType, 
+char *convertCParamDataToSQLData(RS_STMT_INFO *pStmt, char *pParamData, SQLLEN iParamDataLen, SQLLEN *plParamDataStrLenInd, short hCType, 
                                   short hSQLType, short hPrepSQLType, RS_BIND_PARAM_STR_BUF *pBindParamStrBuf, int *piConversionError)
 {
     int iConversionError = FALSE;
@@ -7836,9 +7836,9 @@ void printHexSQLWCHR(SQLWCHAR *sqlwchr, int len,
 //---------------------------------------------------------------------------------------------------------igarish
 // Get parameter value as string from C buffer using given C data type.
 //
-char *getParamVal(char *pParamData, int iParamDataLen, SQLLEN *plParamDataStrLenInd, short hCType, RS_BIND_PARAM_STR_BUF *pBindParamStrBuf, short hSQLType)
+char *getParamVal(char *pParamData, SQLLEN iParamDataLen, SQLLEN *plParamDataStrLenInd, short hCType, RS_BIND_PARAM_STR_BUF *pBindParamStrBuf, short hSQLType)
 {
-    int iIndicator = (plParamDataStrLenInd) ? (int) *plParamDataStrLenInd : 0;
+    int iIndicator = int((plParamDataStrLenInd) ? *plParamDataStrLenInd : 0);
     pBindParamStrBuf->iAllocDataLen = 0;
 
     if(pParamData)

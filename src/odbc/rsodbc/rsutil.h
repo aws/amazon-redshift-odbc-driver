@@ -243,9 +243,9 @@ void clearBindColList(RS_DESC_INFO *pARD);
 void clearBindParamList(RS_STMT_INFO *pStmt);
 int countBindParams(RS_DESC_REC *pDescRecHead);
 
-char *getParamVal(char *pParamData, int iParamDataLen, SQLLEN *plParamDataStrLenInd, short hCType, RS_BIND_PARAM_STR_BUF *pBindParamStrBuf, short hSQLType);
+char *getParamVal(char *pParamData, SQLLEN iParamDataLen, SQLLEN *plParamDataStrLenInd, short hCType, RS_BIND_PARAM_STR_BUF *pBindParamStrBuf, short hSQLType);
 short getDefaultCTypeFromSQLType(short hSQLType, int *piConversionError);
-char *convertCParamDataToSQLData(RS_STMT_INFO *pStmt, char *pParamData, int iParamDataLen, SQLLEN *plParamDataStrLenInd, short hCType, 
+char *convertCParamDataToSQLData(RS_STMT_INFO *pStmt, char *pParamData, SQLLEN iParamDataLen, SQLLEN *plParamDataStrLenInd, short hCType, 
                                   short hSQLType, short hPrepSQLType, RS_BIND_PARAM_STR_BUF *pBindParamStrBuf, int *piConversionError);
 
 
