@@ -1,6 +1,10 @@
 Changelog
 =========
 
+v2.1.9 (2025-08-14)
+---------------------
+1. Fixed row-wise parameter binding in SQLBindParameter by implementing correct length indicator pointer and stride calculations.
+
 v2.1.8 (2025-07-01)
 ---------------------
 1. Added support to change the connection to read-write using mode SQL_ATTR_ACCESS_MODE after the connection was established.
