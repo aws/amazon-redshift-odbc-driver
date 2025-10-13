@@ -231,9 +231,6 @@ class RS_STMT_ATTR_INFO;
 
 class RS_DATA_AT_EXEC;
 class RS_EXEC_THREAD_INFO;
-class RS_COPY_CMD_INFO;
-class RS_UNLOAD_CMD_INFO;
-
 // Data structures
 struct _RS_DESC_REC; // Array of it
 struct _RS_STR_BUF;
@@ -472,9 +469,6 @@ class RS_STMT_INFO
 
       pExecThread = NULL;
       pCscStatementContext = NULL;
-      pCopyCmd = NULL;
-      pUnloadCmd = NULL;
-
       iMultiInsert = 0;
       iLastBatchMultiInsert = 0;
       pszLastBatchMultiInsertCmd = NULL;
@@ -538,12 +532,6 @@ class RS_STMT_INFO
 
     // Statement context for CSC in libpq
     struct _CscStatementContext *pCscStatementContext;
-
-    // COPY command info
-    RS_COPY_CMD_INFO *pCopyCmd;
-
-    // UNLOAD command info
-    RS_UNLOAD_CMD_INFO *pUnloadCmd;
 
     // > 0 means INSERT converted to multi INSERT. It shows mutlipier factor.
     int iMultiInsert;
@@ -1644,61 +1632,6 @@ public:
     int iExecFromParamData;
 };
 
-/*
- * COPY FROM STDIN | COPY FROM CLIENT 'local file name' command info.
- */
-class RS_COPY_CMD_INFO
-{
-public:
-// SQLPutData length indicate that COPY call for FILE STREAM
-#define COPY_BUF_AS_FILE_STREAM (-99)
-
-// COPY buffer size
-#define COPY_BUF_SIZE    (16 * 1024) 
-
-// COPY command type
-#define COPY_STDIN  1
-#define COPY_CLIENT 2
-
-    int iCopyCmdType;       // Is it STDIN or CLIENT COPY command
-    char *pszLocalFileName; // Local file name for COPY CLIENT
-
-// COPY status type
-#define COPY_NOT_STARTED 0
-#define COPY_IN_BUFFER   1
-#define COPY_IN_STREAM   2
-#define COPY_IN_ENDED    3
-
-    int iCopyStatus; // Indicate status of the COPY
-
-    RS_COPY_CMD_INFO() {
-      iCopyCmdType = 0;
-      pszLocalFileName = NULL;
-      iCopyStatus = 0;
-    }
-};
-
-/*
- * UNLOAD ('select query') TO CLIENT 'local file name' command info.
- */
-class RS_UNLOAD_CMD_INFO
-{
-public:
-    char *pszLocalOutFileName; // Local file name for UNLOAD TO CLIENT
-
-// COPY status type
-#define COPY_OUT_NOT_STARTED 0
-#define COPY_OUT_IN_PROGRESS 1
-#define COPY_OUT_ENDED       2
-
-    int iCopyOutStatus; // Indicate status of the COPY
-
-    RS_UNLOAD_CMD_INFO() {
-      pszLocalOutFileName = NULL;
-      iCopyOutStatus = 0;
-    }
-};
-
 // Golbal var
 extern RS_GLOBAL_VARS gRsGlobalVars;
 
@@ -1759,11 +1692,6 @@ SQLRETURN libpqExecuteDeallocateCommand(RS_STMT_INFO *pStmt, int iLockRequired, 
 void initLibpq(FILE    *fpTrace);
 void uninitLibpq();
 
-SQLRETURN libpqCopyBuffer(RS_STMT_INFO *pStmt, char *pBuffer,int nbytes,int iLockRequired);
-SQLRETURN libpqCopyEnd(RS_STMT_INFO *pStmt,int iLockRequired, char *errorMsg);
-
-SQLRETURN libpqCopyOutBuffer(RS_STMT_INFO *pStmt, char **ppBuffer,int *pnbytes);
-SQLRETURN libpqCopyOutEnd(RS_STMT_INFO *pStmt);
 void *libpqFreemem(void *ptr);
 
 ConnStatusType libpqConnectionStatus(RS_CONN_INFO *pConn);

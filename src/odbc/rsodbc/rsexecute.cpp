@@ -231,11 +231,6 @@ SQLRETURN  SQL_API RsExecute::RS_SQLExecDirect(SQLHSTMT phstmt,
         goto error; 
     }
 
-    // Check for COPY command in current execution
-    rc = checkForCopyExecution(pStmt);
-    if(rc == SQL_ERROR)
-        goto error;
-
     if(executePrepared)
     {
         int iNoOfParams = (pStmt->pPrepareHead) ? getNumberOfParams(pStmt) : getParamMarkerCount(pStmt);
@@ -280,14 +275,6 @@ SQLRETURN  SQL_API RsExecute::RS_SQLExecDirect(SQLHSTMT phstmt,
             {
                 pszCmd = (char *)checkReplaceParamMarkerAndODBCEscapeClause(pStmt, (char *)pCmd, cbLen, pStmt->pCmdBuf, TRUE);
 
-                // Look for COPY command
-                parseForCopyCommand(pStmt, pszCmd, SQL_NTS);
-
-                if(!(pStmt->pCopyCmd))
-                {
-                    // Look for UNLOAD command
-                    parseForUnloadCommand(pStmt, pszCmd, SQL_NTS);
-                }
             }
             else
             {
@@ -306,22 +293,6 @@ SQLRETURN  SQL_API RsExecute::RS_SQLExecDirect(SQLHSTMT phstmt,
         else
         {
             pszCmd = pStmt->pCmdBuf->pBuf;
-
-            // Is it called from SQLExecDirectW
-            if(iSQLExecDirectW)
-            {
-                if(!(pStmt->iMultiInsert))
-                {
-                    // Look for COPY command
-                    parseForCopyCommand(pStmt, pszCmd, SQL_NTS);
-
-                    if(!(pStmt->pCopyCmd))
-                    {
-                        // Look for UNLOAD command
-                        parseForUnloadCommand(pStmt, pszCmd, SQL_NTS);
-                    }
-                }
-            }
         }
     }
     else
@@ -442,86 +413,53 @@ SQLRETURN  SQL_API SQLParamData(SQLHSTMT phstmt, SQLPOINTER *ppValue)
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if(pStmt->pCopyCmd && (pStmt->pCopyCmd->iCopyCmdType == COPY_STDIN))
+    if(ppValue == NULL)
     {
-        int endOfCopy = (ppValue == NULL) || (*ppValue == NULL) || (_stricmp((char *)(*ppValue),"end") == 0);
+        rc = SQL_ERROR;
+        addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
+        goto error; 
+    }
 
-        if(endOfCopy)
+    if(pStmt->pAPDRecDataAtExec)
+    {
+        if(pStmt->pAPDRecDataAtExec->pDataAtExec == NULL)
         {
-            // Copy END 
-            if(pStmt->pCopyCmd->iCopyStatus == COPY_IN_BUFFER)
-            {
-                pStmt->pCopyCmd->iCopyStatus = COPY_IN_ENDED;
-                rc = libpqCopyEnd(pStmt, TRUE, NULL);
-            }
-            else
-            if(pStmt->pCopyCmd->iCopyStatus == COPY_IN_STREAM)
-            {
-                pStmt->pCopyCmd->iCopyStatus = COPY_IN_ENDED;
-            }
-            else
-            {
-                rc = SQL_ERROR;
-                addError(&pStmt->pErrorList,"HY010", "COPY function sequence error", 0, NULL);
-                goto error; 
-            } 
+            *ppValue = pStmt->pAPDRecDataAtExec->pValue;
+            rc = SQL_NEED_DATA;
         }
         else
         {
-            // First call after execute for COPY. unix ODBC DM was giving Function seq. error without it.
-            rc = SQL_NEED_DATA;
-        }
-    }
-    else
-    {
-        if(ppValue == NULL)
-        {
-            rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
-            goto error; 
-        }
-
-        if(pStmt->pAPDRecDataAtExec)
-        {
-            if(pStmt->pAPDRecDataAtExec->pDataAtExec == NULL)
+            // Move to next data-at-exec
+            if(needDataAtExec(pStmt, pStmt->pStmtAttr->pAPD->pDescRecHead,pStmt->lParamProcessedDataAtExec,pStmt->iExecutePreparedDataAtExec))
             {
                 *ppValue = pStmt->pAPDRecDataAtExec->pValue;
                 rc = SQL_NEED_DATA;
             }
             else
             {
-                // Move to next data-at-exec
-                if(needDataAtExec(pStmt, pStmt->pStmtAttr->pAPD->pDescRecHead,pStmt->lParamProcessedDataAtExec,pStmt->iExecutePreparedDataAtExec))
-                {
-                    *ppValue = pStmt->pAPDRecDataAtExec->pValue;
-                    rc = SQL_NEED_DATA;
-                }
-                else
-                {
-                    if(pStmt->pExecThread)
-                        pStmt->pExecThread->iExecFromParamData = 1;
+                if(pStmt->pExecThread)
+                    pStmt->pExecThread->iExecFromParamData = 1;
 
-                    // If all data-at-exec done then execute it.
-                    rc = libpqExecuteDirectOrPrepared(pStmt, pStmt->pszCmdDataAtExec, pStmt->iExecutePreparedDataAtExec);
+                // If all data-at-exec done then execute it.
+                rc = libpqExecuteDirectOrPrepared(pStmt, pStmt->pszCmdDataAtExec, pStmt->iExecutePreparedDataAtExec);
 
-                    if(rc != SQL_STILL_EXECUTING)
-                        resetAndReleaseDataAtExec(pStmt);
+                if(rc != SQL_STILL_EXECUTING)
+                    resetAndReleaseDataAtExec(pStmt);
 
-                    if(rc == SQL_ERROR)
-                        goto error;
+                if(rc == SQL_ERROR)
+                    goto error;
 
-                    pStmt->iStatus =  RS_EXECUTE_STMT;
+                pStmt->iStatus =  RS_EXECUTE_STMT;
 
-                }
             }
         }
-        else
-        {
-            rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HY010", "Function sequence error", 0, NULL);
-            goto error; 
-        }
-    } // !COPY
+    }
+    else
+    {
+        rc = SQL_ERROR;
+        addError(&pStmt->pErrorList,"HY010", "Function sequence error", 0, NULL);
+        goto error; 
+    }
 
 error:
 
@@ -567,52 +505,20 @@ SQLRETURN  SQL_API SQLPutData(SQLHSTMT phstmt,
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    // Is it for COPY FROM STDIN?
-    if(pStmt->pCopyCmd && (pStmt->pCopyCmd->iCopyCmdType == COPY_STDIN))
+    if(pStmt->pAPDRecDataAtExec)
     {
-        // Copy buffer if pData != NULL && cbLen > 0
-        if(pData && (cbLen != COPY_BUF_AS_FILE_STREAM))
-        {
-            cbLen = (INT_LEN(cbLen) == SQL_NTS) ? strlen((char *)pData) : cbLen;
-        }
+        RS_DESC_REC *pDescRec = pStmt->pAPDRecDataAtExec;
 
-        if(pData && (cbLen > 0))
-        {
-            // COPY buffer
-            pStmt->pCopyCmd->iCopyStatus = COPY_IN_BUFFER;
-            rc = libpqCopyBuffer(pStmt, (char *)pData, (int)cbLen, TRUE);
-        }
+        if(pDescRec->pDataAtExec == NULL)
+            pDescRec->pDataAtExec = allocateAndSetDataAtExec((char *)pData, (long) cbLen);
         else
-        if(pData && (cbLen == COPY_BUF_AS_FILE_STREAM))
-        {
-            // Copy as File stream if pData != NULL && cbLen == -99.
-            pStmt->pCopyCmd->iCopyStatus = COPY_IN_STREAM;
-            rc = copyFromLocalFile(pStmt,(FILE *)pData, TRUE);
-        }
-        else
-        {
-            rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HY010", "Invalid buffer pointer or buffer length for COPY", 0, NULL);
-            goto error; 
-        }
+            pDescRec->pDataAtExec = appendDataAtExec(pDescRec->pDataAtExec, (char *)pData, (long) cbLen);
     }
     else
     {
-        if(pStmt->pAPDRecDataAtExec)
-        {
-            RS_DESC_REC *pDescRec = pStmt->pAPDRecDataAtExec;
-
-            if(pDescRec->pDataAtExec == NULL)
-                pDescRec->pDataAtExec = allocateAndSetDataAtExec((char *)pData, (long) cbLen);
-            else
-                pDescRec->pDataAtExec = appendDataAtExec(pDescRec->pDataAtExec, (char *)pData, (long) cbLen);
-        }
-        else
-        {
-            rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HY010", "Function sequence error", 0, NULL);
-            goto error; 
-        }
+        rc = SQL_ERROR;
+        addError(&pStmt->pErrorList,"HY010", "Function sequence error", 0, NULL);
+        goto error; 
     }
 
 error:

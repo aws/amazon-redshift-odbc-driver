@@ -235,10 +235,7 @@ typedef enum
 {
 	PGASYNC_IDLE,				/* nothing's happening, dude */
 	PGASYNC_BUSY,				/* query in progress */
-	PGASYNC_READY,				/* result ready for PQgetResult */
-	PGASYNC_COPY_IN,			/* Copy In data transfer in progress */
-	PGASYNC_COPY_OUT,			/* Copy Out data transfer in progress */
-	PGASYNC_COPY_BOTH			/* Copy In/Out data transfer in progress */
+	PGASYNC_READY				/* result ready for PQgetResult */
 } PGAsyncStatusType;
 
 /* PGQueryClass tracks which query protocol we are now executing */
@@ -361,9 +358,6 @@ struct pg_conn
 	bool		options_valid;	/* true if OK to attempt connection */
 	bool		nonblocking;	/* whether this connection is using nonblock
 								 * sending semantics */
-	char		copy_is_binary; /* 1 = copy binary, 0 = copy text */
-	int			copy_already_done;		/* # bytes already returned in COPY
-										 * OUT */
 	PGnotify   *notifyHead;		/* oldest unreported Notify msg */
 	PGnotify   *notifyTail;		/* newest unreported Notify msg */
 
@@ -601,10 +595,6 @@ extern PostgresPollingStatusType pqSetenvPoll(PGconn *conn);
 extern char *pqBuildStartupPacket2(PGconn *conn, int *packetlen,
 					  const PQEnvironmentOption *options);
 extern void pqParseInput2(PGconn *conn);
-extern int	pqGetCopyData2(PGconn *conn, char **buffer, int async);
-extern int	pqGetline2(PGconn *conn, char *s, int maxlen);
-extern int	pqGetlineAsync2(PGconn *conn, char *buffer, int bufsize);
-extern int	pqEndcopy2(PGconn *conn);
 extern PGresult *pqFunctionCall2(PGconn *conn, Oid fnid,
 				int *result_buf, int *actual_result_len,
 				int result_is_int,
@@ -618,10 +608,6 @@ extern void pqParseInput3(PGconn *conn);
 extern void _pqParseInput3(void *_pCscStatementContext, int *piStop); // IHG
 
 extern int	pqGetErrorNotice3(PGconn *conn, bool isError);
-extern int	pqGetCopyData3(PGconn *conn, char **buffer, int async);
-extern int	pqGetline3(PGconn *conn, char *s, int maxlen);
-extern int	pqGetlineAsync3(PGconn *conn, char *buffer, int bufsize);
-extern int	pqEndcopy3(PGconn *conn);
 extern PGresult *pqFunctionCall3(PGconn *conn, Oid fnid,
 				int *result_buf, int *actual_result_len,
 				int result_is_int,

@@ -1275,18 +1275,6 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
         }
     }
 
-    if(pStmt->pCopyCmd)
-    {
-        // Was it COPY command with STDIN or CLIENT?
-        rc = checkAndHandleCopyStdinOrClient(pStmt,rc,FALSE);
-    }
-    else
-    if(pStmt->pUnloadCmd)
-    {
-        // Was it UNLOAD command with CLIENT?
-        rc = checkAndHandleCopyOutClient(pStmt,rc);
-    }
-
     if(iBeginCommand)
     {
         if(pConn->pConnAttr->iAutoCommit != SQL_AUTOCOMMIT_OFF 
@@ -1763,10 +1751,7 @@ SQLRETURN libpqPrepareOnThread(RS_STMT_INFO *pStmt, char *pszCmd)
         // Multi prepare loop
         do
         {
-            if(!(pqRc == PGRES_COMMAND_OK
-                    || pqRc == PGRES_TUPLES_OK
-                    || pqRc == PGRES_COPY_IN
-                    || pqRc == PGRES_COPY_OUT))
+            if (!(pqRc == PGRES_COMMAND_OK || pqRc == PGRES_TUPLES_OK))
             {
                 char *pError = libpqErrorMsg(pConn);
 
@@ -1782,8 +1767,7 @@ SQLRETURN libpqPrepareOnThread(RS_STMT_INFO *pStmt, char *pszCmd)
 
                 pPrepare = NULL;
             }
-            else
-            {
+            else {
                 PGresult *pgResultDescParam = PQgetResult(pConn->pgConn);
 
                 if(pgResultDescParam == NULL)
@@ -1824,11 +1808,7 @@ SQLRETURN libpqPrepareOnThread(RS_STMT_INFO *pStmt, char *pszCmd)
 
             } // Success
 
-            if (pqRc == PGRES_COPY_IN ||
-                pqRc == PGRES_COPY_OUT ||
-                pqRc == PGRES_COPY_BOTH ||
-                (pConn && pConn->pgConn && PQstatus(pConn->pgConn) == CONNECTION_BAD)
-                )
+            if ((pConn && pConn->pgConn && PQstatus(pConn->pgConn) == CONNECTION_BAD))
             {
                 // No need to loop any more.
                 break;
@@ -1929,10 +1909,7 @@ SQLRETURN libpqDescribeParams(RS_STMT_INFO *pStmt, RS_PREPARE_INFO *pPrepare, PG
 
     ExecStatusType pqRc = PGRES_COMMAND_OK;
 
-    if(!(pqRc == PGRES_COMMAND_OK
-            || pqRc == PGRES_TUPLES_OK
-            || pqRc == PGRES_COPY_IN
-            || pqRc == PGRES_COPY_OUT))
+    if(!(pqRc == PGRES_COMMAND_OK || pqRc == PGRES_TUPLES_OK))
     {
         char *pError = libpqErrorMsg(pConn);
 
@@ -2362,8 +2339,6 @@ SQLRETURN setResultInStmt(SQLRETURN rc, RS_STMT_INFO *pStmt, PGresult *pgResult,
 
     if(!(pqRc == PGRES_COMMAND_OK
             || pqRc == PGRES_TUPLES_OK
-            || pqRc == PGRES_COPY_IN
-            || pqRc == PGRES_COPY_OUT
             || pqRc == PGRES_EMPTY_QUERY))
     {
         char *pError = libpqErrorMsg(pConn);
@@ -2418,12 +2393,6 @@ SQLRETURN setResultInStmt(SQLRETURN rc, RS_STMT_INFO *pStmt, PGresult *pgResult,
             }
         }
         else
-        if(pqRc == PGRES_COPY_IN
-            || pqRc == PGRES_COPY_OUT)
-        {
-            // COPY/(UNLOAD CLIENT) command result. Do nothing.
-        }
-        else
         if(pqRc == PGRES_TUPLES_OK)
         {
             // SELECT kind of operation returning rows
@@ -2440,11 +2409,7 @@ SQLRETURN setResultInStmt(SQLRETURN rc, RS_STMT_INFO *pStmt, PGresult *pgResult,
     } // Success
 
     // pqRc == CONNECTION_BAD
-    if (pqRc == PGRES_COPY_IN ||
-        pqRc == PGRES_COPY_OUT ||
-        pqRc == PGRES_COPY_BOTH ||
-        (pConn && pConn->pgConn && PQstatus(pConn->pgConn) == CONNECTION_BAD)
-        )
+    if ((pConn && pConn->pgConn && PQstatus(pConn->pgConn) == CONNECTION_BAD))
     {
         // No need to loop any more.
         *piStop = TRUE;
@@ -2520,120 +2485,6 @@ SQLRETURN setQueryTimeoutInServer(RS_STMT_INFO *pStmt)
             PQclear(pgResult);
             pgResult = NULL;
         }
-    }
-
-    return rc;
-}
-
-/*====================================================================================================================================================*/
-
-//---------------------------------------------------------------------------------------------------------igarish
-// Send COPY buffer
-//
-SQLRETURN libpqCopyBuffer(RS_STMT_INFO *pStmt, char *pBuffer,int nbytes, int iLockRequired)
-{
-    SQLRETURN rc = SQL_SUCCESS;
-    RS_CONN_INFO *pConn = pStmt->phdbc;
-
-    if(iLockRequired)
-    {
-        // Lock connection sem to protect multiple stmt execution at same time.
-        rsLockSem(pConn->hSemMultiStmt);
-
-        // Wait for current csc thread to finish, if any.
-        pgWaitForCscThreadToFinish(pConn->pgConn, FALSE);
-    }
-
-    if(pBuffer)
-    {
-        // COPY data 
-	    if(PQputCopyData(pConn->pgConn, pBuffer, nbytes) <= 0)
-        {
-            // Error during COPY
-            rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HY000", "Error during copy buffer", 0, NULL);
-            goto error;
-        }
-    }
-    else
-    {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HY000", "Invalid copy buffer", 0, NULL);
-        goto error;
-    }
-
-error:
-
-    if(iLockRequired)
-    {
-        // Unlock connection sem
-        rsUnlockSem(pConn->hSemMultiStmt);
-    }
-
-    return rc;
-}
-
-//---------------------------------------------------------------------------------------------------------igarish
-// Send COPY buffer
-//
-SQLRETURN libpqCopyEnd(RS_STMT_INFO *pStmt, int iLockRequired, char *errorMsg)
-{
-    SQLRETURN rc = SQL_SUCCESS;
-    RS_CONN_INFO *pConn = pStmt->phdbc;
-	PGresult   *res = NULL;
-
-    if(iLockRequired)
-    {
-        // Lock connection sem to protect multiple stmt execution at same time.
-        rsLockSem(pConn->hSemMultiStmt);
-
-        // Wait for current csc thread to finish, if any.
-        pgWaitForCscThreadToFinish(pConn->pgConn, FALSE);
-    }
-
-    // COPY END
-	if (PQputCopyEnd(pConn->pgConn, errorMsg) <= 0)
-    {
-        // Error during COPY
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HY000", "Error during copy END", 0, NULL);
-        goto error;
-    }
-
-	/* Check command status and return to normal libpq state */
-    do
-    {
-	    res = pqGetResult(pConn->pgConn, pStmt->pCscStatementContext);
-
-        if(res == NULL)
-            break;
-
-	    if (PQresultStatus(res) != PGRES_COMMAND_OK)
-	    {
-            char *pError = libpqErrorMsg(pConn);
-
-            rc = SQL_ERROR;
-
-            if(pError && *pError != '\0')
-                addError(&pStmt->pErrorList,"HY000", pError, 0, pConn);
-            else
-                addError(&pStmt->pErrorList,"HY000", "Error during copy END", 0, NULL);
-
-	        PQclear(res);
-            res = NULL;
-            goto error;
-	    }
-
-	    PQclear(res);
-
-    }while(TRUE);
-
-error:
-
-    if(iLockRequired)
-    {
-        // Unlock connection sem
-        rsUnlockSem(pConn->hSemMultiStmt);
     }
 
     return rc;
@@ -2719,10 +2570,7 @@ SQLRETURN libpqPrepareOnThreadWithoutStoringResults(RS_STMT_INFO *pStmt, char *p
         // Multi prepare loop
         do
         {
-            if(!(pqRc == PGRES_COMMAND_OK
-                    || pqRc == PGRES_TUPLES_OK
-                    || pqRc == PGRES_COPY_IN
-                    || pqRc == PGRES_COPY_OUT))
+            if (!(pqRc == PGRES_COMMAND_OK || pqRc == PGRES_TUPLES_OK))
             {
                 char *pError = libpqErrorMsg(pConn);
 
@@ -2736,8 +2584,7 @@ SQLRETURN libpqPrepareOnThreadWithoutStoringResults(RS_STMT_INFO *pStmt, char *p
                 PQclear(pgResult);
                 pgResult = NULL;
             }
-            else
-            {
+            else {
                 PGresult *pgResultDescParam = PQgetResult(pConn->pgConn);
 
                 if(pgResultDescParam == NULL)
@@ -2762,11 +2609,7 @@ SQLRETURN libpqPrepareOnThreadWithoutStoringResults(RS_STMT_INFO *pStmt, char *p
 
             } // Success
 
-            if (pqRc == PGRES_COPY_IN ||
-                pqRc == PGRES_COPY_OUT ||
-                pqRc == PGRES_COPY_BOTH ||
-                (pConn && pConn->pgConn && PQstatus(pConn->pgConn) == CONNECTION_BAD)
-                )
+            if ((pConn && pConn->pgConn && PQstatus(pConn->pgConn) == CONNECTION_BAD))
             {
                 // No need to loop any more.
                 break;
@@ -2808,114 +2651,6 @@ SQLRETURN libpqPrepareOnThreadWithoutStoringResults(RS_STMT_INFO *pStmt, char *p
         addError(&pStmt->pErrorList,"HY000", "Invalid command buffer", 0, NULL);
         goto error;
     }
-
-error:
-
-    return rc;
-}
-
-/*====================================================================================================================================================*/
-
-//---------------------------------------------------------------------------------------------------------igarish
-// Receive COPY buffer
-//
-SQLRETURN libpqCopyOutBuffer(RS_STMT_INFO *pStmt, char **ppBuffer,int *pnbytes)
-{
-    SQLRETURN rc = SQL_SUCCESS;
-    RS_CONN_INFO *pConn = pStmt->phdbc;
-
-    if(ppBuffer && pnbytes)
-    {
-        // Get COPY data 
-        *pnbytes = PQgetCopyData(pConn->pgConn, ppBuffer, FALSE);
-	    if(*pnbytes == -2)
-        {
-            // Error during COPY OUT 
-            char *pError = libpqErrorMsg(pConn);
-
-            rc = SQL_ERROR;
-
-            if(pError && *pError != '\0')
-                addError(&pStmt->pErrorList,"HY000", pError, 0, pConn);
-            else
-                addError(&pStmt->pErrorList,"HY000", "Error during copy out buffer", 0, NULL);
-
-            goto error;
-        }
-        else
-        if(*pnbytes == 0)
-        {
-            // Not expected
-            rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HY000", "Get zero length for copy out operation", 0, NULL);
-            goto error;
-        }
-        else
-        if(*pnbytes == -1)
-        {
-            // End of COPY OUT
-            rc = libpqCopyOutEnd(pStmt);
-        }
-        else
-        if(*ppBuffer == NULL)
-        {
-            // Not expected
-            rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HY000", "Get NULL buffer for copy out operation", 0, NULL);
-            goto error;
-        }
-    }
-    else
-    {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HY000", "Invalid copy out buffer or length pointer", 0, NULL);
-        goto error;
-    }
-
-error:
-
-    return rc;
-}
-
-/*====================================================================================================================================================*/
-
-//---------------------------------------------------------------------------------------------------------igarish
-// Get last result for COPY OUT operation
-//
-SQLRETURN libpqCopyOutEnd(RS_STMT_INFO *pStmt)
-{
-    SQLRETURN rc = SQL_SUCCESS;
-    RS_CONN_INFO *pConn = pStmt->phdbc;
-	PGresult   *res = NULL;
-
-
-	/* Check command status and return to normal libpq state */
-    do
-    {
-	    res = pqGetResult(pConn->pgConn, pStmt->pCscStatementContext);
-
-        if(res == NULL)
-            break;
-
-	    if (PQresultStatus(res) != PGRES_COMMAND_OK)
-	    {
-            char *pError = libpqErrorMsg(pConn);
-
-            rc = SQL_ERROR;
-
-            if(pError && *pError != '\0')
-                addError(&pStmt->pErrorList,"HY000", pError, 0, pConn);
-            else
-                addError(&pStmt->pErrorList,"HY000", "Error during copy OUT END", 0, NULL);
-
-	        PQclear(res);
-            res = NULL;
-            goto error;
-	    }
-
-	    PQclear(res);
-
-    }while(TRUE);
 
 error:
 

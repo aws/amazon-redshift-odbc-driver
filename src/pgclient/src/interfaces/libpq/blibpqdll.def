@@ -27,11 +27,6 @@ EXPORTS
     _PQgetResult               @ 24
     _PQisBusy                  @ 25
     _PQconsumeInput            @ 26
-    _PQgetline                 @ 27
-    _PQputline                 @ 28
-    _PQgetlineAsync            @ 29
-    _PQputnbytes               @ 30
-    _PQendcopy                 @ 31
     _PQfn                      @ 32
     _PQresultStatus            @ 33
     _PQntuples                 @ 34
@@ -102,9 +97,6 @@ EXPORTS
     _PQsetNoticeReceiver       @ 100
     _PQexecParams              @ 101
     _PQsendQueryParams         @ 102
-    _PQputCopyData             @ 103
-    _PQputCopyEnd              @ 104
-    _PQgetCopyData             @ 105
     _PQresultErrorField        @ 106
     _PQftable                  @ 107
     _PQftablecol               @ 108
@@ -185,11 +177,6 @@ EXPORTS
     PQgetResult               = _PQgetResult
     PQisBusy                  = _PQisBusy
     PQconsumeInput            = _PQconsumeInput
-    PQgetline                 = _PQgetline
-    PQputline                 = _PQputline
-    PQgetlineAsync            = _PQgetlineAsync
-    PQputnbytes               = _PQputnbytes
-    PQendcopy                 = _PQendcopy
     PQfn                      = _PQfn
     PQresultStatus            = _PQresultStatus
     PQntuples                 = _PQntuples
@@ -260,9 +247,6 @@ EXPORTS
     PQsetNoticeReceiver       = _PQsetNoticeReceiver
     PQexecParams              = _PQexecParams
     PQsendQueryParams         = _PQsendQueryParams
-    PQputCopyData             = _PQputCopyData
-    PQputCopyEnd              = _PQputCopyEnd
-    PQgetCopyData             = _PQgetCopyData
     PQresultErrorField        = _PQresultErrorField
     PQftable                  = _PQftable
     PQftablecol               = _PQftablecol

@@ -509,11 +509,6 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLPrepare(SQLHSTMT phstmt,
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    // Check for COPY command in current execution
-    rc = checkForCopyExecution(pStmt);
-    if(rc == SQL_ERROR)
-        goto error;
-
     if(pCmd == NULL)
     {
         rc = SQL_ERROR;
@@ -563,15 +558,6 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLPrepare(SQLHSTMT phstmt,
         if(!pszMultiInsertCmd)
         {
             pszCmd = (char *)checkReplaceParamMarkerAndODBCEscapeClause(pStmt,(char *)pCmd, cbLen, pStmt->pCmdBuf, TRUE);
-
-            // Look for COPY command
-            parseForCopyCommand(pStmt, pszCmd, SQL_NTS);
-
-            if(!(pStmt->pCopyCmd))
-            {
-                // Look for UNLOAD command
-                parseForUnloadCommand(pStmt, pszCmd, SQL_NTS);
-            }
         }
         else
         {
@@ -591,22 +577,6 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLPrepare(SQLHSTMT phstmt,
     else
     {
         pszCmd = pStmt->pCmdBuf->pBuf;
-
-        // Is it called from SQLPrepareW?
-        if(iSQLPrepareW)
-        {
-            if(!(pStmt->iMultiInsert))
-            {
-                // Look for COPY command
-                parseForCopyCommand(pStmt, pszCmd, SQL_NTS);
-
-                if(!(pStmt->pCopyCmd))
-                {
-                    // Look for UNLOAD command
-                    parseForUnloadCommand(pStmt, pszCmd, SQL_NTS);
-                }
-            }
-        }
     }
 
     rc = libpqPrepare(pStmt, pszCmd);

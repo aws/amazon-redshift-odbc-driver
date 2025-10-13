@@ -36,12 +36,9 @@ char	   *const pgresStatus[] = {
 	"PGRES_EMPTY_QUERY",
 	"PGRES_COMMAND_OK",
 	"PGRES_TUPLES_OK",
-	"PGRES_COPY_OUT",
-	"PGRES_COPY_IN",
 	"PGRES_BAD_RESPONSE",
 	"PGRES_NONFATAL_ERROR",
-	"PGRES_FATAL_ERROR",
-	"PGRES_COPY_BOTH"
+	"PGRES_FATAL_ERROR"
 };
 
 /*
@@ -196,9 +193,6 @@ PQmakeEmptyPGresult(PGconn *conn, ExecStatusType status)
 			case PGRES_EMPTY_QUERY:
 			case PGRES_COMMAND_OK:
 			case PGRES_TUPLES_OK:
-			case PGRES_COPY_OUT:
-			case PGRES_COPY_IN:
-			case PGRES_COPY_BOTH:
 				/* non-error cases */
 				break;
 			default:
@@ -1751,24 +1745,6 @@ pqGetResult(PGconn *conn, struct _CscStatementContext *pCscStatementContext)
 			/* Set the state back to BUSY, allowing parsing to proceed. */
 			conn->asyncStatus = PGASYNC_BUSY;
 			break;
-		case PGASYNC_COPY_IN:
-			if (conn->result && conn->result->resultStatus == PGRES_COPY_IN)
-				res = pqPrepareAsyncResult(conn);
-			else
-				res = PQmakeEmptyPGresult(conn, PGRES_COPY_IN);
-			break;
-		case PGASYNC_COPY_OUT:
-			if (conn->result && conn->result->resultStatus == PGRES_COPY_OUT)
-				res = pqPrepareAsyncResult(conn);
-			else
-				res = PQmakeEmptyPGresult(conn, PGRES_COPY_OUT);
-			break;
-		case PGASYNC_COPY_BOTH:
-			if (conn->result && conn->result->resultStatus == PGRES_COPY_BOTH)
-				res = pqPrepareAsyncResult(conn);
-			else
-				res = PQmakeEmptyPGresult(conn, PGRES_COPY_BOTH);
-			break;
 		default:
 			printfPQExpBuffer(&conn->errorMessage,
 							  libpq_gettext("unexpected asyncStatus: %d\n"),
@@ -1980,18 +1956,6 @@ PQgetResultNbytes(PGconn *conn)
                         /* Set the state back to BUSY, allowing parsing to proceed. */
                         conn->asyncStatus = PGASYNC_BUSY;
                         break;
-                case PGASYNC_COPY_IN:
-                        if (conn->result && conn->result->resultStatus == PGRES_COPY_IN)
-                                res = pqPrepareAsyncResult(conn);
-                        else
-                                res = PQmakeEmptyPGresult(conn, PGRES_COPY_IN);
-                        break;
-                case PGASYNC_COPY_OUT:
-                        if (conn->result && conn->result->resultStatus == PGRES_COPY_OUT)
-                                res = pqPrepareAsyncResult(conn);
-                        else
-                                res = PQmakeEmptyPGresult(conn, PGRES_COPY_OUT);
-                        break;
                 default:
                         printfPQExpBuffer(&conn->errorMessage,
                                                    libpq_gettext("unexpected asyncStatus: %d\n"),
@@ -2187,51 +2151,6 @@ PQexecStart(PGconn *conn)
 		ExecStatusType resultStatus = result->resultStatus;
 
 		PQclear(result);		/* only need its status */
-		if (resultStatus == PGRES_COPY_IN)
-		{
-			if (PG_PROTOCOL_MAJOR(conn->pversion) >= 3)
-			{
-				/* In protocol 3, we can get out of a COPY IN state */
-				if (PQputCopyEnd(conn,
-						 libpq_gettext("COPY terminated by new PQexec")) < 0)
-					return false;
-				/* keep waiting to swallow the copy's failure message */
-			}
-			else
-			{
-				/* In older protocols we have to punt */
-				printfPQExpBuffer(&conn->errorMessage,
-				  libpq_gettext("COPY IN state must be terminated first\n"));
-				return false;
-			}
-		}
-		else if (resultStatus == PGRES_COPY_OUT)
-		{
-			if (PG_PROTOCOL_MAJOR(conn->pversion) >= 3)
-			{
-				/*
-				 * In protocol 3, we can get out of a COPY OUT state: we just
-				 * switch back to BUSY and allow the remaining COPY data to be
-				 * dropped on the floor.
-				 */
-				conn->asyncStatus = PGASYNC_BUSY;
-				/* keep waiting to swallow the copy's completion message */
-			}
-			else
-			{
-				/* In older protocols we have to punt */
-				printfPQExpBuffer(&conn->errorMessage,
-				 libpq_gettext("COPY OUT state must be terminated first\n"));
-				return false;
-			}
-		}
-		else if (resultStatus == PGRES_COPY_BOTH)
-		{
-			/* We don't allow PQexec during COPY BOTH */
-			printfPQExpBuffer(&conn->errorMessage,
-					 libpq_gettext("PQexec not allowed during COPY BOTH\n"));
-			return false;
-		}
 		/* check for loss of connection, too */
 		if (conn->status == CONNECTION_BAD)
 			return false;
@@ -2282,10 +2201,7 @@ PQexecFinish(PGconn *conn)
 				PQclear(lastResult);
 		}
 		lastResult = result;
-		if (result->resultStatus == PGRES_COPY_IN ||
-			result->resultStatus == PGRES_COPY_OUT ||
-			result->resultStatus == PGRES_COPY_BOTH ||
-			conn->status == CONNECTION_BAD)
+		if (conn->status == CONNECTION_BAD)
 			break;
 	}
 
@@ -2456,322 +2372,6 @@ PQnotifies(PGconn *conn)
 	}
 	return event;
 }
-
-/*
- * PQputCopyData - send some data to the backend during COPY IN or COPY BOTH
- *
- * Returns 1 if successful, 0 if data could not be sent (only possible
- * in nonblock mode), or -1 if an error occurs.
- */
-int
-PQputCopyData(PGconn *conn, const char *buffer, int nbytes)
-{
-	if (!conn)
-		return -1;
-	if (conn->asyncStatus != PGASYNC_COPY_IN &&
-		conn->asyncStatus != PGASYNC_COPY_BOTH)
-	{
-		printfPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("no COPY in progress\n"));
-		return -1;
-	}
-
-	/*
-	 * Process any NOTICE or NOTIFY messages that might be pending in the
-	 * input buffer.  Since the server might generate many notices during the
-	 * COPY, we want to clean those out reasonably promptly to prevent
-	 * indefinite expansion of the input buffer.  (Note: the actual read of
-	 * input data into the input buffer happens down inside pqSendSome, but
-	 * it's not authorized to get rid of the data again.)
-	 */
-	parseInput(conn);
-
-	if (nbytes > 0)
-	{
-		/*
-		 * Try to flush any previously sent data in preference to growing the
-		 * output buffer.  If we can't enlarge the buffer enough to hold the
-		 * data, return 0 in the nonblock case, else hard error. (For
-		 * simplicity, always assume 5 bytes of overhead even in protocol 2.0
-		 * case.)
-		 */
-		if ((conn->outBufSize - conn->outCount - 5) < nbytes)
-		{
-			if (pqFlush(conn) < 0)
-				return -1;
-			if (pqCheckOutBufferSpace(conn->outCount + 5 + (size_t) nbytes,
-									  conn))
-				return pqIsnonblocking(conn) ? 0 : -1;
-		}
-		/* Send the data (too simple to delegate to fe-protocol files) */
-		if (PG_PROTOCOL_MAJOR(conn->pversion) >= 3)
-		{
-			if (pqPutMsgStart('d', false, conn) < 0 ||
-				pqPutnchar(buffer, nbytes, conn) < 0 ||
-				pqPutMsgEnd(conn) < 0)
-				return -1;
-		}
-		else
-		{
-			if (pqPutMsgStart(0, false, conn) < 0 ||
-				pqPutnchar(buffer, nbytes, conn) < 0 ||
-				pqPutMsgEnd(conn) < 0)
-				return -1;
-		}
-	}
-	return 1;
-}
-
-/*
- * PQputCopyEnd - send EOF indication to the backend during COPY IN
- *
- * After calling this, use PQgetResult() to check command completion status.
- *
- * Returns 1 if successful, 0 if data could not be sent (only possible
- * in nonblock mode), or -1 if an error occurs.
- */
-int
-PQputCopyEnd(PGconn *conn, const char *errormsg)
-{
-	if (!conn)
-		return -1;
-	if (conn->asyncStatus != PGASYNC_COPY_IN)
-	{
-		printfPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("no COPY in progress\n"));
-		return -1;
-	}
-
-	/*
-	 * Send the COPY END indicator.  This is simple enough that we don't
-	 * bother delegating it to the fe-protocol files.
-	 */
-	if (PG_PROTOCOL_MAJOR(conn->pversion) >= 3)
-	{
-		if (errormsg)
-		{
-			/* Send COPY FAIL */
-			if (pqPutMsgStart('f', false, conn) < 0 ||
-				pqPuts(errormsg, conn) < 0 ||
-				pqPutMsgEnd(conn) < 0)
-				return -1;
-		}
-		else
-		{
-			/* Send COPY DONE */
-			if (pqPutMsgStart('c', false, conn) < 0 ||
-				pqPutMsgEnd(conn) < 0)
-				return -1;
-		}
-
-		/*
-		 * If we sent the COPY command in extended-query mode, we must issue a
-		 * Sync as well.
-		 */
-		if (conn->queryclass != PGQUERY_SIMPLE)
-		{
-			if (pqPutMsgStart('S', false, conn) < 0 ||
-				pqPutMsgEnd(conn) < 0)
-				return -1;
-		}
-	}
-	else
-	{
-		if (errormsg)
-		{
-			/* Ooops, no way to do this in 2.0 */
-			printfPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("function requires at least protocol version 3.0\n"));
-			return -1;
-		}
-		else
-		{
-			/* Send old-style end-of-data marker */
-			if (pqPutMsgStart(0, false, conn) < 0 ||
-				pqPutnchar("\\.\n", 3, conn) < 0 ||
-				pqPutMsgEnd(conn) < 0)
-				return -1;
-		}
-	}
-
-	/* Return to active duty */
-	conn->asyncStatus = PGASYNC_BUSY;
-	resetPQExpBuffer(&conn->errorMessage);
-
-	/* Try to flush data */
-	if (pqFlush(conn) < 0)
-		return -1;
-
-	return 1;
-}
-
-/*
- * PQgetCopyData - read a row of data from the backend during COPY OUT
- * or COPY BOTH
- *
- * If successful, sets *buffer to point to a malloc'd row of data, and
- * returns row length (always > 0) as result.
- * Returns 0 if no row available yet (only possible if async is true),
- * -1 if end of copy (consult PQgetResult), or -2 if error (consult
- * PQerrorMessage).
- */
-int
-PQgetCopyData(PGconn *conn, char **buffer, int async)
-{
-	*buffer = NULL;				/* for all failure cases */
-	if (!conn)
-		return -2;
-	if (conn->asyncStatus != PGASYNC_COPY_OUT &&
-		conn->asyncStatus != PGASYNC_COPY_BOTH)
-	{
-		printfPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("no COPY in progress\n"));
-		return -2;
-	}
-	if (PG_PROTOCOL_MAJOR(conn->pversion) >= 3)
-		return pqGetCopyData3(conn, buffer, async);
-	else
-		return pqGetCopyData2(conn, buffer, async);
-}
-
-/*
- * PQgetline - gets a newline-terminated string from the backend.
- *
- * Chiefly here so that applications can use "COPY <rel> to stdout"
- * and read the output string.	Returns a null-terminated string in s.
- *
- * XXX this routine is now deprecated, because it can't handle binary data.
- * If called during a COPY BINARY we return EOF.
- *
- * PQgetline reads up to maxlen-1 characters (like fgets(3)) but strips
- * the terminating \n (like gets(3)).
- *
- * CAUTION: the caller is responsible for detecting the end-of-copy signal
- * (a line containing just "\.") when using this routine.
- *
- * RETURNS:
- *		EOF if error (eg, invalid arguments are given)
- *		0 if EOL is reached (i.e., \n has been read)
- *				(this is required for backward-compatibility -- this
- *				 routine used to always return EOF or 0, assuming that
- *				 the line ended within maxlen bytes.)
- *		1 in other cases (i.e., the buffer was filled before \n is reached)
- */
-int
-PQgetline(PGconn *conn, char *s, int maxlen)
-{
-	if (!s || maxlen <= 0)
-		return EOF;
-	*s = '\0';
-	/* maxlen must be at least 3 to hold the \. terminator! */
-	if (maxlen < 3)
-		return EOF;
-
-	if (!conn)
-		return EOF;
-
-	if (PG_PROTOCOL_MAJOR(conn->pversion) >= 3)
-		return pqGetline3(conn, s, maxlen);
-	else
-		return pqGetline2(conn, s, maxlen);
-}
-
-/*
- * PQgetlineAsync - gets a COPY data row without blocking.
- *
- * This routine is for applications that want to do "COPY <rel> to stdout"
- * asynchronously, that is without blocking.  Having issued the COPY command
- * and gotten a PGRES_COPY_OUT response, the app should call PQconsumeInput
- * and this routine until the end-of-data signal is detected.  Unlike
- * PQgetline, this routine takes responsibility for detecting end-of-data.
- *
- * On each call, PQgetlineAsync will return data if a complete data row
- * is available in libpq's input buffer.  Otherwise, no data is returned
- * until the rest of the row arrives.
- *
- * If -1 is returned, the end-of-data signal has been recognized (and removed
- * from libpq's input buffer).  The caller *must* next call PQendcopy and
- * then return to normal processing.
- *
- * RETURNS:
- *	 -1    if the end-of-copy-data marker has been recognized
- *	 0	   if no data is available
- *	 >0    the number of bytes returned.
- *
- * The data returned will not extend beyond a data-row boundary.  If possible
- * a whole row will be returned at one time.  But if the buffer offered by
- * the caller is too small to hold a row sent by the backend, then a partial
- * data row will be returned.  In text mode this can be detected by testing
- * whether the last returned byte is '\n' or not.
- *
- * The returned data is *not* null-terminated.
- */
-
-int
-PQgetlineAsync(PGconn *conn, char *buffer, int bufsize)
-{
-	if (!conn)
-		return -1;
-
-	if (PG_PROTOCOL_MAJOR(conn->pversion) >= 3)
-		return pqGetlineAsync3(conn, buffer, bufsize);
-	else
-		return pqGetlineAsync2(conn, buffer, bufsize);
-}
-
-/*
- * PQputline -- sends a string to the backend during COPY IN.
- * Returns 0 if OK, EOF if not.
- *
- * This is deprecated primarily because the return convention doesn't allow
- * caller to tell the difference between a hard error and a nonblock-mode
- * send failure.
- */
-int
-PQputline(PGconn *conn, const char *s)
-{
-	return PQputnbytes(conn, s, strlen(s));
-}
-
-/*
- * PQputnbytes -- like PQputline, but buffer need not be null-terminated.
- * Returns 0 if OK, EOF if not.
- */
-int
-PQputnbytes(PGconn *conn, const char *buffer, int nbytes)
-{
-	if (PQputCopyData(conn, buffer, nbytes) > 0)
-		return 0;
-	else
-		return EOF;
-}
-
-/*
- * PQendcopy
- *		After completing the data transfer portion of a copy in/out,
- *		the application must call this routine to finish the command protocol.
- *
- * When using protocol 3.0 this is deprecated; it's cleaner to use PQgetResult
- * to get the transfer status.	Note however that when using 2.0 protocol,
- * recovering from a copy failure often requires a PQreset.  PQendcopy will
- * take care of that, PQgetResult won't.
- *
- * RETURNS:
- *		0 on success
- *		1 on failure
- */
-int
-PQendcopy(PGconn *conn)
-{
-	if (!conn)
-		return 0;
-
-	if (PG_PROTOCOL_MAJOR(conn->pversion) >= 3)
-		return pqEndcopy3(conn);
-	else
-		return pqEndcopy2(conn);
-}
-
 
 /* ----------------
  *		PQfn -	Send a function call to the POSTGRES backend.

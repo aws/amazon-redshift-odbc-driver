@@ -1765,22 +1765,6 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFreeStmt(SQLHSTMT phstmt,
             // Release CSC statement context
             pStmt->pCscStatementContext = releaseCscStatementContext(pStmt->pCscStatementContext);
 
-            // Release COPY command info
-            if(pStmt->pCopyCmd)
-            {
-                pStmt->pCopyCmd->pszLocalFileName = (char *)rs_free(pStmt->pCopyCmd->pszLocalFileName);
-                delete pStmt->pCopyCmd;
-                pStmt->pCopyCmd = NULL;
-            }
-
-            // Release UNLOAD command info
-            if(pStmt->pUnloadCmd)
-            {
-                pStmt->pUnloadCmd->pszLocalOutFileName = (char *)rs_free(pStmt->pUnloadCmd->pszLocalOutFileName);
-                delete pStmt->pUnloadCmd;
-                pStmt->pUnloadCmd = NULL;
-            }
-
             // Release user insert command, if any.
             pStmt->resetMultiInsertInfo();
 

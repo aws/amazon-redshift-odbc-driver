@@ -27,11 +27,6 @@ EXPORTS
     PQgetResult               @ 24
     PQisBusy                  @ 25
     PQconsumeInput            @ 26
-    PQgetline                 @ 27
-    PQputline                 @ 28
-    PQgetlineAsync            @ 29
-    PQputnbytes               @ 30
-    PQendcopy                 @ 31
     PQfn                      @ 32
     PQresultStatus            @ 33
     PQntuples                 @ 34
@@ -102,9 +97,6 @@ EXPORTS
     PQsetNoticeReceiver       @ 100
     PQexecParams              @ 101
     PQsendQueryParams         @ 102
-    PQputCopyData             @ 103
-    PQputCopyEnd              @ 104
-    PQgetCopyData             @ 105
     PQresultErrorField        @ 106
     PQftable                  @ 107
     PQftablecol               @ 108

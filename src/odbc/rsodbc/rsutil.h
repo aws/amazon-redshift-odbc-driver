@@ -470,11 +470,6 @@ void sharedObjectDetach();
 
 #endif
 
-void parseForCopyCommand(RS_STMT_INFO *pStmt, char *pCmd, size_t cbLen);
-char *getNextTokenForCopyOrUnloadCommand(char **ppSrc, size_t cbLen, int *pi, int tokenInQuote);
-SQLRETURN copyFromLocalFile(RS_STMT_INFO *pStmt, FILE *fp, int iLockRequired);
-SQLRETURN checkAndHandleCopyStdinOrClient(RS_STMT_INFO *pStmt, SQLRETURN rc, int iLockRequired);
-
 char *parseForMultiInsertCommand(RS_STMT_INFO *pStmt, char *pCmd, SQLINTEGER cbLen, char **ppLastBatchMultiInsertCmd);
 char *getNextTokenForInsertCommand(char **ppSrc, size_t cbLen, int *pi, char delimiter);
 int getNumberOfParams(RS_STMT_INFO *pStmt);
@@ -485,11 +480,7 @@ int DoesEmbedInDoubleQuotes(char *pStart,char *pEnd);
 SQLRETURN createLastBatchMultiInsertCmd(RS_STMT_INFO *pStmt, char *pszLastBatchMultiInsertCmd);
 SQLRETURN rePrepareMultiInsertCommand(RS_STMT_INFO *pStmt, char *pszCmd);
 
-SQLRETURN checkForCopyExecution(RS_STMT_INFO *pStmt);
 
-void parseForUnloadCommand(RS_STMT_INFO *pStmt, char *pCmd, size_t cbLen);
-SQLRETURN copyToLocalFile(RS_STMT_INFO *pStmt, FILE *fp);
-SQLRETURN checkAndHandleCopyOutClient(RS_STMT_INFO *pStmt, SQLRETURN rc);
 
 void checkAndSkipAllResultsOfStreamingCursor(RS_STMT_INFO *pStmt);
 void skipAllResultsOfStreamingRowsUsingConnection(RS_CONN_INFO *pConn);

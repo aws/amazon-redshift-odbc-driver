@@ -83,13 +83,10 @@ typedef enum
 	PGRES_TUPLES_OK,			/* a query command that returns tuples was
 								 * executed properly by the backend, PGresult
 								 * contains the result tuples */
-	PGRES_COPY_OUT,				/* Copy Out data transfer in progress */
-	PGRES_COPY_IN,				/* Copy In data transfer in progress */
 	PGRES_BAD_RESPONSE,			/* an unexpected response was recv'd from the
 								 * backend */
 	PGRES_NONFATAL_ERROR,		/* notice or warning message */
-	PGRES_FATAL_ERROR,			/* query failed */
-	PGRES_COPY_BOTH				/* Copy In/Out data transfer in progress */
+	PGRES_FATAL_ERROR			/* query failed */
 } ExecStatusType;
 
 typedef enum
@@ -428,18 +425,6 @@ extern int	PQconsumeInput(PGconn *conn);
 
 /* LISTEN/NOTIFY support */
 extern PGnotify *PQnotifies(PGconn *conn);
-
-/* Routines for copy in/out */
-extern int	PQputCopyData(PGconn *conn, const char *buffer, int nbytes);
-extern int	PQputCopyEnd(PGconn *conn, const char *errormsg);
-extern int	PQgetCopyData(PGconn *conn, char **buffer, int async);
-
-/* Deprecated routines for copy in/out */
-extern int	PQgetline(PGconn *conn, char *string, int length);
-extern int	PQputline(PGconn *conn, const char *string);
-extern int	PQgetlineAsync(PGconn *conn, char *buffer, int bufsize);
-extern int	PQputnbytes(PGconn *conn, const char *buffer, int nbytes);
-extern int	PQendcopy(PGconn *conn);
 
 /* Set blocking/nonblocking connection to the backend */
 extern int	PQsetnonblocking(PGconn *conn, int arg);
