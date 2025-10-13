@@ -422,19 +422,13 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
             if (pConnectProps->iCscEnable) {
                 RS_LOG_DEBUG(
                     "RSLIBPQ",
-                    "Possible Cursor Mode (if rowset size "
-                    "exceed memory limit and may consume disk "
-                    "space): Client Side Cursor");
+                    "Possible Cursor Mode (if rowset size exceed memory limit and may consume disk space): Client Side Cursor");
             } else if (pConnectProps->iStreamingCursorRows > 0) {
-                RS_LOG_DEBUG("RSLIBPQ", "Possible Cursor Mode (if FWD "
-                                         "only cursor): Streaming Cursor");
+                RS_LOG_DEBUG("RSLIBPQ", "Possible Cursor Mode (if FWD only cursor): Streaming Cursor");
             } else {
                 RS_LOG_DEBUG(
                     "RSLIBPQ",
-                    "Possible Cursor Mode (may go OOM or slow "
-                    "down system depends on size of rows v/s "
-                    "actual physical memory): All-in-Memory "
-                    "Cursor");
+                    "Possible Cursor Mode (may go OOM or slow down system depends on size of rows v/s actual physical memory): All-in-Memory Cursor");
             }
         }
 
@@ -953,7 +947,7 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                                 if (iValOffset <= 0) {
                                     rc = SQL_ERROR;
                                     std::string err = "Invalid Array element length :" + std::to_string(iValOffset);
-                                    RS_LOG_ERROR("rslibpq", err.data());
+                                    RS_LOG_ERROR("rslibpq", "%s", err.data());
                                     addError(&pStmt->pErrorList, "HY000", err.data(), 0, NULL);
                                     goto error;
                                 }

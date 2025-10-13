@@ -36,7 +36,7 @@ SQLRETURN RsMetadataServerProxy::sqlCatalogs(
         return rc;
     }
 
-    RS_LOG_TRACE("sqlCatalogs", "Total number of return rows: %d", catalogs.size());
+    RS_LOG_TRACE("sqlCatalogs", "Total number of return rows: %zu", catalogs.size());
     
     return rc;
 }
@@ -75,7 +75,7 @@ SQLRETURN RsMetadataServerProxy::sqlSchemas(
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlSchemas", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlSchemas", "Total number of return rows: %zu", intermediateRS.size());
     
     return rc;
 }
@@ -130,7 +130,7 @@ SQLRETURN RsMetadataServerProxy::sqlTables(
         }
         catalogs.clear();
 
-        RS_LOG_TRACE("sqlTables", "Total number of return rows: %d", intermediateRS.size());
+        RS_LOG_TRACE("sqlTables", "Total number of return rows: %zu", intermediateRS.size());
     } else {
         RS_LOG_TRACE("sqlTables", "Return empty intermediateRS");
     }
@@ -208,7 +208,7 @@ SQLRETURN RsMetadataServerProxy::sqlColumns(
         }
         catalogs.clear();
 
-        RS_LOG_TRACE("sqlColumns", "Total number of return rows: %d", intermediateRS.size());
+        RS_LOG_TRACE("sqlColumns", "Total number of return rows: %zu", intermediateRS.size());
     } else {
         RS_LOG_TRACE("sqlColumns", "Return empty intermediateRS");
     }
@@ -302,7 +302,7 @@ SQLRETURN RsMetadataServerProxy::callShowDatabases(
         pStmt->pStmtAttr->pARD,
         getIndex(pStmt, RsMetadataAPIHelper::kSHOW_DATABASES_database_name));
 
-    RS_LOG_TRACE("callShowDatabases", "number of catalog: %d",
+    RS_LOG_TRACE("callShowDatabases", "number of catalog: %zu",
                  catalogs.size());
 
     // While loop will end if there's no more result to fetch. Therefore, rc
@@ -780,7 +780,7 @@ SQLRETURN RsMetadataServerProxy::callQuoteFunc(
     SQLLEN lenIndex = input.size();
     SQLCHAR buf[MAX_IDEN_LEN] = {0};
 
-    RS_LOG_TRACE("callQuoteFunc", "input string: %s, len: %d", input.c_str(), input.size());
+    RS_LOG_TRACE("callQuoteFunc", "input string: %s, len: %zu", input.c_str(), input.size());
 
     rc = RsPrepare::RS_SQLPrepare(phstmt, (SQLCHAR *)quotedQuery.c_str(),
                                   SQL_NTS, FALSE, FALSE, FALSE, TRUE);

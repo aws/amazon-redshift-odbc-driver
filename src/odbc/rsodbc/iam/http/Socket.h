@@ -207,9 +207,8 @@ inline int Socket::GetListenPort() const
     getsockname(socket_fd_, (struct sockaddr*)&addr, &len);
     port = htons(((sockaddr_in*)&addr)->sin_port);
 
-    RS_LOG_DEBUG(
-        "Socket::GetListenPort %s",
-        std::to_string(port).c_str());
+    RS_LOG_DEBUG("IAM", 
+        "Socket::GetListenPort %d", port);
 
     return port;
 }

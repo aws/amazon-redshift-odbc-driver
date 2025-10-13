@@ -335,7 +335,6 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
 	}
 
 	RS_LOG_DEBUG("IAMCLNT",
-		"RsIamClient::SendClusterCredentialRequest",
 		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
 		config.httpRequestTimeoutMs,
 		config.connectTimeoutMs,
@@ -524,7 +523,6 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
 	}
 
 	RS_LOG_DEBUG("IAMCLNT",
-		"RsIamClient::SendClusterCredentialsWithIAMRequest",
 		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
 		config.httpRequestTimeoutMs,
 		config.connectTimeoutMs,
@@ -676,7 +674,6 @@ Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentia
 	}
 
 	RS_LOG_DEBUG("IAMCLNT",
-		"RsIamClient::SendCredentialRequest",
 		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
 		config.httpRequestTimeoutMs,
 		config.connectTimeoutMs,

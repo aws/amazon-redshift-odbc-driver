@@ -84,7 +84,6 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
 	RS_LOG_DEBUG("IAMCRD",
-                     "IAMOktaCredentialsProvider::GetSamlAssertion "
                      "HttpClientConfig.m_timeout: %ld",
                      config.m_timeout);
 
@@ -162,7 +161,7 @@ rs_string IAMOktaCredentialsProvider::GetAuthSessionToken(
     Redshift::IamSupport::HttpResponse response =
         in_httpClient->MakeHttpRequest(uri, HttpMethod::HTTP_POST, requestHeader, requestBody);
 
-    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetAuthSessionToken "
+    RS_LOG_DEBUG("IAMCRD",
          "Response Code: %d, Response Header: %s, Response Body: %s",
         response.GetStatusCode(),
         response.GetResponseHeader().c_str(),

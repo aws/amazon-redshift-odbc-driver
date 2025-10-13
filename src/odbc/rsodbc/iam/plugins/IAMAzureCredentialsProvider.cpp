@@ -93,8 +93,7 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
     bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
 
     RS_LOG_DEBUG("IAMCRD", 
-        "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication ",
-        + "verifySSL: %s",
+        "verifySSL: %s",
         shouldVerifySSL ? "true" : "false");
 
     HttpClientConfig config;
@@ -102,8 +101,7 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
     config.m_caFile = m_config.GetCaFile();
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
-	RS_LOG_DEBUG("IAMCRD", "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication ",
-		"HttpClientConfig.m_timeout: %ld",
+	RS_LOG_DEBUG("IAMCRD", "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication HttpClientConfig.m_timeout: %ld",
 		config.m_timeout);
 
     if (m_config.GetUsingHTTPSProxy() && m_config.GetUseProxyIdpAuth())
@@ -205,10 +203,7 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
     Base64::Base64 base64;
     rs_string samlAssertion = IAMUtils::convertToUTF8(in_samlAssertion);
 
-	RS_LOG_DEBUG("IAMCRD", 
-		"IAMAzureCredentialsProvider::AzureOauthBasedAuthentication ",
-		+"samlAssertion: %s",
-		samlAssertion.c_str());
+    RS_LOG_DEBUG("IAMCRD", "saml assertion length %d\n", samlAssertion.length());
 
     /* The Base64 Decode method takes in an AWS::String so we convert from rs_string. */
     Aws::String aws_samlAssertion(samlAssertion.c_str(), samlAssertion.size());

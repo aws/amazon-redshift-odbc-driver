@@ -44,9 +44,8 @@ IAMProfileCredentialsProvider::IAMProfileCredentialsProvider(
         PROFILE_LOG_TAG,
         GetCredentialsProfileFilename()))
 {
-    RS_LOG_DEBUG("IAM", "Redshift::IamSuppor::%s::%s()t",
-                 "IAMProfileCredentialsProvider",
-                 "IAMProfileCredentialsProvider");
+    RS_LOG_DEBUG("IAM",
+                 "IAMProfileCredentialsProvider::IAMProfileCredentialsProvider");
 
     /* Use default profile to look up IAM profile configurations */
     if (m_profileToUse.empty())
@@ -67,8 +66,8 @@ IAMProfileCredentialsProvider::IAMProfileCredentialsProvider(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials()
 {
-    RS_LOG_DEBUG("IAM", "Redshift::IamSupport::%s::%s()",
-                 "IAMProfileCredentialsProvider", "GetAWSCredentials");
+    RS_LOG_DEBUG("IAM", 
+                 "IAMProfileCredentialsProvider::GetAWSCredentials");
     /* return cached AWSCredentials */
     if (CanUseCachedAwsCredentials())
     {
@@ -84,8 +83,8 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string& in_profile)
 {
-    RS_LOG_DEBUG("IAM", "Redshift::IamSupport::%s::%s()",
-                 "IAMProfileCredentialsProvider", "GetAWSCredentials");
+    RS_LOG_DEBUG("IAM", 
+                 "IAMProfileCredentialsProvider::GetAWSCredentials");
     /* check for profile type:
     1. Default profile
     2. Role-based profile
@@ -102,8 +101,7 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
     if (!IAMUtils::isEmpty(pluginName))
     {
         RS_LOG_DEBUG("IAM",
-                     "IAMProfileCredentialsProvider.GetAWSCredentials() Using "
-                     "plugin based profile: %s",
+                     "IAMProfileCredentialsProvider.GetAWSCredentials() Using plugin based profile: %s",
                      pluginName.c_str());
 
         std::unique_ptr<IAMPluginCredentialsProvider> plugin = IAMPluginFactory::CreatePlugin(
@@ -123,8 +121,7 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
     else if (!roleArn.empty())
     {
         RS_LOG_DEBUG("IAM",
-                     "IAMProfileCredentialsProvider.GetAWSCredentials Using "
-                     "role based profile: %s",
+                     "IAMProfileCredentialsProvider.GetAWSCredentials Using role based profile: %s",
                      roleArn.c_str());
 
         /* role-based profile */
@@ -136,8 +133,7 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
 	else if (!IAMUtils::isEmpty(credential_process))
 	{
         RS_LOG_DEBUG("IAM",
-                     "IAMProfileCredentialsProvider.GetAWSCredentials Using "
-                     "credential process based profile: %s",
+                     "IAMProfileCredentialsProvider.GetAWSCredentials Using credential process based profile: %s",
                      credential_process.c_str());
 
         /* credential process profile */
@@ -169,8 +165,8 @@ IAMProfile IAMProfileCredentialsProvider::LoadProfile(const rs_string& in_profil
     /* keep track of each chained profile */
     m_chainedProfiles.insert(in_profile);
 
-    RS_LOG_DEBUG("IAM", "Redshift::IamSupport::%s::%s() Loading profile: %s",
-                 "IAMProfileCredentialsProvider", "LoadProfile",
+    RS_LOG_DEBUG("IAM", 
+                 "IAMProfileCredentialsProvider::LoadProfile: %s",
                  in_profile.c_str());
 
     /* load profiles from credentials file if credentials file loader is empty */
@@ -208,7 +204,7 @@ AWSCredentials IAMProfileCredentialsProvider::AssumeRole(
 	const rs_string& in_roleSessionName,
     const std::shared_ptr<AWSCredentialsProvider>& in_credentialsProvider)
 {
-    RS_LOG_DEBUG("IAM","Redshift::IamSupport::%s::%s()", "IAMProfileCredentialsProvider", "AssumeRole");
+    RS_LOG_DEBUG("IAM", "IAMProfileCredentialsProvider::AssumeRole");
 
     ClientConfiguration config;
 
@@ -239,9 +235,7 @@ AWSCredentials IAMProfileCredentialsProvider::AssumeRole(
 	config.requestTimeoutMs = m_config.GetStsConnectionTimeout();
 
     RS_LOG_DEBUG("IAM",
-                    "Redshift::IamSupport::%s::%s(): httpRequestTimeoutMs: "
-                    "%ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
-                    "IAMProfileCredentialsProvider", "AssumeRole",
+                    "AssumeRole httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
                     config.httpRequestTimeoutMs, config.connectTimeoutMs,
                     config.requestTimeoutMs);
 
@@ -262,7 +256,6 @@ AWSCredentials IAMProfileCredentialsProvider::AssumeRole(
 
         RS_LOG_DEBUG(
             "IAM",
-            "IAMProfileCredentialsProvider::AssumeRole: Calling "
             "client.AssumeRole with role_arn: %s and role_session_name: %s",
             request.GetRoleArn().c_str(), request.GetRoleSessionName().c_str());
 
@@ -340,8 +333,8 @@ IAMCredentials IAMProfileCredentialsProvider::GetIAMCredentials()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool IAMProfileCredentialsProvider::CanUseCachedAwsCredentials()
 {
-    RS_LOG_DEBUG("IAM", "Redshift::IamSupport::%s::%s()",
-                 "IAMProfileCredentialsProvider", "CanUseCachedAwsCredentials");
+    RS_LOG_DEBUG("IAM", 
+                 "IAMProfileCredentialsProvider::CanUseCachedAwsCredentials");
     return 
         ((!m_credentials.GetAWSCredentials().GetAWSAccessKeyId().empty())
             && (!m_credentials.GetAWSCredentials().GetAWSSecretKey().empty()));
@@ -352,8 +345,6 @@ bool IAMProfileCredentialsProvider::CanUseCachedAwsCredentials()
 IAMProfileCredentialsProvider::~IAMProfileCredentialsProvider()
 {
     RS_LOG_DEBUG("IAM",
-                 "Redshift::IamSupport::%s::%s()"
-                 "IAMProfileCredentialsProvider",
-                 "~IAMProfileCredentialsProvider");
+                 "IAMProfileCredentialsProvider::~IAMProfileCredentialsProvider");
     /* Do nothing */
 }

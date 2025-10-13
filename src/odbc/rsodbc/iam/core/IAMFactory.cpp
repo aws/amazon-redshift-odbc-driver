@@ -11,7 +11,6 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> IAMFactory::CreateCredentials
     const IamSettings& in_settings)
 {
   RS_LOG_DEBUG(
-        "Redshift::IamSupport::%s::%s()",
         "IAMFactory",
         "CreateCredentialsProvider");
 
@@ -128,7 +127,6 @@ std::shared_ptr<IAMProfileCredentialsProvider> IAMFactory::CreateProfileCredenti
         const IAMConfiguration& in_config)
 {
   RS_LOG_DEBUG(
-        "Redshift:IamSupport",
         "IAMFactory",
         "CreateProfileCredentialsProvider");
 
@@ -141,7 +139,6 @@ std::shared_ptr<IAMPluginCredentialsProvider> IAMFactory::CreatePluginCredential
 {
   std::map<rs_string, rs_string> argsMap;
   RS_LOG_DEBUG(
-        "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreatePluginCredentialsProvider");
 
@@ -154,7 +151,6 @@ std::shared_ptr<IAMAdfsCredentialsProvider> IAMFactory::CreateAdfsCredentialsPro
         const IAMConfiguration& in_config)
 {
   RS_LOG_DEBUG(
-        "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreateAdfsCredentialsProvider");
 
@@ -167,7 +163,6 @@ std::shared_ptr<IAMAzureCredentialsProvider> IAMFactory::CreateAzureCredentialsP
         const IAMConfiguration& in_config)
 {
   RS_LOG_DEBUG(
-        "Redshift:IamSupport::%s:%s()",
         "IAMFactory",
         "CreateAzureCredentialsProvider");
 
@@ -180,7 +175,6 @@ std::shared_ptr<IAMBrowserAzureCredentialsProvider> IAMFactory::CreateBrowserAzu
         const IAMConfiguration& in_config)
 {
   RS_LOG_DEBUG(
-        "Redshift:IamSupport::%s:%s()",
         "IAMFactory",
         "CreateBrowserAzureCredentialsProvider");
 
@@ -193,7 +187,6 @@ std::shared_ptr<IAMJwtBasicCredentialsProvider> IAMFactory::CreateJwtCredentials
         const IAMConfiguration& in_config)
 {
   RS_LOG_DEBUG(
-        "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreateJwtCredentialsProvider");
 
@@ -206,7 +199,6 @@ std::shared_ptr<IAMBrowserSamlCredentialsProvider> IAMFactory::CreateBrowserSaml
         const IAMConfiguration& in_config)
 {
   RS_LOG_DEBUG(
-        "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreateBrowserSamlCredentialsProvider");
 
@@ -219,7 +211,6 @@ std::shared_ptr<IAMOktaCredentialsProvider> IAMFactory::CreateOktaCredentialsPro
         const IAMConfiguration& in_config)
 {
   RS_LOG_DEBUG(
-        "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreateOktaCredentialsProvider");
 
@@ -232,7 +223,6 @@ std::shared_ptr<IAMPingCredentialsProvider> IAMFactory::CreatePingCredentialsPro
         const IAMConfiguration& in_config)
 {
   RS_LOG_DEBUG(
-        "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreatePingCredentialsProvider");
 
@@ -245,7 +235,6 @@ std::shared_ptr<IAMExternalCredentialsProvider> IAMFactory::CreateExternalCreden
         const IAMConfiguration& in_config)
 {
   RS_LOG_DEBUG(
-        "Redshift:IamSupport::%s::%s()",
         "IAMFactory",
         "CreateExternalCredentialsProvider");
 

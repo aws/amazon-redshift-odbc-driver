@@ -95,5 +95,5 @@ bool IAMCredentialsProvider::CanUseCachedAwsCredentials()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMCredentialsProvider::~IAMCredentialsProvider()
 {
-    RS_LOG_DEBUG("Redshift::IamSupport::%s::%s()", "IAMCredentialsProvider", "~IAMCredentialsProvider");
+    RS_LOG_DEBUG("IAM", "IAMCredentialsProvider::~IAMCredentialsProvider");
 }

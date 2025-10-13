@@ -41,16 +41,14 @@ void IdpTokenAuthPlugin::ValidateArgumentsMap() {
     // token and token type
     if (!m_argsMap.count(KEY_IDP_AUTH_TOKEN)) {
         RS_LOG_ERROR("IAMIDP",
-        "IdC authentication failed: token needs to be provided in connection "
-         "params");
+        "IdC authentication failed: token needs to be provided in connection params");
         IAMUtils::ThrowConnectionExceptionWithInfo(
             "IdC authentication failed: The token must be included in the "
             "connection parameters.");
     }
     if (!m_argsMap.count(KEY_IDP_AUTH_TOKEN_TYPE)) {
         RS_LOG_ERROR("IAMIDP",
-        "IdC authentication failed: token type needs to be provided in "
-         "connection params");
+        "IdC authentication failed: token type needs to be provided in connection params");
         IAMUtils::ThrowConnectionExceptionWithInfo(
             "IdC authentication failed: The token type must be included in the "
             "connection parameters.");

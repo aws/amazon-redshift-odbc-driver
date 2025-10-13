@@ -70,8 +70,7 @@ rs_string IAMAdfsCredentialsProvider::WindowsIntegratedAuthentication()
     bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
 
     RS_LOG_DEBUG("IAMCRD", 
-        "IAMAdfsCredentialsProvider::WindowsIntegratedAuthentication ",
-        + "verifySSL: %s",
+        "verifySSL: %s",
         shouldVerifySSL ? "true" : "false");
 
     const bool useProxyForIdP = m_config.GetUsingHTTPSProxy() && m_config.GetUseProxyIdpAuth();
@@ -94,14 +93,13 @@ rs_string IAMAdfsCredentialsProvider::WindowsIntegratedAuthentication()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
 {
-    RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuhentication");
+    RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuthentication");
 
     /* By default we enable verifying server certificate, use argument ssl_insecure = true to disable
        verifying the server certificate (e.g., self-signed IDP server) */
     bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
 
-    RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuthentication "
-         "verifySSL: %s",
+    RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuthentication verifySSL: %s",
         (shouldVerifySSL ? "true" : "false"));
 
     HttpClientConfig config;
@@ -109,8 +107,7 @@ rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
     config.m_caFile = m_config.GetCaFile();
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
-	RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuthentication ",
-		"HttpClientConfig.m_timeout: %ld",
+	RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuthentication HttpClientConfig.m_timeout: %ld",
 		config.m_timeout);
 
 

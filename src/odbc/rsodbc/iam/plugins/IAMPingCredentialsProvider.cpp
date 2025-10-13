@@ -50,7 +50,7 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
     
     bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
 
-    RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::GetSamlAssertion "
+    RS_LOG_DEBUG("IAMCRD", 
          "verifySSL: %s",
         shouldVerifySSL ? "true" : "false");
 
@@ -60,8 +60,8 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
     config.m_caFile = m_config.GetCaFile();
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
-	RS_LOG_DEBUG("IAMCRD", "IAMPingCredentialsProvider::GetSamlAssertion",
-		"HttpClientConfig.m_timeout: %ld",
+	RS_LOG_DEBUG("IAMCRD",
+		"IAMPingCredentialsProvider::GetSamlAssertion timeout: %ld",
 		config.m_timeout);
 
     if (m_config.GetUsingHTTPSProxy() && m_config.GetUseProxyIdpAuth())
@@ -108,7 +108,6 @@ rs_string IAMPingCredentialsProvider::GetSamlAssertion()
                                      requestHeader, requestBody);
 
   RS_LOG_DEBUG("IAMCRD",
-  "IAMPingCredentialsProvider::PostSamlAssertion "
    "Using URI: %s",
    uri_post.c_str());
     IAMHttpClient::CheckHttpResponseStatus(response,
@@ -147,7 +146,7 @@ std::map<rs_string, rs_string> IAMPingCredentialsProvider::GetNameValuePairFromI
         {
             if (isPasswordFound)
             {
-                RS_LOG_ERROR("IAMCRD", "IAMPingCredentialsProvider::GetNameValuePairFromInputTag "
+                RS_LOG_ERROR("IAMCRD",
                      "pass field: %s, has conflict with field: %s",
                     password_tag.c_str(), name.c_str());
                 
@@ -185,7 +184,7 @@ std::map<rs_string, rs_string> IAMPingCredentialsProvider::GetNameValuePairFromI
     
     if (!isUsernameFound || !isPasswordFound)
     {
-        RS_LOG_ERROR("IAMCRD", "IAMPingCredentialsProvider::GetNameValuePairFromInputTag "
+        RS_LOG_ERROR("IAMCRD",
              "username found: %s, password found: %s",
             std::to_string(isUsernameFound).c_str(),
             std::to_string(isPasswordFound).c_str());

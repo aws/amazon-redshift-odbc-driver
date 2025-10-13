@@ -186,15 +186,13 @@ void BrowserIdcAuthPlugin::ValidateArgumentsMap() {
     // Validate the parameters passed in and make sure we have the required fields.
     if (!m_argsMap.count(KEY_IDC_ISSUER_URL)) {
         RS_LOG_ERROR("IAMIDC",
-        "IdC authentication failed: issuer_url needs to be provided in "
-        "connection params");
+        "IdC authentication failed: issuer_url needs to be provided in connection params");
         IAMUtils::ThrowConnectionExceptionWithInfo(
             "IdC authentication failed: The issuer URL must be included in the "
             "connection parameters.");
     } else if (!m_argsMap.count(KEY_IDC_REGION)) {
         RS_LOG_ERROR("IAMIDC",
-        "IdC authentication failed: idc_region needs to be provided in "
-        "connection params");
+        "IdC authentication failed: idc_region needs to be provided in connection params");
         IAMUtils::ThrowConnectionExceptionWithInfo(
             "IdC authentication failed: The IdC region must be included in the "
             "connection parameters.");
