@@ -499,6 +499,11 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetConnectAttr(SQLHDBC phdbc,
         }
     }
 
+    // Only validate buffer length for string attributes
+    // For integer attributes, BufferLength should be ignored per ODBC spec
+    if (RsOptions::isStrConnectAttr(iAttribute) && cbLen < 0 && cbLen != SQL_NTS) {
+        rc = SQL_ERROR;
+        addError(&pConn->pErrorList, "HY090", "Invalid string or buffer length", 0, NULL);
         goto error;
     }
 
