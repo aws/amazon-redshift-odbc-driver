@@ -2,7 +2,7 @@
 #define _IAMUTILS_H_
 
 #include <vector>
-
+#include <regex>
 #include "../rs_iam_support.h"
 
 #include <ares.h>
@@ -167,6 +167,23 @@ namespace IamSupport
 
         static void ValidateURL(const rs_string & in_url);
 
+        /**
+         * Generates a regular expression pattern to match a specific JSON key-value pair.
+         *
+         * @param keyName The name of the JSON key to match
+         * @return A regex pattern string that matches the key and captures its value
+         */
+        static std::string getRegexForJsonKey(const std::string& keyName);
+
+        /**
+         * Masks sensitive credential values in a JSON string.
+         * Specifically masks 'access_token', 'refresh_token', 'sessionToken' and
+         * 'id_token' values with "***masked***".
+         *
+         * @param content The original JSON string containing sensitive credentials
+         * @return A new string with sensitive values masked
+         */
+        static std::string maskCredentials(const std::string& content);
     };
 }
 }

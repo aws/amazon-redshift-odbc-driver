@@ -297,12 +297,13 @@ rs_string IAMBrowserAzureCredentialsProvider::RequestAccessToken(const rs_string
         HttpMethod::HTTP_POST,
         requestHeader,
         requestBody);
-    
-	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RequestAccessToken: response %s\n", response.GetResponseBody().c_str());
 
     IAMHttpClient::CheckHttpResponseStatus(response,
         "Authentication failed on the Browser server. Please check the IdP Tenant and Client ID.");
-    
+
+    std::string maskedResponse = IAMUtils::maskCredentials(response.GetResponseBody());
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RequestAccessToken: response %s\n", maskedResponse.c_str());
+
     /* Convert response body to JSON and return Access Token if parse was successful. */
     Json::JsonValue res(response.GetResponseBody());
     
@@ -348,7 +349,7 @@ rs_string IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken(const 
     samlByteBuffer.GetUnderlyingData()),
     samlByteBuffer.GetLength());
     
-	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken: samlContent %s\n", samlContent.c_str());
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken: samlContent length %d\n", samlContent.length());
 
     /* What we get back from Browser is only the SAML Assertion. THe base class requires we pass in the full SAML
     Response. So we append the extra tags to the SAML Assertion to turn it into a SAML Response.*/

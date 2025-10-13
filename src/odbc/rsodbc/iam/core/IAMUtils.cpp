@@ -600,6 +600,7 @@ void IAMUtils::CurlValidateUrl(const rs_string &in_url){
 
 void IAMUtils::ValidateURL(const rs_string & in_url)
 {
+    RS_LOG_DEBUG("IAM", "IAMUtils::ValidateURL uri=%s", in_url.c_str());
     //const int in_url_len = in_url.length();
     //TestWinCrackURL();
     rs_string out_url;
@@ -608,4 +609,43 @@ void IAMUtils::ValidateURL(const rs_string & in_url)
     #else
         IAMUtils::CurlValidateUrl(in_url);
     #endif
+}
+
+std::string IAMUtils::getRegexForJsonKey(const std::string& keyName) {
+    return "(\"" + keyName + "\"\\s*:\\s*\")[^\"]*\"";
+}
+
+std::string IAMUtils::maskCredentials(const std::string& content) {
+    if (content.empty()) {
+        RS_LOG_WARN("IAM", "Empty content received");
+        return content;
+    }
+
+    // Array of sensitive token names to mask
+    const std::vector<std::string> tokenNames = {
+        "access_token",
+        "id_token",
+        "refresh_token",
+        "sessionToken"
+    };
+
+    std::string maskedContent = content;
+
+    // Iterate through all token types and mask them
+    for (const auto& tokenName : tokenNames) {
+        try {
+            maskedContent = std::regex_replace(
+                maskedContent,
+                std::regex(getRegexForJsonKey(tokenName)),
+                "$1***masked***\""
+            );
+        } catch (const std::regex_error& e) {
+            RS_LOG_DEBUG("IAM", "Regex replacement for sensitive info failed: %s, code: %s\n",
+               std::string(e.what()), std::to_string(e.code()));
+            maskedContent = "***content-masking-failed***";
+            break;
+        }
+    }
+
+    return maskedContent;
 }

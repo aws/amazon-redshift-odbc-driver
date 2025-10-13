@@ -55,7 +55,10 @@ rs_string IAMJwtBasicCredentialsProvider::GetJwtAssertion()
 
     rs_string jwt = m_argsMap[IAM_KEY_WEB_IDENTITY_TOKEN];
 
-    RS_LOG_DEBUG("IAMCRD", "IAMJwtBasicCredentialsProvider::GetJwtAssertion JWT Assertion: %s", jwt.c_str());
+    RS_LOG_DEBUG("IAMCRD",
+                 "IAMJwtBasicCredentialsProvider::GetJwtAssertion JWT "
+                 "Assertion length: %zu",
+                 jwt.length());
 
     return jwt;
 }

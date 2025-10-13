@@ -306,10 +306,11 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 		requestHeader,
 		requestBody);
 
-	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken: response %s\n", response.GetResponseBody().c_str());
-
 	IAMHttpClient::CheckHttpResponseStatus(response,
 		"Authentication failed on the Browser server. Please check the IdP Tenant and Client ID.");
+
+	std::string maskedResponse = IAMUtils::maskCredentials(response.GetResponseBody());
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken: response %s\n", maskedResponse.c_str());
 
 	/* Convert response body to JSON and return Access Token if parse was successful. */
 	Json::JsonValue res(response.GetResponseBody());

@@ -151,12 +151,13 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
         requestHeader,
         requestBody);
 
-	RS_LOG_DEBUG("IAMCRD", "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication: response %s\n", response.GetResponseBody().c_str());
-
     /* Check the response to see if we get a 200 back. If it fails, we throw an error and tell the user to
        double check their parameters. */
     IAMHttpClient::CheckHttpResponseStatus(response,
         "Authentication failed on the Azure server. Please check the IdP Tenant, User, Password, Client Secret and Client ID.");
+
+    std::string maskedResponse = IAMUtils::maskCredentials(response.GetResponseBody());
+    RS_LOG_DEBUG("IAMCRD", "IAMAzureCredentialsProvider::AzureOauthBasedAuthentication: response %s\n", maskedResponse.c_str());
 
     /* Convert response body to JSON and return session Token */
     Json::JsonValue res(response.GetResponseBody());

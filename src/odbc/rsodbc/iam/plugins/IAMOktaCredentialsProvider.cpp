@@ -112,7 +112,6 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
 	IAMUtils::ValidateURL(uri);
 
     Redshift::IamSupport::HttpResponse response = client->MakeHttpRequest(uri);
-	RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetSamlAssertion: response %s\n", response.GetResponseBody().c_str());
 
     IAMHttpClient::CheckHttpResponseStatus(response,
         "Failed to retrieve SAML assertion from the Okta server. Please check App ID and App Name.");
@@ -124,7 +123,10 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
     IAMUtils::ReplaceAll(samlAssertion,L"&#x2b;", L'+');
     IAMUtils::ReplaceAll(samlAssertion,L"&#x3d;", L'=');
 
-    return IAMUtils::convertToUTF8(samlAssertion);
+    rs_string finalSamlAssertion = IAMUtils::convertToUTF8(samlAssertion);
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetSamlAssertion: saml assertion length %d\n", finalSamlAssertion.length());
+
+    return finalSamlAssertion;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -161,14 +163,16 @@ rs_string IAMOktaCredentialsProvider::GetAuthSessionToken(
     Redshift::IamSupport::HttpResponse response =
         in_httpClient->MakeHttpRequest(uri, HttpMethod::HTTP_POST, requestHeader, requestBody);
 
+    IAMHttpClient::CheckHttpResponseStatus(response,
+        "Connection or authentication failed to the Okta server. Please check the IdP Host, user and password.");
+
+    std::string maskedResponseBody = IAMUtils::maskCredentials(response.GetResponseBody());
+
     RS_LOG_DEBUG("IAMCRD",
          "Response Code: %d, Response Header: %s, Response Body: %s",
         response.GetStatusCode(),
         response.GetResponseHeader().c_str(),
-        response.GetResponseBody().c_str());
-
-    IAMHttpClient::CheckHttpResponseStatus(response,
-        "Connection or authentication failed to the Okta server. Please check the IdP Host, user and password.");
+        maskedResponseBody.c_str());
 
     /* Convert response body to JSON and return session Token */
     Json::JsonValue res(response.GetResponseBody());

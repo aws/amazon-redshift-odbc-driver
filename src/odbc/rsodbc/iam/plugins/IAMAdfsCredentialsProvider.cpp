@@ -159,10 +159,13 @@ rs_string IAMAdfsCredentialsProvider::FormBasedAuthentication()
 
     const rs_string requestBody = IAMHttpClient::CreateHttpFormRequestBody(paramMap);
     response = client->MakeHttpRequest(uri, HttpMethod::HTTP_POST, requestHeader, requestBody);
-	RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuthentication: response2 %s\n", response.GetResponseBody().c_str());
 
     IAMHttpClient::CheckHttpResponseStatus(response,
         "Authentication failed on the AD FS server. Please check the user, password, or Login To RP.");
+
+    RS_LOG_DEBUG("IAMCRD", "IAMAdfsCredentialsProvider::FormBasedAuthentication: SAML response length: %d\n",
+    response.GetResponseBody().length());
+
     return ExtractSamlAssertion(response.GetResponseBody(), IAM_PLUGIN_SAML_PATTERN);
 }
 
