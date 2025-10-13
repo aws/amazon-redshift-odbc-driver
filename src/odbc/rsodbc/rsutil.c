@@ -101,7 +101,6 @@ static const RS_MAP_SQL_STATE   gMapToODBC2SqlState[] =
 static  const RS_MAP_FUNC_NAME gMapToPadbFuncName[] = 
 {
     { "LCASE", "LOWER"},
-    { "LOCATE", "STRPOS"},
     { "UCASE", "UPPER"},
     { "LOG", "LN"},
     { "LOG10", "LOG"},

@@ -286,8 +286,6 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
         case SQL_MAX_ROW_SIZE:
         case SQL_MAX_STATEMENT_LEN:
         case SQL_STATIC_SENSITIVITY:
-        case SQL_TIMEDATE_ADD_INTERVALS:
-        case SQL_TIMEDATE_DIFF_INTERVALS:
         {
             rc = integerInfoResponse(0, piVal, pcbLen, piRetType);
             break;
@@ -1087,15 +1085,18 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
                      | SQL_FN_STR_CHAR_LENGTH 
                      | SQL_FN_STR_CHARACTER_LENGTH 
                      | SQL_FN_STR_CONCAT
+                     | SQL_FN_STR_DIFFERENCE
                      | SQL_FN_STR_LCASE
+                     | SQL_FN_STR_LEFT
                      | SQL_FN_STR_LENGTH
-                     | SQL_FN_STR_LOCATE_2 
                      | SQL_FN_STR_LTRIM 
                      | SQL_FN_STR_OCTET_LENGTH
                      | SQL_FN_STR_POSITION
                      | SQL_FN_STR_REPEAT
                      | SQL_FN_STR_REPLACE 
+                     | SQL_FN_STR_RIGHT
                      | SQL_FN_STR_RTRIM 
+                     | SQL_FN_STR_SOUNDEX
                      | SQL_FN_STR_SUBSTRING 
                      | SQL_FN_STR_UCASE;
 
@@ -1126,15 +1127,42 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
             break;
         }
 
+        case SQL_TIMEDATE_ADD_INTERVALS:
+        case SQL_TIMEDATE_DIFF_INTERVALS:
+        {
+            iVal = SQL_FN_TSI_FRAC_SECOND
+                    | SQL_FN_TSI_SECOND
+                    | SQL_FN_TSI_MINUTE
+                    | SQL_FN_TSI_HOUR
+                    | SQL_FN_TSI_DAY
+                    | SQL_FN_TSI_WEEK
+                    | SQL_FN_TSI_MONTH
+                    | SQL_FN_TSI_QUARTER
+                    | SQL_FN_TSI_YEAR;
+            rc = integerInfoResponse(iVal, piVal, pcbLen, piRetType);
+            break;
+        }
+
         case SQL_TIMEDATE_FUNCTIONS:
         {
             iVal =  SQL_FN_TD_CURRENT_DATE
                      | SQL_FN_TD_CURRENT_TIME
                      | SQL_FN_TD_CURRENT_TIMESTAMP
-                     | SQL_FN_TD_CURDATE  
-                     | SQL_FN_TD_CURTIME 
+                     | SQL_FN_TD_CURDATE
+                     | SQL_FN_TD_CURTIME
                      | SQL_FN_TD_EXTRACT
-                     | SQL_FN_TD_NOW;
+                     | SQL_FN_TD_NOW
+                     | SQL_FN_TD_DAYOFMONTH
+                     | SQL_FN_TD_DAYOFYEAR
+                     | SQL_FN_TD_MONTH
+                     | SQL_FN_TD_QUARTER
+                     | SQL_FN_TD_WEEK
+                     | SQL_FN_TD_YEAR
+                     | SQL_FN_TD_HOUR
+                     | SQL_FN_TD_MINUTE
+                     | SQL_FN_TD_SECOND
+                     | SQL_FN_TD_TIMESTAMPADD
+                     | SQL_FN_TD_TIMESTAMPDIFF;
             rc = integerInfoResponse(iVal, piVal, pcbLen, piRetType);
             break;
         }
