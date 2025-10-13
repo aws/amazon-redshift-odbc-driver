@@ -482,10 +482,23 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetConnectAttr(SQLHDBC phdbc,
     // Clear error list
     pConn->pErrorList = clearErrorList(pConn->pErrorList);
 
-    if(!pValue)
-    {
-        rc = SQL_ERROR;
-        addError(&pConn->pErrorList,"HY000", "Output buffer is NULL", 0, NULL);
+    if(!pValue) {
+        if(RsOptions::isStrConnectAttr(iAttribute)) {
+            if(!pcbLen) {
+                // For string attributes: pValue can be NULL only when querying buffer size,
+                // which requires a valid StringLengthPtr
+                // https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetconnectattr-function
+                addError(&pConn->pErrorList,"HY000", "Both ValuePtr and StringLengthPtr cannot be NULL", 0, NULL);
+                rc = SQL_ERROR;
+                goto error;
+            }
+        } else {
+            addError(&pConn->pErrorList,"HY000", "ValuePtr cannot be NULL", 0, NULL);
+            rc = SQL_ERROR;
+            goto error;
+        }
+    }
+
         goto error;
     }
 
@@ -1671,9 +1684,7 @@ SQLRETURN  SQL_API SQLGetConnectAttrW(SQLHDBC        phdbc,
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLGetConnectAttrW(FUNC_CALL, 0, phdbc, iAttribute, pwValue, cbLen, pcbLen);
 
-    if(iAttribute == SQL_ATTR_CURRENT_CATALOG
-        || iAttribute == SQL_ATTR_TRACEFILE
-        || iAttribute == SQL_ATTR_TRANSLATE_LIB)
+    if(RsOptions::isStrConnectAttr(iAttribute))
     {
         strOption = TRUE;
 
@@ -1703,7 +1714,7 @@ SQLRETURN  SQL_API SQLGetConnectAttrW(SQLHDBC        phdbc,
     szValue = (char *)rs_free(szValue);
 
     if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLGetConnectAttrW(FUNC_RETURN, 0, phdbc, iAttribute, pwValue, cbLen, pcbLen);
+        TraceSQLGetConnectAttrW(FUNC_RETURN, rc, phdbc, iAttribute, pwValue, cbLen, pcbLen);
 
     endApiMutex(NULL, phdbc);
 
@@ -2023,3 +2034,11 @@ error:
     return rc;
 }
 
+/*====================================================================================================================================================*/
+// Checks if the input is a string-type connection attribute
+//
+bool RsOptions::isStrConnectAttr(SQLINTEGER iAttribute) {
+    return iAttribute == SQL_ATTR_CURRENT_CATALOG
+        || iAttribute == SQL_ATTR_TRACEFILE
+        || iAttribute == SQL_ATTR_TRANSLATE_LIB;
+}

@@ -821,3 +821,77 @@ TEST(CopyStrDataBigLen, NonNullTerminatedInput) {
     EXPECT_EQ(dest[1], '\0');
     EXPECT_EQ(lenInd, 1);
 }
+
+// Test copyStrDataLargeLen function behavior with NULL pDest and non-NULL pcbLen
+TEST(copyStrDataLargeLen, test_copyStrDataLargeLen_null_pDest_with_pcbLen) {
+    const char* testStr = "test";
+    SQLINTEGER pcbLen = 0;
+    
+    SQLRETURN rc = copyStrDataLargeLen(testStr, SQL_NTS, NULL, 0, &pcbLen);
+    
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_EQ(pcbLen, 4); // Length of "test"
+}
+
+TEST(copyStrDataLargeLen, test_copyStrDataLargeLen_explicit_length) {
+    const char* testStr = "test_longer_string";
+    char buffer[10];
+    SQLINTEGER pcbLen = 0;
+
+    // Only copy first 4 characters using explicit length
+    SQLRETURN rc = copyStrDataLargeLen(testStr, 4, buffer, sizeof(buffer), &pcbLen);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(pcbLen, 4);
+    EXPECT_STREQ(buffer, "test");
+}
+
+// Test copyStrDataLargeLen function behavior with short buffer
+TEST(copyStrDataLargeLen, test_copyStrDataLargeLen_short_buffer) {
+    const char* testStr = "test";
+    char shortBuffer[2];
+    SQLINTEGER pcbLen = 0;
+    
+    SQLRETURN rc = copyStrDataLargeLen(testStr, SQL_NTS, shortBuffer, sizeof(shortBuffer), &pcbLen);
+    
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    EXPECT_EQ(pcbLen, 4); // Length of "test"
+    EXPECT_EQ(shortBuffer[0], 't');
+    EXPECT_EQ(shortBuffer[1], '\0');
+}
+
+// Test copyStrDataLargeLen function behavior with adequate buffer
+TEST(copyStrDataLargeLen, test_copyStrDataLargeLen_adequate_buffer) {
+    const char* testStr = "test";
+    char buffer[10];
+    SQLINTEGER pcbLen = 0;
+    
+    SQLRETURN rc = copyStrDataLargeLen(testStr, SQL_NTS, buffer, sizeof(buffer), &pcbLen);
+    
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(pcbLen, 4); // Length of "test"
+    EXPECT_STREQ(buffer, "test");
+}
+
+// Test copyStrDataLargeLen function behavior with NULL source
+TEST(copyStrDataLargeLen, test_copyStrDataLargeLen_null_source) {
+    char buffer[10];
+    SQLINTEGER pcbLen = 0;
+    
+    SQLRETURN rc = copyStrDataLargeLen(NULL, SQL_NTS, buffer, sizeof(buffer), &pcbLen);
+    
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(pcbLen, 0);
+    EXPECT_EQ(buffer[0], '\0');
+}
+
+// Test copyStrDataLargeLen function behavior with NULL pcbLen
+TEST(copyStrDataLargeLen, test_copyStrDataLargeLen_null_pcbLen) {
+    const char* testStr = "test";
+    char buffer[10];
+
+    SQLRETURN rc = copyStrDataLargeLen(testStr, SQL_NTS, buffer, sizeof(buffer), NULL);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_STREQ(buffer, "test");
+}

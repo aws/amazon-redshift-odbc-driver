@@ -53,6 +53,8 @@ class RsOptions {
                                                  SQLPOINTER    pValue,
                                                  SQLINTEGER    cbLen);
 
+    static bool isStrConnectAttr(SQLINTEGER iAttribute);
+
 };
 
 #endif // __RS_OPTIONS_H__
