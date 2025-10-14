@@ -1,6 +1,15 @@
 Changelog
 =========
 
+v2.1.10 (2025-10-14)
+---------------------
+1. Standardized logging output to conform with ODBC logger format specifications.
+2. Updated SQLGetInfo to reflect existing String and Date/Time function support.
+3. Removed unsupported client/stdin Copy and Unload feature implementation that was no longer maintained or supported.
+4. Fixed SQLGetConnectAttr API to correctly return StringLengthPtr for NULL ValuePtr in string attribute scenarios.
+5. Fixed buffer length validation for integer attributes in SQLGetConnectAttr.
+6. Improvements for logging.
+
 v2.1.9 (2025-08-14)
 ---------------------
 1. Fixed row-wise parameter binding in SQLBindParameter by implementing correct length indicator pointer and stride calculations.
