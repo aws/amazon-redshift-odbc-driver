@@ -183,6 +183,7 @@ function(get_rsodbc_deps rsodbc_deps)
       krb5
       k5crypto
       krb5support
+      k5crypto
       com_err
       PARENT_SCOPE)
 endfunction()

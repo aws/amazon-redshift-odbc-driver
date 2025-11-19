@@ -37,7 +37,7 @@ if (WIN32)
 endif()
 # Set include directories for the library(for openssl)
 if(RS_OPENSSL_DIR)
-    target_include_directories(pq PRIVATE ${RS_OPENSSL_DIR}/${RS_BUILD_TYPE}/include)
+    add_safe_include(pq ${RS_OPENSSL_DIR})
 endif()
 
 target_include_directories(pq PRIVATE ${PGCLIENT_INCLUDE_DIR})

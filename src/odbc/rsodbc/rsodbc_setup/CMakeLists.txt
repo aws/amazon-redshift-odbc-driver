@@ -43,7 +43,7 @@ include_and_link_openssl(rsodbcsetup)
 # Set the output directories for the target
 
 
-install(TARGETS ${TARGET_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/lib")
+install(TARGETS ${TARGET_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}")
 
 if ( WIN32 )
     message(STARTUS "Targeting${CMAKE_CURRENT_BINARY_DIR}")

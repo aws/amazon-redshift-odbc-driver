@@ -23,10 +23,16 @@ else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
 
-install(TARGETS ${EXECUTABLE_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
+install(TARGETS ${EXECUTABLE_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}")
 install(TARGETS ${EXECUTABLE_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/odbcconform_tests")
 install(TARGETS ${EXECUTABLE_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/test")
 install(TARGETS ${EXECUTABLE_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/ODBCAPITests/src")
+
+if(ENABLE_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/cmake/Test.cmake")
+
+  include(${CMAKE_SOURCE_DIR}/cmake/Test.cmake)
+  install_rsodbcsql_for_test(${EXECUTABLE_NAME})
+endif()
 
 add_custom_target(
     ${EXECUTABLE_NAME}_BINARY

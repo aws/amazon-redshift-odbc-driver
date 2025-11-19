@@ -65,7 +65,7 @@
      <!-- Add files to your installer package -->
      <DirectoryRef Id="BASEDIR">
         <Component Id="rsodbcsql.exe" Guid="BC8A809A-59CA-41f6-A657-06553364049A" Win64="yes">
-          <File Id="rsodbcsql.exe" Name="rsodbcsql.exe" Source="$(var.ProjectDir)/cmake-build/install/bin/rsodbcsql.exe" />
+          <File Id="rsodbcsql.exe" Name="rsodbcsql.exe" Source="$(var.ProjectDir)/cmake-build/install/rsodbcsql.exe" />
 	</Component>
      </DirectoryRef>
      <DirectoryRef Id="BINDIR">
@@ -81,7 +81,7 @@
           <File Id="redshift.ico" Name="resdhfit.ico" Source="$(var.ProjectDir)/src/odbc/rsodbc/samples/connect/redshift.ico" />
           <File Id="connect.sln" Name="connect.sln" Source="$(var.ProjectDir)/src/odbc/rsodbc/samples/connect/connect.sln" />
           <File Id="connect.vcproj" Name="connect.vcproj" Source="$(var.ProjectDir)/src/odbc/rsodbc/samples/connect/connect.vcxproj" />
-          <File Id="connect.exe" Name="connect.exe" Source="$(var.ProjectDir)/cmake-build/install/bin/connect64.exe" />
+          <File Id="connect.exe" Name="connect.exe" Source="$(var.ProjectDir)/cmake-build/install/connect.exe" />
 	</Component>
      </DirectoryRef>
     

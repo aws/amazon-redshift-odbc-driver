@@ -1,4 +1,4 @@
-set(EXECUTABLE_NAME "connect64")
+set(EXECUTABLE_NAME "connect")
 file(GLOB SOURCES connect.c)
 set_source_files_properties(${C_SOURCES} PROPERTIES LANGUAGE CXX )
 
@@ -22,9 +22,9 @@ target_compile_definitions(${EXECUTABLE_NAME} PRIVATE
     ODBCVER=0x0350 ODBC64 WIN32 )
 endif()
 
-install(TARGETS ${EXECUTABLE_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
+install(TARGETS ${EXECUTABLE_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}")
 
 if ( WIN32 )
-    message(STARTUS "Targeting${CMAKE_CURRENT_BINARY_DIR}")
+    message(STATUS "Targeting ${CMAKE_CURRENT_BINARY_DIR}")
     set_output_directory(${EXECUTABLE_NAME})                    
 endif (  )

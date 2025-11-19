@@ -1,3 +1,7 @@
+set(ODBC_DRIVER "Amazon Redshift ODBC Driver (x64)")
+# Applicable to Linux and macOS. Windows has a different setup
+set(ODBCINI_INSTALL_DIR "/opt/amazon/redshiftodbcx64")
+
 function(set_output_directory EXECUTABLE_NAME)
   
   set_target_properties(${EXECUTABLE_NAME} PROPERTIES
@@ -112,11 +116,13 @@ function(find_gtest)
     find_library(GTEST_LIBRARY
     NAMES gtest
     PATHS ${CMAKE_LIBRARY_PATH}
+    NO_DEFAULT_PATH
     )
 
     # Check if libgtest.a is found
     if (GTEST_LIBRARY)
         message(STATUS "Found GTest library: ${GTEST_LIBRARY}")
+        message(STATUS "CMAKE_LIBRARY_PATH: ${CMAKE_LIBRARY_PATH}")
         # Set variables expected by GTest
         set(GTEST_LIBRARIES ${GTEST_LIBRARY} PARENT_SCOPE)
         # Set the include directories where GTest headers are located
@@ -158,4 +164,43 @@ function(post_build_copy_dependency_files EXECUTABLE_NAME DST_DIR)
           )
       endforeach()
   endif ()
+endfunction()
+
+function(install_assets)
+  configure_file("${CMAKE_SOURCE_DIR}/src/odbc/rsodbc/odbc.ini.in" "${CMAKE_BINARY_DIR}/src/odbc/rsodbc/odbc.ini" @ONLY)
+  configure_file("${CMAKE_SOURCE_DIR}/src/odbc/rsodbc/odbcinst.ini.in" "${CMAKE_BINARY_DIR}/src/odbc/rsodbc/odbcinst.ini" @ONLY)
+  configure_file("${CMAKE_SOURCE_DIR}/src/odbc/rsodbc/odbc.sh.in" "${CMAKE_BINARY_DIR}/src/odbc/rsodbc/odbc.sh" @ONLY)
+  configure_file("${CMAKE_SOURCE_DIR}/src/odbc/rsodbc/odbc.csh.in" "${CMAKE_BINARY_DIR}/src/odbc/rsodbc/odbc.csh" @ONLY)
+  configure_file("${CMAKE_SOURCE_DIR}/src/odbc/rsodbc/amazon.redshiftodbc.ini" "${CMAKE_BINARY_DIR}/src/odbc/rsodbc/amazon.redshiftodbc.ini" @ONLY)
+
+  install(FILES "${CMAKE_BINARY_DIR}/src/odbc/rsodbc/odbc.ini" DESTINATION "${CMAKE_INSTALL_PREFIX}" RENAME odbc.ini)
+  install(FILES "${CMAKE_BINARY_DIR}/src/odbc/rsodbc/odbcinst.ini" DESTINATION "${CMAKE_INSTALL_PREFIX}" RENAME odbcinst.ini)
+  install(FILES "${CMAKE_BINARY_DIR}/src/odbc/rsodbc/odbc.csh" DESTINATION "${CMAKE_INSTALL_PREFIX}" RENAME odbc.csh)
+  install(FILES "${CMAKE_BINARY_DIR}/src/odbc/rsodbc/odbc.sh" DESTINATION "${CMAKE_INSTALL_PREFIX}" RENAME odbc.sh)
+  install(FILES "${CMAKE_BINARY_DIR}/src/odbc/rsodbc/amazon.redshiftodbc.ini" DESTINATION "${CMAKE_INSTALL_PREFIX}" RENAME amazon.redshiftodbc.ini)
+
+  install(FILES "${CMAKE_SOURCE_DIR}/src/odbc/rsodbc/root.crt" DESTINATION "${CMAKE_INSTALL_PREFIX}" )
+endfunction()
+
+function(add_safe_include target lib_dir)
+    # Optional: allow override
+    set(build_type "${RS_BUILD_TYPE}")
+    if(NOT build_type)
+        if(CMAKE_BUILD_TYPE)
+            set(build_type "${CMAKE_BUILD_TYPE}")
+        else()
+            set(build_type "Release")
+        endif()
+    endif()
+
+    set(include_dir "${lib_dir}/${build_type}/include")
+    if(EXISTS "${include_dir}")
+        message(STATUS "Using include path: ${include_dir}")
+        target_include_directories(${target} PRIVATE "${include_dir}")
+    elseif(EXISTS "${lib_dir}/include")
+        message(WARNING "Using fallback include path: ${lib_dir}/include")
+        target_include_directories(${target} PRIVATE "${lib_dir}/include")
+    else()
+        message(FATAL_ERROR "No valid include path found in ${lib_dir}")
+    endif()
 endfunction()

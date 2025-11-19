@@ -20,11 +20,11 @@
       <Directory Id="BINDIR" Name=".">
         <Component Id="rsodbc.files" Guid="486400C3-BD3B-424d-8B1F-C9DA38BDAA88" Win64="yes">
           <!-- Redshift -->
-          <File Id="rsodbc.dll" Name="rsodbc.dll" Source="$(var.ProjectDir)/cmake-build/install/lib/rsodbc64.dll" />
+          <File Id="rsodbc.dll" Name="rsodbc.dll" Source="$(var.ProjectDir)/cmake-build/install/rsodbc64.dll" />
           <File Id="root.crt" Name="root.crt" Source="../root.crt" />
           <File Id="libcrypto_1_1_x64.dll" Name="libcrypto-1_1-x64.dll" Source="$(var.DependenciesDir)/openssl/$(var.BuildType)/bin/libcrypto-1_1-x64.dll" />
           <File Id="libssl_1_1_x64.dll" Name="libssl-1_1-x64.dll" Source="$(var.DependenciesDir)/openssl/$(var.BuildType)/bin/libssl-1_1-x64.dll" />
-          <File Id="rsodbcsetup.dll" Name="rsodbcsetup.dll" Source="$(var.ProjectDir)/cmake-build/install/lib/rsodbcsetup.dll" />
+          <File Id="rsodbcsetup.dll" Name="rsodbcsetup.dll" Source="$(var.ProjectDir)/cmake-build/install/rsodbcsetup.dll" />
           <File Id="gssapi64.dll" Name="gssapi64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/gssapi64.dll" />
           <File Id="krb5_64.dll" Name="krb5_64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/krb5_64.dll" />
           <File Id="k5sprt64.dll" Name="k5sprt64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/k5sprt64.dll" />

@@ -43,19 +43,19 @@ fi
 mkdir -p /tmp/redshiftodbcx64
 mkdir -p /tmp/redshiftodbcx64/samples/connect
 
-cp ${INSTALL_DIR}/lib/librsodbc64.so /tmp/redshiftodbcx64/
-cp ./amazon.redshiftodbc.ini  /tmp/redshiftodbcx64/
-cp ./root.crt /tmp/redshiftodbcx64/
-cp ./odbc.ini.x64  /tmp/redshiftodbcx64/odbc.ini
-cp ./odbcinst.ini.x64 /tmp/redshiftodbcx64/odbcinst.ini
-cp ./odbc.csh.x64 /tmp/redshiftodbcx64/odbc.csh
-cp ./odbc.sh.x64 /tmp/redshiftodbcx64/odbc.sh
+cp ${INSTALL_DIR}/librsodbc64.so /tmp/redshiftodbcx64/
+cp ${INSTALL_DIR}/amazon.redshiftodbc.ini  /tmp/redshiftodbcx64/
+cp ${INSTALL_DIR}/root.crt /tmp/redshiftodbcx64/
+cp ${INSTALL_DIR}/odbc.ini  /tmp/redshiftodbcx64/odbc.ini
+cp ${INSTALL_DIR}/odbcinst.ini /tmp/redshiftodbcx64/odbcinst.ini
+cp ${INSTALL_DIR}/odbc.csh /tmp/redshiftodbcx64/odbc.csh
+cp ${INSTALL_DIR}/odbc.sh /tmp/redshiftodbcx64/odbc.sh
 
 cp ./samples/connect/connect.c /tmp/redshiftodbcx64/samples/connect/
 cp ./samples/connect/connect.mak /tmp/redshiftodbcx64/samples/connect/connect.mak
-cp ${INSTALL_DIR}/bin/connect64 /tmp/redshiftodbcx64/samples/connect/connect
+cp ${INSTALL_DIR}/connect /tmp/redshiftodbcx64/samples/connect/connect
 
-cp ${INSTALL_DIR}/bin/rsodbcsql /tmp/redshiftodbcx64/
+cp ${INSTALL_DIR}/rsodbcsql /tmp/redshiftodbcx64/
 
 # This is the directory used by RPMBUILD
 rm -rf /var/tmp/redshiftodbcx64/
@@ -84,11 +84,12 @@ rm ${spec_file}
 echo Moving the 64 bit rpm to the rpm folder..
 rm ./rpm/$rpm_new_name
 mv $rpm_src ./rpm/$rpm_new_name
-echo "sha256sum=$(sha256sum ./rpm/$rpm_new_name)"
-echo "sha512sum=$(sha512sum ./rpm/$rpm_new_name)"
-if [ $? -ne 0 ]
+echo "sha256sum=$(sha256sum "$(pwd)/rpm/$rpm_new_name" | awk '{print $1}')"
+echo "sha512sum=$(sha512sum "$(pwd)/rpm/$rpm_new_name" | awk '{print $1}')"
+rc_=$?
+if [ $rc_ -ne 0 ]
 then
-    exit $?
+    exit $rc_
 fi
-
-exit $?
+echo "Find the package in $(pwd)/rpm/$rpm_new_name"
+exit $rc_

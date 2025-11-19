@@ -1,0 +1,11 @@
+[ODBC Drivers]
+@ODBC_DRIVER@=Installed
+
+[ODBC]
+#This section must contain values for DSN-less connections
+#if no odbc.ini file exists. If an odbc.ini file exists,
+#the values from that [ODBC] section are used.
+
+[@ODBC_DRIVER@]
+Driver=@ODBCINI_INSTALL_DIR@/librsodbc64@CMAKE_SHARED_LIBRARY_SUFFIX@
+Setup=@ODBCINI_INSTALL_DIR@/librsodbc64@CMAKE_SHARED_LIBRARY_SUFFIX@
