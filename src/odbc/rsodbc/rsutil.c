@@ -13425,9 +13425,32 @@ std::string getDatabase(RS_STMT_INFO *pStmt) {
     return connection->szDatabase;
 }
 
-// Helper function to retrieve column index based on column name
+/**
+ * @brief Internal helper function to get column index from column name.
+ *
+ * This function is for metadata API internal use only.
+ *
+ * @param pStmt Pointer to the statement information structure
+ * @param columnName Column name to look up (must be lowercase)
+ * @return int Column index (1-based) if found, -1 if not found
+ */
 int getIndex(RS_STMT_INFO *pStmt, std::string columnName) {
-    return pStmt->pResultHead->columnNameIndexMap[columnName];
+    auto it = pStmt->pResultHead->columnNameIndexMap.find(columnName);
+    if (it != pStmt->pResultHead->columnNameIndexMap.end()) {
+        return it->second;
+    }
+
+    // If not found, try with uppercase
+    std::string upperName = columnName;
+    std::transform(upperName.begin(), upperName.end(), upperName.begin(), ::toupper);
+    it = pStmt->pResultHead->columnNameIndexMap.find(upperName);
+    if (it != pStmt->pResultHead->columnNameIndexMap.end()) {
+        return it->second;
+    }
+
+    RS_LOG_ERROR("RSUTIL", "Column %s not found in column index map",
+        columnName.c_str());
+    return -1;
 }
 
 // Helper function to check if catalog name was SQL_ALL_CATALOGS
