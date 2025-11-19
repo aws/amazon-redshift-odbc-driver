@@ -287,7 +287,7 @@
 /* 1 Workgroup*/
 /* 1 Compression */
 
-#define DD_DSN_ATTR_COUNT 105
+#define DD_DSN_ATTR_COUNT 106
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
