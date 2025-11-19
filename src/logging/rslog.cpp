@@ -135,7 +135,46 @@ static LogManagerType rsLogManager;
 Initialize the logging system. Logs can be wrrtten to the file after successful
 completion of this command
 */
-void initializeAWSLogging() { rsLogManager.initializeAWSLogging(); }
+void initializeAWSLogging() {
+    rsLogManager.initializeAWSLogging();
+    auto* logSystem = rsLogManager.GetLogSystem();
+    if (logSystem == nullptr) {
+        throw std::runtime_error("Failed to initialize logging system");
+    }
+
+    // Check log level
+    auto logLevel = logSystem->GetLogLevel();
+    if (logLevel >= AwsLogging::LogLevel::Debug) {
+        RS_LOG_WARN("RSLOG",
+                    "\n"
+                    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                    "!!!! WARNING "
+                    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                    "!!!!!!!\n"
+                    "**********************************************************"
+                    "**********************************************************"
+                    "********************\n"
+                    "*                                                         "
+                    "                                                          "
+                    "                   *\n"
+                    "*  Log level (%d) is enabled!                             "
+                    "                                                          "
+                    "                    *\n"
+                    "*  WARNING: Log level Debug (level 5) or higher captures "
+                    "ALL data which may include sensitive information.         "
+                    "                    *\n"
+                    "*                                                         "
+                    "                                                          "
+                    "                   *\n"
+                    "*  IMPORTANT: Before sharing logs with support or any "
+                    "third party, ensure all sensitive information is "
+                    "redacted/removed from the logs  *\n"
+                    "**********************************************************"
+                    "**********************************************************"
+                    "********************\n",
+                    static_cast<int>(logLevel));
+    }
+}
 void initializeLoggingWithGlobalLogVars(RS_LOG_VARS *rsLogVars) {
     rsLogManager.initializeAWSLogging(rsLogVars);
 }
