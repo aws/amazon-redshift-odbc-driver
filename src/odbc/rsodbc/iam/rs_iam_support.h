@@ -67,6 +67,7 @@ namespace IamSupport
     #define IAM_KEY_IDP_HOST        "idp_host"
     #define IAM_KEY_IDP_PORT        "idp_port"
     #define IAM_KEY_IDP_TENANT      "idp_tenant"
+    #define IAM_KEY_IDP_PARTITION   "idp_partition"
     #define IAM_KEY_CLIENT_SECRET   "client_secret"
     #define IAM_KEY_CLIENT_SECRET_ENCRYPTED     "client_secret_encrypted"
     #define IAM_KEY_CLIENT_ID       "client_id"
@@ -207,6 +208,9 @@ namespace IamSupport
 
         /// The Idp Server tenant.
         rs_string m_idpTenant;
+
+        /// The Idp Server partition.
+        rs_string m_idpPartition;
 
         /// The IDP Response Timeout for Browser based authentication.
         short m_idp_response_timeout;

@@ -51,6 +51,7 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> IAMFactory::CreateCredentials
         config.SetIdpHost(in_settings.m_idpHost);
         config.SetIdpPort(in_settings.m_idpPort);
         config.SetIdpTenant(in_settings.m_idpTenant);
+        config.SetIdpPartition(in_settings.m_idpPartition);
         config.SetClientSecret(in_settings.m_clientSecret);
         config.SetClientId(in_settings.m_clientId);
 		config.SetScope(in_settings.m_scope);

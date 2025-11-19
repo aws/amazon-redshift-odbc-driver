@@ -446,6 +446,7 @@ void RsIamHelper::SetIamSettings(
         settings.m_idpPort = pIamProps->iIdpPort;
 
         settings.m_idpTenant = pIamProps->szIdpTenant;
+        settings.m_idpPartition = pIamProps->szIdpPartition;
         settings.m_clientSecret = pIamProps->szClientSecret;
         settings.m_clientId = pIamProps->szClientId;
         settings.m_scope = pIamProps->szScope;

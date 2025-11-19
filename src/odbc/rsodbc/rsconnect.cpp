@@ -2274,6 +2274,9 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
         } else if (_stricmp(pname, RS_IDP_TENANT) == 0) {
           rs_strncpy(pIamProps->szIdpTenant, pval,
                      sizeof(pIamProps->szIdpTenant));
+        } else if (_stricmp(pname, RS_IDP_PARTITION) == 0) {
+          rs_strncpy(pIamProps->szIdpPartition, pval,
+                     sizeof(pIamProps->szIdpPartition));
         } else if (_stricmp(pname, RS_CLIENT_ID) == 0) {
           rs_strncpy(pIamProps->szClientId, pval,
                      sizeof(pIamProps->szClientId));
@@ -3120,6 +3123,7 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
 		RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_GROUP_FEDERATION, &(pIamProps->isGroupFederation));
 		RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_LOGIN_TO_RP, "", pIamProps->szLoginToRp, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IDP_TENANT, "", pIamProps->szIdpTenant, MAX_IAM_BUF_VAL, ODBC_INI);
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IDP_PARTITION, "", pIamProps->szIdpPartition, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_CLIENT_ID, "", pIamProps->szClientId, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_CLIENT_SECRET, "", pIamProps->szClientSecret, MAX_IAM_BUF_VAL, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_LOGIN_URL, "", pIamProps->szLoginUrl, MAX_IAM_BUF_VAL, ODBC_INI);

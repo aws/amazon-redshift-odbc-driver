@@ -29,6 +29,7 @@ struct RS_IAM_CONN_PROPS_INFO {
   char szIdpHost[MAX_IAM_BUF_VAL]; // idp_host
   int iIdpPort; // idp_port
   char szIdpTenant[MAX_IAM_BUF_VAL]; // idp_tenant
+  char szIdpPartition[MAX_IAM_BUF_VAL]; // idp_partition
   long lIdpResponseTimeout; // idp_response_timeout
   char szLoginUrl[MAX_IAM_BUF_VAL]; // login_url
   long lListenPort; // listen_port

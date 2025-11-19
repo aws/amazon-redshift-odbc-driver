@@ -156,3 +156,6 @@ EXPORTS
 	?getTypeInfo@RsMetadataAPIHelper@@SA?AUTypeInfoResult@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@_N@Z
 	?getDataTypeNameStruct@RsMetadataAPIHelper@@SA?BUDataTypeName@1@XZ
 	?getRedshiftTypeNameStruct@RsMetadataAPIHelper@@SA?BURedshiftTypeName@1@XZ
+	?getErrorMessage@RsErrorException@@QEAAPEADXZ
+	?GetMicrosoftIdpHost@IAMUtils@IamSupport@Redshift@@SAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEAV45@@Z
+

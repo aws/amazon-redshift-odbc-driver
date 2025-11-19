@@ -107,6 +107,7 @@ struct RsSettings
 	rs_wstring m_stsEndpointUrl;
     rs_wstring m_idpHost;
     rs_string m_idpTenant;
+    rs_string m_idpPartition;
     short m_idp_response_timeout;
     rs_string m_login_url;
     rs_string m_dbGroupsFilter;

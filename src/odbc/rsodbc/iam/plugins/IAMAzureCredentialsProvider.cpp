@@ -43,6 +43,12 @@ void IAMAzureCredentialsProvider::InitArgumentsMap()
     /* We grab the parameters needed to get the SAML Assertion and get the temporary IAM Credentials.
        We are using the base class implementation but we override for logging purposes. */
     IAMPluginCredentialsProvider::InitArgumentsMap();
+    
+    // Add IDP partition from configuration to argsMap
+    rs_string idp_partition = m_config.GetSetting(IAM_KEY_IDP_PARTITION);
+    if (!idp_partition.empty()) {
+        m_argsMap[IAM_KEY_IDP_PARTITION] = idp_partition;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,11 +121,11 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
     /* We get the shared ptr to the IAM Http Client similar to how all the other plugins do it. */
     std::shared_ptr<IAMHttpClient> client = GetHttpClient(config);
 
-    /* This is the url used to grab the saml2 oauth token. This never changes. We need to pass
+    /* This is the url used to grab the saml2 oauth token. We need to pass
        in the idp_tenant either in string readable form or ID form. */
-    rs_string uri = "https://login.microsoftonline.com/" +
-        m_argsMap[IAM_KEY_IDP_TENANT] +
-        "/oauth2/token";
+    rs_string idpHostUrl;
+    IAMUtils::GetMicrosoftIdpHost(m_argsMap.count(IAM_KEY_IDP_PARTITION) ? m_argsMap.at(IAM_KEY_IDP_PARTITION) : "", idpHostUrl);
+    rs_string uri = idpHostUrl + "/" + m_argsMap[IAM_KEY_IDP_TENANT] + "/oauth2/token";
 
 	// Enforce URL validation
 	IAMUtils::ValidateURL(uri);

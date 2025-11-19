@@ -55,6 +55,12 @@ void IAMBrowserAzureOAuth2CredentialsProvider::InitArgumentsMap()
 	/* We grab the parameters needed to get the OAUTH Assertion and get the temporary IAM Credentials.
 	We are using the base class implementation but we override for logging purposes. */
 	IAMPluginCredentialsProvider::InitArgumentsMap();
+	
+	// Add IDP partition from configuration to argsMap
+	rs_string idp_partition = m_config.GetSetting(IAM_KEY_IDP_PARTITION);
+	if (!idp_partition.empty()) {
+		m_argsMap[IAM_KEY_IDP_PARTITION] = idp_partition;
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -207,7 +213,9 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 		rs_string scope = "openid%20" + m_argsMap[IAM_KEY_SCOPE];
 
 		/* Generate URI to request an authorization code.  */
-		const rs_string uri = "https://login.microsoftonline.com/" +
+		rs_string idpHostUrl;
+		IAMUtils::GetMicrosoftIdpHost(m_argsMap.count(IAM_KEY_IDP_PARTITION) ? m_argsMap.at(IAM_KEY_IDP_PARTITION) : "", idpHostUrl);
+		const rs_string uri = idpHostUrl + "/" +
 			m_argsMap[IAM_KEY_IDP_TENANT] +
 			"/oauth2/authorize?client_id=" +
 			m_argsMap[IAM_KEY_CLIENT_ID] +
@@ -291,7 +299,9 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 	std::shared_ptr<IAMHttpClient> client = GetHttpClient(config);
 
 	/* Generate URI to redeem the code for an access_token. */
-	rs_string reduri = "https://login.microsoftonline.com/" +
+	rs_string idpHostUrl;
+	IAMUtils::GetMicrosoftIdpHost(m_argsMap.count(IAM_KEY_IDP_PARTITION) ? m_argsMap.at(IAM_KEY_IDP_PARTITION) : "", idpHostUrl);
+	rs_string reduri = idpHostUrl + "/" +
 		m_argsMap[IAM_KEY_IDP_TENANT] +
 		"/oauth2/v2.0/token";
 

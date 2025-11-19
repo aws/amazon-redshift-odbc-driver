@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <regex>
+#include <map>
 #include "../rs_iam_support.h"
 
 #include <ares.h>
@@ -166,6 +167,21 @@ namespace IamSupport
 #endif
 
         static void ValidateURL(const rs_string & in_url);
+
+        /// @brief Get Microsoft Azure IDP host URL from partition value
+        /// @param partition The partition value (empty or "commercial" for commercial, "us-gov" for government, "cn" for China)
+        /// @param output The output parameter that will be set to the appropriate Microsoft IDP host URL
+        static void GetMicrosoftIdpHost(const rs_string& partition, rs_string& output);
+
+        // Azure IDP host constants
+        static inline const rs_string MICROSOFT_IDP_COMMERCIAL_HOST = "https://login.microsoftonline.com";
+        static inline const rs_string MICROSOFT_IDP_GOV_HOST = "https://login.microsoftonline.us";
+        static inline const rs_string MICROSOFT_IDP_CHINA_HOST = "https://login.chinacloudapi.cn";
+
+        // Azure partition constants
+        static inline const rs_string MICROSOFT_IDP_COMMERCIAL_PARTITION = "commercial";
+        static inline const rs_string MICROSOFT_IDP_GOV_PARTITION = "us-gov";
+        static inline const rs_string MICROSOFT_IDP_CHINA_PARTITION = "cn";
 
         /**
          * Generates a regular expression pattern to match a specific JSON key-value pair.

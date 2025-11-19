@@ -1065,6 +1065,7 @@ struct SHOWCOLUMNSResult {
 #define RS_GROUP_FEDERATION       "group_federation"
 #define RS_LOGIN_TO_RP            "loginToRp"
 #define RS_IDP_TENANT             "idp_tenant"
+#define RS_IDP_PARTITION          "idp_partition"
 #define RS_CLIENT_ID              "client_id"
 #define RS_CLIENT_SECRET          "client_secret"
 #define RS_LOGIN_URL              "login_url"

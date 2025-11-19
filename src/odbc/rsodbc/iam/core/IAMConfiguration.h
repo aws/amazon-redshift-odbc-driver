@@ -172,6 +172,11 @@ namespace IamSupport
         /// @param in_idpTenant      IdpTenant of the IAMConfiguration
         void SetIdpTenant(const rs_string& in_idpTenant);
 
+        /// @brief Sets the IdpPartition of the IAMConfiguration
+        ///
+        /// @param in_idpPartition      IdpPartition of the IAMConfiguration
+        void SetIdpPartition(const rs_string& in_idpPartition);
+
         /// @brief Returns the ClientSecret of the IAMConfiguration
         ///
         /// @return ClientSecret of the IAMConfiguration

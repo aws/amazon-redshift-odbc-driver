@@ -611,6 +611,27 @@ void IAMUtils::ValidateURL(const rs_string & in_url)
     #endif
 }
 
+void IAMUtils::GetMicrosoftIdpHost(const rs_string& partition, rs_string& output)
+{
+    rs_string trimmedPartition = IAMUtils::rs_trim(partition);
+    // Convert partition to lowercase for case-insensitive comparison
+    std::transform(trimmedPartition.begin(), trimmedPartition.end(), trimmedPartition.begin(),
+                   [](unsigned char c) { return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c; });
+    
+    if (trimmedPartition.empty() || trimmedPartition == MICROSOFT_IDP_COMMERCIAL_PARTITION) {
+        output = MICROSOFT_IDP_COMMERCIAL_HOST;
+    } else if (trimmedPartition == MICROSOFT_IDP_GOV_PARTITION) {
+        output = MICROSOFT_IDP_GOV_HOST;
+    } else if (trimmedPartition == MICROSOFT_IDP_CHINA_PARTITION) {
+        output = MICROSOFT_IDP_CHINA_HOST;
+    } else {
+        RS_LOG_ERROR("IAM", ("Invalid IdP partition specified: " + partition).c_str());
+        IAMUtils::ThrowConnectionExceptionWithInfo("Invalid IdP partition specified: '" + partition + "'. Valid values are: '" + MICROSOFT_IDP_COMMERCIAL_PARTITION + "', '" + MICROSOFT_IDP_GOV_PARTITION + "', or '" + MICROSOFT_IDP_CHINA_PARTITION + "'");
+    }
+    
+    RS_LOG_DEBUG("IAM", ("Selected Microsoft IdP host: " + output + " for partition: '" + partition + "' (processed as '" + trimmedPartition + "')").c_str());
+}
+
 std::string IAMUtils::getRegexForJsonKey(const std::string& keyName) {
     return "(\"" + keyName + "\"\\s*:\\s*\")[^\"]*\"";
 }

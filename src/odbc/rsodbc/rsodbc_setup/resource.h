@@ -53,6 +53,7 @@
 #define IDC_DATASOURCE                  1018
 #define IDC_AZURE_CI                    1018
 #define IDC_AZURE_CS                    1019
+#define IDC_IDP_PARTITION               1235
 #define IDC_TO                          1020
 #define IDC_LOGIN_URL                   1021
 #define IDC_LP                          1022
@@ -161,6 +162,7 @@
 #define IDC_AZURE_CI_STATIC             1162
 #define IDC_INI_SQL_STATIC              1163
 #define IDC_AZURE_CS_STATIC             1163
+#define IDC_IDP_PARTITION_STATIC        1236
 #define IDC_TO_STATIC                   1164
 #define IDC_ADV_HELP                    1165
 #define IDC_LOGIN_URL_STATIC            1165

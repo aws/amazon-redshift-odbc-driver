@@ -972,6 +972,7 @@ IAMConfiguration RsIamClient::CreateIAMConfiguration(const rs_string& in_authTyp
         config.SetIdpHost(IAMUtils::convertToUTF8(m_settings.m_idpHost));
         config.SetIdpPort(m_settings.m_idpPort);
         config.SetIdpTenant(m_settings.m_idpTenant);
+        config.SetIdpPartition(m_settings.m_idpPartition);
         config.SetClientSecret(m_settings.m_clientSecret);
         config.SetClientId(m_settings.m_clientId);
 		config.SetScope(m_settings.m_scope);

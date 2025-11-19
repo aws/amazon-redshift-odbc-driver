@@ -268,6 +268,12 @@ void IAMConfiguration::SetIdpTenant(const rs_string& in_idpTenant)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+void IAMConfiguration::SetIdpPartition(const rs_string& in_idpPartition)
+{
+    SetSetting(IAM_KEY_IDP_PARTITION, in_idpPartition);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMConfiguration::GetClientSecret() const
 {
     return GetSetting(IAM_KEY_CLIENT_SECRET);

@@ -68,6 +68,7 @@
 #define RS_IDP_TENANT             "idp_tenant"
 #define RS_CLIENT_ID              "client_id"
 #define RS_CLIENT_SECRET          "client_secret"
+#define RS_IDP_PARTITION          "idp_partition"
 #define RS_LOGIN_URL              "login_url"
 #define RS_LISTEN_PORT            "listen_port"
 #define RS_PARTNER_SPID           "partner_spid"
@@ -112,6 +113,15 @@
 #define PLUGIN_JWT_IAM_AUTH         "JwtIamAuthPlugin"    // used for federated IAM auth
 #define PLUGIN_IDP_TOKEN_AUTH              "IdpTokenAuthPlugin"
 #define PLUGIN_BROWSER_IDC_AUTH            "BrowserIdcAuthPlugin"
+
+// IDP Partition constants
+#define PARTITION_COMMERCIAL      ""
+#define PARTITION_US_GOV         "us-gov"
+#define PARTITION_CHINA          "cn"
+
+#define PARTITION_COMMERCIAL_DISPLAY "Commercial (default)"
+#define PARTITION_US_GOV_DISPLAY     "us-gov"
+#define PARTITION_CHINA_DISPLAY      "cn"
 
 
 #define MAX_JWT					(16 * 1024)
@@ -222,6 +232,7 @@
 #define DFLT_IDP_TENANT ""
 #define DFLT_CLIENT_ID  ""
 #define DFLT_CLIENT_SECRET ""
+#define DFLT_IDP_PARTITION ""
 #define DFLT_LOGIN_URL ""
 #define DFLT_LISTEN_PORT ""
 #define DFLT_PARTNER_SPID ""
@@ -444,6 +455,7 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_IDP_TENANT , DFLT_IDP_TENANT},
 { RS_CLIENT_ID , DFLT_CLIENT_ID},
 { RS_CLIENT_SECRET , DFLT_CLIENT_SECRET},
+{ RS_IDP_PARTITION , DFLT_IDP_PARTITION},
 { RS_LOGIN_URL , DFLT_LOGIN_URL},
 { RS_LISTEN_PORT , DFLT_LISTEN_PORT},
 { RS_PARTNER_SPID , DFLT_PARTNER_SPID},
@@ -573,6 +585,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { RS_IDP_TENANT , RS_IDP_TENANT },
 { RS_CLIENT_ID , RS_CLIENT_ID },
 { RS_CLIENT_SECRET , RS_CLIENT_SECRET },
+{ RS_IDP_PARTITION , RS_IDP_PARTITION },
 { RS_LOGIN_URL , RS_LOGIN_URL },
 { RS_LISTEN_PORT , RS_LISTEN_PORT },
 { RS_PARTNER_SPID , RS_PARTNER_SPID },
@@ -749,6 +762,8 @@ static int rs_idp_controls[] =
 	IDC_AZURE_CI,
 	IDC_AZURE_CS_STATIC, // Azure Client Secret
 	IDC_AZURE_CS,
+	IDC_IDP_PARTITION_STATIC, // IDP Partition
+	IDC_IDP_PARTITION,
 	IDC_TO_STATIC, // Timeout
 	IDC_TO,
 	IDC_LOGIN_URL_STATIC,
@@ -991,6 +1006,8 @@ static int rs_azure_controls[] =
 	IDC_AZURE_CI,
 	IDC_AZURE_CS_STATIC,
 	IDC_AZURE_CS,
+	IDC_IDP_PARTITION_STATIC,
+	IDC_IDP_PARTITION,
 	IDC_STS_EPU_STATIC,
 	IDC_STS_EPU,
 	IDC_EPU_STATIC,
@@ -1015,6 +1032,7 @@ static rs_dialog_controls rs_azure_val_controls[] =
 	{ IDC_PR, RS_TEXT_CONTROL, RS_PREFERRED_ROLE },
 	{ IDC_DGF, RS_TEXT_CONTROL, RS_DB_GROUPS_FILTER},
 	{ IDC_IDP_TENANT, RS_TEXT_CONTROL, RS_IDP_TENANT},
+	{ IDC_IDP_PARTITION, RS_DROP_DOWN_CONTROL, RS_IDP_PARTITION },
 	{ IDC_AZURE_CI, RS_TEXT_CONTROL, RS_CLIENT_ID},
 	{ IDC_AZURE_CS, RS_TEXT_CONTROL, RS_CLIENT_SECRET},
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
@@ -1044,6 +1062,8 @@ static int rs_azure_browser_controls[] =
 	IDC_DGF,
 	IDC_IDP_TENANT_STATIC,
 	IDC_IDP_TENANT,
+	IDC_IDP_PARTITION_STATIC,
+	IDC_IDP_PARTITION,
 	IDC_AZURE_CI_STATIC,
 	IDC_AZURE_CI,
 	IDC_TO_STATIC,
@@ -1073,6 +1093,7 @@ static rs_dialog_controls rs_azure_browser_val_controls[] =
 	{ IDC_PR, RS_TEXT_CONTROL, RS_PREFERRED_ROLE },
 	{ IDC_DGF, RS_TEXT_CONTROL, RS_DB_GROUPS_FILTER },
 	{ IDC_IDP_TENANT, RS_TEXT_CONTROL, RS_IDP_TENANT },
+	{ IDC_IDP_PARTITION, RS_DROP_DOWN_CONTROL, RS_IDP_PARTITION },
 	{ IDC_AZURE_CI, RS_TEXT_CONTROL, RS_CLIENT_ID },
 	{ IDC_TO, RS_TEXT_CONTROL, RS_IDP_RESPONSE_TIMEOUT},
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
@@ -1090,6 +1111,8 @@ static int rs_azure_browser_oauth2_controls[] =
 	IDC_REGION,
 	IDC_IDP_TENANT_STATIC,
 	IDC_IDP_TENANT,
+	IDC_IDP_PARTITION_STATIC,
+	IDC_IDP_PARTITION,
 	IDC_AZURE_CI_STATIC,
 	IDC_AZURE_CI,
 	IDC_TO_STATIC,
@@ -1113,6 +1136,7 @@ static rs_dialog_controls rs_azure_browser_oauth2_val_controls[] =
 	{ IDC_CID, RS_TEXT_CONTROL,RS_CLUSTER_ID },
 	{ IDC_REGION, RS_TEXT_CONTROL, RS_REGION },
 	{ IDC_IDP_TENANT, RS_TEXT_CONTROL, RS_IDP_TENANT },
+	{ IDC_IDP_PARTITION, RS_DROP_DOWN_CONTROL, RS_IDP_PARTITION },
 	{ IDC_AZURE_CI, RS_TEXT_CONTROL, RS_CLIENT_ID },
 	{ IDC_TO, RS_TEXT_CONTROL, RS_IDP_RESPONSE_TIMEOUT },
 	{ IDC_EPU,  RS_TEXT_CONTROL, RS_END_POINT_URL },
@@ -2090,6 +2114,10 @@ static LRESULT CALLBACK rs_dsn_connect_sheet(HWND hwndDlg, UINT message, WPARAM 
 //							char szBuf[256];
 							char *auth_type = szAuthTypes[n];
 
+							rs_dsn_setup_ctxt = (rs_dsn_setup_ptr_t) GetWindowLongPtr(hwndDlg, DWLP_USER);
+							if (rs_dsn_setup_ctxt) {
+								set_dlg_items_based_on_auth_type(n, hwndDlg, rs_dsn_setup_ctxt);
+							}
 							rs_hide_show_authtype_controls(hwndDlg, auth_type);
 
 
@@ -2827,6 +2855,43 @@ static void set_idp_dlg_items(rs_dialog_controls idp_controls[], HWND hwndDlg, r
 		{
 			CheckDlgButton(hwndDlg, idp_controls[id].control, rs_dsn_bool_attr(rs_dsn_setup_ctxt, idp_controls[id].dsn_entry));
 		}
+		else
+		if (idp_controls[id].type == RS_DROP_DOWN_CONTROL)
+		{
+			// Handle IdP Partition dropdown
+			if (idp_controls[id].control == IDC_IDP_PARTITION)
+			{
+				HWND hComboBox = GetDlgItem(hwndDlg, IDC_IDP_PARTITION);
+				if (hComboBox) {
+					// Clear existing items before adding new ones
+					ComboBox_ResetContent(hComboBox);
+					
+					// Add partition options
+					ComboBox_AddString(hComboBox, PARTITION_COMMERCIAL_DISPLAY);
+					ComboBox_AddString(hComboBox, PARTITION_US_GOV_DISPLAY);
+					ComboBox_AddString(hComboBox, PARTITION_CHINA_DISPLAY);
+					
+					// Set current selection based on stored value
+					const char* currentPartition = rs_dsn_get_attr(rs_dsn_setup_ctxt, idp_controls[id].dsn_entry);
+					if (currentPartition == NULL || strlen(currentPartition) == 0)
+					{
+						ComboBox_SetCurSel(hComboBox, 0); // Commercial
+					}
+					else if (strcmp(currentPartition, PARTITION_US_GOV) == 0)
+					{
+						ComboBox_SetCurSel(hComboBox, 1); // US Gov
+					}
+					else if (strcmp(currentPartition, PARTITION_CHINA) == 0)
+					{
+						ComboBox_SetCurSel(hComboBox, 2); // China
+					}
+					else
+					{
+						ComboBox_SetCurSel(hComboBox, 0); // Default to Commercial
+					}
+				}
+			}
+		}
 	} // Loop
 }
 
@@ -3019,6 +3084,34 @@ static void rs_dsn_read_auth_type_items(rs_dialog_controls idp_controls[], HWND 
 		if (idp_controls[id].type == RS_CHECKBOX_CONTROL)
 		{
 			rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, idp_controls[id].control, idp_controls[id].dsn_entry);
+		}
+		else
+		if (idp_controls[id].type == RS_DROP_DOWN_CONTROL)
+		{
+			// Handle IdP Partition dropdown
+			if (idp_controls[id].control == IDC_IDP_PARTITION)
+			{
+				int selectedIndex = ComboBox_GetCurSel(GetDlgItem(hdlg, IDC_IDP_PARTITION));
+				const char* partitionValue = "";
+				
+				switch (selectedIndex)
+				{
+					case 0: // Commercial (default)
+						partitionValue = PARTITION_COMMERCIAL;
+						break;
+					case 1: // us-gov
+						partitionValue = PARTITION_US_GOV;
+						break;
+					case 2: // cn
+						partitionValue = PARTITION_CHINA;
+						break;
+					default:
+						partitionValue = PARTITION_COMMERCIAL;
+						break;
+				}
+				
+				rs_dsn_set_attr(rs_dsn_setup_ctxt, idp_controls[id].dsn_entry, partitionValue);
+			}
 		}
 	} // Loop
 }
