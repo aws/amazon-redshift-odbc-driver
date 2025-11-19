@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include "rsMetadataAPIHelper.h"
+#include "rsMetadataServerProxyHelper.h"
 #include "rsodbc.h"
 #include "rstrace.h"
 #include "rsunicode.h"
@@ -87,8 +88,6 @@ class RsMetadataServerProxy {
      *   catalogName (const std::string &): catalog name (pattern)
      *   schemaName (const std::string &): schema name (pattern)
      *   tableName (const std::string &): table name (pattern)
-     *   retEmpty (bool): a boolean to determine return empty result set
-     *     directly without calling any Server API SHOW command
      *   intermediateRS (std::vector<SHOWTABLESResult> &): a vector to store
      *     intermediate result set for post-processing
      *   isSingleDatabaseMetaData (bool): a boolean to determine returning
@@ -101,7 +100,7 @@ class RsMetadataServerProxy {
     static SQLRETURN
     sqlTables(SQLHSTMT phstmt, const std::string &catalogName,
                        const std::string &schemaName,
-                       const std::string &tableName, bool retEmpty,
+                       const std::string &tableName,
                        std::vector<SHOWTABLESResult> &intermediateRS,
                        bool isSingleDatabaseMetaData);
 
@@ -116,8 +115,6 @@ class RsMetadataServerProxy {
      *   schemaName (const std::string &): schema name (pattern)
      *   tableName (const std::string &): table name (pattern)
      *   columnName (const std::string &): column name (pattern)
-     *   retEmpty (bool): a boolean to determine return empty result set
-     *     directly without calling any Server API SHOW command
      *   intermediateRS (std::vector<SHOWCOLUMNSResult> &): a vector to store
      *     intermediate result set for post-processing
      *   isSingleDatabaseMetaData (bool): a boolean to determine returning
@@ -131,19 +128,93 @@ class RsMetadataServerProxy {
     sqlColumns(SQLHSTMT phstmt, const std::string &catalogName,
                         const std::string &schemaName,
                         const std::string &tableName,
-                        const std::string &columnName, bool retEmpty,
+                        const std::string &columnName,
                         std::vector<SHOWCOLUMNSResult> &intermediateRS,
                         bool isSingleDatabaseMetaData);
 
     /* ----------------
-     * callShowDatabases
+     * sqlPrimaryKeys
      *
-     * helper function to call SHOW DATABASES and return a list of catalog
+     * Helper function to return intermediate result set for SQLPrimaryKeys
      *
      * Parameters:
      *   phstmt (SQLHSTMT): statement handler
-     *   catalog (const std::string &): catalog name / pattern
-     *   catalogs (std::vector<std::string>): a vector to store catalog list
+     *   catalogName (const std::string &): catalog name
+     *   schemaName (const std::string &): schema name
+     *   tableName (const std::string &): table name
+     *   intermediateRS (std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult> &): a vector to store
+     *     intermediate result set for post-processing
+     *   isSingleDatabaseMetaData (bool): a boolean to determine returning
+     *     result from single database or all database
+     *
+     * Return:
+     *   SQLRETURN: SQL_SUCCESS if successful, SQL_ERROR if failed
+     *
+     * Notes:
+     *   - Returns primary key columns for the specified table(s)
+     *   - If catalog/schema/table names are empty, searches all respective objects
+     *   - Results include column names, key sequence numbers, and constraint names
+     * ----------------
+     */
+    static SQLRETURN
+    sqlPrimaryKeys(SQLHSTMT phstmt, const std::string &catalogName,
+                  const std::string &schemaName,
+                  const std::string &tableName,
+                  std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult> &intermediateRS,
+                  bool isSingleDatabaseMetaData);
+
+    /* ----------------
+     * sqlForeignKeys
+     *
+     * Helper function to return intermediate result set for SQLForeignKeys
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   pkCatalogName (const std::string &): primary key table's catalog name
+     *   pkSchemaName (const std::string &): primary key table's schema name
+     *   pkTableName (const std::string &): primary key table's name
+     *   fkCatalogName (const std::string &): foreign key table's catalog name
+     *   fkSchemaName (const std::string &): foreign key table's schema name
+     *   fkTableName (const std::string &): foreign key table's name
+     *   intermediateRS (std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult> &): a vector to store
+     *     intermediate result set for post-processing
+     *   isSingleDatabaseMetaData (bool): a boolean to determine returning
+     *     result from single database or all database
+     *
+     * Return:
+     *   SQLRETURN: SQL_SUCCESS if successful, SQL_ERROR if failed
+     *
+     * Notes:
+     *   - Three usage patterns:
+     *     1. If only pkTableName specified: returns exported keys (FKs that reference this table)
+     *     2. If only fkTableName specified: returns imported keys (FKs in this table)
+     *     3. If both specified: returns the specific relationship between the tables
+     *   - Results include both PK and FK column information, constraint names, and update/delete rules
+     * ----------------
+     */
+    static SQLRETURN
+    sqlForeignKeys(SQLHSTMT phstmt,
+                  const std::string &pkCatalogName,
+                  const std::string &pkSchemaName,
+                  const std::string &pkTableName,
+                  const std::string &fkCatalogName,
+                  const std::string &fkSchemaName,
+                  const std::string &fkTableName,
+                  std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult> &intermediateRS,
+                  bool isSingleDatabaseMetaData);
+
+    /* ----------------
+     * sqlSpecialColumns
+     *
+     * Helper function to return intermediate result set for SQLSpecialColumns
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   catalogName (const std::string &): catalog name
+     *   schemaName (const std::string &): schema name
+     *   tableName (const std::string &): table name
+     *   intermediateRS (std::vector<SHOWCOLUMNSResult> &): a vector to store
+     *     intermediate result set for post-processing
      *   isSingleDatabaseMetaData (bool): a boolean to determine returning
      *     result from single database or all database
      *
@@ -151,91 +222,168 @@ class RsMetadataServerProxy {
      *   SQLRETURN
      * ----------------
      */
-    static SQLRETURN callShowDatabases(SQLHSTMT phstmt, const std::string &catalog, std::vector<std::string> &catalogs, bool isSingleDatabaseMetaData);
+    static SQLRETURN
+    sqlSpecialColumns(SQLHSTMT phstmt,
+                    const std::string &catalogName,
+                    const std::string &schemaName,
+                    const std::string &tableName,
+                    std::vector<SHOWCOLUMNSResult> &intermediateRS,
+                    bool isSingleDatabaseMetaData);
 
     /* ----------------
-     * callShowSchemas
+     * sqlColumnPrivileges
      *
-     * helper function to call SHOW SCHEMAS and return intermediate result set
+     * Helper function to return intermediate result set for SQLColumnPrivileges
      *
      * Parameters:
      *   phstmt (SQLHSTMT): statement handler
-     *   catalog (const std::string &): Exact name of catalog
-     *   schema (const std::string&): schema name / pattern
-     *   intermediateRS (std::vector<SHOWSCHEMASResult> &): a vector to store
+     *   catalogName (const std::string &): catalog name
+     *   schemaName (const std::string &): schema name
+     *   tableName (const std::string &): table name
+     *   columnName (const std::string &): column name
+     *   intermediateRS (std::vector<SHOWGRANTSCOLUMNResult> &): a vector to store
      *     intermediate result set for post-processing
+     *   isSingleDatabaseMetaData (bool): a boolean to determine returning
+     *     result from single database or all database
      *
      * Return:
      *   SQLRETURN
      * ----------------
      */
     static SQLRETURN
-    callShowSchemas(SQLHSTMT phstmt, const std::string &catalog, const std::string &schema, 
-                     std::vector<SHOWSCHEMASResult> &intermediateRS);
+    sqlColumnPrivileges(SQLHSTMT phstmt, const std::string &catalogName,
+                      const std::string &schemaName,
+                      const std::string &tableName,
+                      const std::string &columnName,
+                      std::vector<SHOWGRANTSCOLUMNResult> &intermediateRS,
+                      bool isSingleDatabaseMetaData);
 
     /* ----------------
-     * callShowTables
+     * sqlTablePrivileges
      *
-     * helper function to call SHOW TABLES and return intermediate result set
+     * Helper function to return intermediate result set for SQLTablePrivileges
      *
      * Parameters:
      *   phstmt (SQLHSTMT): statement handler
-     *   catalog (const std::string &): Exact name of catalog
-     *   schema (const std::string &): Exact name of schema
-     *   table (const std::string &): table name / pattern
-     *   intermediateRS (std::vector<SHOWTABLESResult> &): a vector to store
+     *   catalogName (const std::string &): catalog name
+     *   schemaName (const std::string &): schema name
+     *   tableName (const std::string &): table name
+     *   intermediateRS (std::vector<SHOWGRANTSTABLEResult> &): a vector to store
      *     intermediate result set for post-processing
+     *   isSingleDatabaseMetaData (bool): a boolean to determine returning
+     *     result from single database or all database
      *
      * Return:
      *   SQLRETURN
      * ----------------
      */
     static SQLRETURN
-    callShowTables(SQLHSTMT phstmt, const std::string &catalog,
-                    const std::string &schema, const std::string &table,
-                    std::vector<SHOWTABLESResult> &intermediateRS);
+    sqlTablePrivileges(SQLHSTMT phstmt, const std::string &catalogName,
+                      const std::string &schemaName,
+                      const std::string &tableName,
+                      std::vector<SHOWGRANTSTABLEResult> &intermediateRS,
+                      bool isSingleDatabaseMetaData);
 
     /* ----------------
-     * callShowColumns
+     * sqlProcedures
      *
-     * helper function to call SHOW COLUMNS and return intermediate result set
+     * Helper function to return intermediate result set for SQLProcedures
      *
      * Parameters:
      *   phstmt (SQLHSTMT): statement handler
-     *   catalog (const std::string &): Exact name of catalog
-     *   schema (const std::string &): Exact name of schema
-     *   table (const std::string &): Exact name of table
-     *   column (const std::string &): column name / pattern
+     *   catalogName (const std::string &): catalog name
+     *   schemaName (const std::string &): schema name
+     *   procName (const std::string &): procedure name
+     *   intermediateRS (std::vector<SHOWPROCEDURESFUNCTIONSResult> &): Vector to store
+     *     intermediate result set containing both procedures and functions.
+     *     Each entry includes catalog, schema, name, and type
+     *     (SQL_PT_PROCEDURE or SQL_PT_FUNCTION)
+     *   isSingleDatabaseMetaData (bool): a boolean to determine returning
+     *     result from single database or all database
+     *
+     * Return:
+     *   SQLRETURN
+     * ----------------
+     */
+    static SQLRETURN
+    sqlProcedures(SQLHSTMT phstmt, const std::string &catalogName,
+                  const std::string &schemaName,
+                  const std::string &procName,
+                  std::vector<SHOWPROCEDURESFUNCTIONSResult> &intermediateRS,
+                  bool isSingleDatabaseMetaData);
+
+    /* ----------------
+     * sqlProcedureColumns
+     *
+     * Helper function to return intermediate result set for SQLProcedureColumns
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   catalogName (const std::string &): catalog name
+     *   schemaName (const std::string &): schema name
+     *   procName (const std::string &): procedure name
+     *   columnName (const std::string &): column name
      *   intermediateRS (std::vector<SHOWCOLUMNSResult> &): a vector to store
      *     intermediate result set for post-processing
+     *   isSingleDatabaseMetaData (bool): a boolean to determine returning
+     *     result from single database or all database
      *
      * Return:
      *   SQLRETURN
      * ----------------
      */
     static SQLRETURN
-    callShowColumns(SQLHSTMT phstmt, const std::string &catalog,
-                     const std::string &schema, const std::string &table,
-                     const std::string &column,
-                     std::vector<SHOWCOLUMNSResult> &intermediateRS);
+    sqlProcedureColumns(SQLHSTMT phstmt, const std::string &catalogName,
+                      const std::string &schemaName,
+                      const std::string &procName,
+                      const std::string &columnName,
+                      std::vector<SHOWCOLUMNSResult> &intermediateRS,
+                      bool isSingleDatabaseMetaData);
 
-    /* ----------------
-     * callQuoteFunc
+  private:
+    static SQLRETURN processKeysCase(
+        SQLHSTMT phstmt,
+        bool isExportedKeys,
+        const std::string& catalogName,
+        const std::string& schemaName,
+        const std::string& tableName,
+        std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult>& intermediateRS,
+        bool isSingleDatabaseMetaData);
+
+    /**
+      * @brief Checks if foreign key constraint metadata matches specified catalog/schema/table criteria
+      *
+      * Performs case-insensitive comparison of foreign key constraint metadata against
+      * provided primary key identifiers. Empty criteria match any value.
+      *
+      * @param result The foreign key constraint metadata result to check
+      * @param pkCatalog Primary key's catalog name to match against (empty matches any)
+      * @param pkSchema Primary key's schema name to match against (empty matches any)
+      * @param pkTable Primary key's table name to match against (empty matches any)
+      *
+      * @return true if the constraint metadata matches all non-empty criteria,
+      *         false otherwise
+      *
+      * @note Comparisons are case-insensitive to match Redshift's identifier behavior
+      * @note Maximum identifier length is limited to NAMEDATALEN-1 (63) bytes
+    */
+    static bool matchesConstraints(
+        const SHOWCONSTRAINTSFOREIGNKEYSResult& result,
+        const std::string &pkCatalog,
+        const std::string &pkSchema,
+        const std::string &pkTable);
+
+    /**
+     * Validates the lengths of provided names against maximum allowed length (NAMEDATALEN)
      *
-     * helper function to call QUOTE* function to do proper quoting
-     * and escaping for identifier and literal
+     * @param validations A vector of pairs where:
+     *                    - first: identifier/description of the name being validated
+     *                    - second: actual name string to validate
      *
-     * Parameters:
-     *   phstmt (SQLHSTMT): statement handler
-     *   input (const std::string &): the input string to be quoted
-     *   output (const std::string &): quoted input string
-     *   quotedQuery (const std::string &): sql query for QUOTE function
-     *
-     * Return:
-     *   SQLRETURN
-     * ----------------
+     * @return SQL_SUCCESS if all name lengths are valid
+     *         SQL_ERROR if any name exceeds NAMEDATALEN
      */
-    static SQLRETURN callQuoteFunc(SQLHSTMT phstmt, const std::string &input, std::string &output, const std::string &quotedQuery);
+    static SQLRETURN validateNameLengths(const std::vector<std::pair<std::string, std::string>>& validations);
 };
 
 #endif // __METADATASERVERAPIHELPER_H__

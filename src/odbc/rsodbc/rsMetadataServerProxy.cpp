@@ -9,6 +9,7 @@
 #include "rsMetadataServerProxy.h"
 #include "rsexecute.h"
 #include "rsutil.h"
+#include "rserror.h"
 
 //
 // Helper function to return intermediate result set for SQLTables special call
@@ -18,26 +19,31 @@ SQLRETURN RsMetadataServerProxy::sqlCatalogs(
     SQLHSTMT phstmt, std::vector<std::string> &catalogs,
     bool isSingleDatabaseMetaData) {
 
-    SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    // Validate statement handler
+    if (!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlCatalogs", "Statement handle allocation failed");
+        return SQL_INVALID_HANDLE;
+    }
 
     // Return current connected database name
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
     if (isSingleDatabaseMetaData) {
         catalogs.push_back(getDatabase(pStmt));
+        RS_LOG_TRACE("sqlCatalogs", "Total number of return rows: %d", catalogs.size());
+        return SQL_SUCCESS;
+    }
+
+    // Get catalog list
+    SQLRETURN rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                       phstmt, RsMetadataAPIHelper::SQL_EMPTY, catalogs,
+                       isSingleDatabaseMetaData)
+                       .execute();
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlCatalogs", "Error in ShowDatabasesHelper");
         return rc;
     }
 
-    // Get a list of catalog name from SHOW DATABASES
-    rc = callShowDatabases(phstmt, RsMetadataAPIHelper::SQL_ALL, catalogs, isSingleDatabaseMetaData);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        RS_LOG_ERROR("sqlCatalogs", "Error in callShowDatabases");
-        addError(&pStmt->pErrorList, "HY000",
-                 "sqlCatalogs: Error in callShowDatabases ", 0, NULL);
-        return rc;
-    }
-
-    RS_LOG_TRACE("sqlCatalogs", "Total number of return rows: %zu", catalogs.size());
-    
+    RS_LOG_TRACE("sqlCatalogs", "Total number of return rows: %d", catalogs.size());
     return rc;
 }
 
@@ -49,34 +55,39 @@ SQLRETURN RsMetadataServerProxy::sqlSchemas(
     SQLHSTMT phstmt, std::vector<SHOWSCHEMASResult> &intermediateRS,
     bool isSingleDatabaseMetaData) {
 
-    SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    // Validate statement handler
+    if (!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlSchemas", "Statement handle allocation failed");
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Define variable to hold the result from Show command helper
     std::vector<std::string> catalogs;
 
-    // Get a list of catalog name from SHOW DATABASES
-    rc = callShowDatabases(phstmt, RsMetadataAPIHelper::SQL_ALL, catalogs, isSingleDatabaseMetaData);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        RS_LOG_ERROR("sqlSchemas", "Error in callShowDatabases");
-        addError(&pStmt->pErrorList, "HY000",
-                 "sqlSchemas: Error in callShowDatabases ", 0, NULL);
+    // Get catalog list
+    SQLRETURN rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                       phstmt, RsMetadataAPIHelper::SQL_EMPTY, catalogs,
+                       isSingleDatabaseMetaData)
+                       .execute();
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlSchemas", "Error in ShowDatabasesHelper");
         return rc;
     }
 
-    for (int i = 0; i < catalogs.size(); i++) {
-        // Get a list of schema name from SHOW SCHEMAS
-        rc = callShowSchemas(phstmt, catalogs[i], RsMetadataAPIHelper::SQL_ALL, intermediateRS);
-        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-            RS_LOG_ERROR("sqlSchemas", "Error in callShowSchemas");
-            addError(&pStmt->pErrorList, "HY000",
-                     "sqlSchemas: Error in callShowSchemas ", 0,
-                     NULL);
+    for (const auto& curCatalog : catalogs) {
+        // Get schema list
+        rc = RsMetadataServerProxyHelpers::ShowSchemasHelper(
+                 phstmt, curCatalog, RsMetadataAPIHelper::SQL_EMPTY,
+                 intermediateRS)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlSchemas", "Error in ShowSchemasHelper");
             return rc;
         }
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlSchemas", "Total number of return rows: %zu", intermediateRS.size());
-    
+    RS_LOG_TRACE("sqlSchemas", "Total number of return rows: %d", intermediateRS.size());
     return rc;
 }
 
@@ -85,56 +96,69 @@ SQLRETURN RsMetadataServerProxy::sqlSchemas(
 //
 SQLRETURN RsMetadataServerProxy::sqlTables(
     SQLHSTMT phstmt, const std::string &catalogName,
-    const std::string &schemaName, const std::string &tableName, bool retEmpty,
+    const std::string &schemaName, const std::string &tableName,
     std::vector<SHOWTABLESResult> &intermediateRS,
     bool isSingleDatabaseMetaData) {
 
-    SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    RS_LOG_TRACE(
+        "sqlTables",
+        "catalogName = \"%s\", schemaName = \"%s\", tableName = \"%s\"",
+        catalogName.c_str(), schemaName.c_str(), tableName.c_str());
+
+    // Validate statement handler
+    if (!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlTables", "Statement handle allocation failed");
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Input length validation
+    std::vector<std::pair<std::string, std::string>> validations;
+    validations.push_back(std::make_pair("catalog", catalogName));
+    validations.push_back(std::make_pair("schema", schemaName));
+    validations.push_back(std::make_pair("table", tableName));
+    if (!SQL_SUCCEEDED(validateNameLengths(validations))) {
+        RS_LOG_ERROR("sqlTables", "Invalid input parameters");
+        return SQL_ERROR;
+    }
+
+    // Define variable to hold the result from Show command helper
     std::vector<std::string> catalogs;
     std::vector<SHOWSCHEMASResult> schemas;
 
-    if (!retEmpty) {
-        // Get a list of catalog name from SHOW DATABASES
-        rc = callShowDatabases(phstmt, catalogName, catalogs,
-                         isSingleDatabaseMetaData);
-        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-            RS_LOG_ERROR("sqlTables", "Error in callShowDatabases");
-            addError(&pStmt->pErrorList, "HY000",
-                     "sqlTables: Error in callShowDatabases ", 0, NULL);
-            return rc;
-        }
-        for (int i = 0; i < catalogs.size(); i++) {
-            // Get a list of schema name from SHOW SCHEMAS
-            rc = callShowSchemas(phstmt, catalogs[i], schemaName, schemas);
-            if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                RS_LOG_ERROR("sqlTables", "Error in callShowSchemas");
-                addError(&pStmt->pErrorList, "HY000",
-                         "sqlTables: Error in callShowSchemas ", 0, NULL);
-                return rc;
-            }
-            for (int j = 0; j < schemas.size(); j++) {
-                // Get a list of table name from SHOW TABLES
-                rc = callShowTables(phstmt, catalogs[i],
-                                     char2String(schemas[j].schema_name),
-                                     tableName, intermediateRS);
-                if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                    RS_LOG_ERROR("sqlTables", "Error in callShowTables");
-                    addError(&pStmt->pErrorList, "HY000",
-                             "sqlTables: Error in callShowTables ", 0,
-                             NULL);
-                    return rc;
-                }
-            }
-            schemas.clear();
-        }
-        catalogs.clear();
-
-        RS_LOG_TRACE("sqlTables", "Total number of return rows: %zu", intermediateRS.size());
-    } else {
-        RS_LOG_TRACE("sqlTables", "Return empty intermediateRS");
+    // Get catalog list
+    SQLRETURN rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                       phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                       .execute();
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlTables", "Error in ShowDatabasesHelper");
+        return rc;
     }
 
+    for (const auto& curCatalog : catalogs) {
+        // Get schema list
+        rc = RsMetadataServerProxyHelpers::ShowSchemasHelper(
+                 phstmt, curCatalog, schemaName, schemas)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlTables", "Error in ShowSchemasHelper");
+            return rc;
+        }
+        for (const auto& curSchema : schemas) {
+            // Get table list
+            rc = RsMetadataServerProxyHelpers::ShowTablesHelper(
+                     phstmt, curCatalog, char2String(curSchema.schema_name),
+                     tableName, intermediateRS)
+                     .execute();
+            if (!SQL_SUCCEEDED(rc)) {
+                RS_LOG_ERROR("sqlTables", "Error in ShowTablesHelper");
+                return rc;
+            }
+        }
+        schemas.clear();
+    }
+    catalogs.clear();
+
+    RS_LOG_TRACE("sqlTables", "Total number of return rows: %d", intermediateRS.size());
     return rc;
 }
 
@@ -144,704 +168,978 @@ SQLRETURN RsMetadataServerProxy::sqlTables(
 SQLRETURN RsMetadataServerProxy::sqlColumns(
     SQLHSTMT phstmt, const std::string &catalogName,
     const std::string &schemaName, const std::string &tableName,
-    const std::string &columnName, bool retEmpty,
+    const std::string &columnName,
     std::vector<SHOWCOLUMNSResult> &intermediateRS,
     bool isSingleDatabaseMetaData) {
 
-    SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    RS_LOG_TRACE("sqlColumns",
+                 "catalogName = \"%s\", schemaName = \"%s\", tableName = "
+                 "\"%s\", columnName = \"%s\"",
+                 catalogName.c_str(), schemaName.c_str(), tableName.c_str(),
+                 columnName.c_str());
+
+    // Validate statement handler
+    if (!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlColumns", "Statement handle allocation failed");
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Input length validation
+    std::vector<std::pair<std::string, std::string>> validations;
+    validations.push_back(std::make_pair("catalog", catalogName));
+    validations.push_back(std::make_pair("schema", schemaName));
+    validations.push_back(std::make_pair("table", tableName));
+    validations.push_back(std::make_pair("column", columnName));
+    if (!SQL_SUCCEEDED(validateNameLengths(validations))) {
+        RS_LOG_ERROR("sqlColumns", "Invalid input parameters");
+        return SQL_ERROR;
+    }
+
+    // Define variable to hold the result from Show command helper
     std::vector<std::string> catalogs;
     std::vector<SHOWSCHEMASResult> schemas;
     std::vector<SHOWTABLESResult> tables;
-    std::string sql;
 
-    if (!retEmpty) {
-        // Get a list of catalog name from SHOW DATABASES
-        rc = callShowDatabases(phstmt, catalogName, catalogs,
-                         isSingleDatabaseMetaData);
-        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-            RS_LOG_ERROR("sqlColumns", "Error in callShowDatabases");
-            addError(&pStmt->pErrorList, "HY000",
-                     "sqlColumns: Error in callShowDatabases ", 0, NULL);
+    // Get catalog list
+    SQLRETURN rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                       phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                       .execute();
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlColumns", "Error in ShowDatabasesHelper");
+        return rc;
+    }
+
+    for (const auto& curCatalog : catalogs) {
+        // Get schema list
+        rc = RsMetadataServerProxyHelpers::ShowSchemasHelper(
+                 phstmt, curCatalog, schemaName, schemas)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlColumns", "Error in ShowSchemasHelper");
             return rc;
         }
-
-        for (int i = 0; i < catalogs.size(); i++) {
-            // Get a list of schema name from SHOW SCHEMAS
-            rc = callShowSchemas(phstmt, catalogs[i], schemaName, schemas);
-            if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                RS_LOG_ERROR("sqlColumns", "Error in callShowSchemas");
-                addError(&pStmt->pErrorList, "HY000",
-                         "sqlColumns: Error in callShowSchemas ", 0, NULL);
+        for (const auto& curSchema : schemas) {
+            // Get table list
+            rc = RsMetadataServerProxyHelpers::ShowTablesHelper(
+                     phstmt, curCatalog, char2String(curSchema.schema_name),
+                     tableName, tables)
+                     .execute();
+            if (!SQL_SUCCEEDED(rc)) {
+                RS_LOG_ERROR("sqlColumns", "Error in ShowTablesHelper");
                 return rc;
             }
-            for (int j = 0; j < schemas.size(); j++) {
-                // Get a list of table name from SHOW TABLES
-                rc = callShowTables(phstmt, catalogs[i],
-                                     char2String(schemas[j].schema_name),
-                                     tableName, tables);
-                if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                    RS_LOG_ERROR("sqlColumns", "Error in callShowTables");
-                    addError(&pStmt->pErrorList, "HY000",
-                             "sqlColumns: Error in callShowTables ", 0,
-                             NULL);
+            for (const auto& curTable : tables) {
+                // Get column list
+                rc = RsMetadataServerProxyHelpers::ShowColumnsHelper(
+                         phstmt, curCatalog, char2String(curSchema.schema_name),
+                         char2String(curTable.table_name), columnName,
+                         intermediateRS)
+                         .execute();
+                if (!SQL_SUCCEEDED(rc)) {
+                    RS_LOG_ERROR("sqlColumns", "Error in ShowColumnsHelper");
                     return rc;
                 }
-                for (int k = 0; k < tables.size(); k++) {
-                    // Get a list of column name from SHOW COLUMNS
-                    rc = callShowColumns(phstmt, catalogs[i],
-                                          char2String(schemas[j].schema_name),
-                                          char2String(tables[k].table_name),
-                                          columnName, intermediateRS);
-                    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-                        RS_LOG_ERROR("sqlColumns", "Error in callShowColumns");
-                        addError(&pStmt->pErrorList, "HY000",
-                                 "sqlColumns: Error in "
-                                 "callShowColumns ",
-                                 0, NULL);
+            }
+            tables.clear();
+        }
+        schemas.clear();
+    }
+    catalogs.clear();
+
+    RS_LOG_TRACE("sqlColumns", "Total number of return rows: %d", intermediateRS.size());
+    return rc;
+}
+
+//
+// Helper function to return intermediate result set for SQLPrimaryKeys
+//
+SQLRETURN RsMetadataServerProxy::sqlPrimaryKeys(
+    SQLHSTMT phstmt,
+    const std::string &catalogName,
+    const std::string &schemaName,
+    const std::string &tableName,
+    std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult> &intermediateRS,
+    bool isSingleDatabaseMetaData) {
+
+    RS_LOG_TRACE(
+        "sqlPrimaryKeys",
+        "catalogName = \"%s\", schemaName = \"%s\", tableName = \"%s\"",
+        catalogName.c_str(), schemaName.c_str(), tableName.c_str());
+
+    // Validate statement handler
+    if(!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlPrimaryKeys", "Statement handle allocation failed");
+        return SQL_INVALID_HANDLE;
+    }
+
+    std::vector<std::pair<std::string, std::string>> validations;
+    validations.push_back(std::make_pair("catalog", catalogName));
+    validations.push_back(std::make_pair("schema", schemaName));
+    validations.push_back(std::make_pair("table", tableName));
+    if (!SQL_SUCCEEDED(validateNameLengths(validations))) {
+        RS_LOG_ERROR("sqlPrimaryKeys", "Invalid input parameters");
+        return SQL_ERROR;
+    }
+
+    // Define variable to hold the result from Show command helper
+    std::vector<std::string> catalogs;
+    std::vector<SHOWSCHEMASResult> schemas;
+    std::vector<SHOWTABLESResult> tables;
+
+    // Get catalog list
+    SQLRETURN rc = SQL_SUCCESS;
+    if (catalogName.empty()) {
+        rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                 phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlPrimaryKeys", "Error in ShowDatabasesHelper");
+            return rc;
+        }
+    } else {
+        catalogs.push_back(catalogName);
+    }
+
+    for (const auto& curCatalog : catalogs) {
+        // Get schema list
+        if (schemaName.empty()) {
+            rc = RsMetadataServerProxyHelpers::ShowSchemasHelper(
+                     phstmt, curCatalog, schemaName, schemas)
+                     .execute();
+            if (!SQL_SUCCEEDED(rc)) {
+                RS_LOG_ERROR("sqlPrimaryKeys", "Error in ShowSchemasHelper");
+                return rc;
+            }
+        } else {
+            SHOWSCHEMASResult schemaResult;
+            schemaResult.schema_name_Len = std::snprintf(
+                reinterpret_cast<char*>(schemaResult.schema_name),
+                NAMEDATALEN,
+                "%.*s",
+                static_cast<int>(schemaName.size()),
+                schemaName.data()
+            );
+            schemas.push_back(schemaResult);
+        }
+
+        for (const auto& curSchema : schemas) {
+            // Get table list
+            if (tableName.empty()) {
+                rc = RsMetadataServerProxyHelpers::ShowTablesHelper(phstmt, curCatalog,
+                                    char2String(curSchema.schema_name), tableName,
+                                    tables).execute();
+                if (!SQL_SUCCEEDED(rc)) {
+                    RS_LOG_ERROR("sqlPrimaryKeys", "Error in ShowTablesHelper");
+                    return rc;
+                }
+            } else {
+                SHOWTABLESResult tableResult;
+                tableResult.table_name_Len = std::snprintf(
+                    reinterpret_cast<char*>(tableResult.table_name),
+                    NAMEDATALEN,
+                    "%.*s",
+                    static_cast<int>(tableName.size()),
+                    tableName.data()
+                );
+                tables.push_back(tableResult);
+            }
+            for (const auto& curTable : tables) {
+                // Get primary key list
+                rc = RsMetadataServerProxyHelpers::ShowConstraintsPkHelper(
+                         phstmt, curCatalog, char2String(curSchema.schema_name),
+                         char2String(curTable.table_name), intermediateRS).execute();
+                if (!SQL_SUCCEEDED(rc)) {
+                    RS_LOG_ERROR("sqlPrimaryKeys", "Error in ShowConstraintsPkHelper");
+                    return rc;
+                }
+            }
+            tables.clear();
+        }
+        schemas.clear();
+    }
+    catalogs.clear();
+
+    RS_LOG_TRACE("sqlPrimaryKeys", "Total number of return rows: %d", intermediateRS.size());
+    return rc;
+}
+
+//
+// Helper function to return intermediate result set for SQLForeignKeys
+//
+SQLRETURN RsMetadataServerProxy::sqlForeignKeys(
+    SQLHSTMT phstmt,
+    const std::string &pkCatalogName,
+    const std::string &pkSchemaName,
+    const std::string &pkTableName,
+    const std::string &fkCatalogName,
+    const std::string &fkSchemaName,
+    const std::string &fkTableName,
+    std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult> &intermediateRS,
+    bool isSingleDatabaseMetaData) {
+
+    RS_LOG_TRACE(
+        "sqlForeignKeys",
+        "pkCatalogName = \"%s\", pkSchemaName = \"%s\", pkTableName = \"%s\", "
+        "fkCatalogName = \"%s\", fkSchemaName = \"%s\", fkTableName = \"%s\"",
+        pkCatalogName.c_str(), pkSchemaName.c_str(), pkTableName.c_str(),
+        fkCatalogName.c_str(), fkSchemaName.c_str(), fkTableName.c_str());
+
+    // Define variable to hold the result from Show command helper
+    if(!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlForeignKeys", "Statement handle allocation failed");
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Input length validation
+    std::vector<std::pair<std::string, std::string>> validations;
+    validations.push_back(std::make_pair("pkCatalogName", pkCatalogName));
+    validations.push_back(std::make_pair("pkSchemaName", pkSchemaName));
+    validations.push_back(std::make_pair("pkTableName", pkTableName));
+    validations.push_back(std::make_pair("fkCatalogName", fkCatalogName));
+    validations.push_back(std::make_pair("fkSchemaName", fkSchemaName));
+    validations.push_back(std::make_pair("fkTableName", fkTableName));
+    if (!SQL_SUCCEEDED(validateNameLengths(validations))) {
+        RS_LOG_ERROR("sqlForeignKeys", "Invalid input parameters");
+        return SQL_ERROR;
+    }
+
+    SQLRETURN rc = SQL_SUCCESS;
+    
+    if (!fkTableName.empty()) {
+        // Case 1: FK table specified (handles both imported keys and specific relationships)
+        std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult> fkResults;
+        
+        // Get all foreign keys for the FK table (imported keys)
+        rc = processKeysCase(phstmt, false, fkCatalogName, fkSchemaName,
+                                    fkTableName, fkResults, isSingleDatabaseMetaData);
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlForeignKeys", "Error in processKeysCase");
+            return rc;
+        }
+
+        // Only filter if PK table is specified
+        if (!pkTableName.empty()) {
+            for (const auto& fkResult : fkResults) {
+                if (matchesConstraints(fkResult,
+                                    pkCatalogName, pkSchemaName, pkTableName)) {
+                    intermediateRS.push_back(fkResult);
+                }
+            }
+        } else {
+            // No filtering needed if PK table is not specified
+            intermediateRS = std::move(fkResults);
+        }
+    } else if (!pkTableName.empty() && fkTableName.empty()) {
+        // Case 2: Only PK table specified (exported keys)
+        rc = processKeysCase(phstmt, true, pkCatalogName, pkSchemaName,
+                             pkTableName, intermediateRS, isSingleDatabaseMetaData);
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlForeignKeys", "Error in processKeysCase");
+            return rc;
+        }
+    } else {
+        RS_LOG_ERROR("sqlForeignKeys", "Both PK and FK table names are empty");
+        return SQL_ERROR;
+    }
+
+    RS_LOG_TRACE("sqlForeignKeys", "Total number of return rows: %d", intermediateRS.size());
+    return rc;
+}
+
+bool RsMetadataServerProxy::matchesConstraints(
+    const SHOWCONSTRAINTSFOREIGNKEYSResult& result,
+    const std::string &pkCatalog,
+    const std::string &pkSchema,
+    const std::string &pkTable) {
+    
+    auto matches = [](const SQLCHAR* value, const std::string& expected) -> bool {
+        if (expected.empty()) return true;
+        if (!value) return false;
+        return strncmp(reinterpret_cast<const char*>(value), expected.c_str(), NAMEDATALEN) == 0;
+    };
+
+    return matches(result.pk_table_cat, pkCatalog) &&
+           matches(result.pk_table_schem, pkSchema) &&
+           matches(result.pk_table_name, pkTable);
+}
+
+SQLRETURN RsMetadataServerProxy::processKeysCase(
+    SQLHSTMT phstmt,
+    bool isExportedKeys,
+    const std::string& catalogName,
+    const std::string& schemaName,
+    const std::string& tableName,
+    std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult>& intermediateRS,
+    bool isSingleDatabaseMetaData) {
+
+    SQLRETURN rc = SQL_SUCCESS;
+
+    // Define variable to hold the result from Show command helper
+    std::vector<std::string> catalogs;
+    std::vector<SHOWSCHEMASResult> schemas;
+    std::vector<SHOWTABLESResult> tables;
+
+    // Get catalog list
+    if (catalogName.empty()) {
+        rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                 phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("processKeysCase", "Error in ShowDatabasesHelper");
+            return rc;
+        }
+    } else {
+        catalogs.push_back(catalogName);
+    }
+
+    for (const auto& curCatalog : catalogs) {
+        // Get schema list
+        if (schemaName.empty()) {
+            rc = RsMetadataServerProxyHelpers::ShowSchemasHelper(
+                     phstmt, curCatalog, schemaName, schemas)
+                     .execute();
+            if (!SQL_SUCCEEDED(rc)) {
+                RS_LOG_ERROR("processKeysCase", "Error in ShowSchemasHelper");
+                return rc;
+            }
+        } else {
+            SHOWSCHEMASResult schemaResult;
+            schemaResult.schema_name_Len = std::snprintf(
+                reinterpret_cast<char*>(schemaResult.schema_name),
+                NAMEDATALEN,
+                "%.*s",
+                static_cast<int>(schemaName.size()),
+                schemaName.data()
+            );
+            schemas.push_back(schemaResult);
+        }
+
+        for (const auto& curSchema : schemas) {
+            // Get table list
+            if (tableName.empty()) {
+                rc = RsMetadataServerProxyHelpers::ShowTablesHelper(phstmt, curCatalog,
+                                    char2String(curSchema.schema_name), tableName,
+                                    tables).execute();
+                if (!SQL_SUCCEEDED(rc)) {
+                    RS_LOG_ERROR("processKeysCase", "Error in ShowTablesHelper");
+                    return rc;
+                }
+            } else {
+                SHOWTABLESResult tableResult;
+                tableResult.table_name_Len = std::snprintf(
+                    reinterpret_cast<char*>(tableResult.table_name),
+                    NAMEDATALEN,
+                    "%.*s",
+                    static_cast<int>(tableName.size()),
+                    tableName.data()
+                );
+                tables.push_back(tableResult);
+            }
+            for (const auto& curTable : tables) {
+                // Get foreign key list
+                rc = RsMetadataServerProxyHelpers::ShowConstraintsFkHelper(phstmt, curCatalog,
+                                         char2String(curSchema.schema_name),
+                                         char2String(curTable.table_name),
+                                         isExportedKeys, intermediateRS).execute();
+                if (!SQL_SUCCEEDED(rc)) {
+                    const char* keyType = isExportedKeys ? "exported" : "imported";
+                    RS_LOG_ERROR("processKeysCase",
+                                "Error in ShowConstraintsFkHelper for %s keys", keyType);
+                    return rc;
+                }
+            }
+            tables.clear();
+        }
+        schemas.clear();
+    }
+    catalogs.clear();
+    return rc;
+}
+
+//
+// Helper function to return intermediate result set for SQLSpecialColumns
+//
+SQLRETURN RsMetadataServerProxy::sqlSpecialColumns(
+    SQLHSTMT phstmt,
+    const std::string &catalogName,
+    const std::string &schemaName,
+    const std::string &tableName,
+    std::vector<SHOWCOLUMNSResult> &intermediateRS,
+    bool isSingleDatabaseMetaData) {
+
+    RS_LOG_TRACE(
+        "sqlSpecialColumns",
+        "catalogName = \"%s\", schemaName = \"%s\", tableName = \"%s\"",
+        catalogName.c_str(), schemaName.c_str(), tableName.c_str());
+
+    // Validate statement handler
+    if (!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlSpecialColumns", "Statement handle allocation failed");
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Input length validation
+    std::vector<std::pair<std::string, std::string>> validations;
+    validations.push_back(std::make_pair("catalog", catalogName));
+    validations.push_back(std::make_pair("schema", schemaName));
+    validations.push_back(std::make_pair("table", tableName));
+    if (!SQL_SUCCEEDED(validateNameLengths(validations))) {
+        RS_LOG_ERROR("sqlSpecialColumns", "Invalid input parameters");
+        return SQL_ERROR;
+    }
+
+    // Define variable to hold the result from Show command helper
+    std::vector<std::string> catalogs;
+    std::vector<SHOWSCHEMASResult> schemas;
+    std::vector<SHOWTABLESResult> tables;
+
+    // Get catalog list
+    SQLRETURN rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                       phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                       .execute();
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlSpecialColumns", "Error in ShowDatabasesHelper");
+        return rc;
+    }
+
+    for (const auto& curCatalog : catalogs) {
+        // Get schema list
+        if (schemaName.empty()) {
+            rc = RsMetadataServerProxyHelpers::ShowSchemasHelper(
+                     phstmt, curCatalog, schemaName, schemas)
+                     .execute();
+            if (!SQL_SUCCEEDED(rc)) {
+                RS_LOG_ERROR("sqlSpecialColumns", "Error in ShowSchemasHelper");
+                return rc;
+            }
+        } else {
+            SHOWSCHEMASResult schemaResult;
+            schemaResult.schema_name_Len = std::snprintf(
+                reinterpret_cast<char*>(schemaResult.schema_name),
+                NAMEDATALEN,
+                "%.*s",
+                static_cast<int>(schemaName.size()),
+                schemaName.data()
+            );
+            schemas.push_back(schemaResult);
+        }
+
+        for (const auto& curSchema : schemas) {
+            // Get table list
+            if (tableName.empty()) {
+                rc = RsMetadataServerProxyHelpers::ShowTablesHelper(
+                         phstmt, curCatalog, char2String(curSchema.schema_name),
+                         tableName, tables)
+                         .execute();
+                if (!SQL_SUCCEEDED(rc)) {
+                    RS_LOG_ERROR("sqlSpecialColumns", "Error in ShowTablesHelper");
+                    return rc;
+                }
+            } else {
+                SHOWTABLESResult tableResult;
+                tableResult.table_name_Len = std::snprintf(
+                    reinterpret_cast<char*>(tableResult.table_name),
+                    NAMEDATALEN,
+                    "%.*s",
+                    static_cast<int>(tableName.size()),
+                    tableName.data()
+                );
+                tables.push_back(tableResult);
+            }
+
+            for (const auto& curTable : tables) {
+                // Step 1: Get primary key columns for the current table
+                std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult> pkResults;
+                rc = RsMetadataServerProxyHelpers::ShowConstraintsPkHelper(phstmt, curCatalog,
+                                    char2String(curSchema.schema_name),
+                                    char2String(curTable.table_name), pkResults).execute();
+                if (!SQL_SUCCEEDED(rc)) {
+                    RS_LOG_ERROR("sqlSpecialColumns", 
+                               "Error in ShowConstraintsPkHelper");
+                    return rc;
+                }
+
+                // Step 2: Check if primary key columns result is not empty
+                if (!pkResults.empty()) {
+                    // Create a set of primary key column names for efficient lookup
+                    std::set<std::string> pkColumnNames;
+                    for (const auto& pk : pkResults) {
+                        pkColumnNames.insert(char2String(pk.column_name));
+                    }
+
+                    // Step 3: Call SHOW COLUMNS once for the entire table
+                    std::vector<SHOWCOLUMNSResult> allColumns;
+                    rc = RsMetadataServerProxyHelpers::ShowColumnsHelper(phstmt, curCatalog,
+                                           char2String(curSchema.schema_name),
+                                           char2String(curTable.table_name),
+                                           RsMetadataAPIHelper::SQL_EMPTY,
+                                           allColumns).execute();
+
+                    if (!SQL_SUCCEEDED(rc)) {
+                        RS_LOG_ERROR("sqlSpecialColumns", 
+                                   "Error in ShowColumnsHelper");
                         return rc;
                     }
+
+                    // Step 4: Filter the result from SHOW COLUMNS based on primary key columns
+                    for (const auto& column : allColumns) {
+                        std::string columnName = char2String(column.column_name);
+                        if (pkColumnNames.find(columnName) != pkColumnNames.end()) {
+                            intermediateRS.push_back(column);
+                        }
+                    }
                 }
-                tables.clear();
             }
-            schemas.clear();
+            tables.clear();
         }
-        catalogs.clear();
-
-        RS_LOG_TRACE("sqlColumns", "Total number of return rows: %zu", intermediateRS.size());
-    } else {
-        RS_LOG_TRACE("sqlColumns", "Return empty intermediateRS");
+        schemas.clear();
     }
+    catalogs.clear();
 
+    RS_LOG_TRACE("sqlSpecialColumns", "Total number of return rows: %d", intermediateRS.size());
     return rc;
 }
 
 //
-// Helper function to retrieve intermediate result set for SHOW DATABASES
+// Helper function to return intermediate result set for SQLColumnPrivileges
 //
-SQLRETURN RsMetadataServerProxy::callShowDatabases(
-    SQLHSTMT phstmt, const std::string &catalog,
-    std::vector<std::string> &catalogs, bool isSingleDatabaseMetaData) {
-    SQLRETURN rc = SQL_SUCCESS;
-    SQLLEN catalogLen;
-    SQLCHAR buf[MAX_IDEN_LEN];
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    std::string sql;
+SQLRETURN RsMetadataServerProxy::sqlColumnPrivileges(
+    SQLHSTMT phstmt,
+    const std::string &catalogName,
+    const std::string &schemaName,
+    const std::string &tableName,
+    const std::string &columnName,
+    std::vector<SHOWGRANTSCOLUMNResult> &intermediateRS,
+    bool isSingleDatabaseMetaData) {
 
-    std::string database = getDatabase(pStmt);
-    if (database.empty()) {
-        addError(
-            &pStmt->pErrorList, "HY000",
-            "callShowDatabases: Error when retrieving current database name",
-            0, NULL);
+    RS_LOG_TRACE(
+        "sqlColumnPrivileges",
+        "catalogName = \"%s\", schemaName = \"%s\", tableName = \"%s\", columnName = \"%s\"",
+        catalogName.c_str(), schemaName.c_str(), tableName.c_str(), columnName.c_str());
+
+    // Validate statement handler
+    if (!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlColumnPrivileges", "Invalid statement handle");
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Input length validation
+    std::vector<std::pair<std::string, std::string>> validations;
+    validations.push_back(std::make_pair("catalog", catalogName));
+    validations.push_back(std::make_pair("schema", schemaName));
+    validations.push_back(std::make_pair("table", tableName));
+    validations.push_back(std::make_pair("column", columnName));
+    if (!SQL_SUCCEEDED(validateNameLengths(validations))) {
+        RS_LOG_ERROR("sqlColumnPrivileges", "Invalid input parameters");
         return SQL_ERROR;
     }
 
-    // Call Server API SHOW DATABASES to get a list of Catalog
-    if (catalog.empty()) {
-        sql = "SHOW DATABASES;";
-    } else {
-        std::string quotedCatalog;
-        rc = callQuoteFunc(phstmt, catalog, quotedCatalog, RsMetadataAPIHelper::quotedLiteralQuery);
-        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-            addError(&pStmt->pErrorList, "HY000",
-                    "callShowTables: Fail to call QUOTE_LITERAL on catalog name", 0,
-                    NULL);
-            return rc;
+    // Define variable to hold the result from Show command helper
+    std::vector<std::string> catalogs;
+    std::vector<SHOWSCHEMASResult> schemas;
+    std::vector<SHOWTABLESResult> tables;
+
+    // Get catalog list
+    SQLRETURN rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                       phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                       .execute();
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlColumnPrivileges", "Error in ShowDatabasesHelper");
+        return rc;
+    }
+
+    for (const auto& curCatalog : catalogs) {
+        // Get schema list
+        if (schemaName.empty()) {
+            rc = RsMetadataServerProxyHelpers::ShowSchemasHelper(
+                     phstmt, curCatalog, schemaName, schemas)
+                     .execute();
+            if (!SQL_SUCCEEDED(rc)) {
+                RS_LOG_ERROR("sqlColumnPrivileges", "Error in ShowSchemasHelper");
+                return rc;
+            }
+        } else {
+            SHOWSCHEMASResult schemaResult;
+            schemaResult.schema_name_Len = std::snprintf(
+                reinterpret_cast<char*>(schemaResult.schema_name),
+                NAMEDATALEN,
+                "%.*s",
+                static_cast<int>(schemaName.size()),
+                schemaName.data()
+            );
+            schemas.push_back(schemaResult);
         }
-        sql = "SHOW DATABASES LIKE " + quotedCatalog + ";";
-    }
 
-    // Execute Server API call
-    RS_LOG_DEBUG("callShowDatabases", "Execute SHOW query: %s", sql.c_str());
-    setCatalogQueryBuf(pStmt, (char *)sql.c_str());
-    // TODO: Support for prepare not ready yet
-    rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)sql.c_str(), SQL_NTS,
-                                     TRUE, FALSE, FALSE, TRUE);
-    resetCatalogQueryFlag(pStmt);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowDatabases: Fail to execute SHOW DATABASES ... ", 0,
-                 NULL);
-        return rc;
-    }
+        for (const auto& curSchema : schemas) {
+            // Get table list
+            if (tableName.empty()) {
+                rc = RsMetadataServerProxyHelpers::ShowTablesHelper(phstmt, curCatalog,
+                                      char2String(curSchema.schema_name),
+                                      tableName, tables).execute();
+                if (!SQL_SUCCEEDED(rc)) {
+                    RS_LOG_ERROR("sqlColumnPrivileges", "Error in ShowTablesHelper");
+                    return rc;
+                }
+            } else {
+                SHOWTABLESResult tableResult;
+                tableResult.table_name_Len = std::snprintf(
+                    reinterpret_cast<char*>(tableResult.table_name),
+                    NAMEDATALEN,
+                    "%.*s",
+                    static_cast<int>(tableName.size()),
+                    tableName.data()
+                );
+                tables.push_back(tableResult);
+            }
 
-    // Clean up the column binding
-    rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowDatabases: Fail to clean up the column binding", 0,
-                 NULL);
-        return rc;
-    }
-
-    // Bind columns for SHOW DATABASES result set
-    rc = RS_STMT_INFO::RS_SQLBindCol(
-        pStmt,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_DATABASES_database_name),
-        SQL_C_CHAR, buf, sizeof(buf), &catalogLen);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowDatabases: Fail to bind column for SHOW DATABASES "
-                 "result ... ",
-                 0, NULL);
-        return SQL_ERROR;
-    }
-
-    // Retrieve result from SHOW DATABASES
-    while (SQL_SUCCEEDED(
-        rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0))) {
-        std::string cur = char2String(buf);
-        if (!isSingleDatabaseMetaData || cur == database) {
-            catalogs.push_back(cur);
+            for (const auto& curTable : tables) {
+                // Get column privileges
+                rc = RsMetadataServerProxyHelpers::ShowGrantsColumnHelper(phstmt, curCatalog,
+                                    char2String(curSchema.schema_name),
+                                    char2String(curTable.table_name),
+                                    columnName, intermediateRS).execute();
+                if (!SQL_SUCCEEDED(rc)) {
+                    RS_LOG_ERROR("sqlColumnPrivileges", "Error in ShowGrantsColumnHelper");
+                    return rc;
+                }
+            }
+            tables.clear();
         }
+        schemas.clear();
     }
+    catalogs.clear();
 
-    // Unbind columns for SHOW DATABASES result set
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_DATABASES_database_name));
-
-    RS_LOG_TRACE("callShowDatabases", "number of catalog: %zu",
-                 catalogs.size());
-
-    // While loop will end if there's no more result to fetch. Therefore, rc
-    // will be changed to SQL_ERROR 
-    // Simply return SQL_SUCCESS since while loop was finished with no issue
-    return SQL_SUCCESS;
-}
-
-//
-// Helper function to retrieve intermediate result set for SHOW SCHEMAS
-//
-SQLRETURN RsMetadataServerProxy::callShowSchemas(
-    SQLHSTMT phstmt, const std::string &catalog, const std::string &schema,
-    std::vector<SHOWSCHEMASResult> &intermediateRS) {
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    SQLRETURN rc = SQL_SUCCESS;
-    std::string sql;
-    std::string quotedCatalog;
-
-    // Input parameter check
-    if (catalog.empty()) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowSchemas: catalog name should not be null or empty", 0,
-                 NULL);
-        return SQL_ERROR;
-    }
-
-    // Apply proper quoting and escaping for identifier
-    rc = callQuoteFunc(phstmt, catalog, quotedCatalog, RsMetadataAPIHelper::quotedIdentQuery);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: Fail to call QUOTE_IDENT on catalog name", 0,
-                 NULL);
-        return rc;
-    }
-
-    // Build query for SHOW SCHEMAS
-    if (schema.empty()) {
-        sql = "SHOW SCHEMAS FROM DATABASE " + quotedCatalog + ";";
-    } else {
-        // Apply proper quoting and escaping for literal
-        std::string quotedSchema;
-        rc = callQuoteFunc(phstmt, schema, quotedSchema, RsMetadataAPIHelper::quotedLiteralQuery);
-        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-            addError(&pStmt->pErrorList, "HY000",
-                    "callShowTables: Fail to call QUOTE_LITERAL on schema name", 0,
-                    NULL);
-            return rc;
-        }
-        sql = "SHOW SCHEMAS FROM DATABASE " + quotedCatalog + " LIKE " + quotedSchema + ";";
-    }
-
-    // Execute Server API call
-    RS_LOG_DEBUG("callShowSchemas", "Execute SHOW query: %s", sql.c_str());
-    setCatalogQueryBuf(pStmt, (char *)sql.c_str());
-    // TODO: Support for prepare not ready yet
-    rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)sql.c_str(), SQL_NTS,
-                                     TRUE, FALSE, FALSE, TRUE);
-    resetCatalogQueryFlag(pStmt);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowSchemas: Fail to execute SHOW SCHEMAS ... ", 0,
-                 NULL);
-        return rc;
-    }
-
-    // Clean up the column binding
-    rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowSchemas: Fail to clean up the column binding", 0,
-                 NULL);
-        return rc;
-    }
-
-    // Bind columns for SHOW SCHEMAS result set
-    SHOWSCHEMASResult cur;
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_SCHEMAS_database_name),
-        SQL_C_CHAR, cur.database_name, sizeof(cur.database_name),
-        &cur.database_name_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_SCHEMAS_schema_name),
-        SQL_C_CHAR, cur.schema_name, sizeof(cur.schema_name),
-        &cur.schema_name_Len);
-
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowSchemas: Fail to bind column for SHOW SCHEMAS "
-                 "result ... ",
-                 0, NULL);
-        return SQL_ERROR;
-    }
-
-    // Retrieve result from SHOW SCHEMAS
-    while (SQL_SUCCEEDED(
-        rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0))) {
-        intermediateRS.push_back(cur);
-    }
-
-    // Unbind columns for SHOW SCHEMAS result set
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_SCHEMAS_database_name));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_SCHEMAS_schema_name));
-
-    
-    // While loop will end if there's no more result to fetch. Therefore, rc
-    // will be changed to SQL_ERROR 
-    // Simply return SQL_SUCCESS since while loop was finished with no issue
-    return SQL_SUCCESS;
-}
-
-//
-// Helper function to retrieve intermediate result set for SHOW TABLES
-//
-SQLRETURN RsMetadataServerProxy::callShowTables(
-    SQLHSTMT phstmt, const std::string &catalog, const std::string &schema,
-    const std::string &table, std::vector<SHOWTABLESResult> &intermediateRS) {
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    SQLRETURN rc = SQL_SUCCESS;
-    std::string sql;
-    std::string quotedCatalog;
-    std::string quotedSchema;
-
-    // Input parameter check
-    if (catalog.empty()) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowTables: catalog name should not be null or empty", 0, NULL);
-        return SQL_ERROR;
-    }
-
-    if (schema.empty()) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowTables: schema name should not be null or empty", 0, NULL);
-        return SQL_ERROR;
-    }
-
-    // Apply proper quoting and escaping for identifier
-    rc = callQuoteFunc(phstmt, catalog, quotedCatalog, RsMetadataAPIHelper::quotedIdentQuery);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: Fail to call QUOTE_IDENT on catalog name", 0,
-                 NULL);
-        return rc;
-    }
-    rc = callQuoteFunc(phstmt, schema, quotedSchema, RsMetadataAPIHelper::quotedIdentQuery);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: Fail to call QUOTE_IDENT on schema name", 0,
-                 NULL);
-        return rc;
-    }
-    
-
-    // Build query for SHOW TABLES
-    if (table.empty()) {
-        sql = "SHOW TABLES FROM SCHEMA " + quotedCatalog + "." + quotedSchema + ";";
-    } else {
-        // Apply proper quoting and escaping for literal
-        std::string quotedTable;
-        rc = callQuoteFunc(phstmt, table, quotedTable, RsMetadataAPIHelper::quotedLiteralQuery);
-        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-            addError(&pStmt->pErrorList, "HY000",
-                    "callShowTables: Fail to call QUOTE_LITERAL on table name", 0,
-                    NULL);
-            return rc;
-        }
-        sql = "SHOW TABLES FROM SCHEMA " + quotedCatalog + "." + quotedSchema + " LIKE " + quotedTable + ";";
-    }
-
-    // Execute Server API call
-    RS_LOG_DEBUG("callShowTables", "Execute SHOW query: %s", sql.c_str());
-    setCatalogQueryBuf(pStmt, (char *)sql.c_str());
-    // TODO: Support for prepare not ready yet
-    rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)sql.c_str(), SQL_NTS,
-                                     TRUE, FALSE, FALSE, TRUE);
-    resetCatalogQueryFlag(pStmt);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowTables: Fail to execute SHOW TABLES ... ", 0, NULL);
-        return rc;
-    }
-
-    // Clean up the column binding
-    rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowTables: Fail to clean up the column binding", 0,
-                 NULL);
-        return rc;
-    }
-
-    // Bind columns for SHOW TABLES result set
-    SHOWTABLESResult cur;
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_database_name),
-        SQL_C_CHAR, cur.database_name, sizeof(cur.database_name),
-        &cur.database_name_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_schema_name),
-        SQL_C_CHAR, cur.schema_name, sizeof(cur.schema_name),
-        &cur.schema_name_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_table_name),
-        SQL_C_CHAR, cur.table_name, sizeof(cur.table_name),
-        &cur.table_name_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_table_type),
-        SQL_C_CHAR, cur.table_type, sizeof(cur.table_type),
-        &cur.table_type_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_remarks),
-        SQL_C_CHAR, cur.remarks, sizeof(cur.remarks), &cur.remarks_Len);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowTables: Fail to bind column for SHOW TABLES "
-                 "result ... ",
-                 0, NULL);
-        return SQL_ERROR;
-    }
-
-    // Retrieve result from SHOW TABLES
-    while (SQL_SUCCEEDED(
-        rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0))) {
-        intermediateRS.push_back(cur);
-    }
-
-    // Unbind columns for SHOW TABLES result set
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_database_name));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_schema_name));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_table_name));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_table_type));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_TABLES_remarks));
-
-    
-    // While loop will end if there's no more result to fetch. Therefore, rc
-    // will be changed to SQL_ERROR 
-    // Simply return SQL_SUCCESS since while loop was finished with no issue
-    return SQL_SUCCESS;
-}
-
-//
-// Helper function to retrieve intermediate result set for SHOW COLUMNS
-//
-SQLRETURN RsMetadataServerProxy::callShowColumns(
-    SQLHSTMT phstmt, const std::string &catalog, const std::string &schema,
-    const std::string &table, const std::string &column,
-    std::vector<SHOWCOLUMNSResult> &intermediateRS) {
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    SQLRETURN rc = SQL_SUCCESS;
-    std::string sql;
-    std::string quotedCatalog;
-    std::string quotedSchema;
-    std::string quotedTable;
-
-    // Input parameter check
-    if (catalog.empty()) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: catalog name should not be null or empty", 0,
-                 NULL);
-        return SQL_ERROR;
-    }
-
-    if (schema.empty()) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: schema name should not be null or empty", 0, NULL);
-        return SQL_ERROR;
-    }
-
-    if (table.empty()) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: table name should not be null or empty", 0, NULL);
-        return SQL_ERROR;
-    }
-
-    // Apply proper quoting and escaping for identifier
-    rc = callQuoteFunc(phstmt, catalog, quotedCatalog, RsMetadataAPIHelper::quotedIdentQuery);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: Fail to call QUOTE_IDENT on catalog name", 0,
-                 NULL);
-        return rc;
-    }
-
-    rc = callQuoteFunc(phstmt, schema, quotedSchema, RsMetadataAPIHelper::quotedIdentQuery);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: Fail to call QUOTE_IDENT on schema name", 0,
-                 NULL);
-        return rc;
-    }
-
-    rc = callQuoteFunc(phstmt, table, quotedTable, RsMetadataAPIHelper::quotedIdentQuery);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: Fail to call QUOTE_IDENT on table name", 0,
-                 NULL);
-        return rc;
-    }
-
-    // Build query for SHOW COLUMNS
-    if (column.empty()) {
-        sql = "SHOW COLUMNS FROM TABLE " + quotedCatalog + "." + quotedSchema + "." + quotedTable + ";";
-    } else {
-        // Apply proper quoting and escaping for literal
-        std::string quotedColumn;
-        rc = callQuoteFunc(phstmt, column, quotedColumn, RsMetadataAPIHelper::quotedLiteralQuery);
-        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-            addError(&pStmt->pErrorList, "HY000",
-                    "callShowColumns: Fail to call QUOTE_LITERAL on column name", 0,
-                    NULL);
-            return rc;
-        }
-        sql = "SHOW COLUMNS FROM TABLE " + quotedCatalog + "." + quotedSchema + "." + quotedTable + " LIKE " + quotedColumn + ";";
-    }
-
-    // Execute Server API call
-    RS_LOG_DEBUG("callShowColumns", "Execute SHOW query: %s", sql.c_str());
-    setCatalogQueryBuf(pStmt, (char *)sql.c_str());
-    // TODO: Support for prepare not ready yet
-    rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)sql.c_str(), SQL_NTS,
-                                     TRUE, FALSE, FALSE, TRUE);
-    resetCatalogQueryFlag(pStmt);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: Fail to execute SHOW COLUMNS ... ", 0,
-                 NULL);
-        return rc;
-    }
-
-    // Clean up the column binding
-    rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: Fail to clean up the column binding", 0,
-                 NULL);
-        return rc;
-    }
-
-    // Bind columns for SHOW TABLES result set
-    SHOWCOLUMNSResult cur;
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_database_name),
-        SQL_C_CHAR, cur.database_name, sizeof(cur.database_name),
-        &cur.database_name_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_schema_name),
-        SQL_C_CHAR, cur.schema_name, sizeof(cur.schema_name),
-        &cur.schema_name_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_table_name),
-        SQL_C_CHAR, cur.table_name, sizeof(cur.table_name),
-        &cur.table_name_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_column_name),
-        SQL_C_CHAR, cur.column_name, sizeof(cur.column_name),
-        &cur.column_name_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_ordinal_position),
-        SQL_C_SSHORT, &cur.ordinal_position, sizeof(cur.ordinal_position),
-        &cur.ordinal_position_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_column_default),
-        SQL_C_CHAR, cur.column_default, sizeof(cur.column_default),
-        &cur.column_default_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_is_nullable),
-        SQL_C_CHAR, cur.is_nullable, sizeof(cur.is_nullable),
-        &cur.is_nullable_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_data_type),
-        SQL_C_CHAR, cur.data_type, sizeof(cur.data_type), &cur.data_type_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt,
-        getIndex(pStmt,
-                 RsMetadataAPIHelper::kSHOW_COLUMNS_character_maximum_length),
-        SQL_C_SSHORT, &cur.character_maximum_length,
-        sizeof(cur.character_maximum_length),
-        &cur.character_maximum_length_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_numeric_precision),
-        SQL_C_SSHORT, &cur.numeric_precision, sizeof(cur.numeric_precision),
-        &cur.numeric_precision_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_numeric_scale),
-        SQL_C_SSHORT, &cur.numeric_scale, sizeof(cur.numeric_scale),
-        &cur.numeric_scale_Len);
-    rc += RS_STMT_INFO::RS_SQLBindCol(
-        pStmt, getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_remarks),
-        SQL_C_CHAR, cur.remarks, sizeof(cur.remarks), &cur.remarks_Len);
-
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callShowColumns: Fail to bind column for SHOW COLUMNS "
-                 "result ... ",
-                 0, NULL);
-        return SQL_ERROR;
-    }
-
-    // Retrieve result from SHOW COLUMNS
-    while (SQL_SUCCEEDED(
-        rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0))) {
-        intermediateRS.push_back(cur);
-    }
-
-    // Unbind columns for SHOW TABLES result set
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_database_name));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_schema_name));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_table_name));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_column_name));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_ordinal_position));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_column_default));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_is_nullable));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_data_type));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt,
-                 RsMetadataAPIHelper::kSHOW_COLUMNS_character_maximum_length));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_numeric_precision));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_numeric_scale));
-    releaseDescriptorRecByNum(
-        pStmt->pStmtAttr->pARD,
-        getIndex(pStmt, RsMetadataAPIHelper::kSHOW_COLUMNS_remarks));
-
-    
-    // While loop will end if there's no more result to fetch. Therefore, rc
-    // will be changed to SQL_ERROR 
-    // Simply return SQL_SUCCESS since while loop was finished with no issue
-    return SQL_SUCCESS;
-}
-
-SQLRETURN RsMetadataServerProxy::callQuoteFunc(
-    SQLHSTMT phstmt, const std::string &input, std::string& output, const std::string &quotedQuery) { // output should be the last argument
-    SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    SQLLEN lenIndex = input.size();
-    SQLCHAR buf[MAX_IDEN_LEN] = {0};
-
-    RS_LOG_TRACE("callQuoteFunc", "input string: %s, len: %zu", input.c_str(), input.size());
-
-    rc = RsPrepare::RS_SQLPrepare(phstmt, (SQLCHAR *)quotedQuery.c_str(),
-                                  SQL_NTS, FALSE, FALSE, FALSE, TRUE);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callQuoteFunc: Fail to prepare QUOTE function ... ", 0,
-                 NULL);
-        return rc;
-    }
-
-     // Clean up the column binding
-    rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_UNBIND, FALSE);
-    if (rc != SQL_SUCCESS) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callQuoteFunc: Fail to clean up the column binding", 0,
-                 NULL);
-        return rc;
-    }
-
-    rc = RsParameter::RS_SQLBindParameter(
-        phstmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR, MAX_IDEN_LEN, 0,
-        (SQLCHAR *)input.c_str(), input.size(), &lenIndex);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(
-            &pStmt->pErrorList, "HY000",
-            "callQuoteFunc: Fail to bind parameter for QUOTE function ... ",
-            0, NULL);
-        return rc;
-    }
-
-    rc = RsExecute::RS_SQLExecDirect(phstmt, NULL, 0, FALSE, TRUE, FALSE, TRUE);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callQuoteFunc: Fail to execute prepare statement for "
-                 "QUOTE function ... ",
-                 0, NULL);
-        return rc;
-    }
-
-    releaseDescriptorRecByNum(pStmt->pStmtAttr->pARD, 1);
-
-    rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(
-            &pStmt->pErrorList, "HY000",
-            "callQuoteFunc: Fail to fetch result for QUOTE funcion ... ", 0,
-            NULL);
-        return rc;
-    }
-
-    rc = RS_STMT_INFO::RS_SQLGetData(pStmt, 1, SQL_C_CHAR, buf, sizeof(buf),
-                                     &lenIndex, TRUE);
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-        addError(&pStmt->pErrorList, "HY000",
-                 "callQuoteFunc: Fail to get data for QUOTE funcion ... ", 0,
-                 NULL);
-        return rc;
-    }
-
-    RS_LOG_TRACE("callQuoteFunc", "Quoted string: %s", buf);
-
-    output = char2String(buf);
+    RS_LOG_TRACE("sqlColumnPrivileges", "Total number of return rows: %d", intermediateRS.size());
     return rc;
+}
+
+//
+// Helper function to return intermediate result set for SQLTablePrivileges
+//
+SQLRETURN RsMetadataServerProxy::sqlTablePrivileges(
+    SQLHSTMT phstmt,
+    const std::string &catalogName,
+    const std::string &schemaName,
+    const std::string &tableName,
+    std::vector<SHOWGRANTSTABLEResult> &intermediateRS,
+    bool isSingleDatabaseMetaData) {
+
+    RS_LOG_TRACE(
+        "sqlTablePrivileges",
+        "catalogName = \"%s\", schemaName = \"%s\", tableName = \"%s\"",
+        catalogName.c_str(), schemaName.c_str(), tableName.c_str());
+
+    // Validate statement handler
+    if (!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlTablePrivileges", "Invalid statement handle");
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Input length validation
+    std::vector<std::pair<std::string, std::string>> validations;
+    validations.push_back(std::make_pair("catalog", catalogName));
+    validations.push_back(std::make_pair("schema", schemaName));
+    validations.push_back(std::make_pair("table", tableName));
+    if (!SQL_SUCCEEDED(validateNameLengths(validations))) {
+        RS_LOG_ERROR("sqlTablePrivileges", "Invalid input parameters");
+        return SQL_ERROR;
+    }
+
+    // Define variable to hold the result from Show command helper
+    std::vector<std::string> catalogs;
+    std::vector<SHOWSCHEMASResult> schemas;
+    std::vector<SHOWTABLESResult> tables;
+
+    // Get catalog list
+    SQLRETURN rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                       phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                       .execute();
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlTablePrivileges", "Error in ShowDatabasesHelper");
+        return rc;
+    }
+
+    for (const auto& curCatalog : catalogs) {
+        // Get schema list
+        rc = RsMetadataServerProxyHelpers::ShowSchemasHelper(
+                 phstmt, curCatalog, schemaName, schemas)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlTablePrivileges", "Error in ShowSchemasHelper");
+            return rc;
+        }
+        for (const auto& curSchema : schemas) {
+            // Get table list
+            rc = RsMetadataServerProxyHelpers::ShowTablesHelper(
+                     phstmt, curCatalog, char2String(curSchema.schema_name),
+                     tableName, tables)
+                     .execute();
+            if (!SQL_SUCCEEDED(rc)) {
+                RS_LOG_ERROR("sqlTablePrivileges", "Error in ShowTablesHelper");
+                return rc;
+            }
+            for (const auto& curTable : tables) {
+                rc = RsMetadataServerProxyHelpers::ShowGrantsTableHelper(phstmt, curCatalog,
+                                  char2String(curSchema.schema_name),
+                                    char2String(curTable.table_name), intermediateRS).execute();
+                if (!SQL_SUCCEEDED(rc)) {
+                    RS_LOG_ERROR("sqlTablePrivileges", "Error in ShowGrantsTableHelper");
+                    return rc;
+                }
+            }
+            tables.clear();
+        }
+        schemas.clear();
+    }
+    catalogs.clear();
+
+    RS_LOG_TRACE("sqlTablePrivileges", "Total number of return rows: %d", intermediateRS.size());
+    return rc;
+}
+
+//
+// Helper function to return intermediate result set for SQLProcedures
+//
+SQLRETURN RsMetadataServerProxy::sqlProcedures(
+    SQLHSTMT phstmt,
+    const std::string &catalogName,
+    const std::string &schemaName,
+    const std::string &procName,
+    std::vector<SHOWPROCEDURESFUNCTIONSResult> &intermediateRS,
+    bool isSingleDatabaseMetaData) {
+
+    RS_LOG_TRACE(
+        "sqlProcedures",
+        "catalogName = \"%s\", schemaName = \"%s\", procName = \"%s\"",
+        catalogName.c_str(), schemaName.c_str(), procName.c_str());
+
+    // Validate statement handler
+    if (!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlProcedures", "Invalid statement handle");
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Input length validation
+    std::vector<std::pair<std::string, std::string>> validations;
+    validations.push_back(std::make_pair("catalog", catalogName));
+    validations.push_back(std::make_pair("schema", schemaName));
+    validations.push_back(std::make_pair("procedure/function", procName));
+    if (!SQL_SUCCEEDED(validateNameLengths(validations))) {
+        RS_LOG_ERROR("sqlProcedures", "Invalid input parameters");
+        return SQL_ERROR;
+    }
+
+    // Define variable to hold the result from Show command helper
+    std::vector<std::string> catalogs;
+    std::vector<SHOWSCHEMASResult> schemas;
+
+    // Get catalog list
+    SQLRETURN rc = SQL_SUCCESS;
+    if (catalogName.empty()) {
+        rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                 phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlProcedures", "Error in ShowDatabasesHelper");
+            return rc;
+        }
+    } else {
+        catalogs.push_back(catalogName);
+    }
+    for (const auto& curCatalog : catalogs) {
+        // Get schema list
+        rc = RsMetadataServerProxyHelpers::ShowSchemasHelper(
+                 phstmt, curCatalog, schemaName, schemas)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlProcedures", "Error in ShowSchemasHelper");
+            return rc;
+        }
+        for (const auto& curSchema : schemas) {
+            // Collect procedures and functions for this catalog/schema
+            std::vector<SHOWPROCEDURESFUNCTIONSResult> procedureFunctionResults;
+
+            // Get procedures
+            rc = RsMetadataServerProxyHelpers::ShowProceduresFunctionsHelper(
+                     phstmt, curCatalog, char2String(curSchema.schema_name),
+                     procName, true, procedureFunctionResults).execute();
+            if (!SQL_SUCCEEDED(rc)) {
+                RS_LOG_ERROR("sqlProcedures", "ShowProceduresFunctionsHelper");
+                return rc;
+            }
+
+            // Get functions
+            rc = RsMetadataServerProxyHelpers::ShowProceduresFunctionsHelper(
+                     phstmt, curCatalog, char2String(curSchema.schema_name),
+                     procName, false, procedureFunctionResults).execute();
+            if (!SQL_SUCCEEDED(rc)) {
+                RS_LOG_ERROR("sqlProcedures", "Error executing SHOW FUNCTIONS query");
+                return rc;
+            }
+
+            // Sort only by procedure/function name within this catalog/schema
+            std::sort(procedureFunctionResults.begin(), procedureFunctionResults.end(),
+                  [](const SHOWPROCEDURESFUNCTIONSResult& a, const SHOWPROCEDURESFUNCTIONSResult& b) {
+                      std::string nameA(reinterpret_cast<const char*>(a.object_name), a.object_name_Len);
+                      std::string nameB(reinterpret_cast<const char*>(b.object_name), b.object_name_Len);
+                      return _stricmp(nameA.c_str(), nameB.c_str()) < 0;
+                  });
+            
+            // Append to final results
+            intermediateRS.insert(intermediateRS.end(), procedureFunctionResults.begin(), procedureFunctionResults.end());
+        }
+        schemas.clear();
+    }
+    catalogs.clear();
+
+    RS_LOG_TRACE("sqlProcedures", "Total number of return rows: %d", intermediateRS.size());
+    return rc;
+}
+
+//
+// Helper function to return intermediate result set for SQLProcedureColumns
+//
+SQLRETURN RsMetadataServerProxy::sqlProcedureColumns(
+    SQLHSTMT phstmt, const std::string &catalogName,
+    const std::string &schemaName, const std::string &procName,
+    const std::string &columnName,
+    std::vector<SHOWCOLUMNSResult> &intermediateRS,
+    bool isSingleDatabaseMetaData) {
+
+    RS_LOG_TRACE(
+        "sqlProcedureColumns",
+        "catalogName = \"%s\", schemaName = \"%s\", procName = \"%s\", columnName = \"%s\"",
+        catalogName.c_str(), schemaName.c_str(), procName.c_str(), columnName.c_str());
+
+    // Validate statement handler
+    if (!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlProcedureColumns", "Statement handle allocation failed");
+        return SQL_INVALID_HANDLE;
+    }
+
+    // Input length validation
+    std::vector<std::pair<std::string, std::string>> validations;
+    validations.push_back(std::make_pair("catalog", catalogName));
+    validations.push_back(std::make_pair("schema", schemaName));
+    validations.push_back(std::make_pair("procedure/function", procName));
+    validations.push_back(std::make_pair("column", columnName));
+    if (!SQL_SUCCEEDED(validateNameLengths(validations))) {
+        RS_LOG_ERROR("sqlProcedureColumns", "Invalid input parameters");
+        return SQL_ERROR;
+    }
+
+    // Define variable to hold the result from Show command helper
+    std::vector<std::string> catalogs;
+    std::vector<SHOWSCHEMASResult> schemas;
+
+    // Get catalog list
+    SQLRETURN rc = SQL_SUCCESS;
+    if (catalogName.empty()) {
+        rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                 phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlProcedureColumns", "Error in ShowDatabasesHelper");
+            return rc;
+        }
+    } else {
+        catalogs.push_back(catalogName);
+    }
+
+    for (int i = 0; i < catalogs.size(); i++) {
+        // Get schema list
+        rc = RsMetadataServerProxyHelpers::ShowSchemasHelper(
+                 phstmt, catalogs[i], schemaName, schemas)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlProcedureColumns", "Error in ShowSchemasHelper");
+            return rc;
+        }
+        for (int j = 0; j < schemas.size(); j++) {
+            // Collect procedures and functions for this catalog/schema
+            std::vector<SHOWPROCEDURESFUNCTIONSResult> procedureFunctionResults;
+
+            // Get procedures
+            rc = RsMetadataServerProxyHelpers::ShowProceduresFunctionsHelper(
+                     phstmt, catalogs[i], char2String(schemas[j].schema_name),
+                     procName, true, procedureFunctionResults).execute();
+            if (!SQL_SUCCEEDED(rc)) {
+                RS_LOG_ERROR("sqlProcedureColumns", "Error in ShowProceduresFunctionsHelper for procedure");
+                return rc;
+            }
+
+            // Get functions
+            rc = RsMetadataServerProxyHelpers::ShowProceduresFunctionsHelper(
+                     phstmt, catalogs[i], char2String(schemas[j].schema_name),
+                     procName, false, procedureFunctionResults).execute();
+            if (!SQL_SUCCEEDED(rc)) {
+                RS_LOG_ERROR("sqlProcedureColumns", "Error in ShowProceduresFunctionsHelper for function");
+                return rc;
+            }
+
+            // Sort only by procedure/function name within this catalog/schema
+            std::sort(procedureFunctionResults.begin(), procedureFunctionResults.end(),
+                  [](const SHOWPROCEDURESFUNCTIONSResult& a, const SHOWPROCEDURESFUNCTIONSResult& b) {
+                      std::string nameA(reinterpret_cast<const char*>(a.object_name), a.object_name_Len);
+                      std::string nameB(reinterpret_cast<const char*>(b.object_name), b.object_name_Len);
+                      return _stricmp(nameA.c_str(), nameB.c_str()) < 0;
+                  });
+
+            // Get columns for each procedure and function
+            for (int k = 0; k < procedureFunctionResults.size(); k++) {
+                bool isProcedure = (procedureFunctionResults[k].object_type == SQL_PT_PROCEDURE);
+                std::string sqlBase = isProcedure ? RsMetadataAPIHelper::kshowParamsProcQuery : RsMetadataAPIHelper::kshowParamsFuncQuery;
+                std::string argumentListStr = char2String(procedureFunctionResults[k].argument_list);
+                try {
+                    auto [sqlQuery, argumentList] = RsMetadataAPIHelper::createParameterizedQueryString(
+                        argumentListStr,
+                        sqlBase,
+                        columnName
+                    );
+                    rc = RsMetadataServerProxyHelpers::
+                            ShowProcedureFunctionColumnsHelper(
+                                phstmt, catalogs[i],
+                                char2String(schemas[j].schema_name),
+                                char2String(
+                                    procedureFunctionResults[k].object_name),
+                                columnName,
+                                sqlQuery,
+                                argumentList,
+                                isProcedure,
+                                intermediateRS)
+                                .execute();
+                    if (!SQL_SUCCEEDED(rc)) {
+                        RS_LOG_ERROR("sqlProcedureColumns", "Error in ShowProcedureFunctionColumnsHelper");
+                        return rc;
+                    }
+                } catch (const std::invalid_argument& e) {
+                    RS_LOG_ERROR("sqlProcedureColumns", "Invalid argument list for procedure/function '%s': %s",
+                        char2String(procedureFunctionResults[k].object_name).c_str(), e.what());
+                    return SQL_ERROR;
+                } catch (...) {
+                    RS_LOG_ERROR("sqlProcedureColumns", "Unexpected exception during query preparation or query execution");
+                    return SQL_ERROR;
+                }
+            }
+        }
+        schemas.clear();
+    }
+    catalogs.clear();
+
+    RS_LOG_TRACE("sqlProcedureColumns", "Total number of return rows: %d", intermediateRS.size());
+    return rc;
+}
+
+SQLRETURN RsMetadataServerProxy::validateNameLengths(
+    const std::vector<std::pair<std::string, std::string>>& validations) {
+
+    for (const auto& validation : validations) {
+        if (!validation.second.empty() && validation.second.size() > NAMEDATALEN) {
+            RS_LOG_ERROR("validateNameLengths",
+                        "Invalid %s provided: length %zu exceeds maximum allowed length %d",
+                        validation.first.c_str(), validation.second.size(), NAMEDATALEN);
+            return SQL_ERROR;
+        }
+    }
+    return SQL_SUCCESS;
 }

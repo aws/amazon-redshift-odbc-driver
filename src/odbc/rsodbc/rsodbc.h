@@ -883,6 +883,10 @@ public:
  * DATA_TYPE_INFO
  *
  * Structure to store the data type info mapping
+ * sqlType      - SQL type identifier (e.g., SQL_VARCHAR, SQL_INTEGER)
+ * sqlDataType  - SQL data type for base type
+ * sqlDateSub   - Subtype for date/time types
+ * typeName     - String representation of the type name
  * ----------------
  */
 struct DATA_TYPE_INFO {
@@ -893,9 +897,26 @@ struct DATA_TYPE_INFO {
 };
 
 /* ----------------
+ * DateTimeInfo
+ *
+ * Structure to store datetime-specific precision information
+ * precision         - Custom precision value for datetime types
+ * hasCustomPrecision - Flag indicating if a custom precision was specified
+ * ----------------
+ */
+struct DateTimeInfo {
+    int precision;
+    bool hasCustomPrecision;
+
+    DateTimeInfo() : precision(0), hasCustomPrecision(false) {}
+};
+
+/* ----------------
  * TypeInfoResult
  *
  * Contains both the type information and a flag indicating if the type was found
+ * typeInfo - Holds the actual type information (DATA_TYPE_INFO)
+ * found    - Indicates if the type was successfully found in the type mapping
  * ----------------
  */
 struct TypeInfoResult {
@@ -903,9 +924,25 @@ struct TypeInfoResult {
     bool found;                 // Indicates if the type was successfully found
     
     TypeInfoResult(DATA_TYPE_INFO i, bool f) : typeInfo(i), found(f) {}
+    TypeInfoResult() : typeInfo(DATA_TYPE_INFO()), found(false) {}
     static TypeInfoResult notFound() { 
         return TypeInfoResult(DATA_TYPE_INFO(), false); 
     }
+};
+
+/* ----------------
+ * ProcessedTypeInfo
+ *
+ * Combines type information with datetime-specific details
+ * typeInfoResult  - Result of type lookup, including type information and found status
+ * dateTimeInfo    - Datetime-specific information (precision and custom precision flag)
+ * cleanedTypeName - Type name with precision specification removed (if applicable)
+ * ----------------
+ */
+struct ProcessedTypeInfo {
+    TypeInfoResult typeInfoResult;
+    DateTimeInfo dateTimeInfo;
+    std::string cleanedTypeName;
 };
 
 typedef struct _tuple {
@@ -933,6 +970,16 @@ struct SHOWTABLESResult {
     SQLLEN table_type_Len = 0;
     SQLCHAR remarks[MAX_REMARK_LEN] = {0};
     SQLLEN remarks_Len = 0;
+    SQLCHAR owner[NAMEDATALEN] = {0};
+    SQLLEN owner_Len = 0;
+    SQLCHAR last_altered_time[NAMEDATALEN] = {0};
+    SQLLEN last_altered_time_Len = 0;
+    SQLCHAR last_modified_time[NAMEDATALEN] = {0};
+    SQLLEN last_modified_time_Len = 0;
+    SQLCHAR dist_style[NAMEDATALEN] = {0};
+    SQLLEN dist_style_Len = 0;
+    SQLCHAR table_subtype[NAMEDATALEN] = {0};
+    SQLLEN table_subtype_Len = 0;
 };
 
 // Define structure to store SHOW COLUMNS result for post-processing
@@ -961,6 +1008,131 @@ struct SHOWCOLUMNSResult {
     SQLLEN numeric_scale_Len = 0;
     SQLCHAR remarks[MAX_REMARK_LEN] = {0};
     SQLLEN remarks_Len = 0;
+    SQLCHAR procedure_function_name[NAMEDATALEN] = {0};
+    SQLLEN procedure_function_name_Len = 0;
+    SQLCHAR parameter_type[NAMEDATALEN] = {0};
+    SQLLEN parameter_type_Len = 0;
+    SQLCHAR sort_key_type[NAMEDATALEN] = {0};
+    SQLLEN sort_key_type_Len = 0;
+    SQLINTEGER sort_key = 0;
+    SQLLEN sort_key_Len = 0;
+    SQLINTEGER dist_key = 0;
+    SQLLEN dist_key_Len = 0;
+    SQLCHAR encoding[NAMEDATALEN] = {0};
+    SQLLEN encoding_Len = 0;
+    SQLCHAR collation[NAMEDATALEN] = {0};
+    SQLLEN collation_Len = 0;
+};
+
+// Define structure to store SHOW CONSTRAINTS PRIMARY KEYS result for post-processing
+struct SHOWCONSTRAINTSPRIMARYKEYSResult {
+    SQLCHAR database_name[NAMEDATALEN] = {0};
+    SQLLEN database_name_Len = 0;
+    SQLCHAR schema_name[NAMEDATALEN] = {0};
+    SQLLEN schema_name_Len = 0;
+    SQLCHAR table_name[NAMEDATALEN] = {0};
+    SQLLEN table_name_Len = 0;
+    SQLCHAR column_name[NAMEDATALEN] = {0};
+    SQLLEN column_name_Len = 0;
+    SQLSMALLINT key_seq = 0;
+    SQLLEN key_seq_Len = 0;
+    SQLCHAR pk_name[NAMEDATALEN] = {0};
+    SQLLEN pk_name_Len = 0;
+};
+
+// Define structure to store SHOW CONSTRAINTS FOREIGN KEYS result for post-processing
+struct SHOWCONSTRAINTSFOREIGNKEYSResult {
+    // Primary key table information
+    SQLCHAR pk_table_cat[NAMEDATALEN] = {0};
+    SQLLEN pk_table_cat_Len = 0;
+    SQLCHAR pk_table_schem[NAMEDATALEN] = {0};
+    SQLLEN pk_table_schem_Len = 0;
+    SQLCHAR pk_table_name[NAMEDATALEN] = {0};
+    SQLLEN pk_table_name_Len = 0;
+    SQLCHAR pk_column_name[NAMEDATALEN] = {0};
+    SQLLEN pk_column_name_Len = 0;
+
+    // Foreign key table information
+    SQLCHAR fk_table_cat[NAMEDATALEN] = {0};
+    SQLLEN fk_table_cat_Len = 0;
+    SQLCHAR fk_table_schem[NAMEDATALEN] = {0};
+    SQLLEN fk_table_schem_Len = 0;
+    SQLCHAR fk_table_name[NAMEDATALEN] = {0};
+    SQLLEN fk_table_name_Len = 0;
+    SQLCHAR fk_column_name[NAMEDATALEN] = {0};
+    SQLLEN fk_column_name_Len = 0;
+
+    // Key sequence
+    SQLSMALLINT key_seq = 0;
+    SQLLEN key_seq_Len = 0;
+
+    // Update and delete rules
+    SQLSMALLINT update_rule = 0;
+    SQLLEN update_rule_Len = 0;
+    SQLSMALLINT delete_rule = 0;
+    SQLLEN delete_rule_Len = 0;
+
+    // Constraint names
+    SQLCHAR fk_name[NAMEDATALEN] = {0};
+    SQLLEN fk_name_Len = 0;
+    SQLCHAR pk_name[NAMEDATALEN] = {0};
+    SQLLEN pk_name_Len = 0;
+
+    // Deferrability
+    SQLSMALLINT deferrability = 0;
+    SQLLEN deferrability_Len = 0;
+};
+
+// Define structure to store SHOW GRANTS ON COLUMN result for post-processing
+struct SHOWGRANTSCOLUMNResult {
+    SQLCHAR table_cat[NAMEDATALEN] = {0};
+    SQLLEN table_cat_Len = 0;
+    SQLCHAR table_schem[NAMEDATALEN] = {0};
+    SQLLEN table_schem_Len = 0;
+    SQLCHAR table_name[NAMEDATALEN] = {0};
+    SQLLEN table_name_Len = 0;
+    SQLCHAR column_name[NAMEDATALEN] = {0};
+    SQLLEN column_name_Len = 0;
+    SQLCHAR grantor[NAMEDATALEN] = {0};
+    SQLLEN grantor_Len = 0;
+    SQLCHAR grantee[NAMEDATALEN] = {0};
+    SQLLEN grantee_Len = 0;
+    SQLCHAR privilege[NAMEDATALEN] = {0};
+    SQLLEN privilege_Len = 0;
+    SQLSMALLINT admin_option = 0;
+    SQLLEN admin_option_len = 0;
+};
+
+// Define structure to store SHOW GRANTS ON TABLE result for post-processing
+struct SHOWGRANTSTABLEResult {
+    SQLCHAR table_cat[NAMEDATALEN] = {0};
+    SQLLEN table_cat_Len = 0;
+    SQLCHAR table_schem[NAMEDATALEN] = {0};
+    SQLLEN table_schem_Len = 0;
+    SQLCHAR table_name[NAMEDATALEN] = {0};
+    SQLLEN table_name_Len = 0;
+    SQLCHAR grantor[NAMEDATALEN] = {0};
+    SQLLEN grantor_Len = 0;
+    SQLCHAR grantee[NAMEDATALEN] = {0};
+    SQLLEN grantee_Len = 0;
+    SQLCHAR privilege[NAMEDATALEN] = {0};
+    SQLLEN privilege_Len = 0;
+    SQLSMALLINT admin_option = 0;
+    SQLLEN admin_option_len = 0;
+};
+
+// Define structure to store SHOW PROCEDURES/FUNCTIONS result for post-processing
+struct SHOWPROCEDURESFUNCTIONSResult {
+    SQLCHAR object_cat[NAMEDATALEN] = {0};
+    SQLLEN object_cat_Len = 0;
+    SQLCHAR object_schem[NAMEDATALEN] = {0};
+    SQLLEN object_schem_Len = 0;
+    SQLCHAR object_name[NAMEDATALEN] = {0};
+    SQLLEN object_name_Len = 0;
+    SQLCHAR argument_list[4096] = {0}; // 32 * 128 (32 maximum argument)
+    SQLLEN argument_list_Len = 0;
+    SQLSMALLINT object_type = 0;
+    SQLLEN object_type_Len = 0;
 };
 
 #define SHORT_NAME_KEYWORD 0
@@ -1665,14 +1837,26 @@ libpqExecuteDirectOrPreparedThreadProc(void *pArg);
 void libpqCloseResult(RS_RESULT_INFO *pResult);
 short mapPgTypeToSqlType(Oid pgType,short *phPaSpecialType);
 char *libpqGetData(RS_RESULT_INFO *pResult, short hCol, int *piLenInd, int *piFormat);
+
+bool allocateIRDRecords(RS_STMT_INFO *pStmt);
+bool initializeIRDRecords(RS_STMT_INFO *pStmt, int colNum);
+bool initializeIRDRecord(RS_STMT_INFO *pStmt, RS_RESULT_INFO *pResult, RS_DESC_REC *pDescRec, int i);
+void handleIRDInitializationError(RS_STMT_INFO *pStmt, char *errorMessage);
+SQLRETURN handleInitializeResultSetError(RS_STMT_INFO *pStmt, PGresAttDesc *column, int colNum, PGresult *result, char *errorMessage);
+void setDescRecAttributes(RS_STMT_INFO *pStmt, RS_DESC_REC *pDescRec, Oid pgType, const char *pName);
 SQLRETURN libpqInitializeResultSetField(RS_STMT_INFO *pStmt, char** tableCol, int colNum, int* tableColDatatype);
-SQLRETURN libpqCreateEmptyResultSet(RS_STMT_INFO *pStmt, short columnNum, const int* columnDataType);
 SQLRETURN libpqCreateSQLCatalogsCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<std::string>& intermediateRS);
 SQLRETURN libpqCreateSQLSchemasCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWSCHEMASResult>& intermediateRS);
 SQLRETURN libpqCreateSQLTableTypesCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<std::string> &tableTypeList);
 SQLRETURN libpqCreateSQLTablesCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::string &pTableType, const std::vector<SHOWTABLESResult>& intermediateRS);
 SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWCOLUMNSResult>& intermediateRS);
-
+SQLRETURN libpqCreateSQLPrimaryKeysCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult> &intermediateRS);
+SQLRETURN libpqCreateSQLForeignKeysCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult>& intermediateRS);
+SQLRETURN libpqCreateSQLSpecialColumnsCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWCOLUMNSResult> &intermediateRS, SQLUSMALLINT identifierType);
+SQLRETURN libpqCreateSQLTablePrivilegesCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWGRANTSTABLEResult>& intermediateRS);
+SQLRETURN libpqCreateSQLColumnPrivilegesCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWGRANTSCOLUMNResult> &intermediateRS);
+SQLRETURN libpqCreateSQLProceduresCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWPROCEDURESFUNCTIONSResult> &intermediateRS);
+SQLRETURN libpqCreateSQLProcedureColumnsCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWCOLUMNSResult> &intermediateRS);
 
 SQLRETURN libpqPrepare(RS_STMT_INFO *pStmt, char *pszCmd);
 SQLRETURN libpqPrepareOnThread(RS_STMT_INFO *pStmt, char *pszCmd);

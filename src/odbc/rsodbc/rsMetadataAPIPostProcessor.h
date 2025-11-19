@@ -24,6 +24,15 @@
 #include "rsunicode.h"
 #include "rsutil.h"
 
+
+namespace PostProcessorLoggings {
+    static const char* START_TRACE_MSG = "Start post-processing";
+    static const char* END_TRACE_MSG = "End post-processing";
+    static const char* INVALID_HANDLER = "Invalid statement handle provided";
+    static const char* COLUMN_FIELD_INITIALIZE_FAILED = "Fail to initialize column field";
+    static const char* RESULTSET_CREATION_FAILED = "Error when create customized result set";
+}
+
 /*----------------
  * RsMetadataAPIPostProcessor
  *
@@ -32,6 +41,7 @@
  */
 class RsMetadataAPIPostProcessor {
   public:
+    RsMetadataAPIPostProcessor(RS_STMT_INFO* stmt);
     static const RsMetadataAPIHelper metadataAPIHelper;
 
     /* ----------------
@@ -93,8 +103,6 @@ class RsMetadataAPIPostProcessor {
      *
      * Parameters:
      *   phstmt (SQLHSTMT): statement handler
-     *   retEmpty (bool): a boolean to determine return empty result set
-     *     directly without calling any Server API SHOW command
      *   intermediateRS (const std::vector<SHOWTABLESResult> &): intermediate
      *     result set from RsMetadataServerProxy::sqlTables
      *
@@ -103,7 +111,7 @@ class RsMetadataAPIPostProcessor {
      * ----------------
      */
     static SQLRETURN sqlTablesPostProcessing(
-        SQLHSTMT phstmt, std::string pTableType, bool retEmpty,
+        SQLHSTMT phstmt, std::string pTableType,
         const std::vector<SHOWTABLESResult> &intermediateRS);
 
     /* ----------------
@@ -114,8 +122,6 @@ class RsMetadataAPIPostProcessor {
      *
      * Parameters:
      *   phstmt (SQLHSTMT): statement handler
-     *   retEmpty (bool): a boolean to determine return empty result set
-     *     directly without calling any Server API SHOW command
      *   intermediateRS (const std::vector<SHOWCOLUMNSResult> &): intermediate
      *     result set from RsMetadataServerProxy::sqlColumns
      *
@@ -124,8 +130,140 @@ class RsMetadataAPIPostProcessor {
      * ----------------
      */
     static SQLRETURN sqlColumnsPostProcessing(
-        SQLHSTMT phstmt, bool retEmpty,
-        const std::vector<SHOWCOLUMNSResult> &intermediateRS);
+        SQLHSTMT phstmt, const std::vector<SHOWCOLUMNSResult> &intermediateRS);
+
+    /* ----------------
+     * sqlPrimaryKeysPostProcessing
+     *
+     * helper function to apply post-processing on intermediate result set for
+     * SQLPrimaryKeys
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   intermediateRS (const std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult> &): 
+     *     intermediate result set from RsMetadataServerProxy::sqlPrimaryKeys
+     *
+     * Return:
+     *   SQLRETURN
+     * ----------------
+     */
+    static SQLRETURN sqlPrimaryKeysPostProcessing(
+        SQLHSTMT phstmt, const std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult> &intermediateRS);
+
+    /* ----------------
+     * sqlForeignKeysPostProcessing
+     *
+     * Helper function to apply post-processing on intermediate result set for
+     * SQLForeignKeys
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   intermediateRS (const std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult> &):
+     *     intermediate result set to be processed
+     *
+     * Return:
+     *   SQLRETURN
+     * ----------------
+     */
+    static SQLRETURN sqlForeignKeysPostProcessing(
+        SQLHSTMT phstmt,
+        const std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult> &intermediateRS);
+
+    /* ----------------
+     * sqlSpecialColumnsPostProcessing
+     *
+     * Helper function to apply post-processing on intermediate result set for
+     * SQLSpecialColumns
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   intermediateRS (const std::vector<SHOWCOLUMNSResult> &):
+     *     intermediate result set to be processed
+     *   identifierType: Type of identifier (SQL_BEST_ROWID or SQL_ROWVER)
+     *
+     * Return:
+     *   SQLRETURN
+     * ----------------
+     */
+    static SQLRETURN sqlSpecialColumnsPostProcessing(
+        SQLHSTMT phstmt,
+        const std::vector<SHOWCOLUMNSResult> &intermediateRS,
+        SQLUSMALLINT identifierType);
+
+    /* ----------------
+     * sqlColumnPrivilegesPostProcessing
+     *
+     * Helper function to apply post-processing on intermediate result set for
+     * SQLColumnPrivileges
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   intermediateRS (const std::vector<SHOWGRANTSCOLUMNResult> &):
+     *     intermediate result set to be processed
+     *
+     * Return:
+     *   SQLRETURN
+     * ----------------
+     */
+    static SQLRETURN sqlColumnPrivilegesPostProcessing(
+        SQLHSTMT phstmt,
+        const std::vector<SHOWGRANTSCOLUMNResult> &intermediateRS);
+
+    /* ----------------
+     * sqlTablePrivilegesPostProcessing
+     *
+     * Helper function to apply post-processing on intermediate result set for
+     * SQLTablePrivileges
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   intermediateRS (const std::vector<SHOWGRANTSTABLEResult> &):
+     *     intermediate result set to be processed
+     *
+     * Return:
+     *   SQLRETURN
+     * ----------------
+     */
+    static SQLRETURN sqlTablePrivilegesPostProcessing(
+        SQLHSTMT phstmt,
+        const std::vector<SHOWGRANTSTABLEResult> &intermediateRS);
+
+    /* ----------------
+     * sqlProceduresPostProcessing
+     *
+     * Helper function to apply post-processing on intermediate result set for
+     * SQLProcedures
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   intermediateRS (const std::vector<SHOWPROCEDURESFUNCTIONSResult> &):
+     *     intermediate result set to be processed
+     *
+     * Return:
+     *   SQLRETURN
+     * ----------------
+     */
+    static SQLRETURN sqlProceduresPostProcessing(
+        SQLHSTMT phstmt,
+        const std::vector<SHOWPROCEDURESFUNCTIONSResult> &intermediateRS);
+
+    /* ----------------
+     * sqlProcedureColumnsPostProcessing
+     *
+     * Helper function to apply post-processing on intermediate result set for
+     * SQLProcedureColumns
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   intermediateRS (const std::vector<SHOWCOLUMNSResult> &):
+     *     intermediate result set to be processed
+     *
+     * Return:
+     *   SQLRETURN
+     * ----------------
+     */
+    static SQLRETURN sqlProcedureColumnsPostProcessing(
+        SQLHSTMT phstmt, const std::vector<SHOWCOLUMNSResult> &intermediateRS);
 };
 
 #endif // __RS_METADATAAPIPOSTPROCESSING_H__

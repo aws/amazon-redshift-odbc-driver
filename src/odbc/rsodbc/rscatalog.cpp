@@ -23,8 +23,12 @@
 #define LOCAL_SCHEMA_QUERY			1
 #define EXTERNAL_SCHEMA_QUERY		2
 
-// The minimum show discovery version for RS_SQLTables / RS_SQLColumns was version 2
-#define MIN_SHOW_DISCOVERY_VERSION 2
+// The minimum show discovery version with prepare support for the following metadata api was version 4:
+// SQLTables, SQLColumns,
+// SQLPrimaryKeys, SQLForeignKeys, SQLSpecialColumns,
+// SQLColumnPrivileges, SQLTablePrivileges,
+// SQLProcedures, SQLProcedureColumns
+#define MIN_SHOW_DISCOVERY_VERSION_V4 4
 
 #define MAX_TYPES 21
 
@@ -450,6 +454,48 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 	SQLCHAR *pColumnName,
 	SQLSMALLINT cbColumnName);
 
+// Helper function to handle common statement operations
+template<typename Func>
+SQLRETURN executeWithInternalStmt(RS_STMT_INFO* pStmt, Func operation, const char* operationName) {
+    SQLHSTMT internalStmt;
+    std::string funcName = std::string("executeWithInternalStmt::") + operationName;
+
+    // Allocate statement
+    SQLRETURN rc = RS_CONN_INFO::RS_SQLAllocStmt(pStmt->phdbc, &internalStmt);
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR(funcName.c_str(), "Fail to allocate new statement for internal use");
+        addError(&pStmt->pErrorList,
+            const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+            "Fail to allocate new statement for internal use",
+            0, NULL);
+        return rc;
+    }
+
+    // Execute the operation
+    rc = operation(internalStmt);
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR(funcName.c_str(), "Fail get intermediate result set");
+        addError(&pStmt->pErrorList,
+            const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+            "Fail get intermediate result set",
+            0, NULL);
+        return rc;
+    }
+
+    // Free statement
+    rc = RS_STMT_INFO::RS_SQLFreeStmt(internalStmt, SQL_DROP, TRUE);
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR(funcName.c_str(), "Fail to free statement for internal use");
+        addError(&pStmt->pErrorList,
+            const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+            "Fail to free statement for internal use",
+            0, NULL);
+        return rc;
+    }
+
+    return rc;
+}
+
 
 /*====================================================================================================================================================*/
 
@@ -499,143 +545,151 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
+    if (!VALID_HSTMT(phstmt)) {
+        rc = SQL_INVALID_HANDLE;
+        return rc;
+    }
+
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION){
-		if (isEmptyString(pSchemaName) && isEmptyString(pTableName) && isSqlAllCatalogs(pCatalogName, cbCatalogName))
-		{
-			SQLHSTMT internalStmt;
-			rc = RS_CONN_INFO::RS_SQLAllocStmt(pStmt->phdbc, &internalStmt);
-			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-				RS_LOG_ERROR("RS_CONN_INFO::RS_SQLAllocStmt", "Fail to allocate new statement for internal use");
-				addError(&pStmt->pErrorList, "HY000", "RS_CONN_INFO::RS_SQLAllocStmt, Fail to allocate new statement for internal use", 0, NULL);
-				return rc;
-			}
-
-			//  Special SQLTables call : get catalog list
+	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4){
+		if (isEmptyString(pSchemaName) && isEmptyString(pTableName) && isSqlAllCatalogs(pCatalogName, cbCatalogName)) {
 			std::vector<std::string> intermediateRS;
-			rc = RsMetadataServerProxy::sqlCatalogs(internalStmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
-			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataServerProxy.sqlCatalogs", "Fail get intermediate result set for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerProxy.sqlCatalogs fail", 0, NULL);
-				return rc;
-			}
+			rc = executeWithInternalStmt(pStmt,
+				[&](SQLHSTMT stmt) -> SQLRETURN {
+					return RsMetadataServerProxy::sqlCatalogs(stmt,
+															intermediateRS,
+															isSingleDatabaseMetaData(pStmt));
+				},
+				"RsMetadataServerProxy.sqlCatalogs");
 
-			rc = RS_STMT_INFO::RS_SQLFreeStmt(internalStmt,SQL_DROP, TRUE);
-			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-				RS_LOG_ERROR("RS_STMT_INFO::RS_SQLFreeStmt", "Fail to free statement for internal use");
-				addError(&pStmt->pErrorList, "HY000", "RS_STMT_INFO::RS_SQLFreeStmt, Fail to free statement for internal use", 0, NULL);
+			if (!SQL_SUCCEEDED(rc)) {
+				std::string errorMsg = RsMetadataErrors::formatError(
+					RsMetadataErrors::PROXY_CALL_FAILED,
+					RsMetadataErrors::TYPE_CATALOG);
+				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				addError(&pStmt->pErrorList,
+					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+					const_cast<char*>(errorMsg.c_str()),
+					0, NULL);
 				return rc;
 			}
 
 			rc = RsMetadataAPIPostProcessor::sqlCatalogsPostProcessing(phstmt, intermediateRS);
-			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataAPIPostProcessor.sqlCatalogsPostProcessing", "Fail call post-processing for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessor.sqlCatalogsPostProcessing fail", 0, NULL);
+			if (!SQL_SUCCEEDED(rc)) {
+				std::string errorMsg = RsMetadataErrors::formatError(
+					RsMetadataErrors::POST_PROCESSING_FAILED,
+					RsMetadataErrors::TYPE_CATALOG
+				);
+				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				addError(&pStmt->pErrorList,
+					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+					const_cast<char*>(errorMsg.c_str()),
+					0, NULL);
 				return rc;
 			}
-
-			// Reset the streaming cursor state
-			if(pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)){
-				libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
-			}
-		}
-		else 
-		if(isEmptyString(pCatalogName) && isEmptyString(pTableName) && isSqlAllSchemas(pSchemaName, cbSchemaName))
-		{
-			SQLHSTMT internalStmt;
-			rc = RS_CONN_INFO::RS_SQLAllocStmt(pStmt->phdbc, &internalStmt);
-			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-				RS_LOG_ERROR("RS_CONN_INFO::RS_SQLAllocStmt", "Fail to allocate new statement for internal use");
-				addError(&pStmt->pErrorList, "HY000", "RS_CONN_INFO::RS_SQLAllocStmt, Fail to allocate new statement for internal use", 0, NULL);
-				return rc;
-			}
-
-			//  Special SQLTables call : get schema list
+		} else if (isEmptyString(pCatalogName) && isEmptyString(pTableName) && isSqlAllSchemas(pSchemaName, cbSchemaName)) {
 			std::vector<SHOWSCHEMASResult> intermediateRS;
-			rc = RsMetadataServerProxy::sqlSchemas(internalStmt, intermediateRS, isSingleDatabaseMetaData(pStmt));
-			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataServerProxy.sqlSchemas", "Fail get intermediate result set for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerProxy.sqlSchemas fail", 0, NULL);
-				return rc;
-			}
+			rc = executeWithInternalStmt(pStmt,
+				[&](SQLHSTMT stmt) -> SQLRETURN {
+					return RsMetadataServerProxy::sqlSchemas(stmt,
+															intermediateRS,
+															isSingleDatabaseMetaData(pStmt));
+				},
+				"RsMetadataServerProxy.sqlSchemas");
 
-			rc = RS_STMT_INFO::RS_SQLFreeStmt(internalStmt,SQL_DROP, TRUE);
-			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-				RS_LOG_ERROR("RS_STMT_INFO::RS_SQLFreeStmt", "Fail to free statement for internal use");
-				addError(&pStmt->pErrorList, "HY000", "RS_STMT_INFO::RS_SQLFreeStmt, Fail to free statement for internal use", 0, NULL);
+			if (!SQL_SUCCEEDED(rc)) {
+				std::string errorMsg = RsMetadataErrors::formatError(
+					RsMetadataErrors::PROXY_CALL_FAILED,
+					RsMetadataErrors::TYPE_SCHEMA);
+				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				addError(&pStmt->pErrorList,
+					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+					const_cast<char*>(errorMsg.c_str()),
+					0, NULL);
 				return rc;
 			}
 
 			rc = RsMetadataAPIPostProcessor::sqlSchemasPostProcessing(phstmt, intermediateRS);
-			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataAPIPostProcessor.sqlSchemasPostProcessing", "Fail call post-processing for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessor.sqlSchemasPostProcessing fail", 0, NULL);
+			if (!SQL_SUCCEEDED(rc)) {
+				std::string errorMsg = RsMetadataErrors::formatError(
+					RsMetadataErrors::POST_PROCESSING_FAILED,
+					RsMetadataErrors::TYPE_SCHEMA);
+				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				addError(&pStmt->pErrorList,
+					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+					const_cast<char*>(errorMsg.c_str()),
+					0, NULL);
 				return rc;
 			}
 
-		}
-		else
-		if(isEmptyString(pCatalogName) && isEmptyString(pSchemaName) && isEmptyString(pTableName) && isSqlAllTableTypes(pTableType, cbTableType))
-		{
+		} else if (isEmptyString(pCatalogName) && isEmptyString(pSchemaName) && isEmptyString(pTableName) && isSqlAllTableTypes(pTableType, cbTableType)) {
 			// Special SQLTables call : get table type list
 			rc = RsMetadataAPIPostProcessor::sqlTableTypesPostProcessing(phstmt);
-			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataAPIPostProcessor.sqlTableTypesPostProcessing", "Fail call post-processing for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessor.sqlTableTypesPostProcessing fail", 0, NULL);
+			if (!SQL_SUCCEEDED(rc)) {
+				std::string errorMsg = RsMetadataErrors::formatError(
+					RsMetadataErrors::POST_PROCESSING_FAILED,
+					RsMetadataErrors::TYPE_TABLE_TYPE_INFO);
+				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				addError(&pStmt->pErrorList,
+					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+					const_cast<char*>(errorMsg.c_str()),
+					0, NULL);
 				return rc;
 			}
-			
-			// Reset the streaming cursor state
-			if(pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)){
-				libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
-			}
-		}
-		else{
-			// Normal SQLTables call
-
+		} else {
+			// Convert parameters to string
 			std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
-
 			std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);
-
 			std::string tableName = (isNullOrEmptyString(pTableName)) ? "" : char2String(pTableName);
 
 			// Return Empty ResultSet if catalog or schemaPattern or tableNamePattern is empty string
-			//bool retEmpty = isEmptyString(pCatalogName) || isEmptyString(pSchemaName) || isEmptyString(pTableName); // comment this out since the Driver will still accept empty string for now
+			// comment following line out since the Driver will still accept empty string for now. SIM: Redshift-112709
+			//bool retEmpty = isEmptyString(pCatalogName) || isEmptyString(pSchemaName) || isEmptyString(pTableName);
 			bool retEmpty = false; // Map empty string to wildcard internally but will block them in the near future
-
-			SQLHSTMT internalStmt;
-			rc = RS_CONN_INFO::RS_SQLAllocStmt(pStmt->phdbc, &internalStmt);
-			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-				RS_LOG_ERROR("RS_CONN_INFO::RS_SQLAllocStmt", "Fail to allocate new statement for internal use");
-				addError(&pStmt->pErrorList, "HY000", "RS_CONN_INFO::RS_SQLAllocStmt, Fail to allocate new statement for internal use", 0, NULL);
-				return rc;
-			}
-
 			std::vector<SHOWTABLESResult> intermediateRS;
-			rc = RsMetadataServerProxy::sqlTables(internalStmt, catalogName, schemaName, tableName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
-			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataServerProxy.sqlTables", "Fail get intermediate result set for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataServerProxy.sqlTables fail", 0, NULL);
-				return rc;
-			}
+			if (!retEmpty) {
+				rc = executeWithInternalStmt(pStmt,
+					[&](SQLHSTMT stmt) {
+						return RsMetadataServerProxy::sqlTables(stmt, catalogName, schemaName, tableName,
+															intermediateRS,
+															isSingleDatabaseMetaData(pStmt));
+					},
+					"RsMetadataServerProxy.sqlTables");
 
-			rc = RS_STMT_INFO::RS_SQLFreeStmt(internalStmt,SQL_DROP, TRUE);
-			if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-				RS_LOG_ERROR("RS_STMT_INFO::RS_SQLFreeStmt", "Fail to free statement for internal use");
-				addError(&pStmt->pErrorList, "HY000", "RS_STMT_INFO::RS_SQLFreeStmt, Fail to free statement for internal use", 0, NULL);
-				return rc;
+				if (!SQL_SUCCEEDED(rc)) {
+					std::string errorMsg = RsMetadataErrors::formatError(
+						RsMetadataErrors::PROXY_CALL_FAILED,
+						RsMetadataErrors::TYPE_TABLE);
+					RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+					addError(&pStmt->pErrorList,
+						const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+						const_cast<char*>(errorMsg.c_str()),
+						0, NULL);
+					return rc;
+				}
 			}
 
 			std::string table_type = (!pTableType) ? "" : char2String(pTableType);
 
-			rc = RsMetadataAPIPostProcessor::sqlTablesPostProcessing(phstmt, table_type, retEmpty, intermediateRS);
-			if(rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO){
-				RS_LOG_ERROR("RsMetadataAPIPostProcessor.sqlTablesPostProcessing", "Fail call post-processing for SQLTables");
-				addError(&pStmt->pErrorList,"HY000", "RsMetadataAPIPostProcessor.sqlTablesPostProcessing fail", 0, NULL);
+			rc = RsMetadataAPIPostProcessor::sqlTablesPostProcessing(phstmt, table_type, intermediateRS);
+			if (!SQL_SUCCEEDED(rc)) {
+				std::string errorMsg = RsMetadataErrors::formatError(
+					RsMetadataErrors::POST_PROCESSING_FAILED,
+					RsMetadataErrors::TYPE_TABLE
+				);
+				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				addError(&pStmt->pErrorList,
+					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+					const_cast<char*>(errorMsg.c_str()),
+					0, NULL);
 				return rc;
 			}
+		}
+		// Reset the streaming cursor state
+		if (pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)) {
+			libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
 		}
 	}
 	else{
@@ -817,10 +871,15 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
+    if (!VALID_HSTMT(phstmt)) {
+        rc = SQL_INVALID_HANDLE;
+        return rc;
+    }
+
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if (showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION) {
+    if (showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4) {
         // Parameter validation check
         std::string catalogName = {0};
         /*if (pCatalogName == NULL) {
@@ -841,38 +900,53 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
         std::string columnName = (isNullOrEmptyString(pColumnName)) ? "" : char2String(pColumnName);
 
         // Return Empty ResultSet if catalog || schemaPattern || tableNamePattern || columnNamePattern is empty string
+        // comment following line out since the Driver will still accept empty string for now. SIM: Redshift-112709
         // bool retEmpty = isEmptyString(pCatalogName) || isEmptyString(pSchemaName) || isEmptyString(pTableName) || isEmptyString(pColumnName);
         bool retEmpty = false; // Map empty string to wildcard internally but will block them in the near future
-
-		SQLHSTMT internalStmt;
-		rc = RS_CONN_INFO::RS_SQLAllocStmt(pStmt->phdbc, &internalStmt);
-		if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-			RS_LOG_ERROR("RS_CONN_INFO::RS_SQLAllocStmt", "Fail to allocate new statement for internal use");
-            addError(&pStmt->pErrorList, "HY000", "RS_CONN_INFO::RS_SQLAllocStmt, Fail to allocate new statement for internal use", 0, NULL);
-            return rc;
-        }
-
         std::vector<SHOWCOLUMNSResult> intermediateRS;
-        rc = RsMetadataServerProxy::sqlColumns(internalStmt, catalogName, schemaName, tableName, columnName, retEmpty, intermediateRS, isSingleDatabaseMetaData(pStmt));
-        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-			RS_LOG_ERROR("RsMetadataServerProxy.sqlColumns", "Fail get intermediate result set for SQLColumns");
-            addError(&pStmt->pErrorList, "HY000", "RsMetadataServerProxy.sqlColumns fail", 0, NULL);
-            return rc;
+        if (!retEmpty) {
+            rc = executeWithInternalStmt(pStmt,
+                [&](SQLHSTMT stmt) {
+                    return RsMetadataServerProxy::sqlColumns(stmt,
+                                                        catalogName,
+                                                        schemaName,
+                                                        tableName,
+                                                        columnName,
+                                                        intermediateRS,
+                                                        isSingleDatabaseMetaData(pStmt));
+                },
+                "RsMetadataServerProxy.sqlColumns");
+
+            if (!SQL_SUCCEEDED(rc)) {
+                std::string errorMsg = RsMetadataErrors::formatError(
+                    RsMetadataErrors::PROXY_CALL_FAILED,
+                    RsMetadataErrors::TYPE_COLUMN);
+                RS_LOG_ERROR("RS_SQLColumns", errorMsg.c_str());
+                addError(&pStmt->pErrorList,
+                    const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                    const_cast<char*>(errorMsg.c_str()),
+                    0, NULL);
+                return rc;
+            }
         }
 
-		rc = RS_STMT_INFO::RS_SQLFreeStmt(internalStmt,SQL_DROP, TRUE);
-		if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-			RS_LOG_ERROR("RS_STMT_INFO::RS_SQLFreeStmt", "Fail to free statement for internal use");
-            addError(&pStmt->pErrorList, "HY000", "RS_STMT_INFO::RS_SQLFreeStmt, Fail to free statement for internal use", 0, NULL);
+        rc = RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(phstmt, intermediateRS);
+        if (!SQL_SUCCEEDED(rc)) {
+            std::string errorMsg = RsMetadataErrors::formatError(
+                RsMetadataErrors::POST_PROCESSING_FAILED,
+                RsMetadataErrors::TYPE_COLUMN);
+            RS_LOG_ERROR("RS_SQLColumns", errorMsg.c_str());
+            addError(&pStmt->pErrorList,
+                const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                const_cast<char*>(errorMsg.c_str()),
+                0, NULL);
             return rc;
         }
-
-        rc = RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(phstmt, retEmpty, intermediateRS);
-        if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
-			RS_LOG_ERROR("RsMetadataAPIPostProcessor.sqlColumnsPostProcessing", "Fail call post-processing for SQLColumns");
-            addError(&pStmt->pErrorList, "HY000", "RsMetadataAPIPostProcessor.sqlColumnsPostProcessing fail", 0, NULL);
-            return rc;
+        // Reset the streaming cursor state
+        if (pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)) {
+            libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
         }
+        return rc;
     } else {
         // Old code path is retained for supporting legacy cluster version which doesn't not support Server API SHOW command
         int schemaPatternType = getExtSchemaPatternMatch(pStmt, pSchemaName, cbSchemaName);
@@ -1027,24 +1101,17 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLStatistics(SQLHSTMT phstmt,
     if(!VALID_HSTMT(phstmt))
     {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if(!checkForValidCatalogName(pStmt, pCatalogName))
-    {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLStatistics", 0, NULL);
-        goto error; 
-    }
-
     if(pTableName == NULL || cbTableName == SQL_NULL_DATA)
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
-        goto error; 
+        return rc; 
     }
 
     rs_strncpy(szCatalogQuery, SQLSTATISTICS_QUERY_NO_RESULT, sizeof(szCatalogQuery));
@@ -1053,9 +1120,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLStatistics(SQLHSTMT phstmt,
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
     resetCatalogQueryFlag(pStmt);
 
-error:
-
-    return rc;
+	return rc;
 }
 
 /*====================================================================================================================================================*/
@@ -1146,31 +1211,113 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLSpecialColumns(SQLHSTMT phstmt,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
 
-    if(!VALID_HSTMT(phstmt))
-    {
+    if (!VALID_HSTMT(phstmt)) {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if(!checkForValidCatalogName(pStmt, pCatalogName))
-    {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented:RS_SQLSpecialColumns", 0, NULL);
-        goto error; 
-    }
-
     if(pTableName == NULL || cbTableName == SQL_NULL_DATA)
     {
         rc = SQL_ERROR;
+        RS_LOG_ERROR("RS_SQLSpecialColumns", "Table name parameter cannot be null");
         addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer:RS_SQLSpecialColumns", 0, NULL);
-        goto error; 
+        return rc;
     }
 
+    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
+    {
+        // Error out if IdentifierType is SQL_ROWVER since Redshift doesn't support column that are
+        // automatically updated by the data source when any value in the row is updated by any transaction
+        if (hIdenType == SQL_ROWVER) {
+            RS_LOG_ERROR("RS_SQLSpecialColumns",
+                         "Redshift doesn't support IdentifierType as SQL_ROWVER");
+            addError(&pStmt->pErrorList, "HYC00",
+                     "Redshift doesn't support IdentifierType as SQL_ROWVER",
+                     0, NULL);
+            return SQL_ERROR;
+        }
+
+        // Validate IdentifierType
+        if (hIdenType != SQL_BEST_ROWID) {
+            RS_LOG_ERROR("SQLSpecialColumns", "Invalid IdentifierType value specified");
+            addError(&pStmt->pErrorList, "HY097", "Invalid IdentifierType value specified", 0, NULL);
+            return SQL_ERROR;
+        }
+
+        // Validate Scope
+        if (hScope != SQL_SCOPE_CURROW && 
+            hScope != SQL_SCOPE_TRANSACTION && 
+            hScope != SQL_SCOPE_SESSION) {
+            RS_LOG_ERROR("SQLSpecialColumns", "Invalid Scope value specified");
+            addError(&pStmt->pErrorList, "HY098", "Invalid Scope value specified", 0, NULL);
+            return SQL_ERROR;
+        }
+
+        // Validate Nullable
+        if (hNullable != SQL_NO_NULLS && hNullable != SQL_NULLABLE) {
+            RS_LOG_ERROR("SQLSpecialColumns", "Invalid Nullable value specified");
+            addError(&pStmt->pErrorList, "HY099", "Invalid Nullable value specified", 0, NULL);
+            return SQL_ERROR;
+        }
+
+        // Convert parameters to strings
+        std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
+        std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);
+        std::string tableName = char2String(pTableName);
+
+        std::vector<SHOWCOLUMNSResult> intermediateRS;
+
+        // Return Empty ResultSet if catalog or schemaPattern or tableNamePattern is empty string. SIM: Redshift-112709
+        bool retEmpty = false;
+        if (!retEmpty) {
+            rc = executeWithInternalStmt(pStmt,
+                [&](SQLHSTMT stmt) -> SQLRETURN {
+                    return RsMetadataServerProxy::sqlSpecialColumns(stmt,
+                                                                catalogName,
+                                                                schemaName,
+                                                                tableName,
+                                                                intermediateRS,
+                                                                isSingleDatabaseMetaData(pStmt));
+                },
+                "RsMetadataServerProxy.sqlSpecialColumns");
+
+            if (!SQL_SUCCEEDED(rc)) {
+                std::string errorMsg = RsMetadataErrors::formatError(
+                    RsMetadataErrors::PROXY_CALL_FAILED,
+                    RsMetadataErrors::TYPE_COLUMN);
+                RS_LOG_ERROR("RS_SQLSpecialColumns", errorMsg.c_str());
+                addError(&pStmt->pErrorList,
+                    const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                    const_cast<char*>(errorMsg.c_str()),
+                    0, NULL);
+            }
+        }
+
+        rc = RsMetadataAPIPostProcessor::sqlSpecialColumnsPostProcessing(phstmt, intermediateRS, hIdenType);
+        if(!SQL_SUCCEEDED(rc)) {
+            std::string errorMsg = RsMetadataErrors::formatError(
+                RsMetadataErrors::POST_PROCESSING_FAILED,
+                RsMetadataErrors::TYPE_COLUMN);
+            RS_LOG_ERROR("RS_SQLSpecialColumns", errorMsg.c_str());
+            addError(&pStmt->pErrorList,
+                const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                const_cast<char*>(errorMsg.c_str()),
+                0, NULL);
+            return rc;
+        }
+        // Reset the streaming cursor state
+        if (pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)) {
+            libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
+        }
+        return rc;
+    }
+
+    // Old code path is retained for supporting legacy cluster version which doesn't not support Server API SHOW command
+    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
     if(hIdenType == SQL_BEST_ROWID)
     {
         rs_strncpy(szCatalogQuery, SQLSPECIALCOLUMNS_ROWID_BASE_QUERY_PART_1, sizeof(szCatalogQuery));
@@ -1200,17 +1347,14 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLSpecialColumns(SQLHSTMT phstmt,
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY097", "An invalid IdentifierType value was specified", 0, NULL);
-        goto error; 
+        return rc;
     }
 
     setCatalogQueryBuf(pStmt, szCatalogQuery);
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
     resetCatalogQueryFlag(pStmt);
 
-error:
-
     return rc;
-
 }
 
 /*====================================================================================================================================================*/
@@ -1300,29 +1444,80 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
-	std::string procedureColQuery = "";
-	char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
-	char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
-//	String unknownColumnSize = "2147483647";
 
-    if(!VALID_HSTMT(phstmt))
-    {
+    if (!VALID_HSTMT(phstmt)) {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if(!checkForValidCatalogName(pStmt, pCatalogName))
+    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
     {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLProcedureColumns", 0, NULL);
-        goto error; 
+        // Convert parameters to strings
+        std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
+        std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);
+        std::string procName = (isNullOrEmptyString(pProcName)) ? "" : char2String(pProcName);
+        std::string columnName = (isNullOrEmptyString(pColumnName)) ? "" : char2String(pColumnName);
+
+        // Return Empty ResultSet if catalog || schemaPattern || procNamePattern || columnNamePattern is empty string
+        // SIM: Redshift-112709
+        bool retEmpty = false; // Map empty string to wildcard internally but will block them in the near future
+
+        std::vector<SHOWCOLUMNSResult> intermediateRS;
+        if (!retEmpty) {
+            rc = executeWithInternalStmt(pStmt,
+                [&](SQLHSTMT stmt) {
+                    return RsMetadataServerProxy::sqlProcedureColumns(stmt,
+                                                                    catalogName,
+                                                                    schemaName,
+                                                                    procName,
+                                                                    columnName,
+                                                                    intermediateRS,
+                                                                    isSingleDatabaseMetaData(pStmt));
+                },
+                "RsMetadataServerProxy.sqlProcedureColumns");
+
+            if (!SQL_SUCCEEDED(rc)) {
+                std::string errorMsg = RsMetadataErrors::formatError(
+                    RsMetadataErrors::PROXY_CALL_FAILED,
+                    RsMetadataErrors::TYPE_COLUMN);
+                RS_LOG_ERROR("RS_SQLProcedureColumns", errorMsg.c_str());
+                addError(&pStmt->pErrorList,
+                    const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                    const_cast<char*>(errorMsg.c_str()),
+                    0, NULL);
+                return rc;
+            }
+        }
+
+        rc = RsMetadataAPIPostProcessor::sqlProcedureColumnsPostProcessing(phstmt, intermediateRS);
+        if (!SQL_SUCCEEDED(rc)) {
+            std::string errorMsg = RsMetadataErrors::formatError(
+                RsMetadataErrors::POST_PROCESSING_FAILED,
+                RsMetadataErrors::TYPE_COLUMN);
+            RS_LOG_ERROR("RS_SQLProcedureColumns", errorMsg.c_str());
+            addError(&pStmt->pErrorList,
+                const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                const_cast<char*>(errorMsg.c_str()),
+                0, NULL);
+            return rc;
+        }
+        // Reset the streaming cursor state
+        if (pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)) {
+            libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
+        }
+        return rc;
     }
 
-	getCatalogFilterCondition(catalogFilter, MAX_LARGE_TEMP_BUF_LEN, pStmt, (char *)pCatalogName, cbCatalogName,
+    // Old code path is retained for supporting legacy cluster version which doesn't not support Server API SHOW command
+    std::string procedureColQuery = "";
+    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
+    char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
+    char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
+
+    getCatalogFilterCondition(catalogFilter, MAX_LARGE_TEMP_BUF_LEN, pStmt, (char *)pCatalogName, cbCatalogName,
 								TRUE, NULL);
 
 	procedureColQuery.append(
@@ -1870,9 +2065,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
     resetCatalogQueryFlag(pStmt);
 
-error:
-
-    return rc;
+	return rc;
 }
 
 /*====================================================================================================================================================*/
@@ -1955,27 +2148,76 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedures(SQLHSTMT           phstmt,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
-	char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
-	char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
-	int len;
 
-
-    if(!VALID_HSTMT(phstmt))
-    {
+    if (!VALID_HSTMT(phstmt)) {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if(!checkForValidCatalogName(pStmt, pCatalogName))
+    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
     {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLProcedures", 0, NULL);
-        goto error; 
+        // Convert parameters to strings
+        std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
+        std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);
+        std::string procName = (isNullOrEmptyString(pProcName)) ? "" : char2String(pProcName);
+
+        // Return Empty ResultSet if catalog || schemaPattern || procNamePattern is empty string
+        // SIM: Redshift-112709
+        bool retEmpty = false; // Map empty string to wildcard internally but will block them in the near future
+
+        std::vector<SHOWPROCEDURESFUNCTIONSResult> intermediateRS;
+        if (!retEmpty) {
+            rc = executeWithInternalStmt(pStmt,
+                [&](SQLHSTMT stmt) {
+                    return RsMetadataServerProxy::sqlProcedures(stmt,
+                                                            catalogName,
+                                                            schemaName,
+                                                            procName,
+                                                            intermediateRS,
+                                                            isSingleDatabaseMetaData(pStmt));
+                },
+                "RsMetadataServerProxy.sqlProcedures");
+
+            if (!SQL_SUCCEEDED(rc)) {
+                std::string errorMsg = RsMetadataErrors::formatError(
+                    RsMetadataErrors::PROXY_CALL_FAILED,
+                    RsMetadataErrors::TYPE_PROCEDURE);
+                RS_LOG_ERROR("RS_SQLProcedures", errorMsg.c_str());
+                addError(&pStmt->pErrorList,
+                    const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                    const_cast<char*>(errorMsg.c_str()),
+                    0, NULL);
+                return rc;
+            }
+        }
+
+        rc = RsMetadataAPIPostProcessor::sqlProceduresPostProcessing(phstmt, intermediateRS);
+        if (!SQL_SUCCEEDED(rc)) {
+            std::string errorMsg = RsMetadataErrors::formatError(
+                RsMetadataErrors::POST_PROCESSING_FAILED,
+                RsMetadataErrors::TYPE_PROCEDURE);
+            RS_LOG_ERROR("RS_SQLProcedures", errorMsg.c_str());
+            addError(&pStmt->pErrorList,
+                const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                const_cast<char*>(errorMsg.c_str()),
+                0, NULL);
+            return rc;
+        }
+        // Reset the streaming cursor state
+        if (pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)) {
+            libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
+        }
+        return rc;
     }
+
+    // Old code path is retained for supporting legacy cluster version which doesn't not support Server API SHOW command
+    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
+    char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
+    char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
+    int len;
 
 	rs_strncpy(szCatalogQuery, SQLPROCEDURES_BASE_QUERY, sizeof(szCatalogQuery));
 
@@ -2002,9 +2244,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedures(SQLHSTMT           phstmt,
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
     resetCatalogQueryFlag(pStmt);
 
-error:
-
-    return rc;
+	return rc;
 }
 
 /*====================================================================================================================================================*/
@@ -2102,29 +2342,89 @@ SQLRETURN SQL_API RsCatalog::RS_SQLForeignKeys(SQLHSTMT               phstmt,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
-	char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
-	char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
-	int len;
 
-    if(!VALID_HSTMT(phstmt))
-    {
+    if (!VALID_HSTMT(phstmt)) {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if(!checkForValidCatalogName(pStmt, pPkCatalogName)
-        || !checkForValidCatalogName(pStmt, pFkCatalogName)
-        )
-    {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLForeignKeys", 0, NULL);
-        goto error; 
-    }
+	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
+	{
+		// Check if at least one table name is provided (either PK or FK)
+        if((pPkTableName == NULL || cbPkTableName == SQL_NULL_DATA) && (pFkTableName == NULL || cbFkTableName == SQL_NULL_DATA)) {
+            RS_LOG_ERROR("RS_SQLForeignKeys", "Either primary key table name or foreign key table name must be provided");
+            addError(&pStmt->pErrorList, "HY009", "Invalid use of null pointer", 0, NULL);
+            return SQL_ERROR;
+        }
 
+        // Convert parameters to strings
+        std::string pkCatalogName = (isNullOrEmptyString(pPkCatalogName)) ? "" : char2String(pPkCatalogName);
+        std::string pkSchemaName = (isNullOrEmptyString(pPkSchemaName)) ? "" : char2String(pPkSchemaName);
+        std::string pkTableName = (isNullOrEmptyString(pPkTableName)) ? "" : char2String(pPkTableName);
+        std::string fkCatalogName = (isNullOrEmptyString(pFkCatalogName)) ? "" : char2String(pFkCatalogName);
+        std::string fkSchemaName = (isNullOrEmptyString(pFkSchemaName)) ? "" : char2String(pFkSchemaName);
+        std::string fkTableName = (isNullOrEmptyString(pFkTableName)) ? "" : char2String(pFkTableName);
+
+        // Return Empty ResultSet if catalog || schemaPattern || procNamePattern is empty string
+        // SIM: Redshift-112709
+        bool retEmpty = false;
+        std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult> intermediateRS;
+        if (!retEmpty) {
+            rc = executeWithInternalStmt(pStmt,
+                [&](SQLHSTMT stmt) {
+                    return RsMetadataServerProxy::sqlForeignKeys(stmt,
+                                                            pkCatalogName,
+                                                            pkSchemaName,
+                                                            pkTableName,
+                                                            fkCatalogName,
+                                                            fkSchemaName,
+                                                            fkTableName,
+                                                            intermediateRS,
+                                                            isSingleDatabaseMetaData(pStmt));
+                },
+                "RsMetadataServerProxy.sqlForeignKeys");
+
+            if (!SQL_SUCCEEDED(rc)) {
+                std::string errorMsg = RsMetadataErrors::formatError(
+                    RsMetadataErrors::PROXY_CALL_FAILED,
+                    RsMetadataErrors::TYPE_FOREIGN_KEY);
+                RS_LOG_ERROR("RS_SQLForeignKeys", errorMsg.c_str());
+                addError(&pStmt->pErrorList,
+                    const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                    const_cast<char*>(errorMsg.c_str()),
+                    0, NULL);
+                return rc;
+            }
+        }
+
+        rc = RsMetadataAPIPostProcessor::sqlForeignKeysPostProcessing(phstmt, intermediateRS);
+        if (!SQL_SUCCEEDED(rc)) {
+            std::string errorMsg = RsMetadataErrors::formatError(
+                RsMetadataErrors::POST_PROCESSING_FAILED,
+                RsMetadataErrors::TYPE_FOREIGN_KEY);
+            RS_LOG_ERROR("RS_SQLForeignKeys", errorMsg.c_str());
+            addError(&pStmt->pErrorList,
+                const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                const_cast<char*>(errorMsg.c_str()),
+                0, NULL);
+            return rc;
+        }
+        // Reset the streaming cursor state
+        if (pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)) {
+            libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
+        }
+        return rc;
+	}
+
+    // Old code path is retained for supporting legacy cluster version which doesn't not support Server API SHOW command
+    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
+    char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
+    char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
+    int len;
+    
 	rs_strncpy(szCatalogQuery, SQLFOREIGN_KEYS_BASE_QUERY, sizeof(szCatalogQuery));
 
 	getCatalogFilterCondition(catalogFilter, MAX_LARGE_TEMP_BUF_LEN, pStmt, (char *)pPkCatalogName, cbPkCatalogName,
@@ -2147,9 +2447,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLForeignKeys(SQLHSTMT               phstmt,
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
     resetCatalogQueryFlag(pStmt);
 
-error:
-
-    return rc;
+	return rc;
 }
 
 
@@ -2250,32 +2548,90 @@ SQLRETURN SQL_API RsCatalog::RS_SQLPrimaryKeys(SQLHSTMT           phstmt,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
-	char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
-	char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
-	int len;
 
-    if(!VALID_HSTMT(phstmt))
-    {
+    if (!VALID_HSTMT(phstmt)) {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if(!checkForValidCatalogName(pStmt, pCatalogName))
-    {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLPrimaryKeys", 0, NULL);
-        goto error; 
+
+	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
+	{
+        // Check if required parameter TableName is provided
+        if(pTableName == NULL || cbTableName == SQL_NULL_DATA) {
+            RS_LOG_ERROR("RS_SQLPrimaryKeys", "Table name parameter cannot be null or empty");
+            addError(&pStmt->pErrorList, "HY009", "Invalid use of null pointer", 0, NULL);
+            return SQL_ERROR;
+        }
+
+        // Convert parameters to string
+        std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
+        std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);
+        std::string tableName = char2String(pTableName);
+
+        // Return Empty ResultSet if catalog || schemaPattern || procNamePattern is empty string
+        // SIM: Redshift-112709
+        bool retEmpty = false;
+        std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult> intermediateRS;
+        if (!retEmpty) {
+            rc = executeWithInternalStmt(pStmt,
+                [&](SQLHSTMT stmt) -> SQLRETURN {
+                    return RsMetadataServerProxy::sqlPrimaryKeys(stmt,
+                                                            catalogName,
+                                                            schemaName,
+                                                            tableName,
+                                                            intermediateRS,
+                                                            isSingleDatabaseMetaData(pStmt));
+                },
+                "RsMetadataServerProxy.sqlPrimaryKeys");
+
+            if (!SQL_SUCCEEDED(rc)) {
+                std::string errorMsg = RsMetadataErrors::formatError(
+                    RsMetadataErrors::PROXY_CALL_FAILED,
+                    RsMetadataErrors::TYPE_PRIMARY_KEY);
+                RS_LOG_ERROR("RS_SQLPrimaryKeys", errorMsg.c_str());
+                addError(&pStmt->pErrorList,
+                    const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                    const_cast<char*>(errorMsg.c_str()),
+                    0, NULL);
+                return rc;
+            }
+        }
+
+        rc = RsMetadataAPIPostProcessor::sqlPrimaryKeysPostProcessing(phstmt, intermediateRS);
+        if (!SQL_SUCCEEDED(rc)) {
+            std::string errorMsg = RsMetadataErrors::formatError(
+                RsMetadataErrors::POST_PROCESSING_FAILED,
+                RsMetadataErrors::TYPE_PRIMARY_KEY);
+            RS_LOG_ERROR("RS_SQLPrimaryKeys", errorMsg.c_str());
+            addError(&pStmt->pErrorList,
+                const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                const_cast<char*>(errorMsg.c_str()),
+                0, NULL);
+            return rc;
+        }
+        // Reset the streaming cursor state
+        if (pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)) {
+            libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
+        }
+        return rc;
     }
+
+
+    // Old code path is retained for supporting legacy cluster version which doesn't not support Server API SHOW command
+    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
+    char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
+    char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
+    int len;
 
     if(pTableName == NULL || cbTableName == SQL_NULL_DATA)
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
-        goto error; 
+        return rc; 
     }
 
 	rs_strncpy(szCatalogQuery, SQLPRIMARY_KEYS_BASE_QUERY,sizeof(szCatalogQuery));
@@ -2298,9 +2654,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLPrimaryKeys(SQLHSTMT           phstmt,
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
     resetCatalogQueryFlag(pStmt);
 
-error:
-
-    return rc;
+	return rc;
 }
 
 
@@ -2463,7 +2817,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
     if(!VALID_HSTMT(phstmt))
     {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
 
     // Clear error list
@@ -2515,7 +2869,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
         {
             rc = SQL_ERROR;
             addError(&pStmt->pErrorList,"HY004", "Invalid SQL data type", 0, NULL);
-            goto error; 
+            return rc;
         }
     }
 
@@ -2525,9 +2879,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
     resetCatalogQueryFlag(pStmt);
 
-error:
-
-    return rc;
+	return rc;
 }
 
 
@@ -2598,32 +2950,90 @@ SQLRETURN SQL_API RsCatalog::RS_SQLColumnPrivileges(SQLHSTMT           phstmt,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
-	char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
-	char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
-	int len;
 
-    if(!VALID_HSTMT(phstmt))
-    {
+    if (!VALID_HSTMT(phstmt)) {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if(!checkForValidCatalogName(pStmt, pCatalogName))
+    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
     {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLColumnPrivileges", 0, NULL);
-        goto error; 
+        // Check if required parameter TableName is provided
+        if(pTableName == NULL || cbTableName == SQL_NULL_DATA) {
+            RS_LOG_ERROR("RS_SQLColumnPrivileges", "Table name parameter cannot be null or empty");
+            addError(&pStmt->pErrorList, "HY009", "Invalid use of null pointer", 0, NULL);
+            return SQL_ERROR;
+        }
+
+        // Convert parameters to strings
+        std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
+        std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);
+        std::string tableName = char2String(pTableName);
+        std::string columnName = (isNullOrEmptyString(pColumnName)) ? "" : char2String(pColumnName);
+
+        // Return Empty ResultSet if catalog || schemaPattern || procNamePattern is empty string
+        // SIM: Redshift-112709
+        bool retEmpty = false;
+        std::vector<SHOWGRANTSCOLUMNResult> intermediateRS;
+        if (!retEmpty) {
+            rc = executeWithInternalStmt(pStmt,
+                [&](SQLHSTMT stmt) -> SQLRETURN {
+                    return RsMetadataServerProxy::sqlColumnPrivileges(stmt,
+                                                                    catalogName,
+                                                                    schemaName,
+                                                                    tableName,
+                                                                    columnName,
+                                                                    intermediateRS,
+                                                                    isSingleDatabaseMetaData(pStmt));
+                },
+                "RsMetadataServerProxy.sqlColumnPrivileges");
+
+            if (!SQL_SUCCEEDED(rc)) {
+                std::string errorMsg = RsMetadataErrors::formatError(
+                    RsMetadataErrors::PROXY_CALL_FAILED,
+                    RsMetadataErrors::TYPE_COLUMN_PRIVILEGES);
+                RS_LOG_ERROR("RS_SQLColumnPrivileges", errorMsg.c_str());
+                addError(&pStmt->pErrorList,
+                    const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                    const_cast<char*>(errorMsg.c_str()),
+                    0, NULL);
+                return rc;
+            }
+        }
+
+        rc = RsMetadataAPIPostProcessor::sqlColumnPrivilegesPostProcessing(phstmt, intermediateRS);
+        if (!SQL_SUCCEEDED(rc)) {
+            std::string errorMsg = RsMetadataErrors::formatError(
+                RsMetadataErrors::POST_PROCESSING_FAILED,
+                RsMetadataErrors::TYPE_COLUMN_PRIVILEGES);
+            RS_LOG_ERROR("RS_SQLColumnPrivileges", errorMsg.c_str());
+            addError(&pStmt->pErrorList,
+                const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                const_cast<char*>(errorMsg.c_str()),
+                0, NULL);
+            return rc;
+        }
+        // Reset the streaming cursor state
+        if (pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)) {
+            libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
+        }
+        return rc;
     }
+
+    // Old code path is retained for supporting legacy cluster version which doesn't not support Server API SHOW command
+    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
+    char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
+    char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
+    int len;
 
     if(pTableName == NULL || cbTableName == SQL_NULL_DATA)
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
-        goto error; 
+        return rc; 
     }
 
 	rs_strncpy(szCatalogQuery, SQLCOLUMN_PRIVILEGES_BASE_QUERY, sizeof(szCatalogQuery));
@@ -2647,9 +3057,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLColumnPrivileges(SQLHSTMT           phstmt,
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
     resetCatalogQueryFlag(pStmt);
 
-error:
-
-    return rc;
+	return rc;
 }
 
 /*====================================================================================================================================================*/
@@ -2735,29 +3143,77 @@ SQLRETURN SQL_API RsCatalog::RS_SQLTablePrivileges(SQLHSTMT           phstmt,
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
-	char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
-	char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
-	int len;
 
-
-    if(!VALID_HSTMT(phstmt))
-    {
+    if (!VALID_HSTMT(phstmt)) {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if(!checkForValidCatalogName(pStmt, pCatalogName))
+    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
     {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLTablePrivileges", 0, NULL);
-        goto error; 
+        // Convert parameters to strings
+        std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
+        std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);
+        std::string tableName = (isNullOrEmptyString(pTableName)) ? "" : char2String(pTableName);
+
+        // Return Empty ResultSet if catalog || schemaPattern || tableNamePattern is empty string
+        // SIM: Redshift-112709
+        bool retEmpty = false; // Map empty string to wildcard internally but will block them in the near future
+        std::vector<SHOWGRANTSTABLEResult> intermediateRS;
+        if (!retEmpty) {
+            rc = executeWithInternalStmt(pStmt,
+                [&](SQLHSTMT stmt) -> SQLRETURN {
+                    return RsMetadataServerProxy::sqlTablePrivileges(stmt,
+                                                                catalogName,
+                                                                schemaName,
+                                                                tableName,
+                                                                intermediateRS,
+                                                                isSingleDatabaseMetaData(pStmt));
+                },
+                "RsMetadataServerProxy.sqlTablePrivileges");
+
+            if (!SQL_SUCCEEDED(rc)) {
+                std::string errorMsg = RsMetadataErrors::formatError(
+                    RsMetadataErrors::PROXY_CALL_FAILED,
+                    RsMetadataErrors::TYPE_TABLE_PRIVILEGES);
+                RS_LOG_ERROR("RS_SQLTablePrivileges", errorMsg.c_str());
+                addError(&pStmt->pErrorList,
+                    const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                    const_cast<char*>(errorMsg.c_str()),
+                    0, NULL);
+                return rc;
+            }
+        }
+        
+        rc = RsMetadataAPIPostProcessor::sqlTablePrivilegesPostProcessing(phstmt, intermediateRS);
+        if (!SQL_SUCCEEDED(rc)) {
+            std::string errorMsg = RsMetadataErrors::formatError(
+                RsMetadataErrors::POST_PROCESSING_FAILED,
+                RsMetadataErrors::TYPE_TABLE_PRIVILEGES);
+            RS_LOG_ERROR("RS_SQLTablePrivileges", errorMsg.c_str());
+            addError(&pStmt->pErrorList,
+                const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+                const_cast<char*>(errorMsg.c_str()),
+                0, NULL);
+            return rc;
+        }
+        // Reset the streaming cursor state
+        if (pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)) {
+            libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
+        }
+        return rc;
     }
 
-	rs_strncpy(szCatalogQuery, SQLTABLE_PRIVILEGES_BASE_QUERY, sizeof(szCatalogQuery));
+    // Old code path is retained for supporting legacy cluster version which doesn't not support Server API SHOW command
+    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
+    char catalogFilter[MAX_LARGE_TEMP_BUF_LEN];
+    char filterClause[MAX_CATALOG_QUERY_FILTER_LEN];
+    int len;
+
+    rs_strncpy(szCatalogQuery, SQLTABLE_PRIVILEGES_BASE_QUERY, sizeof(szCatalogQuery));
 
 	getCatalogFilterCondition(catalogFilter, MAX_LARGE_TEMP_BUF_LEN, pStmt, (char *)pCatalogName, cbCatalogName,
 								TRUE, NULL);
@@ -2777,9 +3233,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLTablePrivileges(SQLHSTMT           phstmt,
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
     resetCatalogQueryFlag(pStmt);
 
-error:
-
-    return rc;
+	return rc;
 }
 
 /*====================================================================================================================================================*/

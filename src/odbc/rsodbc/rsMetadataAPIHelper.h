@@ -22,41 +22,152 @@
 #include "rsunicode.h"
 #include "rsutil.h"
 #include <regex>
+#include <algorithm>
+#include <tuple>
+#include <set>
 
 // Define constant for SQLTables
 // Spec:
 // https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqltables-function?view=sql-server-ver16
-#define kTablesColNum 5 // Number of column
+#define kTablesColNum 10 // Number of column
 /* COLUMNS IN SQLTables() RESULT SET */
-#define kSQLTables_TABLE_CATALOG 0
-#define kSQLTables_TABLE_SCHEM 1
-#define kSQLTables_TABLE_NAME 2
-#define kSQLTables_TABLE_TYPE 3
-#define kSQLTables_REMARKS 4
+#define kSQLTables_TABLE_CATALOG_COL_NUM 0
+#define kSQLTables_TABLE_SCHEM_COL_NUM 1
+#define kSQLTables_TABLE_NAME_COL_NUM 2
+#define kSQLTables_TABLE_TYPE_COL_NUM 3
+#define kSQLTables_REMARKS_COL_NUM 4
+#define kSQLTables_OWNER_COL_NUM 5
+#define kSQLTables_LAST_ALTERED_TIME_COL_NUM 6
+#define kSQLTables_LAST_MODIFIED_TIME_COL_NUM 7
+#define kSQLTables_DIST_STYLE_COL_NUM 8
+#define kSQLTables_TABLE_SUBTYPE_COL_NUM 9
 
 // Define constant for SQLColumns
 // Spec:
 // https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlcolumns-function?view=sql-server-ver16
-#define kColumnsColNum 18 // Number of column
+#define kColumnsColNum 23 // Number of column
 /* COLUMNS IN SQLColumns() RESULT SET */                     
-#define kSQLColumns_TABLE_CAT 0
-#define kSQLColumns_TABLE_SCHEM 1
-#define kSQLColumns_TABLE_NAME 2
-#define kSQLColumns_COLUMN_NAME 3
-#define kSQLColumns_DATA_TYPE 4
-#define kSQLColumns_TYPE_NAME 5
-#define kSQLColumns_COLUMN_SIZE 6
-#define kSQLColumns_BUFFER_LENGTH 7
-#define kSQLColumns_DECIMAL_DIGITS 8
-#define kSQLColumns_NUM_PREC_RADIX 9
-#define kSQLColumns_NULLABLE 10
-#define kSQLColumns_REMARKS 11
-#define kSQLColumns_COLUMN_DEF 12
-#define kSQLColumns_SQL_DATA_TYPE 13
-#define kSQLColumns_SQL_DATETIME_SUB 14
-#define kSQLColumns_CHAR_OCTET_LENGTH 15
-#define kSQLColumns_ORDINAL_POSITION 16
-#define kSQLColumns_IS_NULLABLE 17
+#define kSQLColumns_TABLE_CAT_COL_NUM 0
+#define kSQLColumns_TABLE_SCHEM_COL_NUM 1
+#define kSQLColumns_TABLE_NAME_COL_NUM 2
+#define kSQLColumns_COLUMN_NAME_COL_NUM 3
+#define kSQLColumns_DATA_TYPE_COL_NUM 4
+#define kSQLColumns_TYPE_NAME_COL_NUM 5
+#define kSQLColumns_COLUMN_SIZE_COL_NUM 6
+#define kSQLColumns_BUFFER_LENGTH_COL_NUM 7
+#define kSQLColumns_DECIMAL_DIGITS_COL_NUM 8
+#define kSQLColumns_NUM_PREC_RADIX_COL_NUM 9
+#define kSQLColumns_NULLABLE_COL_NUM 10
+#define kSQLColumns_REMARKS_COL_NUM 11
+#define kSQLColumns_COLUMN_DEF_COL_NUM 12
+#define kSQLColumns_SQL_DATA_TYPE_COL_NUM 13
+#define kSQLColumns_SQL_DATETIME_SUB_COL_NUM 14
+#define kSQLColumns_CHAR_OCTET_LENGTH_COL_NUM 15
+#define kSQLColumns_ORDINAL_POSITION_COL_NUM 16
+#define kSQLColumns_IS_NULLABLE_COL_NUM 17
+#define kSQLColumns_SORT_KEY_TYPE_COL_NUM 18
+#define kSQLColumns_SORT_KEY_COL_NUM 19
+#define kSQLColumns_DIST_KEY_COL_NUM 20
+#define kSQLColumns_ENCODING_COL_NUM 21
+#define kSQLColumns_COLLATION_COL_NUM 22
+
+// Define constant for SQLPrimaryKeys
+#define kPrimaryKeysColNum 6 // Number of column
+/* COLUMNS IN SQLPrimaryKeys() RESULT SET */
+#define kSQLPrimaryKeys_TABLE_CAT_COL_NUM 0
+#define kSQLPrimaryKeys_TABLE_SCHEM_COL_NUM 1
+#define kSQLPrimaryKeys_TABLE_NAME_COL_NUM 2
+#define kSQLPrimaryKeys_COLUMN_NAME_COL_NUM 3
+#define kSQLPrimaryKeys_KEY_SEQ_COL_NUM 4
+#define kSQLPrimaryKeys_PK_NAME_COL_NUM 5
+
+// Define constant for SQLForeignKeys
+#define kForeignKeysColNum 14 // Number of column
+/* COLUMNS IN SQLForeignKeys() RESULT SET */
+#define kSQLForeignKeys_PKTABLE_CAT_COL_NUM 0
+#define kSQLForeignKeys_PKTABLE_SCHEM_COL_NUM 1
+#define kSQLForeignKeys_PKTABLE_NAME_COL_NUM 2
+#define kSQLForeignKeys_PKCOLUMN_NAME_COL_NUM 3
+#define kSQLForeignKeys_FKTABLE_CAT_COL_NUM 4
+#define kSQLForeignKeys_FKTABLE_SCHEM_COL_NUM 5
+#define kSQLForeignKeys_FKTABLE_NAME_COL_NUM 6
+#define kSQLForeignKeys_FKCOLUMN_NAME_COL_NUM 7
+#define kSQLForeignKeys_KEY_SEQ_COL_NUM 8
+#define kSQLForeignKeys_UPDATE_RULE_COL_NUM 9
+#define kSQLForeignKeys_DELETE_RULE_COL_NUM 10
+#define kSQLForeignKeys_FK_NAME_COL_NUM 11
+#define kSQLForeignKeys_PK_NAME_COL_NUM 12
+#define kSQLForeignKeys_DEFERRABILITY_COL_NUM 13
+
+// Define constant for SQLSpecialColumns
+#define kSpecialColumnsColNum 8 // Number of column
+/* COLUMNS IN SQLSpecialColumns() RESULT SET */
+#define kSQLSpecialColumns_SCOPE 0
+#define kSQLSpecialColumns_COLUMN_NAME 1
+#define kSQLSpecialColumns_DATA_TYPE 2
+#define kSQLSpecialColumns_TYPE_NAME 3
+#define kSQLSpecialColumns_COLUMN_SIZE 4
+#define kSQLSpecialColumns_BUFFER_LENGTH 5
+#define kSQLSpecialColumns_DECIMAL_DIGITS 6
+#define kSQLSpecialColumns_PSEUDO_COLUMN 7
+
+// Define constant for SQLColumnPrivileges
+#define kColumnPrivilegesColNum 8 // Number of column
+/* COLUMNS IN SQLColumnPrivileges() RESULT SET */
+#define kSQLColumnPrivileges_TABLE_CAT_COL_NUM 0
+#define kSQLColumnPrivileges_TABLE_SCHEM_COL_NUM 1
+#define kSQLColumnPrivileges_TABLE_NAME_COL_NUM 2
+#define kSQLColumnPrivileges_COLUMN_NAME_COL_NUM 3
+#define kSQLColumnPrivileges_GRANTOR_COL_NUM 4
+#define kSQLColumnPrivileges_GRANTEE_COL_NUM 5
+#define kSQLColumnPrivileges_PRIVILEGE_COL_NUM 6
+#define kSQLColumnPrivileges_IS_GRANTABLE_COL_NUM 7
+
+// Define constant for SQLTablePrivileges
+#define kTablePrivilegesColNum 7 // Number of column
+/* COLUMNS IN SQLTablePrivileges() RESULT SET */
+#define kSQLTablePrivileges_TABLE_CAT_COL_NUM 0
+#define kSQLTablePrivileges_TABLE_SCHEM_COL_NUM 1
+#define kSQLTablePrivileges_TABLE_NAME_COL_NUM 2
+#define kSQLTablePrivileges_GRANTOR_COL_NUM 3
+#define kSQLTablePrivileges_GRANTEE_COL_NUM 4
+#define kSQLTablePrivileges_PRIVILEGE_COL_NUM 5
+#define kSQLTablePrivileges_IS_GRANTABLE_COL_NUM 6
+
+// Define constant for SQLProcedures
+#define kProceduresColNum 8 // Number of column
+/* COLUMNS IN SQLProcedures() RESULT SET */
+#define kSQLProcedures_PROCEDURE_CAT_COL_NUM 0
+#define kSQLProcedures_PROCEDURE_SCHEM_COL_NUM 1
+#define kSQLProcedures_PROCEDURE_NAME_COL_NUM 2
+#define kSQLProcedures_NUM_INPUT_PARAMS_COL_NUM 3
+#define kSQLProcedures_NUM_OUTPUT_PARAMS_COL_NUM 4
+#define kSQLProcedures_NUM_RESULT_SETS_COL_NUM 5
+#define kSQLProcedures_REMARKS_COL_NUM 6
+#define kSQLProcedures_PROCEDURE_TYPE_COL_NUM 7
+
+// Define constant for SQLProcedureColumns
+#define kProcedureColumnsColNum 19 // Number of column
+/* COLUMNS IN SQLProcedureColumns() RESULT SET */
+#define kSQLProcedureColumns_PROCEDURE_CAT_COL_NUM 0
+#define kSQLProcedureColumns_PROCEDURE_SCHEM_COL_NUM 1
+#define kSQLProcedureColumns_PROCEDURE_NAME_COL_NUM 2
+#define kSQLProcedureColumns_COLUMN_NAME_COL_NUM 3
+#define kSQLProcedureColumns_COLUMN_TYPE_COL_NUM 4
+#define kSQLProcedureColumns_DATA_TYPE_COL_NUM 5
+#define kSQLProcedureColumns_TYPE_NAME_COL_NUM 6
+#define kSQLProcedureColumns_COLUMN_SIZE_COL_NUM 7
+#define kSQLProcedureColumns_BUFFER_LENGTH_COL_NUM 8
+#define kSQLProcedureColumns_DECIMAL_DIGITS_COL_NUM 9
+#define kSQLProcedureColumns_NUM_PREC_RADIX_COL_NUM 10
+#define kSQLProcedureColumns_NULLABLE_COL_NUM 11
+#define kSQLProcedureColumns_REMARKS_COL_NUM 12
+#define kSQLProcedureColumns_COLUMN_DEF_COL_NUM 13
+#define kSQLProcedureColumns_SQL_DATA_TYPE_COL_NUM 14
+#define kSQLProcedureColumns_SQL_DATETIME_SUB_COL_NUM 15
+#define kSQLProcedureColumns_CHAR_OCTET_LENGTH_COL_NUM 16
+#define kSQLProcedureColumns_ORDINAL_POSITION_COL_NUM 17
+#define kSQLProcedureColumns_IS_NULLABLE_COL_NUM 18
 
 #define kColumnNullable 1
 #define kColumnNoNulls 0
@@ -71,6 +182,7 @@
 
 #define kUnknownColumnSize 2147483647
 
+#define kODBC2DiffColumnNum 12
 
 /*----------------
  * RsMetadataAPIHelper
@@ -107,6 +219,11 @@ class RsMetadataAPIHelper {
                                     TABLES*/
     static const std::string kSHOW_TABLES_remarks; /* Column name to retrieve
                                                       remark from SHOW TABLES*/
+    static const std::string kSHOW_TABLES_owner; /* Column name to retrieve owner from SHOW TABLES*/
+    static const std::string kSHOW_TABLES_last_altered_time; /* Column name to retrieve last_altered_time from SHOW TABLES*/
+    static const std::string kSHOW_TABLES_last_modified_time; /* Column name to retrieve last_modified_time from SHOW TABLES*/
+    static const std::string kSHOW_TABLES_dist_style; /* Column name to retrieve dist_style from SHOW TABLES*/
+    static const std::string kSHOW_TABLES_table_subtype; /* Column name to retrieve table_subtype from SHOW TABLES*/
 
     static const std::string
         kSHOW_COLUMNS_database_name; /* Column name to retrieve catalog from
@@ -145,25 +262,137 @@ class RsMetadataAPIHelper {
     static const std::string
         kSHOW_COLUMNS_remarks; /* Column name to retrieve remarks from SHOW
                                   COLUMNS*/
+    static const std::string kSHOW_COLUMNS_sort_key_type; /* Column name to retrieve sort_key_type from SHOW COLUMNS*/
+    static const std::string kSHOW_COLUMNS_sort_key; /* Column name to retrieve sort_key from SHOW COLUMNS*/
+    static const std::string kSHOW_COLUMNS_dist_key; /* Column name to retrieve dist_key from SHOW COLUMNS*/
+    static const std::string kSHOW_COLUMNS_encoding; /* Column name to retrieve encoding from SHOW COLUMNS*/
+    static const std::string kSHOW_COLUMNS_collation; /* Column name to retrieve collation from SHOW COLUMNS*/
 
-    // Define column attributes for SQLTables
-    static constexpr const char *kTablesCol[kTablesColNum] = {
-        "TABLE_CAT", "TABLE_SCHEM", "TABLE_NAME", "TABLE_TYPE", "REMARKS"};
+    // Constants for SHOW CONSTRAINS PK
+    static const std::string kSHOW_CONSTRAINTS_PK_database_name;    /* Column name to retrieve database name from SHOW CONSTRAINTS PRIMARY KEY */
+    static const std::string kSHOW_CONSTRAINTS_PK_schema_name;      /* Column name to retrieve schema name from SHOW CONSTRAINTS PRIMARY KEY */
+    static const std::string kSHOW_CONSTRAINTS_PK_table_name;       /* Column name to retrieve table name from SHOW CONSTRAINTS PRIMARY KEY */
+    static const std::string kSHOW_CONSTRAINTS_PK_column_name;      /* Column name to retrieve column name from SHOW CONSTRAINTS PRIMARY KEY */
+    static const std::string kSHOW_CONSTRAINTS_PK_key_seq;          /* Column name to retrieve key sequence from SHOW CONSTRAINTS PRIMARY KEY */
+    static const std::string kSHOW_CONSTRAINTS_PK_pk_name;          /* Column name to retrieve primary key name from SHOW CONSTRAINTS PRIMARY KEY */
+
+    // Constants for SHOW CONSTRAINTS FK
+    static const std::string kSHOW_CONSTRAINTS_FK_pk_database_name;  /* Column name to retrieve primary key database name from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_pk_schema_name;    /* Column name to retrieve primary key schema name from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_pk_table_name;     /* Column name to retrieve primary key table name from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_pk_column_name;    /* Column name to retrieve primary key column name from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_fk_database_name;  /* Column name to retrieve foreign key database name from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_fk_schema_name;    /* Column name to retrieve foreign key schema name from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_fk_table_name;     /* Column name to retrieve foreign key table name from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_fk_column_name;    /* Column name to retrieve foreign key column name from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_key_seq;           /* Column name to retrieve key sequence from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_update_rule;       /* Column name to retrieve update rule from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_delete_rule;       /* Column name to retrieve delete rule from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_fk_name;           /* Column name to retrieve foreign key name from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_pk_name;           /* Column name to retrieve primary key name from SHOW CONSTRAINTS FOREIGN KEY */
+    static const std::string kSHOW_CONSTRAINTS_FK_deferrability;     /* Column name to retrieve deferrability from SHOW CONSTRAINTS FOREIGN KEY */
+
+    // Constants for SHOW GRANTS
+    static const std::string kSHOW_GRANTS_database_name;    /* Column name to retrieve database name from SHOW GRANTS */
+    static const std::string kSHOW_GRANTS_schema_name;      /* Column name to retrieve schema name from SHOW GRANTS */
+    static const std::string kSHOW_GRANTS_object_name;      /* Column name to retrieve object name from SHOW GRANTS */
+    static const std::string kSHOW_GRANTS_table_name;       /* Column name to retrieve table name from SHOW GRANTS */
+    static const std::string kSHOW_GRANTS_column_name;      /* Column name to retrieve column name from SHOW GRANTS */
+    static const std::string kSHOW_GRANTS_grantor;          /* Column name to retrieve grantor from SHOW GRANTS */
+    static const std::string kSHOW_GRANTS_identity_name;    /* Column name to retrieve identity name from SHOW GRANTS */
+    static const std::string kSHOW_GRANTS_privilege_type;   /* Column name to retrieve privilege type from SHOW GRANTS */
+    static const std::string kSHOW_GRANTS_admin_option;     /* Column name to retrieve admin option from SHOW GRANTS */
+
+    // Constants for SHOW PROCEDURES
+    static const std::string kSHOW_PROCEDURES_database_name;  /* Column name to retrieve database name from SHOW PROCEDURES */
+    static const std::string kSHOW_PROCEDURES_schema_name;    /* Column name to retrieve schema name from SHOW PROCEDURES */
+    static const std::string kSHOW_PROCEDURES_procedure_name; /* Column name to retrieve procedure name from SHOW PROCEDURES */
+    static const std::string kSHOW_PROCEDURES_return_type;    /* Column name to retrieve return type from SHOW PROCEDURES */
+    static const std::string kSHOW_PROCEDURES_argument_list;  /* Column name to retrieve argument list from SHOW PROCEDURES */
+
+    // Constants for SHOW FUNCTIONS
+    static const std::string kSHOW_FUNCTIONS_database_name;   /* Column name to retrieve database name from SHOW FUNCTIONS */
+    static const std::string kSHOW_FUNCTIONS_schema_name;     /* Column name to retrieve schema name from SHOW FUNCTIONS */
+    static const std::string kSHOW_FUNCTIONS_function_name;   /* Column name to retrieve function name from SHOW FUNCTIONS */
+    static const std::string kSHOW_FUNCTIONS_return_type;     /* Column name to retrieve return type from SHOW FUNCTIONS */
+    static const std::string kSHOW_FUNCTIONS_argument_list;   /* Column name to retrieve argument list from SHOW FUNCTIONS */
+
+    // Constants for SHOW PARAMETERS
+    static const std::string kSHOW_PARAMETERS_database_name;
+    static const std::string kSHOW_PARAMETERS_schema_name;
+    static const std::string kSHOW_PARAMETERS_procedure_name;
+    static const std::string kSHOW_PARAMETERS_function_name;
+    static const std::string kSHOW_PARAMETERS_parameter_name;
+    static const std::string kSHOW_PARAMETERS_ordinal_position;
+    static const std::string kSHOW_PARAMETERS_parameter_type;
+    static const std::string kSHOW_PARAMETERS_data_type;
+    static const std::string kSHOW_PARAMETERS_character_maximum_length;
+    static const std::string kSHOW_PARAMETERS_numeric_precision;
+    static const std::string kSHOW_PARAMETERS_numeric_scale;
+
+
+    static const char* kTablesCol[kTablesColNum];
+    static const char* getSqlTablesColName(int columnNum);
+    static const char* kColumnsCol[kColumnsColNum];
+    static const char* getSqlColumnsColName(int columnNum);
+    static const char* kPrimaryKeysCol[kPrimaryKeysColNum];
+    static const char* getSqlPrimaryKeysColName(int columnNum);
+    static const char* kForeignKeysCol[kForeignKeysColNum];
+    static const char* getSqlForeignKeysColName(int columnNum);
+    static const char* kSpecialColumnsCol[kSpecialColumnsColNum];
+    static const char* getSqlSpecialColumnsColName(int columnNum);
+    static const char* kColumnPrivilegesCol[kColumnPrivilegesColNum];
+    static const char* getSqlColumnPrivilegesColName(int columnNum);
+    static const char* kTablePrivilegesCol[kTablePrivilegesColNum];
+    static const char* getSqlTablePrivilegesColName(int columnNum);
+    static const char* kProceduresCol[kProceduresColNum];
+    static const char* getSqlProceduresColName(int columnNum);
+    static const char* kProcedureColumnsCol[kProcedureColumnsColNum];
+    static const char* getSqlProcedureColumnsColName(int columnNum);
+
+    static const char* kOdbc2ColumnNames[];
+    static const char* getOdbc2ColumnName(int columnNum);
+    static const char* kOdbc3ColumnNames[];
+    static void initializeColumnNames(RS_STMT_INFO* pStmt);
+
     static constexpr const int kTablesColDatatype[kTablesColNum] = {
-        VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID};
+        VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID,
+        VARCHAROID, TIMESTAMPOID, TIMESTAMPOID, VARCHAROID, VARCHAROID};
 
-    // Define column attributes for SQLColumns
-    static constexpr const char *kColumnsCol[kColumnsColNum] = {
-        "TABLE_CAT",         "TABLE_SCHEM",      "TABLE_NAME",
-        "COLUMN_NAME",       "DATA_TYPE",        "TYPE_NAME",
-        "COLUMN_SIZE",       "BUFFER_LENGTH",    "DECIMAL_DIGITS",
-        "NUM_PREC_RADIX",    "NULLABLE",         "REMARKS",
-        "COLUMN_DEF",        "SQL_DATA_TYPE",    "SQL_DATETIME_SUB",
-        "CHAR_OCTET_LENGTH", "ORDINAL_POSITION", "IS_NULLABLE"};
     static constexpr const int kColumnsColDatatype[kColumnsColNum] = {
         VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, INT2OID, VARCHAROID,
         INT4OID,    INT4OID,    INT2OID,    INT2OID,    INT2OID, VARCHAROID,
-        VARCHAROID, INT2OID,    INT2OID,    INT4OID,    INT4OID, VARCHAROID};
+        VARCHAROID, INT2OID,    INT2OID,    INT4OID,    INT4OID, VARCHAROID,
+        VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID};
+
+    static constexpr const int kPrimaryKeysColDatatype[kPrimaryKeysColNum] = {
+        VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, INT2OID, VARCHAROID};
+
+    static constexpr const int kForeignKeysColDatatype[kForeignKeysColNum] = {
+        VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID,
+        VARCHAROID, VARCHAROID, INT2OID,    INT2OID,    INT2OID,    VARCHAROID,
+        VARCHAROID, INT2OID};
+
+    static constexpr const int kSpecialColumnsColDatatype[kSpecialColumnsColNum] = {
+        INT2OID, VARCHAROID, INT2OID, VARCHAROID, INT4OID, INT4OID, INT2OID, INT2OID};
+
+    static constexpr const int kColumnPrivilegesColDatatype[kColumnPrivilegesColNum] = {
+        VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID,
+        VARCHAROID, VARCHAROID};
+
+    static constexpr const int kTablePrivilegesColDatatype[kTablePrivilegesColNum] = {
+        VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID,
+        VARCHAROID};
+
+    static constexpr const int kProceduresColDatatype[kProceduresColNum] = {
+        VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID,
+        VARCHAROID, INT2OID};
+
+    static constexpr const int kProcedureColumnsColDatatype[kProcedureColumnsColNum] = {
+        VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, INT2OID,    INT4OID,
+        VARCHAROID, INT4OID,    INT4OID,    INT2OID,    INT2OID,    INT2OID,
+        VARCHAROID, VARCHAROID, INT4OID,    INT4OID,    INT4OID,    INT4OID,
+        VARCHAROID};
 
     // Define the list of table type Redshift support
     static const std::vector<std::string> tableTypeList;
@@ -225,6 +454,11 @@ class RsMetadataAPIHelper {
     static const RedshiftTypeName getRedshiftTypeNameStruct();
 
     static const std::regex glueSuperTypeRegex;
+    static const std::regex dateTimeRegex;
+    static const std::regex intervalRegex;
+
+    static const std::set<std::string> VALID_TYPES;
+    static const std::unordered_map<std::string, int> procedureFunctionColumnTypeMap;
 
     /**
      * @brief Checks if ODBC2 datetime format should be used
@@ -282,14 +516,34 @@ class RsMetadataAPIHelper {
     // Define set for character data type and binary data type
     static const std::unordered_set<std::string> charOctetLenSet;
 
-    // Define QUOTE_IDENT query for prepare statement
-    static const std::string quotedIdentQuery;
-
-    // Define QUOTE_LITERAL query for prepare statement
-    static const std::string quotedLiteralQuery;
-
     // Define empty string
-    static const std::string SQL_ALL;
+    static const std::string SQL_EMPTY;
+
+    // Define query text for SHOW command
+    static const std::string kshowDatabasesQuery;
+    static const std::string kshowDatabasesLikeQuery;
+    static const std::string kshowSchemasQuery;
+    static const std::string kshowSchemasLikeQuery;
+    static const std::string kshowTablesQuery;
+    static const std::string kshowTablesLikeQuery;
+    static const std::string kshowColumnsQuery;
+    static const std::string kshowColumnsLikeQuery;
+    static const std::string kshowConstraintsPkQuery;
+    static const std::string kshowConstraintsFkQuery;
+    static const std::string kshowConstraintsFkExportQuery;
+    static const std::string kshowGrantsTableQuery;
+    static const std::string kshowGrantsColumnQuery;
+    static const std::string kshowGrantsColumnLikeQuery;
+    static const std::string kshowProceduresQuery;
+    static const std::string kshowProceduresLikeQuery;
+    static const std::string kshowFunctionsQuery;
+    static const std::string kshowFunctionsLikeQuery;
+    static const std::string kshowParamsProcQuery;
+    static const std::string kshowParamsFuncQuery;
+    static const std::string ksqlSemicolon;
+    static const std::string ksqlLike;
+
+    static ProcessedTypeInfo processDataTypeInfo(std::string& dataType, int ODBCVer);
 
     /* ----------------
      * initializeColumnField
@@ -420,6 +674,74 @@ class RsMetadataAPIHelper {
      */
     static int getCharOctetLen(const std::string &rsType,
                                short character_maximum_length);
+
+    /**
+     * Checks if a given data type is a valid Redshift data type.
+     * 
+     * @param dataType The data type string to validate
+     * @return true if the data type is valid (exists in VALID_TYPES set),
+     *         false otherwise
+     */
+    static bool isValidType(const std::string& dataType);
+
+    /**
+     * Validates a list of data types against the predefined valid Redshift data types.
+     * 
+     * @param dataTypes Vector of data type strings to validate
+     * @return A tuple containing:
+     *         - bool: true if all data types are valid, false if any are invalid
+     *         - vector<string>: list of invalid data types found (empty if all are valid)
+     */
+    static std::tuple<bool, std::vector<std::string>> validateTypes(
+        const std::vector<std::string>& dataTypes);
+
+    /**
+     * Creates a parameterized SQL query string based on the argument list and base SQL statement.
+     * Appends either a semicolon or LIKE clause depending on whether column_name_pattern is provided.
+     *
+     * @param argumentList Comma-separated string of argument types
+     *                    (e.g. "integer, short, character varying")
+     * @param sqlBase Base SQL statement to which parameters will be added
+     *                (e.g. "SHOW PARAMETERS OF PROCEDURE")
+     * @param columnNamePattern Optional pattern for filtering column names.
+     *                         If provided, adds LIKE clause instead of semicolon
+     * @return tuple containing:
+     *         - Complete SQL query with appropriate placeholders and termination
+     *         - Vector of argument types with whitespace stripped
+     * @throws std::invalid_argument if invalid arguments are found
+     */
+    static std::tuple<std::string, std::vector<std::string>> createParameterizedQueryString(
+        const std::string& argumentListStr,
+        const std::string& sqlBase,
+        const std::string& columnNamePattern);
+
+    /**
+     * Maps string parameter type to ProcedureColumnType enum value
+     * @param parameterType String representation of parameter type
+     * @return Corresponding ProcedureColumnType enum value
+     */
+    static int getProcedureFunctionColumnType(const std::string& parameterType);
+
+    /**
+     * Pattern matching function similar to SQL LIKE operator. Driver currently
+     * treat empty string as null which match anything
+     * @param str: input string to match against the pattern
+     * @param pattern: pattern string containing wildcards
+     * @return: true if string matches pattern, false otherwise
+     *
+     * Wildcards:
+     * % - matches zero or more characters
+     * _ - matches exactly one character
+     */
+    static bool patternMatch(const std::string& str, const std::string& pattern);
+
+    /**
+     * Convert SQL LIKE pattern to regex pattern
+     * @param pattern SQL LIKE pattern with % and _ wildcards
+     * @return Equivalent regex pattern
+     */
+    static std::string convertSqlLikeToRegex(const std::string& pattern);
+
 };
 
 #endif // __RS_METADATAAPIHELPER_H__

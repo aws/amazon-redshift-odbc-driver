@@ -2234,6 +2234,19 @@ static RS_RESULT_INFO *createResultObject(RS_STMT_INFO *pStmt, PGresult *pgResul
     return pResult;
 }
 
+static void releaseResultObject(RS_RESULT_INFO* pResult) {
+    if (pResult != nullptr) {
+        // Clear PostgreSQL result if it exists
+        if (pResult->pgResult != nullptr) {
+            PQclear(pResult->pgResult);
+            pResult->pgResult = nullptr;
+        }
+
+        // Delete the result object
+        delete pResult;
+    }
+}
+
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
@@ -2911,160 +2924,299 @@ int libpqDoesAnyOtherStreamingCursorOpen(RS_STMT_INFO *pStmt, int iLockRequired)
 	return rc;
 }
 
-// Helper function to initialize customize PGResult object
+/**
+ * Allocates memory for the Implementation Row Descriptor (IRD) records.
+ *
+ * @param pStmt Pointer to the statement information structure.
+ * @return true if allocation is successful, false otherwise.
+ */
+bool allocateIRDRecords(RS_STMT_INFO *pStmt) {
+    if (!pStmt || pStmt->pIRD == NULL) {
+        return false;
+    }
+
+    // Allocate memory for IRD records based on the number of columns
+    pStmt->pIRD->pDescRecHead = (RS_DESC_REC *)rs_calloc(
+        pStmt->pResultHead->iNumberOfCols, sizeof(RS_DESC_REC));
+    if (!pStmt->pIRD->pDescRecHead) {
+        return false;
+    }
+    pStmt->pIRD->iRecListType = RS_DESC_RECS_ARRAY_LIST;
+    return true;
+}
+
+/**
+ * Initializes the Implementation Row Descriptor (IRD) records for all columns.
+ *
+ * @param pStmt Pointer to the statement information structure.
+ * @param colNum Number of columns in the result set.
+ * @return true if initialization is successful for all records, false
+ * otherwise.
+ */
+bool initializeIRDRecords(RS_STMT_INFO *pStmt, int colNum) {
+    RS_DESC_REC *iRD = pStmt->pIRD->pDescRecHead;
+    RS_RESULT_INFO *pResult = pStmt->pResultHead;
+    if (!pResult) {
+        return false;
+    }
+
+    // Iterate through all columns and initialize their IRD records
+    for (int i = 0; i < colNum; i++) {
+        RS_DESC_REC *pDescRec = &iRD[i];
+
+        // Initialize individual IRD record
+        if (!initializeIRDRecord(pStmt, pResult, pDescRec, i)) {
+            return false;
+        }
+
+        // Link the current record to the previous one (except for the first
+        // record)
+        if (i > 0) {
+            iRD[i - 1].pNext = pDescRec;
+        }
+    }
+    return true;
+}
+
+/**
+ * Initializes a single Implementation Row Descriptor (IRD) record.
+ *
+ * @param pStmt Pointer to the statement information structure.
+ * @param pResult Pointer to the result information structure.
+ * @param pDescRec Pointer to the descriptor record to be initialized.
+ * @param i Column index.
+ * @return true if initialization is successful, false otherwise.
+ */
+bool initializeIRDRecord(RS_STMT_INFO *pStmt, RS_RESULT_INFO *pResult,
+                         RS_DESC_REC *pDescRec, int i) {
+    if (!pResult || !pDescRec) {
+        return false;
+    }
+
+    // Retrieve the column name
+    char *pName = PQfname(pResult->pgResult, i);
+    if (!pName) {
+        handleIRDInitializationError(
+            pStmt, "Fail to retrieve column name from result object");
+        return false;
+    }
+
+    // Retrieve the Data type OID
+    Oid pgType = PQftype(pResult->pgResult, i);
+    if (pgType == InvalidOid) {
+        handleIRDInitializationError(
+            pStmt, "Fail to retrieve data type oid from result object");
+        return false;
+    }
+
+    // Set the record number (1-based index)
+    pDescRec->hRecNumber = i + 1;
+
+    // Copy the column name to the descriptor record
+    copyStrDataSmallLen(pName, SQL_NTS, pDescRec->szName, MAX_IDEN_LEN, NULL);
+
+    // Map Data type OID to SQL type
+    pDescRec->hType = mapPgTypeToSqlType(pgType, &(pDescRec->hRsSpecialType));
+    if (pDescRec->hType == SQL_UNKNOWN_TYPE) {
+        handleIRDInitializationError(pStmt,
+                                     "Fail to convert pg type oid to sql type");
+        return false;
+    }
+
+    // Set additional attributes for the descriptor record
+    setDescRecAttributes(pStmt, pDescRec, pgType, pName);
+    return true;
+}
+
+/**
+ * Sets various attributes for a descriptor record based on the Data type OID
+ * and column name.
+ *
+ * @param pStmt Pointer to the statement information structure.
+ * @param pDescRec Pointer to the descriptor record to be updated.
+ * @param pgType Data type OID.
+ * @param pName Column name.
+ */
+void setDescRecAttributes(RS_STMT_INFO *pStmt, RS_DESC_REC *pDescRec,
+                          Oid pgType, const char *pName) {
+
+    if (!pStmt || !pDescRec || !pName) {
+        RS_LOG_ERROR("setDescRecAttributes", "Input validation failed");
+        return;
+    }
+
+    // Set size and case sensitivity based on Data type OID
+    if (pgType == INT2OID || pgType == INT4OID || pgType == INT8OID) {
+        pDescRec->iSize = (pgType == INT2OID) ? INT2_LEN : 
+                          (pgType == INT4OID) ? INT4_LEN : INT8_LEN;
+        pDescRec->cCaseSensitive = SQL_FALSE;
+    } else {
+        // Set size for special column names or use default
+        if (strcmp(pName, "REMARKS") == 0) {
+            pDescRec->iSize = MAX_REMARK_LEN;
+        } else if (strcmp(pName, "COLUMN_DEF") == 0) {
+            pDescRec->iSize = MAX_COLUMN_DEF_LEN;
+        } else {
+            pDescRec->iSize = NAMEDATALEN;
+        }
+        pDescRec->cCaseSensitive = getCaseSensitive(pStmt);
+    }
+
+    // Set various other attributes
+    pDescRec->hScale = 0;
+    pDescRec->hNullable = SQL_TRUE;
+    pDescRec->cAutoInc = SQL_FALSE;
+    pDescRec->iDisplaySize = getDisplaySize(
+        pDescRec->hType, pDescRec->iSize, pDescRec->hRsSpecialType);
+    pDescRec->cFixedPrecScale = SQL_FALSE;
+    getLiteralPrefix(pDescRec->hType, pDescRec->szLiteralPrefix,
+                        pDescRec->hRsSpecialType);
+    getLiteralSuffix(pDescRec->hType, pDescRec->szLiteralSuffix,
+                        pDescRec->hRsSpecialType);
+    getTypeName(pDescRec->hType, pDescRec->szTypeName,
+                sizeof(pDescRec->szTypeName), pDescRec->hRsSpecialType);
+    pDescRec->iNumPrecRadix = getNumPrecRadix(pDescRec->hType);
+    pDescRec->iOctetLen = getOctetLen(pDescRec->hType, pDescRec->iSize,
+                                        pDescRec->hRsSpecialType);
+    pDescRec->iPrecision = getPrecision(
+        pDescRec->hType, pDescRec->iSize, pDescRec->hRsSpecialType);
+    pDescRec->iSearchable =
+        getSearchable(pDescRec->hType, pDescRec->hRsSpecialType);
+    pDescRec->iUnNamed = getUnNamed(pDescRec->szName);
+    pDescRec->cUnsigned = getUnsigned(pDescRec->hType);
+    pDescRec->iUpdatable = getUpdatable();
+}
+
+/**
+ * Handles errors during IRD record initialization.
+ *
+ * @param pStmt Pointer to the statement information structure.
+ * @param errorMessage Error message to be logged and added to the error list.
+ */
+void handleIRDInitializationError(RS_STMT_INFO *pStmt, char *errorMessage) {
+    if (!pStmt) {
+        RS_LOG_ERROR("handleIRDInitializationError", "Invalid statement handler");
+        return;
+    }
+
+    if (pStmt->pIRD != NULL) {
+        pStmt->pIRD = releaseDescriptor(pStmt->pIRD, TRUE);
+    }
+    addError(&pStmt->pErrorList, "HY000", errorMessage, 0, NULL);
+}
+
+/**
+ * Helper function to handle error cleanup and reporting in libpqInitializeResultSetField.
+ *
+ * @param pStmt Pointer to the statement information structure.
+ * @param column Pointer to column attributes to be cleaned up.
+ * @param colNum Number of columns.
+ * @param result PGresult to be cleared (can be NULL).
+ * @param errorMessage Error message to be added to the error list.
+ * @return SQL_ERROR.
+ */
+SQLRETURN handleInitializeResultSetError(RS_STMT_INFO *pStmt,
+                                               PGresAttDesc *column,
+                                               int colNum,
+                                               PGresult *result,
+                                               char *errorMessage) {
+    if (column) {
+        PQcleanupCustomizeAttrs(column, colNum);
+    }
+
+    if (result) {
+        PQclear(result);
+    }
+
+    if (pStmt && pStmt->pResultHead) {
+        releaseResultObject(pStmt->pResultHead);
+        pStmt->pResultHead = NULL;
+    }
+
+    if (pStmt && errorMessage) {
+        addError(&pStmt->pErrorList, "HY000", errorMessage, 0, NULL);
+    }
+
+    return SQL_ERROR;
+}
+
+/**
+ * Initializes a custom PGResult object for a result set.
+ *
+ * @param pStmt Pointer to the statement information structure.
+ * @param colName Array of column names.
+ * @param colNum Number of columns.
+ * @param colDatatype Array of column data types.
+ * @return SQL_SUCCESS if successful, SQL_ERROR or SQL_INVALID_HANDLE otherwise.
+ */
 SQLRETURN libpqInitializeResultSetField(RS_STMT_INFO *pStmt, char **colName,
                                         int colNum, int *colDatatype) {
+
+    RS_LOG_TRACE("libpqInitializeResultSetField",
+                 "Start creating customized result set object");
+
+    // Validate input parameters
+    if (!pStmt) {
+        // Log the error instead of adding into error list since
+        // statement is invalid
+        RS_LOG_ERROR("libpqInitializeResultSetField", "Invalid statement handler");
+        return SQL_INVALID_HANDLE;
+    }
+    if (!colName || !colDatatype) {
+        addError(&pStmt->pErrorList, "HY000",
+                "Column name / Column data type should be provided", 0, NULL);
+        return SQL_ERROR;
+    }
+
     SQLRETURN rc = SQL_SUCCESS;
+    PGresAttDesc *column = NULL;
+    PGresult *result = NULL;
 
     // Create customize column attribute description
-    PGresAttDesc *column = PQcreateCustomizeAttrs(colName, colNum, colDatatype);
+    column = PQcreateCustomizeAttrs(colName, colNum, colDatatype);
+    if (!column) {
+        addError(&pStmt->pErrorList, "HY000",
+                "Failed to create column attributes", 0, NULL);
+        return SQL_ERROR;
+    }
 
     // Create a newly allocated, initialized PGresult with given status
-    PGresult *result =
-        PQmakeEmptyPGresult(pStmt->phdbc->pgConn, PGRES_TUPLES_OK);
+    result = PQmakeEmptyPGresult(pStmt->phdbc->pgConn, PGRES_TUPLES_OK);
+    if (!result) {
+        PQcleanupCustomizeAttrs(column, colNum);
+        addError(&pStmt->pErrorList, "HY000",
+                "Failed to create PGresult", 0, NULL);
+        return SQL_ERROR;
+    }
 
     // Create new RS_RESULT_INFO object with initialized PGresult
     pStmt->pResultHead = createResultObject(pStmt, result);
+    if (!pStmt->pResultHead) {
+        return handleInitializeResultSetError(pStmt, column, colNum, result, "Failed to create result object");
+    }
+
     RS_RESULT_INFO *pResult = pStmt->pResultHead;
 
     // Set the column number in RS_RESULT_INFO object
     pResult->iNumberOfCols = colNum;
 
     // Populate column (PGresAttDesc*) into pResult->pgResult (PGresult *)
-    if (PQsetResultAttrs(pResult->pgResult, colNum, column)) {
-        // Statement IRD description
-        pStmt->pIRD->pDescRecHead = (RS_DESC_REC *)rs_calloc(
-            pResult->iNumberOfCols, sizeof(RS_DESC_REC));
-        pStmt->pIRD->iRecListType = RS_DESC_RECS_ARRAY_LIST;
-        RS_DESC_REC *iRD = pStmt->pIRD->pDescRecHead;
-        int i;
-        for (i = 0; i < colNum; i++) {
-            RS_DESC_REC *pDescRec = &iRD[i];
-
-            Oid pgType;
-            int pgMod;
-            char *pName;
-            char *pTemp;
-
-            pDescRec->hRecNumber = i + 1;
-
-            if (i) {
-                // Link previous element to this one
-                iRD[i - 1].pNext = pDescRec;
-            }
-
-            pName = PQfname(pResult->pgResult, i);
-            if (pName == NULL) {
-                addError(&pStmt->pErrorList, "HY000",
-                         "createEmptyResultSet: Fail to retrieve column name "
-                         "from result object ... ",
-                         0, NULL);
-                return SQL_ERROR;
-            }
-            copyStrDataSmallLen(pName, SQL_NTS, pDescRec->szName, MAX_IDEN_LEN,
-                                NULL);
-
-            pgType = PQftype(pResult->pgResult, i);
-            if (pgType == InvalidOid) {
-                addError(&pStmt->pErrorList, "HY000",
-                         "createEmptyResultSet: Fail to retrieve pg type oid "
-                         "from result object ... ",
-                         0, NULL);
-                return SQL_ERROR;
-            }
-
-            pDescRec->hType =
-                mapPgTypeToSqlType(pgType, &(pDescRec->hRsSpecialType));
-            if (pDescRec->hType == SQL_UNKNOWN_TYPE) {
-                addError(&pStmt->pErrorList, "HY000",
-                         "createEmptyResultSet: Fail to convert pg type oid to "
-                         "sql type ... ",
-                         0, NULL);
-                return SQL_ERROR;
-            }
-
-            // Since the column data type would only contain Varchar, Integer and short
-            if (pgType == INT2OID) {
-                pDescRec->iSize = INT2_LEN;
-                // Case sensitive set to false for numeric data type
-                pDescRec->cCaseSensitive = SQL_FALSE;
-            } else if (pgType == INT4OID) {
-                pDescRec->iSize = INT4_LEN;
-                // Case sensitive set to false for numeric data type
-                pDescRec->cCaseSensitive = SQL_FALSE;
-            } else if (pgType == INT8OID) {
-                pDescRec->iSize = INT8_LEN;
-                // Case sensitive set to false for numeric data type
-                pDescRec->cCaseSensitive = SQL_FALSE;
-            } else {
-                if (strcmp(pName, "REMARKS") == 0) {
-                    // The specific size limits for REMARKS wasn't explicity
-                    // documented in publicly available source This value is
-                    // based on existing code
-                    pDescRec->iSize = MAX_REMARK_LEN;
-                } else if (strcmp(pName, "COLUMN_DEF") == 0) {
-                    // The specific size limits for COLUMN_DEF wasn't explicity
-                    // documented in publicly available source This value is
-                    // based on existing code
-                    pDescRec->iSize = MAX_COLUMN_DEF_LEN;
-                } else {
-                    pDescRec->iSize = NAMEDATALEN;
-                }
-
-                // Set case sensitive for non-numeric data type
-                pDescRec->cCaseSensitive = getCaseSensitive(pStmt);
-            }
-
-            pDescRec->hScale = 0;
-            pDescRec->hNullable = SQL_TRUE;
-            pDescRec->cAutoInc = SQL_FALSE;
-            pDescRec->iDisplaySize = getDisplaySize(
-                pDescRec->hType, pDescRec->iSize, pDescRec->hRsSpecialType);
-            pDescRec->cFixedPrecScale = SQL_FALSE;
-            getLiteralPrefix(pDescRec->hType, pDescRec->szLiteralPrefix,
-                             pDescRec->hRsSpecialType);
-            getLiteralSuffix(pDescRec->hType, pDescRec->szLiteralSuffix,
-                             pDescRec->hRsSpecialType);
-            getTypeName(pDescRec->hType, pDescRec->szTypeName,
-                        sizeof(pDescRec->szTypeName), pDescRec->hRsSpecialType);
-            pDescRec->iNumPrecRadix = getNumPrecRadix(pDescRec->hType);
-            pDescRec->iOctetLen = getOctetLen(pDescRec->hType, pDescRec->iSize,
-                                              pDescRec->hRsSpecialType);
-            pDescRec->iPrecision = getPrecision(
-                pDescRec->hType, pDescRec->iSize, pDescRec->hRsSpecialType);
-            pDescRec->iSearchable =
-                getSearchable(pDescRec->hType, pDescRec->hRsSpecialType);
-            pDescRec->iUnNamed = getUnNamed(pDescRec->szName);
-            pDescRec->cUnsigned = getUnsigned(pDescRec->hType);
-            pDescRec->iUpdatable = getUpdatable();
-        }
-        RS_LOG_TRACE("rslibpq", "successfully create empty PGresult object");
-    } else {
-        addError(&pStmt->pErrorList, "HY000",
-                 "createEmptyResultSet: Fail to set result Attributes ... ", 0,
-                 NULL);
-        PQcleanupCustomizeAttrs(column, colNum);
-        column = NULL;
-        return SQL_ERROR;
+    if (!PQsetResultAttrs(pResult->pgResult, colNum, column)) {
+        return handleInitializeResultSetError(pStmt, column, colNum, result, "Failed to set result attributes");
     }
+
+    // Allocate IRD records
+    if (!allocateIRDRecords(pStmt)) {
+        return handleInitializeResultSetError(pStmt, column, colNum, result, "Failed to allocate IRD records");
+    }
+
+    // Initialized IRD records
+    if (!initializeIRDRecords(pStmt, colNum)) {
+        return handleInitializeResultSetError(pStmt, column, colNum, result, "Failed to initialize IRD records");
+    }
+
     PQcleanupCustomizeAttrs(column, colNum);
-    column = NULL;
-    return rc;
-}
-
-// Helper function to create empty result set for given column number and column
-// data type
-SQLRETURN libpqCreateEmptyResultSet(RS_STMT_INFO *pStmt, short columnNum,
-                                    const int *columnDataType) {
-    SQLRETURN rc = SQL_SUCCESS;
-
-    PGresult *res = pStmt->pResultHead->pgResult;
-
-    PQsetNumAttributes(res, columnNum);
-
-    for (int i = 0; i < columnNum; i++) {
-        PQsetvalue(res, 0, i, NULL, NULL_LEN);
-    }
+    RS_LOG_TRACE("rslibpq", "Successfully create empty PGresult object");
     return rc;
 }
 
@@ -3074,26 +3226,43 @@ SQLRETURN libpqCreateSQLCatalogsCustomizedResultSet(
     RS_STMT_INFO *pStmt, short columnNum,
     const std::vector<std::string> &intermediateRS) {
 
-    int intermediateRSLen = intermediateRS.size();
-
-    PGresult *res = pStmt->pResultHead->pgResult;
-
-    PQsetNumAttributes(res, columnNum);
-
-    for (int i = 0; i < intermediateRSLen; i++) {
-        PQsetvalue(res, i, kSQLTables_TABLE_CATALOG,
-                   (char *)intermediateRS[i].c_str(), intermediateRS[i].size());
-        PQsetvalue(res, i, kSQLTables_TABLE_SCHEM, NULL, NULL_LEN);
-        PQsetvalue(res, i, kSQLTables_TABLE_NAME, NULL, NULL_LEN);
-        PQsetvalue(res, i, kSQLTables_TABLE_TYPE, NULL, NULL_LEN);
-        PQsetvalue(res, i, kSQLTables_REMARKS, NULL, NULL_LEN);
+    // Result handler validation
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+            "Invalid statement handler or Result head");
+        return SQL_INVALID_HANDLE;
     }
 
+    const int intermediateRSSize = intermediateRS.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
     // Set the total row number
-    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSLen;
+    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
 
     // Reset the current row number for fetching result
     pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    for (int i = 0; i < intermediateRSSize; i++) {
+        PQsetvalue(res, i, kSQLTables_TABLE_CATALOG_COL_NUM,
+                   (char *)intermediateRS[i].c_str(), intermediateRS[i].size());
+        PQsetvalue(res, i, kSQLTables_TABLE_SCHEM_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_TABLE_NAME_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_TABLE_TYPE_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_REMARKS_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_OWNER_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_LAST_ALTERED_TIME_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_LAST_MODIFIED_TIME_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_DIST_STYLE_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_TABLE_SUBTYPE_COL_NUM, NULL, NULL_LEN);
+    }
 
     return SQL_SUCCESS;
 }
@@ -3104,29 +3273,46 @@ SQLRETURN libpqCreateSQLSchemasCustomizedResultSet(
     RS_STMT_INFO *pStmt, short columnNum,
     const std::vector<SHOWSCHEMASResult> &intermediateRS) {
 
-    int intermediateRSLen = intermediateRS.size();
-
-    PGresult *res = pStmt->pResultHead->pgResult;
-
-    PQsetNumAttributes(res, columnNum);
-
-    for (int i = 0; i < intermediateRSLen; i++) {
-        PQsetvalue(res, i, kSQLTables_TABLE_CATALOG,
-                   (char *)intermediateRS[i].database_name,
-                   intermediateRS[i].database_name_Len);
-        PQsetvalue(res, i, kSQLTables_TABLE_SCHEM,
-                   (char *)intermediateRS[i].schema_name,
-                   intermediateRS[i].schema_name_Len);
-        PQsetvalue(res, i, kSQLTables_TABLE_NAME, NULL, NULL_LEN);
-        PQsetvalue(res, i, kSQLTables_TABLE_TYPE, NULL, NULL_LEN);
-        PQsetvalue(res, i, kSQLTables_REMARKS, NULL, NULL_LEN);
+    // Result handler validation
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+            "Invalid statement handler or Result head");
+        return SQL_INVALID_HANDLE;
     }
 
+    const int intermediateRSSize = intermediateRS.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
     // Set the total row number
-    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSLen;
+    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
 
     // Reset the current row number for fetching result
     pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    for (int i = 0; i < intermediateRSSize; i++) {
+        PQsetvalue(res, i, kSQLTables_TABLE_CATALOG_COL_NUM,
+                   (char *)intermediateRS[i].database_name,
+                   intermediateRS[i].database_name_Len);
+        PQsetvalue(res, i, kSQLTables_TABLE_SCHEM_COL_NUM,
+                   (char *)intermediateRS[i].schema_name,
+                   intermediateRS[i].schema_name_Len);
+        PQsetvalue(res, i, kSQLTables_TABLE_NAME_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_TABLE_TYPE_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_REMARKS_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_OWNER_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_LAST_ALTERED_TIME_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_LAST_MODIFIED_TIME_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_DIST_STYLE_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_TABLE_SUBTYPE_COL_NUM, NULL, NULL_LEN);
+    }
 
     return SQL_SUCCESS;
 }
@@ -3137,26 +3323,43 @@ SQLRETURN libpqCreateSQLTableTypesCustomizedResultSet(
     RS_STMT_INFO *pStmt, short columnNum,
     const std::vector<std::string> &tableTypeList) {
 
-    int intermediateRSLen = tableTypeList.size();
-
-    PGresult *res = pStmt->pResultHead->pgResult;
-
-    PQsetNumAttributes(res, columnNum);
-
-    for (int i = 0; i < intermediateRSLen; i++) {
-        PQsetvalue(res, i, kSQLTables_TABLE_CATALOG, NULL, NULL_LEN);
-        PQsetvalue(res, i, kSQLTables_TABLE_SCHEM, NULL, NULL_LEN);
-        PQsetvalue(res, i, kSQLTables_TABLE_NAME, NULL, NULL_LEN);
-        PQsetvalue(res, i, kSQLTables_TABLE_TYPE,
-                   (char *)tableTypeList[i].c_str(), tableTypeList[i].size());
-        PQsetvalue(res, i, kSQLTables_REMARKS, NULL, NULL_LEN);
+    // Result handler validation
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+            "Invalid statement handler or Result head");
+        return SQL_INVALID_HANDLE;
     }
 
+    const int intermediateRSSize = tableTypeList.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
     // Set the total row number
-    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSLen;
+    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
 
     // Reset the current row number for fetching result
     pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    for (int i = 0; i < intermediateRSSize; i++) {
+        PQsetvalue(res, i, kSQLTables_TABLE_CATALOG_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_TABLE_SCHEM_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_TABLE_NAME_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_TABLE_TYPE_COL_NUM,
+                   (char *)tableTypeList[i].c_str(), tableTypeList[i].size());
+        PQsetvalue(res, i, kSQLTables_REMARKS_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_OWNER_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_LAST_ALTERED_TIME_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_LAST_MODIFIED_TIME_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_DIST_STYLE_COL_NUM, NULL, NULL_LEN);
+        PQsetvalue(res, i, kSQLTables_TABLE_SUBTYPE_COL_NUM, NULL, NULL_LEN);
+    }
 
     return SQL_SUCCESS;
 }
@@ -3167,12 +3370,29 @@ SQLRETURN libpqCreateSQLTablesCustomizedResultSet(
     RS_STMT_INFO *pStmt, short columnNum, const std::string &tableType,
     const std::vector<SHOWTABLESResult> &intermediateRS) {
 
-    int intermediateRSLen = intermediateRS.size();
-    int finalRowNum = 0;
+    // Result handler validation
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+            "Invalid statement handler or Result head");
+        return SQL_INVALID_HANDLE;
+    }
 
+    const int intermediateRSSize = intermediateRS.size();
     PGresult *res = pStmt->pResultHead->pgResult;
 
+    // Set the total column number
     PQsetNumAttributes(res, columnNum);
+
+    // Reset the current row number for fetching result
+    pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
+        return SQL_SUCCESS;
+    }
+
+    int finalRowNum = 0;
 
     // Create table type filter
     std::unordered_set<std::string> typeSet;
@@ -3188,34 +3408,46 @@ SQLRETURN libpqCreateSQLTablesCustomizedResultSet(
         }
     }
 
-    for (int i = 0; i < intermediateRSLen; i++) {
+    for (int i = 0; i < intermediateRSSize; i++) {
         if (tableType.empty() ||
             typeSet.find(char2String(intermediateRS[i].table_type)) !=
                 typeSet.end()) {
-            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_CATALOG,
+            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_CATALOG_COL_NUM,
                        (char *)intermediateRS[i].database_name,
                        intermediateRS[i].database_name_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_SCHEM,
+            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_SCHEM_COL_NUM,
                        (char *)intermediateRS[i].schema_name,
                        intermediateRS[i].schema_name_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_NAME,
+            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_NAME_COL_NUM,
                        (char *)intermediateRS[i].table_name,
                        intermediateRS[i].table_name_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_TYPE,
+            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_TYPE_COL_NUM,
                        (char *)intermediateRS[i].table_type,
                        intermediateRS[i].table_type_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_REMARKS,
+            PQsetvalue(res, finalRowNum, kSQLTables_REMARKS_COL_NUM,
                        (char *)intermediateRS[i].remarks,
                        intermediateRS[i].remarks_Len);
+            PQsetvalue(res, finalRowNum, kSQLTables_OWNER_COL_NUM,
+                       (char *)intermediateRS[i].owner,
+                       intermediateRS[i].owner_Len);
+            PQsetvalue(res, finalRowNum, kSQLTables_LAST_ALTERED_TIME_COL_NUM,
+                       (char *)intermediateRS[i].last_altered_time,
+                       intermediateRS[i].last_altered_time_Len);
+            PQsetvalue(res, finalRowNum, kSQLTables_LAST_MODIFIED_TIME_COL_NUM,
+                       (char *)intermediateRS[i].last_modified_time,
+                       intermediateRS[i].last_modified_time_Len);
+            PQsetvalue(res, finalRowNum, kSQLTables_DIST_STYLE_COL_NUM,
+                       (char *)intermediateRS[i].dist_style,
+                       intermediateRS[i].dist_style_Len);
+            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_SUBTYPE_COL_NUM,
+                       (char *)intermediateRS[i].table_subtype,
+                       intermediateRS[i].table_subtype_Len);
             finalRowNum += 1;
         }
     }
 
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = finalRowNum;
-
-    // Reset the current row number for fetching result
-    pStmt->pResultHead->iCurRow = -1;
 
     return SQL_SUCCESS;
 }
@@ -3225,27 +3457,42 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
     RS_STMT_INFO *pStmt, short columnNum,
     const std::vector<SHOWCOLUMNSResult> &intermediateRS) {
 
-    int intermediateRSLen = intermediateRS.size();
+    // Result handler validation
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+            "Invalid statement handler or Result head");
+        return SQL_INVALID_HANDLE;
+    }
+
+    const int intermediateRSSize = intermediateRS.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
+    // Set the total row number
+    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
+
+    // Reset the current row number for fetching result
+    pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    SQLINTEGER ODBCVer = pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion;
+    RS_LOG_DEBUG("RSLIBPQ", "ODBC spec version: %d", ODBCVer);
+
     int columnSize = 0, bufferLen = 0, charOctetLen = 0;
     short sqlType = 0, sqlDataType = 0, sqlDateSub = 0, precisions = 0,
           decimalDigit = 0, num_pre_radix = 0;
-    
-    SQLINTEGER ODBCVer = pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion;
 
-    RS_LOG_DEBUG("RSLIBPQ", "ODBC spec version: %d", ODBCVer);
-
-    std::string intStr = {0};
-    std::string shortStr = {0};
+    std::string numStr = {0};
 
     bool dateTimeCustomizePrecision = false;
 
-    std::string rsType;
-
-    PGresult *res = pStmt->pResultHead->pgResult;
-
-    PQsetNumAttributes(res, columnNum);
-
-    for (int i = 0; i < intermediateRSLen; i++) {
+    for (int i = 0; i < intermediateRSSize; i++) {
         // Reset the variable
         columnSize = 0;
         bufferLen = 0;
@@ -3257,51 +3504,26 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
         decimalDigit = 0;
         num_pre_radix = 0;
         dateTimeCustomizePrecision = false;
-        rsType.clear();
-
-        // Retrieve customize precision for second fraction
-        std::regex dateTimeRegex(
-            "(time|timetz|timestamp|timestamptz)\\(\\d+\\).*");
-        std::regex intervalRegex("interval.*.\\(\\d+\\)");
+        std::string rsType;
         std::string dataType = char2String(intermediateRS[i].data_type);
-        if (std::regex_match(dataType, dateTimeRegex) ||
-            std::regex_match(dataType, intervalRegex)) {
-            std::string cleanedDataType =
-                std::regex_replace(dataType, std::regex("\\(\\d+\\)"), "");
-            trim(cleanedDataType);
-            TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(
-                cleanedDataType,
-                RsMetadataAPIHelper::returnODBC2DateTime(ODBCVer));
-            if (typeInfoResult.found) {
-                DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
-                sqlType = typeInfo.sqlType;
-                sqlDataType = typeInfo.sqlDataType;
-                sqlDateSub = typeInfo.sqlDateSub;
-                rsType = typeInfo.typeName;
-            } else {
-                rsType = cleanedDataType;
-            }
 
-            std::smatch match;
-            if (std::regex_search(dataType, match,
-                                  std::regex(".*\\(([0-9]+)\\).*"))) {
-                precisions = std::stoi(match[1]);
-                dateTimeCustomizePrecision = true;
-            }
+        ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
+            dataType,
+            ODBCVer
+        );
+
+        if (processedType.typeInfoResult.found) {
+            sqlType = processedType.typeInfoResult.typeInfo.sqlType;
+            sqlDataType = processedType.typeInfoResult.typeInfo.sqlDataType;
+            sqlDateSub = processedType.typeInfoResult.typeInfo.sqlDateSub;
+            rsType = processedType.typeInfoResult.typeInfo.typeName;
         } else {
-            TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(
-                (char *)intermediateRS[i].data_type,
-                RsMetadataAPIHelper::returnODBC2DateTime(ODBCVer));
-            if (typeInfoResult.found) {
-                DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
-                sqlType = typeInfo.sqlType;
-                sqlDataType = typeInfo.sqlDataType;
-                sqlDateSub = typeInfo.sqlDateSub;
-                rsType = typeInfo.typeName;
-            } else {
-                rsType = std::string(reinterpret_cast<const char *>(
-                    intermediateRS[i].data_type));
-            }
+            rsType = processedType.cleanedTypeName;
+        }
+
+        if (processedType.dateTimeInfo.hasCustomPrecision) {
+            precisions = processedType.dateTimeInfo.precision;
+            dateTimeCustomizePrecision = true;
         }
 
         columnSize = RsMetadataAPIHelper::getColumnSize(
@@ -3322,127 +3544,920 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
             rsType, intermediateRS[i].character_maximum_length);
 
         // Catalog name
-        PQsetvalue(res, i, kSQLColumns_TABLE_CAT,
+        PQsetvalue(res, i, kSQLColumns_TABLE_CAT_COL_NUM,
                    (char *)intermediateRS[i].database_name,
                    intermediateRS[i].database_name_Len);
 
         // Schema name
-        PQsetvalue(res, i, kSQLColumns_TABLE_SCHEM,
+        PQsetvalue(res, i, kSQLColumns_TABLE_SCHEM_COL_NUM,
                    (char *)intermediateRS[i].schema_name,
                    intermediateRS[i].schema_name_Len);
 
         // Table name
-        PQsetvalue(res, i, kSQLColumns_TABLE_NAME,
+        PQsetvalue(res, i, kSQLColumns_TABLE_NAME_COL_NUM,
                    (char *)intermediateRS[i].table_name,
                    intermediateRS[i].table_name_Len);
 
         // Column name
-        PQsetvalue(res, i, kSQLColumns_COLUMN_NAME,
+        PQsetvalue(res, i, kSQLColumns_COLUMN_NAME_COL_NUM,
                    (char *)intermediateRS[i].column_name,
                    intermediateRS[i].column_name_Len);
 
         // SQL type (concise data type)
-        shortStr = std::to_string(sqlType);
-        PQsetvalue(res, i, kSQLColumns_DATA_TYPE, shortStr.data(),
-                   shortStr.size());
+        numStr = std::to_string(sqlType);
+        PQsetvalue(res, i, kSQLColumns_DATA_TYPE_COL_NUM, numStr.data(),
+                   numStr.size());
 
         // Redshift type name
-        PQsetvalue(res, i, kSQLColumns_TYPE_NAME, (char *)rsType.c_str(),
+        PQsetvalue(res, i, kSQLColumns_TYPE_NAME_COL_NUM, (char *)rsType.c_str(),
                    rsType.size());
 
         // Column size
         if (columnSize == kNotApplicable) {
-            PQsetvalue(res, i, kSQLColumns_COLUMN_SIZE, NULL, NULL_LEN);
+            PQsetvalue(res, i, kSQLColumns_COLUMN_SIZE_COL_NUM, NULL, NULL_LEN);
         } else {
-            intStr = std::to_string(columnSize);
-            PQsetvalue(res, i, kSQLColumns_COLUMN_SIZE, intStr.data(),
-                       intStr.size());
+            numStr = std::to_string(columnSize);
+            PQsetvalue(res, i, kSQLColumns_COLUMN_SIZE_COL_NUM, numStr.data(),
+                       numStr.size());
         }
 
         // Buffer length
         if (bufferLen == kNotApplicable) {
-            PQsetvalue(res, i, kSQLColumns_BUFFER_LENGTH, NULL, NULL_LEN);
+            PQsetvalue(res, i, kSQLColumns_BUFFER_LENGTH_COL_NUM, NULL, NULL_LEN);
         } else {
-            intStr = std::to_string(bufferLen);
-            PQsetvalue(res, i, kSQLColumns_BUFFER_LENGTH, intStr.data(),
-                       intStr.size());
+            numStr = std::to_string(bufferLen);
+            PQsetvalue(res, i, kSQLColumns_BUFFER_LENGTH_COL_NUM, numStr.data(),
+                       numStr.size());
         }
 
         // Decimal digits
         if (decimalDigit == kNotApplicable) {
             // Return NULL where DECIMAL_DIGITS is not applicable
-            PQsetvalue(res, i, kSQLColumns_DECIMAL_DIGITS, NULL, NULL_LEN);
+            PQsetvalue(res, i, kSQLColumns_DECIMAL_DIGITS_COL_NUM, NULL, NULL_LEN);
         } else {
-            shortStr = std::to_string(decimalDigit);
-            PQsetvalue(res, i, kSQLColumns_DECIMAL_DIGITS, shortStr.data(),
-                       shortStr.size());
+            numStr = std::to_string(decimalDigit);
+            PQsetvalue(res, i, kSQLColumns_DECIMAL_DIGITS_COL_NUM, numStr.data(),
+                       numStr.size());
         }
 
         // Num prec radix
         if (num_pre_radix == kNotApplicable) {
             // Return NULL where NUM_PREC_RADIX is not applicable
-            PQsetvalue(res, i, kSQLColumns_NUM_PREC_RADIX, NULL, NULL_LEN);
+            PQsetvalue(res, i, kSQLColumns_NUM_PREC_RADIX_COL_NUM, NULL, NULL_LEN);
         } else {
-            shortStr = std::to_string(num_pre_radix);
-            PQsetvalue(res, i, kSQLColumns_NUM_PREC_RADIX, shortStr.data(),
-                       shortStr.size());
+            numStr = std::to_string(num_pre_radix);
+            PQsetvalue(res, i, kSQLColumns_NUM_PREC_RADIX_COL_NUM, numStr.data(),
+                       numStr.size());
         }
 
         // Nullable
-        shortStr = std::to_string(RsMetadataAPIHelper::getNullable(
+        numStr = std::to_string(RsMetadataAPIHelper::getNullable(
             char2String(intermediateRS[i].is_nullable)));
-        PQsetvalue(res, i, kSQLColumns_NULLABLE, shortStr.data(),
-                   shortStr.size());
+        PQsetvalue(res, i, kSQLColumns_NULLABLE_COL_NUM, numStr.data(),
+                   numStr.size());
 
         // Remarks
-        PQsetvalue(res, i, kSQLColumns_REMARKS,
+        PQsetvalue(res, i, kSQLColumns_REMARKS_COL_NUM,
                    (char *)intermediateRS[i].remarks,
                    intermediateRS[i].remarks_Len);
 
         // Column default
-        PQsetvalue(res, i, kSQLColumns_COLUMN_DEF,
+        PQsetvalue(res, i, kSQLColumns_COLUMN_DEF_COL_NUM,
                    (char *)intermediateRS[i].column_default,
                    intermediateRS[i].column_default_Len);
 
         // SQL Data type (non-concise data type)
-        shortStr = std::to_string(sqlDataType);
-        PQsetvalue(res, i, kSQLColumns_SQL_DATA_TYPE, shortStr.data(),
-                   shortStr.size());
+        numStr = std::to_string(sqlDataType);
+        PQsetvalue(res, i, kSQLColumns_SQL_DATA_TYPE_COL_NUM, numStr.data(),
+                   numStr.size());
 
         // SQL Date data type subtype code
         if (sqlDateSub == kNotApplicable) {
-            PQsetvalue(res, i, kSQLColumns_SQL_DATETIME_SUB, NULL, NULL_LEN);
+            PQsetvalue(res, i, kSQLColumns_SQL_DATETIME_SUB_COL_NUM, NULL, NULL_LEN);
         } else {
-            shortStr = std::to_string(sqlDateSub);
-            PQsetvalue(res, i, kSQLColumns_SQL_DATETIME_SUB, shortStr.data(),
-                       shortStr.size());
+            numStr = std::to_string(sqlDateSub);
+            PQsetvalue(res, i, kSQLColumns_SQL_DATETIME_SUB_COL_NUM, numStr.data(),
+                       numStr.size());
         }
 
         // char octet length
         if (charOctetLen == kNotApplicable) {
-            PQsetvalue(res, i, kSQLColumns_CHAR_OCTET_LENGTH, NULL, NULL_LEN);
+            PQsetvalue(res, i, kSQLColumns_CHAR_OCTET_LENGTH_COL_NUM, NULL, NULL_LEN);
         } else {
-            intStr = std::to_string(charOctetLen);
-            PQsetvalue(res, i, kSQLColumns_CHAR_OCTET_LENGTH, intStr.data(),
-                       intStr.size());
+            numStr = std::to_string(charOctetLen);
+            PQsetvalue(res, i, kSQLColumns_CHAR_OCTET_LENGTH_COL_NUM, numStr.data(),
+                       numStr.size());
         }
 
         // Ordinal position
-        intStr = std::to_string(intermediateRS[i].ordinal_position);
-        PQsetvalue(res, i, kSQLColumns_ORDINAL_POSITION, intStr.data(),
-                   intStr.size());
+        numStr = std::to_string(intermediateRS[i].ordinal_position);
+        PQsetvalue(res, i, kSQLColumns_ORDINAL_POSITION_COL_NUM, numStr.data(),
+                   numStr.size());
 
         // Is nullable
-        PQsetvalue(res, i, kSQLColumns_IS_NULLABLE,
+        PQsetvalue(res, i, kSQLColumns_IS_NULLABLE_COL_NUM,
                    (char *)intermediateRS[i].is_nullable,
                    intermediateRS[i].is_nullable_Len);
+
+        // Sort key type
+        PQsetvalue(res, i, kSQLColumns_SORT_KEY_TYPE_COL_NUM,
+                   (char *)intermediateRS[i].sort_key_type,
+                   intermediateRS[i].sort_key_type_Len);
+
+        // Sort key
+        if (intermediateRS[i].sort_key_Len == SQL_NULL_DATA) {
+            PQsetvalue(res, i, kSQLColumns_SORT_KEY_COL_NUM, NULL, NULL_LEN);
+        } else {
+            numStr = std::to_string(intermediateRS[i].sort_key);
+            PQsetvalue(res, i, kSQLColumns_SORT_KEY_COL_NUM, numStr.data(),
+                    numStr.size());
+        }
+
+        // Dist key
+        if (intermediateRS[i].dist_key_Len == SQL_NULL_DATA) {
+            PQsetvalue(res, i, kSQLColumns_DIST_KEY_COL_NUM, NULL, NULL_LEN);
+        } else {
+            numStr = std::to_string(intermediateRS[i].dist_key);
+            PQsetvalue(res, i, kSQLColumns_DIST_KEY_COL_NUM, numStr.data(),
+                    numStr.size());
+        }
+        // Encoding
+        PQsetvalue(res, i, kSQLColumns_ENCODING_COL_NUM,
+                   (char *)intermediateRS[i].encoding,
+                   intermediateRS[i].encoding_Len);
+
+        // Collation
+        PQsetvalue(res, i, kSQLColumns_COLLATION_COL_NUM,
+                   (char *)intermediateRS[i].collation,
+                   intermediateRS[i].collation_Len);
     }
 
+    return SQL_SUCCESS;
+}
+
+SQLRETURN libpqCreateSQLPrimaryKeysCustomizedResultSet(
+    RS_STMT_INFO *pStmt, short columnNum,
+    const std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult>& intermediateRS) {
+
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLPrimaryKeysCustomizedResultSet", "Statement handle allocation failed");
+        return SQL_INVALID_HANDLE;
+    }
+
+    const int intermediateRSSize = intermediateRS.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
     // Set the total row number
-    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSLen;
+    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
 
     // Reset the current row number for fetching result
     pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    for (int i = 0; i < intermediateRSSize; i++) {
+        const auto& row = intermediateRS[i];
+
+        // TABLE_CAT (catalog name)
+        PQsetvalue(res, i, kSQLPrimaryKeys_TABLE_CAT_COL_NUM,
+                   (char *)row.database_name,
+                   row.database_name_Len);
+
+        // TABLE_SCHEM (schema name)
+        PQsetvalue(res, i, kSQLPrimaryKeys_TABLE_SCHEM_COL_NUM,
+                   (char *)row.schema_name,
+                   row.schema_name_Len);
+
+        // TABLE_NAME
+        PQsetvalue(res, i, kSQLPrimaryKeys_TABLE_NAME_COL_NUM,
+                   (char *)row.table_name,
+                   row.table_name_Len);
+
+        // COLUMN_NAME
+        PQsetvalue(res, i, kSQLPrimaryKeys_COLUMN_NAME_COL_NUM,
+                   (char *)row.column_name,
+                   row.column_name_Len);
+
+        // KEY_SEQ (sequence number within primary key)
+        std::string keySeqStr = std::to_string(row.key_seq);
+        if (PQsetvalue(res, i, kSQLPrimaryKeys_KEY_SEQ_COL_NUM,
+                    keySeqStr.data(), keySeqStr.length()) != 1) {
+            RS_LOG_ERROR("libpqCreateSQLPrimaryKeysCustomizedResultSet", "Failed to set KEY_SEQ");
+            return SQL_ERROR;
+        }
+
+        // PK_NAME (primary key name)
+        PQsetvalue(res, i, kSQLPrimaryKeys_PK_NAME_COL_NUM,
+                   (char *)row.pk_name,
+                   row.pk_name_Len);
+    }
+
+    return SQL_SUCCESS;
+}
+
+// Helper function to create result set for SQLForeignKeys
+SQLRETURN libpqCreateSQLForeignKeysCustomizedResultSet(
+    RS_STMT_INFO *pStmt, short columnNum,
+    const std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult> &intermediateRS) {
+
+    // Result handler validation
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLForeignKeysCustomizedResultSet", "Invalid statement handler or Result head");
+        return SQL_INVALID_HANDLE;
+    }
+
+    const int intermediateRSSize = intermediateRS.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
+    // Set the total row number
+    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
+
+    // Reset the current row number for fetching result
+    pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    std::string numStr = {0};
+    for (int i = 0; i < intermediateRSSize; i++) {
+        // pk Catalog name
+        PQsetvalue(res, i, kSQLForeignKeys_PKTABLE_CAT_COL_NUM,
+                   (char *)intermediateRS[i].pk_table_cat,
+                   intermediateRS[i].pk_table_cat_Len);
+
+        // pk Schema name
+        PQsetvalue(res, i, kSQLForeignKeys_PKTABLE_SCHEM_COL_NUM,
+                   (char *)intermediateRS[i].pk_table_schem,
+                   intermediateRS[i].pk_table_schem_Len);
+
+        // pk Table name
+        PQsetvalue(res, i, kSQLForeignKeys_PKTABLE_NAME_COL_NUM,
+                   (char *)intermediateRS[i].pk_table_name,
+                   intermediateRS[i].pk_table_name_Len);
+
+        // pk Column name
+        PQsetvalue(res, i, kSQLForeignKeys_PKCOLUMN_NAME_COL_NUM,
+                   (char *)intermediateRS[i].pk_column_name,
+                   intermediateRS[i].pk_column_name_Len);
+
+        // fk Catalog name
+        PQsetvalue(res, i, kSQLForeignKeys_FKTABLE_CAT_COL_NUM,
+                   (char *)intermediateRS[i].fk_table_cat,
+                   intermediateRS[i].fk_table_cat_Len);
+
+        // fk Schema name
+        PQsetvalue(res, i, kSQLForeignKeys_FKTABLE_SCHEM_COL_NUM,
+                   (char *)intermediateRS[i].fk_table_schem,
+                   intermediateRS[i].fk_table_schem_Len);
+
+        // fk Table name
+        PQsetvalue(res, i, kSQLForeignKeys_FKTABLE_NAME_COL_NUM,
+                   (char *)intermediateRS[i].fk_table_name,
+                   intermediateRS[i].fk_table_name_Len);
+
+        // fk Column name
+        PQsetvalue(res, i, kSQLForeignKeys_FKCOLUMN_NAME_COL_NUM,
+                   (char *)intermediateRS[i].fk_column_name,
+                   intermediateRS[i].fk_column_name_Len);
+
+        // Key sequence number
+        numStr = std::to_string(intermediateRS[i].key_seq);
+        PQsetvalue(res, i, kSQLForeignKeys_KEY_SEQ_COL_NUM, numStr.data(),
+                   numStr.size());
+
+        // Update role
+        numStr = intermediateRS[i].update_rule_Len == SQL_NULL_DATA
+                       ? std::to_string(SQL_NO_ACTION)
+                       : std::to_string(intermediateRS[i].update_rule);
+        PQsetvalue(res, i, kSQLForeignKeys_UPDATE_RULE_COL_NUM, numStr.data(),
+                   numStr.size());
+
+        // Delete role
+        numStr = intermediateRS[i].delete_rule_Len == SQL_NULL_DATA
+                       ? std::to_string(SQL_NO_ACTION)
+                       : std::to_string(intermediateRS[i].delete_rule);
+        PQsetvalue(res, i, kSQLForeignKeys_DELETE_RULE_COL_NUM, numStr.data(),
+                   numStr.size());
+
+        // fk name
+        PQsetvalue(res, i, kSQLForeignKeys_FK_NAME_COL_NUM,
+                   (char *)intermediateRS[i].fk_name,
+                   intermediateRS[i].fk_name_Len);
+
+        // pk name
+        PQsetvalue(res, i, kSQLForeignKeys_PK_NAME_COL_NUM,
+                   (char *)intermediateRS[i].pk_name,
+                   intermediateRS[i].pk_name_Len);
+
+        // deferrability
+        numStr = std::to_string(intermediateRS[i].deferrability_Len == SQL_NULL_DATA
+                                       ? SQL_NOT_DEFERRABLE
+                                       : intermediateRS[i].deferrability);
+        PQsetvalue(res, i, kSQLForeignKeys_DEFERRABILITY_COL_NUM,
+                   numStr.data(), numStr.size());
+    }
+    return SQL_SUCCESS;
+}
+
+SQLRETURN libpqCreateSQLSpecialColumnsCustomizedResultSet(
+    RS_STMT_INFO *pStmt,
+    short columnNum,
+    const std::vector<SHOWCOLUMNSResult> &intermediateRS,
+    SQLUSMALLINT identifierType) {
+
+    // Result handler validation
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+            "Invalid statement handler or Result head");
+        return SQL_INVALID_HANDLE;
+    }
+
+    const int intermediateRSSize = intermediateRS.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
+    // Set the total row number
+    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
+
+    // Reset the current row number for fetching result
+    pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    SQLINTEGER ODBCVer = pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion;
+    RS_LOG_DEBUG("RSLIBPQ", "ODBC spec version: %d", ODBCVer);
+
+    int columnSize = 0, bufferLen = 0, charOctetLen = 0;
+    short sqlType = 0, sqlDataType = 0, sqlDateSub = 0, precisions = 0,
+          decimalDigit = 0, num_pre_radix = 0;
+
+    std::string strValue = {0};
+
+    bool dateTimeCustomizePrecision = false;
+
+    for (int i = 0; i < intermediateRSSize; i++) {
+        // Reset variables
+        sqlType = 0;
+        columnSize = 0;
+        bufferLen = 0;
+        precisions = 0;
+        decimalDigit = 0;
+        dateTimeCustomizePrecision = false;
+        std::string rsType;
+        std::string dataType = char2String(intermediateRS[i].data_type);
+
+        ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
+            dataType,
+            ODBCVer
+        );
+
+        if (processedType.typeInfoResult.found) {
+            sqlType = processedType.typeInfoResult.typeInfo.sqlType;
+            sqlDataType = processedType.typeInfoResult.typeInfo.sqlDataType;
+            sqlDateSub = processedType.typeInfoResult.typeInfo.sqlDateSub;
+            rsType = processedType.typeInfoResult.typeInfo.typeName;
+        } else {
+            rsType = processedType.cleanedTypeName;
+        }
+
+        if (processedType.dateTimeInfo.hasCustomPrecision) {
+            precisions = processedType.dateTimeInfo.precision;
+            dateTimeCustomizePrecision = true;
+        }
+
+        columnSize = RsMetadataAPIHelper::getColumnSize(
+            rsType, intermediateRS[i].character_maximum_length,
+            intermediateRS[i].numeric_precision);
+
+        bufferLen = RsMetadataAPIHelper::getBufferLen(
+            rsType, intermediateRS[i].character_maximum_length,
+            intermediateRS[i].numeric_precision);
+
+        decimalDigit = RsMetadataAPIHelper::getDecimalDigit(
+            rsType, intermediateRS[i].numeric_scale, precisions,
+            dateTimeCustomizePrecision);
+
+        // SCOPE 
+        strValue = std::to_string(identifierType == SQL_BEST_ROWID ? 2 : 0);
+        PQsetvalue(res, i, kSQLSpecialColumns_SCOPE,
+                  strValue.data(),
+                  strValue.length());
+
+        // COLUMN_NAME
+        PQsetvalue(res, i, kSQLSpecialColumns_COLUMN_NAME,
+                  (char *)intermediateRS[i].column_name,
+                  intermediateRS[i].column_name_Len);
+
+        // DATA_TYPE
+        strValue = std::to_string(sqlType);
+        PQsetvalue(res, i, kSQLSpecialColumns_DATA_TYPE,
+                  strValue.data(),
+                  strValue.length());
+
+        // TYPE_NAME
+        PQsetvalue(res, i, kSQLSpecialColumns_TYPE_NAME,
+                  rsType.data(),
+                  rsType.length());
+
+        // COLUMN_SIZE
+        columnSize = RsMetadataAPIHelper::getColumnSize(
+            rsType,
+            intermediateRS[i].character_maximum_length,
+            intermediateRS[i].numeric_precision);
+        
+        if (columnSize == kNotApplicable) {
+            PQsetvalue(res, i, kSQLSpecialColumns_COLUMN_SIZE, NULL, NULL_LEN);
+        } else {
+            strValue = std::to_string(columnSize);
+            PQsetvalue(res, i, kSQLSpecialColumns_COLUMN_SIZE,
+                      strValue.data(),
+                      strValue.length());
+        }
+
+        // BUFFER_LENGTH
+        bufferLen = RsMetadataAPIHelper::getBufferLen(
+            rsType,
+            intermediateRS[i].character_maximum_length,
+            intermediateRS[i].numeric_precision);
+        
+        if (bufferLen == kNotApplicable) {
+            PQsetvalue(res, i, kSQLSpecialColumns_BUFFER_LENGTH, NULL, NULL_LEN);
+        } else {
+            strValue = std::to_string(bufferLen);
+            PQsetvalue(res, i, kSQLSpecialColumns_BUFFER_LENGTH,
+                      strValue.data(),
+                      strValue.length());
+        }
+
+        // DECIMAL_DIGITS
+        decimalDigit = RsMetadataAPIHelper::getDecimalDigit(
+            rsType,
+            intermediateRS[i].numeric_scale,
+            precisions,
+            dateTimeCustomizePrecision);
+        
+        if (decimalDigit == kNotApplicable) {
+            PQsetvalue(res, i, kSQLSpecialColumns_DECIMAL_DIGITS, NULL, NULL_LEN);
+        } else {
+            strValue = std::to_string(decimalDigit);
+            PQsetvalue(res, i, kSQLSpecialColumns_DECIMAL_DIGITS,
+                      strValue.data(),
+                      strValue.length());
+        }
+
+        // PSEUDO_COLUMN
+        int pseudoColumnValue = (identifierType == SQL_BEST_ROWID) ? 1 :
+                              (identifierType == SQL_ROWVER) ? 2 : 0;
+        strValue = std::to_string(pseudoColumnValue);
+        PQsetvalue(res, i, kSQLSpecialColumns_PSEUDO_COLUMN,
+                  strValue.data(),
+                  strValue.length());
+    }
+
+    return SQL_SUCCESS;
+}
+
+
+SQLRETURN libpqCreateSQLTablePrivilegesCustomizedResultSet(
+    RS_STMT_INFO *pStmt, 
+    short columnNum,
+    const std::vector<SHOWGRANTSTABLEResult>& intermediateRS) {
+
+    // Result handler validation
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLTablePrivilegesCustomizedResultSet", "Invalid statement handler or Result head");
+        return SQL_INVALID_HANDLE;
+    }
+
+    const int intermediateRSSize = intermediateRS.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
+    // Set the total row number
+    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
+
+    // Reset the current row number for fetching result
+    pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    std::string isGrantable = "NO";
+    for (int i = 0; i < intermediateRSSize; i++) {
+        // TABLE_CAT (catalog name)
+        PQsetvalue(res, i, kSQLTablePrivileges_TABLE_CAT_COL_NUM,
+                  (char *)intermediateRS[i].table_cat,
+                  intermediateRS[i].table_cat_Len);
+
+        // TABLE_SCHEM (schema name)
+        PQsetvalue(res, i, kSQLTablePrivileges_TABLE_SCHEM_COL_NUM,
+                  (char *)intermediateRS[i].table_schem,
+                  intermediateRS[i].table_schem_Len);
+
+        // TABLE_NAME
+        PQsetvalue(res, i, kSQLTablePrivileges_TABLE_NAME_COL_NUM,
+                  (char *)intermediateRS[i].table_name,
+                  intermediateRS[i].table_name_Len);
+
+        // GRANTOR
+        PQsetvalue(res, i, kSQLTablePrivileges_GRANTOR_COL_NUM,
+                  (char *)intermediateRS[i].grantor,
+                  intermediateRS[i].grantor_Len);
+
+        // GRANTEE
+        PQsetvalue(res, i, kSQLTablePrivileges_GRANTEE_COL_NUM,
+                  (char *)intermediateRS[i].grantee,
+                  intermediateRS[i].grantee_Len);
+
+        // PRIVILEGE
+        PQsetvalue(res, i, kSQLTablePrivileges_PRIVILEGE_COL_NUM,
+                  (char *)intermediateRS[i].privilege,
+                  intermediateRS[i].privilege_Len);
+
+        // IS_GRANTABLE
+        isGrantable = (intermediateRS[i].admin_option_len != SQL_NULL_DATA &&
+               intermediateRS[i].admin_option != 0) ? "YES" : "NO";
+        PQsetvalue(res, i, kSQLTablePrivileges_IS_GRANTABLE_COL_NUM,
+                  isGrantable.data(),
+                  isGrantable.size());
+    }
+
+    return SQL_SUCCESS;
+}
+
+SQLRETURN libpqCreateSQLColumnPrivilegesCustomizedResultSet(
+    RS_STMT_INFO *pStmt,
+    short columnNum,
+    const std::vector<SHOWGRANTSCOLUMNResult> &intermediateRS) {
+
+    // Result handler validation
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLColumnPrivilegesCustomizedResultSet", "Invalid statement handler or Result head");
+        return SQL_INVALID_HANDLE;
+    }
+
+    const int intermediateRSSize = intermediateRS.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
+    // Set the total row number
+    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
+
+    // Reset the current row number for fetching result
+    pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    std::string isGrantable = "NO";
+
+    for (int i = 0; i < intermediateRSSize; i++) {
+        // TABLE_CAT
+        PQsetvalue(res, i, kSQLColumnPrivileges_TABLE_CAT_COL_NUM,
+                  (char *)intermediateRS[i].table_cat,
+                  intermediateRS[i].table_cat_Len);
+
+        // TABLE_SCHEM
+        PQsetvalue(res, i, kSQLColumnPrivileges_TABLE_SCHEM_COL_NUM,
+                  (char *)intermediateRS[i].table_schem,
+                  intermediateRS[i].table_schem_Len);
+
+        // TABLE_NAME
+        PQsetvalue(res, i, kSQLColumnPrivileges_TABLE_NAME_COL_NUM,
+                  (char *)intermediateRS[i].table_name,
+                  intermediateRS[i].table_name_Len);
+
+        // COLUMN_NAME
+        PQsetvalue(res, i, kSQLColumnPrivileges_COLUMN_NAME_COL_NUM,
+                  (char *)intermediateRS[i].column_name,
+                  intermediateRS[i].column_name_Len);
+
+        // GRANTOR
+        PQsetvalue(res, i, kSQLColumnPrivileges_GRANTOR_COL_NUM,
+                  (char *)intermediateRS[i].grantor,
+                  intermediateRS[i].grantor_Len);
+
+        // GRANTEE
+        PQsetvalue(res, i, kSQLColumnPrivileges_GRANTEE_COL_NUM,
+                  (char *)intermediateRS[i].grantee,
+                  intermediateRS[i].grantee_Len);
+
+        // PRIVILEGE
+        PQsetvalue(res, i, kSQLColumnPrivileges_PRIVILEGE_COL_NUM,
+                  (char *)intermediateRS[i].privilege,
+                  intermediateRS[i].privilege_Len);
+
+        // IS_GRANTABLE
+        isGrantable = (intermediateRS[i].admin_option_len != SQL_NULL_DATA &&
+               intermediateRS[i].admin_option != 0) ? "YES" : "NO";
+        PQsetvalue(res, i, kSQLColumnPrivileges_IS_GRANTABLE_COL_NUM,
+                  isGrantable.data(),
+                  isGrantable.size());
+    }
+
+    return SQL_SUCCESS;
+}
+
+SQLRETURN libpqCreateSQLProceduresCustomizedResultSet(
+    RS_STMT_INFO *pStmt,
+    short columnNum,
+    const std::vector<SHOWPROCEDURESFUNCTIONSResult> &intermediateRS) {
+
+    // Result handler validation
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLProceduresCustomizedResultSet", "Invalid statement handler or Result head");
+        return SQL_INVALID_HANDLE;
+    }
+
+    const int intermediateRSSize = intermediateRS.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
+    // Set the total row number
+    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
+
+    // Reset the current row number for fetching result
+    pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    std::string numStr = {0};
+
+    for (int i = 0; i < intermediateRSSize; i++) {
+        // PROCEDURE_CAT
+        PQsetvalue(res, i, kSQLProcedures_PROCEDURE_CAT_COL_NUM,
+                  (char *)intermediateRS[i].object_cat,
+                  intermediateRS[i].object_cat_Len);
+
+        // PROCEDURE_SCHEM
+        PQsetvalue(res, i, kSQLProcedures_PROCEDURE_SCHEM_COL_NUM,
+                  (char *)intermediateRS[i].object_schem,
+                  intermediateRS[i].object_schem_Len);
+
+        // PROCEDURE_NAME
+        PQsetvalue(res, i, kSQLProcedures_PROCEDURE_NAME_COL_NUM,
+                  (char *)intermediateRS[i].object_name,
+                  intermediateRS[i].object_name_Len);
+
+        // NUM_INPUT_PARAMS (reserved for future use)
+        PQsetvalue(res, i, kSQLProcedures_NUM_INPUT_PARAMS_COL_NUM, NULL, NULL_LEN);
+
+        // NUM_OUTPUT_PARAMS (reserved for future use)
+        PQsetvalue(res, i, kSQLProcedures_NUM_OUTPUT_PARAMS_COL_NUM, NULL, NULL_LEN);
+
+        // NUM_RESULT_SETS (reserved for future use)
+        PQsetvalue(res, i, kSQLProcedures_NUM_RESULT_SETS_COL_NUM, NULL, NULL_LEN);
+
+        // REMARKS - Always empty string since Redshift doesn't support
+        // comment on procedure or function
+        PQsetvalue(res, i, kSQLProcedures_REMARKS_COL_NUM, "", 1);
+
+        // PROCEDURE_TYPE
+        numStr = std::to_string(intermediateRS[i].object_type);
+        PQsetvalue(res, i, kSQLProcedures_PROCEDURE_TYPE_COL_NUM, numStr.data(),
+                  numStr.size());
+    }
+
+    return SQL_SUCCESS;
+}
+
+
+// Helper function to create result set for SQLProcedureColumns
+SQLRETURN libpqCreateSQLProcedureColumnsCustomizedResultSet(
+    RS_STMT_INFO *pStmt, short columnNum,
+    const std::vector<SHOWCOLUMNSResult> &intermediateRS) {
+
+    // Result handler validation
+    if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
+        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+            "Invalid statement handler or Result head");
+        return SQL_INVALID_HANDLE;
+    }
+
+    const int intermediateRSSize = intermediateRS.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
+    // Set the total row number
+    pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
+
+    // Reset the current row number for fetching result
+    pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (intermediateRSSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    SQLINTEGER ODBCVer = pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion;
+    RS_LOG_DEBUG("RSLIBPQ", "ODBC spec version: %d", ODBCVer);
+
+    int columnSize = 0, bufferLen = 0, charOctetLen = 0;
+    short sqlType = 0, sqlDataType = 0, sqlDateSub = 0, precisions = 0,
+          decimalDigit = 0, num_pre_radix = 0;
+
+    std::string numStr = {0};
+
+    bool dateTimeCustomizePrecision = false;
+
+    for (int i = 0; i < intermediateRSSize; i++) {
+        // Reset the variable
+        columnSize = 0;
+        bufferLen = 0;
+        charOctetLen = 0;
+        sqlType = 0;
+        sqlDataType = 0;
+        sqlDateSub = 0;
+        precisions = 0;
+        decimalDigit = 0;
+        num_pre_radix = 0;
+        dateTimeCustomizePrecision = false;
+        std::string rsType;
+        std::string dataType = char2String(intermediateRS[i].data_type);
+
+        ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
+            dataType,
+            ODBCVer
+        );
+
+        if (processedType.typeInfoResult.found) {
+            sqlType = processedType.typeInfoResult.typeInfo.sqlType;
+            sqlDataType = processedType.typeInfoResult.typeInfo.sqlDataType;
+            sqlDateSub = processedType.typeInfoResult.typeInfo.sqlDateSub;
+            rsType = processedType.typeInfoResult.typeInfo.typeName;
+        } else {
+            rsType = processedType.cleanedTypeName;
+        }
+
+        if (processedType.dateTimeInfo.hasCustomPrecision) {
+            precisions = processedType.dateTimeInfo.precision;
+            dateTimeCustomizePrecision = true;
+        }
+
+        columnSize = RsMetadataAPIHelper::getColumnSize(
+            rsType, intermediateRS[i].character_maximum_length,
+            intermediateRS[i].numeric_precision);
+
+        bufferLen = RsMetadataAPIHelper::getBufferLen(
+            rsType, intermediateRS[i].character_maximum_length,
+            intermediateRS[i].numeric_precision);
+
+        decimalDigit = RsMetadataAPIHelper::getDecimalDigit(
+            rsType, intermediateRS[i].numeric_scale, precisions,
+            dateTimeCustomizePrecision);
+
+        num_pre_radix = RsMetadataAPIHelper::getNumPrecRadix(rsType);
+
+        charOctetLen = RsMetadataAPIHelper::getCharOctetLen(
+            rsType, intermediateRS[i].character_maximum_length);
+
+        // Catalog name
+        PQsetvalue(res, i, kSQLProcedureColumns_PROCEDURE_CAT_COL_NUM,
+                   (char *)intermediateRS[i].database_name,
+                   intermediateRS[i].database_name_Len);
+
+        // Schema name
+        PQsetvalue(res, i, kSQLProcedureColumns_PROCEDURE_SCHEM_COL_NUM,
+                   (char *)intermediateRS[i].schema_name,
+                   intermediateRS[i].schema_name_Len);
+
+        // Procedure name
+        PQsetvalue(res, i, kSQLProcedureColumns_PROCEDURE_NAME_COL_NUM,
+                   (char *)intermediateRS[i].procedure_function_name,
+                   intermediateRS[i].procedure_function_name_Len);
+
+        // Column name
+        PQsetvalue(res, i, kSQLProcedureColumns_COLUMN_NAME_COL_NUM,
+                   (char *)intermediateRS[i].column_name,
+                   intermediateRS[i].column_name_Len);
+
+        // Column type
+        numStr = std::to_string(
+            RsMetadataAPIHelper::getProcedureFunctionColumnType(char2String(intermediateRS[i].parameter_type))
+        );
+        PQsetvalue(res, i, kSQLProcedureColumns_COLUMN_TYPE_COL_NUM, numStr.data(),
+                   numStr.size());
+
+        // SQL type (concise data type)
+        numStr = std::to_string(sqlType);
+        PQsetvalue(res, i, kSQLProcedureColumns_DATA_TYPE_COL_NUM, numStr.data(),
+                   numStr.size());
+
+        // Redshift type name
+        PQsetvalue(res, i, kSQLProcedureColumns_TYPE_NAME_COL_NUM, (char *)rsType.c_str(),
+                   rsType.size());
+
+        // Column size
+        if (columnSize == kNotApplicable) {
+            PQsetvalue(res, i, kSQLProcedureColumns_COLUMN_SIZE_COL_NUM, NULL, NULL_LEN);
+        } else {
+            numStr = std::to_string(columnSize);
+            PQsetvalue(res, i, kSQLProcedureColumns_COLUMN_SIZE_COL_NUM, numStr.data(),
+                       numStr.size());
+        }
+
+        // Length
+        if (bufferLen == kNotApplicable) {
+            PQsetvalue(res, i, kSQLProcedureColumns_BUFFER_LENGTH_COL_NUM, NULL, NULL_LEN);
+        } else {
+            numStr = std::to_string(bufferLen);
+            PQsetvalue(res, i, kSQLProcedureColumns_BUFFER_LENGTH_COL_NUM, numStr.data(),
+                       numStr.size());
+        }
+
+        // Decimal digit
+        if (decimalDigit == kNotApplicable) {
+            // Return NULL where Scale is not applicable
+            PQsetvalue(res, i, kSQLProcedureColumns_DECIMAL_DIGITS_COL_NUM, NULL, NULL_LEN);
+        } else {
+            numStr = std::to_string(decimalDigit);
+            PQsetvalue(res, i, kSQLProcedureColumns_DECIMAL_DIGITS_COL_NUM, numStr.data(),
+                       numStr.size());
+        }
+
+        // Radix
+        if (num_pre_radix == kNotApplicable) {
+            // Return NULL where RADIX is not applicable
+            PQsetvalue(res, i, kSQLProcedureColumns_NUM_PREC_RADIX_COL_NUM, NULL, NULL_LEN);
+        } else {
+            numStr = std::to_string(num_pre_radix);
+            PQsetvalue(res, i, kSQLProcedureColumns_NUM_PREC_RADIX_COL_NUM, numStr.data(),
+                       numStr.size());
+        }
+
+        // Nullable return unknown based on old hardcoded query
+        numStr = std::to_string(SQL_NULLABLE_UNKNOWN);
+        PQsetvalue(res, i, kSQLProcedureColumns_NULLABLE_COL_NUM, numStr.data(),
+                   numStr.size());
+
+        // Remarks
+        PQsetvalue(res, i, kSQLProcedureColumns_REMARKS_COL_NUM, (char *)"",0);
+
+        // Column default
+        PQsetvalue(res, i, kSQLProcedureColumns_COLUMN_DEF_COL_NUM, NULL, NULL_LEN);
+
+        // SQL Data type (non-concise data type)
+        numStr = std::to_string(sqlDataType);
+        PQsetvalue(res, i, kSQLProcedureColumns_SQL_DATA_TYPE_COL_NUM, numStr.data(),
+                   numStr.size());
+
+        // SQL Date data type subtype code
+        if (sqlDateSub == kNotApplicable) {
+            PQsetvalue(res, i, kSQLProcedureColumns_SQL_DATETIME_SUB_COL_NUM, NULL, NULL_LEN);
+        } else {
+            numStr = std::to_string(sqlDateSub);
+            PQsetvalue(res, i, kSQLProcedureColumns_SQL_DATETIME_SUB_COL_NUM, numStr.data(),
+                       numStr.size());
+        }
+
+        // char octet length
+        if (charOctetLen == kNotApplicable) {
+            PQsetvalue(res, i, kSQLProcedureColumns_CHAR_OCTET_LENGTH_COL_NUM, NULL, NULL_LEN);
+        } else {
+            numStr = std::to_string(charOctetLen);
+            PQsetvalue(res, i, kSQLProcedureColumns_CHAR_OCTET_LENGTH_COL_NUM, numStr.data(),
+                       numStr.size());
+        }
+
+        // Ordinal position
+        numStr = std::to_string(intermediateRS[i].ordinal_position);
+        PQsetvalue(res, i, kSQLProcedureColumns_ORDINAL_POSITION_COL_NUM, numStr.data(),
+                   numStr.size());
+
+        // Is nullable return empty string based on old hardcoded query
+        PQsetvalue(res, i, kSQLProcedureColumns_IS_NULLABLE_COL_NUM, (char *)"",0);
+    }
 
     return SQL_SUCCESS;
 }
