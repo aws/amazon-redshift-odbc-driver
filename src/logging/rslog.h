@@ -6,6 +6,17 @@
 
 #include <string.h>
 
+#ifdef _WIN32
+#include <process.h>
+#define getpid _getpid
+#ifndef _PID_T_DEFINED
+typedef int pid_t;
+#define _PID_T_DEFINED
+#endif
+#else
+#include <unistd.h>
+#endif
+
 /*
  * Global log state.
  * Important for producing/consuming settings across modules

@@ -4,7 +4,7 @@
 #include <map>
 #include <memory>
 #include <typeinfo>
-#include <rslog.h>
+#include "rslog.h"
 
 #include <aws/core/Aws.h>
 #include <aws/core/utils/FileSystemUtils.h>
@@ -18,6 +18,9 @@ namespace internal {
     
 static std::shared_ptr<RS_LOG_VARS> gRslogSettings;
 static RS_LOG_VARS *gRslogSettingsPtr = nullptr;
+
+// Cache PID to avoid repeated getpid() calls
+static const pid_t cachedPid = getpid();
 
 void resetGlobalLogVars() {
     gRslogSettings.reset();
@@ -195,14 +198,28 @@ AwsLogging::LogSystemInterface *GetLogSystem() {
 void processLogLine(AwsLogging::LogLevel level, const char *filename,
                     const int line, const char *func, const char *tag1,
                     const char *msg) {
-    static const std::string open = "[", close = "]", colon = ":";
-    const std::string tag2 =
-        (open + tag1 + colon +
-         Aws::Utils::PathUtils::GetFileNameFromPathWithExt(filename) + colon +
-         std::to_string(line) + close);
-    const Aws::OStringStream messageStream(msg);
-    internal::GetLogSystem()->LogStream(level, tag2.c_str(), messageStream);
-    internal::GetLogSystem()->Flush();
+    AwsLogging::LogSystemInterface *logSystem = internal::GetLogSystem();
+    if (!logSystem) {
+        return; // Log system not initialized, silently return
+    }
+    
+    const std::string locationTag = "[" + 
+        std::string(tag1 ? tag1 : "<null>") + ":" +
+        (filename ? Aws::Utils::PathUtils::GetFileNameFromPathWithExt(filename) : "<null>") + ":" +
+        std::to_string(line) + "]";
+    
+    // Only include PID in log lines for DEBUG level and above
+    std::string fullMessage;
+    if (level >= AwsLogging::LogLevel::Debug) {
+        fullMessage = "[pid:" + std::to_string(cachedPid) + "] " + 
+            std::string(msg ? msg : "<null>");
+    } else {
+        fullMessage = std::string(msg ? msg : "<null>");
+    }
+    
+    const Aws::OStringStream messageStream(fullMessage.c_str());
+    logSystem->LogStream(level, locationTag.c_str(), messageStream);
+    logSystem->Flush();
 }
 } // namespace internal
 
