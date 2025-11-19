@@ -9,6 +9,7 @@
 #include <random>
 #include <string>
 #include <algorithm>
+#include <regex>
 #include <openssl/sha.h>
 #include <cstring>
 #include "IAMUtils.h"
@@ -68,6 +69,10 @@ namespace {
      * String containing amazonaws.com used for building the authorization server endpoint.
      */
     static const std::string AMAZON_COM_SCHEMA = "amazonaws.com";
+    /**
+     * String containing amazonaws.com.cn used for building the authorization server endpoint.
+     */
+    static const std::string AMAZON_CHINA_SCHEMA = "amazonaws.com.cn";
     /**
      * Redirect URI of client application
      */
@@ -322,8 +327,14 @@ void BrowserIdcAuthPlugin::OpenBrowser(
     const std::string& codeChallenge,
     RegisterClientResult& registerClientResult) {
     // Generate URI to request an authorization code
-    const std::string uri = CURRENT_INTERACTION_SCHEMA + "://" + OIDC_SCHEMA + "." +
-        m_argsMap[KEY_IDC_REGION] + "." + AMAZON_COM_SCHEMA +
+    const std::string idcHost = BuildOidcHostUrl(m_argsMap[KEY_IDC_REGION]);
+    
+    // Check if BuildOidcHostUrl returned empty string (error case)
+    if (idcHost.empty()) {
+        IAMUtils::ThrowConnectionExceptionWithInfo("Invalid or empty region provided for IdC authentication");
+    }
+    
+    const std::string uri = CURRENT_INTERACTION_SCHEMA + "://" + idcHost +
         "/authorize?response_type=" + AUTH_CODE_PARAMETER_NAME +
         "&client_id=" + registerClientResult.GetClientId().c_str() +
         "&redirect_uri=" + REDIRECT_URI_URL + m_argsMap[IAM_KEY_LISTEN_PORT] +
@@ -523,4 +534,38 @@ void BrowserIdcAuthPlugin::HandleCreateTokenError(
             "IdC authentication failed: There was an error during "
             "authentication.");
     }
+}
+std::string BrowserIdcAuthPlugin::BuildOidcHostUrl(const std::string& idcRegion) {
+    if (idcRegion.empty()) {
+        // Return empty string instead of throwing to avoid SDK boundary issues
+        return "";
+    }
+    
+    std::string normalizedRegion = idcRegion;
+    std::transform(normalizedRegion.begin(), normalizedRegion.end(), normalizedRegion.begin(), 
+                   [](unsigned char c){ return std::tolower(c); });
+    
+    // Trim whitespace
+    normalizedRegion.erase(0, normalizedRegion.find_first_not_of(" \t\r\n"));
+    size_t lastPos = normalizedRegion.find_last_not_of(" \t\r\n");
+    if (lastPos != std::string::npos) {
+        normalizedRegion.erase(lastPos + 1);
+    }
+    
+    if (normalizedRegion.empty()) {
+        // Return empty string instead of throwing to avoid SDK boundary issues
+        return "";
+    }
+    
+    // Validate region format to prevent injection attacks
+    static const std::regex regionPattern("^[a-z]{2,3}(-[a-z]+)+-[0-9]+$");
+    bool isValidRegion = std::regex_match(normalizedRegion, regionPattern);
+    
+    if (!isValidRegion) {
+        // Return empty string instead of throwing to avoid SDK boundary issues
+        return "";
+    }
+    
+    const std::string& domain = (normalizedRegion.substr(0, 3) == "cn-") ? AMAZON_CHINA_SCHEMA : AMAZON_COM_SCHEMA;
+    return OIDC_SCHEMA + "." + normalizedRegion + "." + domain;
 }

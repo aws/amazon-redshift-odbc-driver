@@ -28,6 +28,9 @@ namespace Redshift
             // @brief Destructor
             ~BrowserIdcAuthPlugin();
 
+            // @brief Builds the OIDC host URL with region validation
+            std::string BuildOidcHostUrl(const std::string& idcRegion);
+
         private:
             // @brief Client to call IdC functions
             std::shared_ptr<Aws::SSOOIDC::SSOOIDCClient> pIdcClient_;

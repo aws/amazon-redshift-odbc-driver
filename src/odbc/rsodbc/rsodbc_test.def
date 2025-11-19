@@ -159,3 +159,10 @@ EXPORTS
 	?getErrorMessage@RsErrorException@@QEAAPEADXZ
 	?GetMicrosoftIdpHost@IAMUtils@IamSupport@Redshift@@SAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEAV45@@Z
 
+	??0IAMCredentials@IamSupport@Redshift@@QEAA@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@00@Z
+	??1IAMCredentials@IamSupport@Redshift@@UEAA@XZ
+	??0IAMConfiguration@IamSupport@Redshift@@QEAA@AEBVIAMCredentials@12@@Z
+	??1IAMConfiguration@IamSupport@Redshift@@QEAA@XZ
+	??0BrowserIdcAuthPlugin@IamSupport@Redshift@@QEAA@AEBVIAMConfiguration@12@AEBV?$map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@U?$less@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@@std@@@2@@std@@@Z
+	??1BrowserIdcAuthPlugin@IamSupport@Redshift@@UEAA@XZ
+	?BuildOidcHostUrl@BrowserIdcAuthPlugin@IamSupport@Redshift@@QEAA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@@Z
