@@ -45,8 +45,7 @@ typedef enum StatMsgType
 	PGSTAT_MTYPE_ANALYZE,
 	PGSTAT_MTYPE_BGWRITER,
 	PGSTAT_MTYPE_FUNCSTAT,
-	PGSTAT_MTYPE_FUNCPURGE,
-	PGSTAT_MTYPE_RECOVERYCONFLICT
+	PGSTAT_MTYPE_FUNCPURGE
 } StatMsgType;
 
 /* ----------
@@ -364,18 +363,6 @@ typedef struct PgStat_MsgBgWriter
 } PgStat_MsgBgWriter;
 
 /* ----------
- * PgStat_MsgRecoveryConflict	Sent by the backend upon recovery conflict
- * ----------
- */
-typedef struct PgStat_MsgRecoveryConflict
-{
-	PgStat_MsgHdr m_hdr;
-
-	Oid			m_databaseid;
-	int			m_reason;
-} PgStat_MsgRecoveryConflict;
-
-/* ----------
  * PgStat_FunctionCounts	The actual per-function counts kept by a backend
  *
  * This struct should contain only actual event counters, because we memcmp
@@ -470,7 +457,6 @@ typedef union PgStat_Msg
 	PgStat_MsgBgWriter msg_bgwriter;
 	PgStat_MsgFuncstat msg_funcstat;
 	PgStat_MsgFuncpurge msg_funcpurge;
-	PgStat_MsgRecoveryConflict msg_recoveryconflict;
 } PgStat_Msg;
 
 
@@ -708,8 +694,6 @@ extern void pgstat_report_vacuum(Oid tableoid, bool shared,
 					 PgStat_Counter tuples);
 extern void pgstat_report_analyze(Relation rel,
 					  PgStat_Counter livetuples, PgStat_Counter deadtuples);
-
-extern void pgstat_report_recovery_conflict(int reason);
 
 extern void pgstat_initialize(void);
 extern void pgstat_bestart(void);

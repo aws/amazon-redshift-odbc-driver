@@ -259,8 +259,6 @@ static const PQconninfoOption PQconninfoOptions[] = {
 	"GSS-library", "", 7},		/* sizeof("gssapi") = 7 */
 #endif
 
-	{"replication", NULL, NULL, NULL,
-	"Replication", "D", 5},
 	{"CscEnable", NULL, NULL, NULL,
 	    "CscEnable", "", 10},
 
@@ -950,9 +948,6 @@ fillPGconn(PGconn *conn, PQconninfoOption *connOptions)
 #error SSPI is not enabled on Windows!!!
 #endif
 #endif
-	tmp = conninfo_getval(connOptions, "replication");
-	conn->replication = tmp ? strdup(tmp) : NULL;
-
 	tmp = conninfo_getval(connOptions, "CscEnable");
     if(tmp)
 	    sscanf(tmp,"%d",&(conn->iCscEnable));
@@ -3332,8 +3327,6 @@ freePGconn(PGconn *conn)
 		free(conn->fbappname);
 	if (conn->dbName)
 		free(conn->dbName);
-	if (conn->replication)
-		free(conn->replication);
 	if (conn->pguser)
 		free(conn->pguser);
 	if (conn->pgpass)

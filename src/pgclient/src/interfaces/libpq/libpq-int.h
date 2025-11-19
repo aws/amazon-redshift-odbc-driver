@@ -316,7 +316,6 @@ struct pg_conn
 	char	   *appname;		/* application name */
 	char	   *fbappname;		/* fallback application name */
 	char	   *dbName;			/* database name */
-	char	   *replication;	/* connect as the replication standby? */
 	char	   *pguser;			/* Postgres username and password, if any */
 	char	   *pgpass;
 	char	   *keepalives;		/* use TCP keepalives? */

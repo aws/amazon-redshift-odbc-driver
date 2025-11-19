@@ -382,10 +382,7 @@ extern void ValidatePgVersion(const char *path);
 extern void process_shared_preload_libraries(void);
 extern void process_local_preload_libraries(void);
 extern void pg_bindtextdomain(const char *domain);
-extern bool is_authenticated_user_replication_role(void);
 
-/* in access/transam/xlog.c */
-extern bool BackupInProgress(void);
-extern void CancelBackup(void);
+
 
 #endif   /* MISCADMIN_H */
