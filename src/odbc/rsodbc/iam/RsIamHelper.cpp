@@ -216,6 +216,7 @@ bool RsIamHelper::IsValidIamCachedSettings(const RsSettings& in_settings, bool i
                     s_rsSettings.m_idpHost == in_settings.m_idpHost &&
                     s_rsSettings.m_idpPort == in_settings.m_idpPort &&
                     s_rsSettings.m_idpTenant == in_settings.m_idpTenant &&
+                    s_rsSettings.m_idpPartition == in_settings.m_idpPartition &&
                     s_rsSettings.m_clientSecret == in_settings.m_clientSecret &&
                     s_rsSettings.m_clientId == in_settings.m_clientId &&
                     s_rsSettings.m_scope == in_settings.m_scope &&
@@ -656,6 +657,7 @@ rs_string RsIamHelper::printRsSettings(const RsSettings &in_settings) {
     STRINGIFY_MEMBER(stream, in_settings, m_stsEndpointUrl);
     STRINGIFY_MEMBER(stream, in_settings, m_idpHost);
     STRINGIFY_MEMBER(stream, in_settings, m_idpTenant);
+    STRINGIFY_MEMBER(stream, in_settings, m_idpPartition);
     STRINGIFY_MEMBER(stream, in_settings, m_idp_response_timeout);
     STRINGIFY_MEMBER(stream, in_settings, m_login_url);
     STRINGIFY_MEMBER(stream, in_settings, m_dbGroupsFilter);
