@@ -1,6 +1,16 @@
 Changelog
 =========
 
+v2.1.11 (2025-11-20)
+---------------------
+1. Added the idp_partition parameter which allows users to authenticate against Azure Active Directory across different Microsoft cloud environments (e.g., Global, US Gov, China).
+2. Enhanced SQLTables and SQLColumns metadata APIs to support uppercase column names in server responses.
+3. Added warning messages when DEBUG or TRACE log levels are enabled.
+4. Removed unsupported PostgreSQL replication features.
+5. Added native ARM64 support for RPM-based Linux distributions.
+6. Enhanced database metadata retrieval logic in SQLTables(), SQLColumns(), SQLPrimaryKeys(), SQLForeignKeys(), SQLSpecialColumns(), SQLColumnPrivileges(), SQLTablePrivileges(), SQLProcedures(), and SQLProcedureColumns() API methods to enable data sharing capabilities while maintaining ODBC specification compliance.
+7. Fixed IDC authentication redirect URL for China regions.
+
 v2.1.10 (2025-10-14)
 ---------------------
 1. Standardized logging output to conform with ODBC logger format specifications.
