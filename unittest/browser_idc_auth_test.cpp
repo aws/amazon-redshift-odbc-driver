@@ -75,3 +75,50 @@ TEST(BROWSER_IDC_AUTH_TEST_SUITE, test_empty_region) {
     EXPECT_TRUE(BrowserIdcAuthPluginTest::TestRegionValidation("").empty());
     EXPECT_TRUE(BrowserIdcAuthPluginTest::TestRegionValidation("   ").empty());  // whitespace only
 }
+
+TEST(BROWSER_IDC_AUTH_TEST_SUITE, test_proxy_not_configured) {
+    IAMConfiguration config;
+    config.SetUsingHTTPSProxy(false);
+    std::map<rs_string, rs_string> argsMap;
+    argsMap["idp_region"] = "us-east-1";
+    
+    BrowserIdcAuthPlugin plugin(config, argsMap);
+    EXPECT_FALSE(config.GetUsingHTTPSProxy());
+}
+
+TEST(BROWSER_IDC_AUTH_TEST_SUITE, test_proxy_configured_without_auth) {
+    IAMConfiguration config;
+    config.SetUsingHTTPSProxy(true);
+    config.SetUseProxyIdpAuth(true);
+    config.SetHTTPSProxyHost("proxy.example.com");
+    config.SetHTTPSProxyPort(8080);
+    
+    EXPECT_TRUE(config.GetUsingHTTPSProxy());
+    EXPECT_TRUE(config.GetUseProxyIdpAuth());
+    EXPECT_EQ(config.GetHTTPSProxyHost(), "proxy.example.com");
+    EXPECT_EQ(config.GetHTTPSProxyPort(), 8080);
+}
+
+TEST(BROWSER_IDC_AUTH_TEST_SUITE, test_proxy_configured_with_auth) {
+    IAMConfiguration config;
+    config.SetUsingHTTPSProxy(true);
+    config.SetUseProxyIdpAuth(true);
+    config.SetHTTPSProxyHost("proxy.example.com");
+    config.SetHTTPSProxyPort(8080);
+    config.SetHTTPSProxyUser("proxyuser");
+    config.SetHTTPSProxyPassword("proxypass");
+    
+    EXPECT_EQ(config.GetHTTPSProxyUser(), "proxyuser");
+    EXPECT_EQ(config.GetHTTPSProxyPassword(), "proxypass");
+}
+
+TEST(BROWSER_IDC_AUTH_TEST_SUITE, test_proxy_disabled_for_idp) {
+    IAMConfiguration config;
+    config.SetUsingHTTPSProxy(true);
+    config.SetUseProxyIdpAuth(false);
+    config.SetHTTPSProxyHost("proxy.example.com");
+    config.SetHTTPSProxyPort(8080);
+    
+    EXPECT_TRUE(config.GetUsingHTTPSProxy());
+    EXPECT_FALSE(config.GetUseProxyIdpAuth());
+}
