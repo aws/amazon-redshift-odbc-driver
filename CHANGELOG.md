@@ -1,6 +1,10 @@
 Changelog
 =========
 
+v2.1.12 (2025-12-17)
+---------------------
+1. Added proxy settings support for the Browser IdC Auth plugin, enabling authentication through proxy servers.
+
 v2.1.11 (2025-11-20)
 ---------------------
 1. Added the idp_partition parameter which allows users to authenticate against Azure Active Directory across different Microsoft cloud environments (e.g., Global, US Gov, China).
