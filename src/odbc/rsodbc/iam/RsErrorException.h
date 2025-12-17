@@ -5,9 +5,10 @@
 #include "rs_wstring.h"
 
 #include <vector>
+#include <exception>
 #define MAX_IAM_ERROR_MSG_LEN 1024
 
-class RsErrorException {
+class RsErrorException : public std::exception {
 
 private:
   char m_errorMessage[MAX_IAM_ERROR_MSG_LEN];
@@ -24,9 +25,9 @@ public :
       int in_componentId,
       const rs_string& in_msgKey,
       const std::vector<rs_wstring>& in_msgParams);
-
-  char *getErrorMessage();
-
+  virtual ~RsErrorException() noexcept; // key function declaration
+  char *getErrorMessage() const noexcept;
+  virtual const char* what() const noexcept override { return m_errorMessage; }
 };
 
 #endif

@@ -84,6 +84,7 @@ if not defined DEPENDENCIES_INSTALL_DIR (
     )
 )
 
+
 rem Display parsed arguments
 echo Version: !RS_VERSION!
 echo Build Type: !RS_BUILD_TYPE!

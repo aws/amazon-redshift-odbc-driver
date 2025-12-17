@@ -202,12 +202,16 @@ void processLogLine(AwsLogging::LogLevel level, const char *filename,
     if (!logSystem) {
         return; // Log system not initialized, silently return
     }
-    
-    const std::string locationTag = "[" + 
-        std::string(tag1 ? tag1 : "<null>") + ":" +
-        (filename ? Aws::Utils::PathUtils::GetFileNameFromPathWithExt(filename) : "<null>") + ":" +
-        std::to_string(line) + "]";
-    
+
+    std::string filenameStr =
+        filename ? Aws::Utils::PathUtils::GetFileNameFromPathWithExt(filename)
+                       .c_str()
+                 : "<null>";
+
+    const std::string locationTag = "[" + std::string(tag1 ? tag1 : "<null>") +
+                                    ":" + filenameStr + ":" +
+                                    std::to_string(line) + "]";
+
     // Only include PID in log lines for DEBUG level and above
     std::string fullMessage;
     if (level >= AwsLogging::LogLevel::Debug) {

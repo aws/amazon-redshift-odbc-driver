@@ -346,6 +346,7 @@ void BrowserIdcAuthPlugin::OpenBrowser(
     // Enforce URL validation
     IAMUtils::ValidateURL(uri);
 
+// LINUX is used in Mac build too, so order of LINUX and APPLE are important
 #if (defined(_WIN32) || defined(_WIN64))
 	try {
         LaunchBrowser(uri);
@@ -353,7 +354,14 @@ void BrowserIdcAuthPlugin::OpenBrowser(
     catch(RsErrorException & e) {
         RS_LOG_ERROR("IAMIDC", "Unable to open the browser. Display environment is not supported");
     }
-#else
+#elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
+    try {
+        LaunchBrowser(uri);
+    } 
+    catch(RsErrorException & e) {
+        RS_LOG_ERROR("IAMIDC", "Unable to open the browser. Display environment is not supported");
+    }
+#elif (defined(LINUX) || defined(__linux__))
     char* display = std::getenv("DISPLAY");
     if (display == nullptr || std::strlen(display) == 0) {
         RS_LOG_ERROR("IAMIDC", "Unable to open the browser. Display environment is not supported");
@@ -369,6 +377,7 @@ void BrowserIdcAuthPlugin::LaunchBrowser(const std::string &uri)
 	RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::LaunchBrowser");
 
 	//  Avoid system calls where possible for LOGIN_URL to help avoid possible remote code execution
+// LINUX is used in Mac build too, so order of LINUX and APPLE are important
 #if (defined(_WIN32) || defined(_WIN64))
 	if (static_cast<int>(
 		reinterpret_cast<intptr_t>(
@@ -379,11 +388,6 @@ void BrowserIdcAuthPlugin::LaunchBrowser(const std::string &uri)
 				NULL,
 				NULL,
 				SW_SHOWNORMAL))) <= 32)
-#elif (defined(LINUX) || defined(__linux__))
-
-	rs_string open_uri = command_ + uri + subcommand_;
-
-	if (system(open_uri.c_str()) == -1)
 #elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
 	CFURLRef url = CFURLCreateWithBytes(
 		NULL,                        // allocator
@@ -398,6 +402,11 @@ void BrowserIdcAuthPlugin::LaunchBrowser(const std::string &uri)
 		CFRelease(url);
 	}
 	else
+#elif (defined(LINUX) || defined(__linux__))
+
+    rs_string open_uri = command_ + uri + subcommand_;
+
+    if (system(open_uri.c_str()) == -1)
 #endif
 	{
         RS_LOG_ERROR("IAMIDC", "Failed to open the URL in a web browser");

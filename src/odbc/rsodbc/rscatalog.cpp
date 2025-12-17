@@ -12,6 +12,56 @@
 #include "rsMetadataAPIPostProcessor.h"
 #include "rsMetadataServerProxy.h"
 
+// Variadic template to validate string parameters
+static inline bool validateStringParams(RS_STMT_INFO *pStmt) {
+    return true;
+}
+
+// Recursive case with parameter name
+template <typename... Args>
+static inline bool
+validateStringParams(RS_STMT_INFO *pStmt, const char *paramName,
+                     SQLWCHAR *pwParam, SQLSMALLINT cchParam, Args... args) {
+    if (cchParam != SQL_NTS && cchParam > 0 && !pwParam) {
+        char errorMsg[256];
+        snprintf(errorMsg, sizeof(errorMsg),
+                 "Invalid string or buffer length for %s",
+                 (paramName ? paramName : "NULL"));
+        addError(&pStmt->pErrorList, "HY009", errorMsg, 0, NULL);
+        RS_LOG_ERROR("RSCAT", "%s", errorMsg);
+        return false;
+    }
+    return validateStringParams(pStmt, args...);
+}
+
+static inline ConversionResult convertWCharParams(RS_STMT_INFO *pStmt) {
+    return CONVERSION_SUCCESS;
+}
+
+template<typename... Args>
+static inline ConversionResult convertWCharParams(
+    RS_STMT_INFO *pStmt,
+    SQLWCHAR *pwParam, SQLSMALLINT cchParam, char *szParam,
+    const char *paramName, const char *logTag, size_t *copiedChars,
+    Args... args) {
+    ConversionResult result = convertWCharParamWithTruncCheck(
+        pwParam, cchParam, szParam, MAX_IDEN_LEN,
+        paramName, logTag, pStmt, copiedChars);
+    
+    if (result == CONVERSION_ERROR) {
+        return CONVERSION_ERROR;
+    }
+    
+    ConversionResult restResult = convertWCharParams(pStmt, args...);
+    
+    if (restResult == CONVERSION_ERROR) {
+        return CONVERSION_ERROR;
+    }
+    
+    return (result == CONVERSION_TRUNCATED || restResult == CONVERSION_TRUNCATED) 
+           ? CONVERSION_TRUNCATED : CONVERSION_SUCCESS;
+}
+
 #define MAX_CATALOG_QUERY_LEN (16*1024)
 #define MAX_CATALOG_QUERY_FILTER_LEN (4*1024)
 
@@ -514,9 +564,15 @@ SQLRETURN  SQL_API SQLTables(SQLHSTMT phstmt,
                                SQLSMALLINT cbTableType)
 {
     SQLRETURN rc;
+	if(!VALID_HSTMT(phstmt)) {
+        return SQL_INVALID_HANDLE;
+	}
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLTables(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, pTableType, cbTableType);
+
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     rc = RsCatalog::RS_SQLTables(phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, pTableType, cbTableType);
 
@@ -543,15 +599,11 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
                                SQLSMALLINT cbTableType)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+	if(!VALID_HSTMT(phstmt)) {
+        return SQL_INVALID_HANDLE;
+	}
 
-    if (!VALID_HSTMT(phstmt)) {
-        rc = SQL_INVALID_HANDLE;
-        return rc;
-    }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+	RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
 	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4){
 		if (isEmptyString(pSchemaName) && isEmptyString(pTableName) && isSqlAllCatalogs(pCatalogName, cbCatalogName)) {
@@ -803,23 +855,67 @@ SQLRETURN SQL_API SQLTablesW(SQLHSTMT          phstmt,
     char szCatalogName[MAX_IDEN_LEN] = {0};
     char szSchemaName[MAX_IDEN_LEN] = {0};
     char szTableName[MAX_IDEN_LEN] = {0};
-    char szTableType[MAX_TEMP_BUF_LEN] = {0};
+    char szTableType[MAX_IDEN_LEN] = {0};
 
     if (IS_TRACE_LEVEL_API_CALL())
         TraceSQLTablesW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, pwTableType, cchTableType);
 
-    wchar16_to_utf8_char(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwTableType, cchTableType, szTableType, MAX_TEMP_BUF_LEN);
+    auto exitLog = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLTablesW(FUNC_RETURN, rc, phstmt, pwCatalogName,
+                            cchCatalogName, pwSchemaName, cchSchemaName,
+                            pwTableName, cchTableName, pwTableType,
+                            cchTableType);
+        }
+    });
+
+    if(!VALID_HSTMT(phstmt)) {
+		rc = SQL_INVALID_HANDLE;
+        return rc;
+	}
+
+	RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    // Clear error list
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
+    // Validate string parameters
+    if (!validateStringParams(
+            pStmt, "catalog name", pwCatalogName, cchCatalogName, "schema name",
+            pwSchemaName, cchSchemaName, "table name", pwTableName,
+            cchTableName, "table type", pwTableType, cchTableType)) {
+        RS_LOG_ERROR("SQLTablesW",
+                     "Input validation failed. Check Diagnostice records.");
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+    size_t copiedCharsCatalog = 0, copiedCharsSchema = 0, copiedCharsTable = 0,
+           copiedCharsTableType = 0;
+
+    ConversionResult convertResult = convertWCharParams(
+        pStmt, pwCatalogName, cchCatalogName, szCatalogName, "Catalog Name",
+        "CATALOG", &copiedCharsCatalog, pwSchemaName, cchSchemaName,
+        szSchemaName, "Schema Name", "SCHEMA", &copiedCharsSchema, pwTableName,
+        cchTableName, szTableName, "Table Name", "TABLE", &copiedCharsTable,
+        pwTableType, cchTableType, szTableType, "Table Type", "TABLE_TYPE",
+        &copiedCharsTableType);
+    
+    if (convertResult == CONVERSION_ERROR ||
+        convertResult == CONVERSION_TRUNCATED) {
+        std::string msg = (convertResult == CONVERSION_ERROR)
+                              ? "Error processing Unicode data"
+                              : "Identifier name exceeds maximum length";
+        addError(&pStmt->pErrorList, "HY090", msg.data(), NULL, 0);
+        RS_LOG_ERROR("RSCAT", "%s", msg.data());
+		rc = SQL_ERROR;
+        return rc;
+    }
 
     rc = RsCatalog::RS_SQLTables(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
         (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
         (SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS,
         (SQLCHAR *)((pwTableType) ? szTableType : NULL), SQL_NTS);
-
-    if (IS_TRACE_LEVEL_API_CALL())
-        TraceSQLTablesW(FUNC_RETURN, rc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, pwTableType, cchTableType);
 
     return rc;
 }
@@ -830,7 +926,7 @@ SQLRETURN SQL_API SQLTablesW(SQLHSTMT          phstmt,
 // SQLColumns returns the list of column names in specified tables. 
 // The driver returns this information as a result set on the specified StatementHandle.
 //
-SQLRETURN  SQL_API SQLColumns(SQLHSTMT phstmt,
+SQLRETURN SQL_API SQLColumns(SQLHSTMT phstmt,
                                SQLCHAR *pCatalogName, 
                                SQLSMALLINT cbCatalogName,
                                SQLCHAR *pSchemaName, 
@@ -841,6 +937,14 @@ SQLRETURN  SQL_API SQLColumns(SQLHSTMT phstmt,
                                SQLSMALLINT cbColumnName)
 {
     SQLRETURN rc;
+
+    if(!VALID_HSTMT(phstmt)) {
+        return SQL_INVALID_HANDLE;
+	}
+
+	RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+	// Clear error list
+	pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     if (IS_TRACE_LEVEL_API_CALL())
         TraceSQLColumns(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, pColumnName, cbColumnName);
@@ -875,9 +979,6 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
         rc = SQL_INVALID_HANDLE;
         return rc;
     }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     if (showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4) {
         // Parameter validation check
@@ -1010,6 +1111,33 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
 
 /*====================================================================================================================================================*/
 
+
+// Helper function to convert and validate multiple WCHAR parameters
+static bool convertColumnsWParams(
+    SQLWCHAR* pwCatalogName, SQLSMALLINT cchCatalogName, char* szCatalogName,
+    SQLWCHAR* pwSchemaName, SQLSMALLINT cchSchemaName, char* szSchemaName,
+    SQLWCHAR* pwTableName, SQLSMALLINT cchTableName, char* szTableName,
+    SQLWCHAR* pwColumnName, SQLSMALLINT cchColumnName, char* szColumnName,
+    RS_STMT_INFO* pStmt,
+    size_t* copiedCharsCatalog, size_t* copiedCharsSchema,
+    size_t* copiedCharsTable, size_t* copiedCharsColumn)
+{
+    bool stringTruncated = false;
+    stringTruncated |= convertWCharParamWithTruncCheck(
+        pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN,
+        "Catalog Name", "CATALOG", pStmt, copiedCharsCatalog);
+    stringTruncated |= convertWCharParamWithTruncCheck(
+        pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN, "Schema Name",
+        "SCHEMA", pStmt, copiedCharsSchema);
+    stringTruncated |= convertWCharParamWithTruncCheck(
+        pwTableName, cchTableName, szTableName, MAX_IDEN_LEN, "Table Name",
+        "TABLE", pStmt, copiedCharsTable);
+    stringTruncated |= convertWCharParamWithTruncCheck(
+        pwColumnName, cchColumnName, szColumnName, MAX_IDEN_LEN, "Column Name",
+        "COLUMN", pStmt, copiedCharsColumn);
+    return stringTruncated;
+}
+
 //---------------------------------------------------------------------------------------------------------igarish
 // Unicode version of SQLColumns.
 //
@@ -1024,7 +1152,6 @@ SQLRETURN SQL_API SQLColumnsW(SQLHSTMT     phstmt,
                                 SQLSMALLINT  cchColumnName)
 {
     SQLRETURN rc;
-
     char szCatalogName[MAX_IDEN_LEN] = {0};
     char szSchemaName[MAX_IDEN_LEN] = {0};
     char szTableName[MAX_IDEN_LEN] = {0};
@@ -1033,18 +1160,62 @@ SQLRETURN SQL_API SQLColumnsW(SQLHSTMT     phstmt,
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLColumnsW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, pwColumnName, cchColumnName);
 
-    wchar16_to_utf8_char(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwColumnName, cchColumnName, szColumnName, MAX_IDEN_LEN);
+    auto exitLog = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLColumnsW(FUNC_RETURN, rc, phstmt, pwCatalogName,
+                             cchCatalogName, pwSchemaName, cchSchemaName,
+                             pwTableName, cchTableName, pwColumnName,
+                             cchColumnName);
+        }
+    });
 
-    rc = RsCatalog::RS_SQLColumns(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
-                              (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
-                              (SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS,
-                              (SQLCHAR *)((pwColumnName) ? szColumnName : NULL), SQL_NTS);
+	if(!VALID_HSTMT(phstmt)) {
+		rc = SQL_INVALID_HANDLE;
+        return rc;
+	}
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLColumnsW(FUNC_RETURN, rc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, pwColumnName, cchColumnName);
+	RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+	// Clear error list
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+	// Validate string parameters
+    if (!validateStringParams(
+            pStmt, "catalog name", pwCatalogName, cchCatalogName, "schema name",
+            pwSchemaName, cchSchemaName, "table name", pwTableName,
+            cchTableName, "columns name", pwColumnName, cchColumnName)) {
+        RS_LOG_ERROR("SQLColumnsW",
+                     "Input validation failed. Check Diagnostice records.");
+		rc = SQL_ERROR;
+        return rc;
+    }
+
+    size_t copiedCharsCatalog = 0, copiedCharsSchema = 0, copiedCharsTable = 0,
+           copiedCharsColumn = 0;
+	// Convert to UTF-8
+    ConversionResult convertResult = convertWCharParams(
+        pStmt, pwCatalogName, cchCatalogName, szCatalogName, "Catalog Name",
+        "CATALOG", &copiedCharsCatalog, pwSchemaName, cchSchemaName,
+        szSchemaName, "Schema Name", "SCHEMA", &copiedCharsSchema, pwTableName,
+        cchTableName, szTableName, "Table Name", "TABLE", &copiedCharsTable,
+        pwColumnName, cchColumnName, szColumnName, "Column Name", "COLUMN",
+        &copiedCharsColumn);
+    
+    if (convertResult == CONVERSION_ERROR ||
+        convertResult == CONVERSION_TRUNCATED) {
+        std::string msg = (convertResult == CONVERSION_ERROR)
+                              ? "Error processing Unicode data"
+                              : "Identifier name exceeds maximum length";
+        addError(&pStmt->pErrorList, "HY090", msg.data(), NULL, 0);
+        RS_LOG_ERROR("RSCAT", "%s", msg.data());
+		rc = SQL_ERROR;
+        return rc;
+    }
+
+    rc = RsCatalog::RS_SQLColumns(
+        phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
+        (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
+        (SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS,
+        (SQLCHAR *)((pwColumnName) ? szColumnName : NULL), SQL_NTS);
+
 
     return rc;
 }
@@ -1069,6 +1240,12 @@ SQLRETURN  SQL_API SQLStatistics(SQLHSTMT phstmt,
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLStatistics(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, hUnique, hReserved);
+
+    if(!VALID_HSTMT(phstmt))
+        return SQL_INVALID_HANDLE;
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     rc = RsCatalog::RS_SQLStatistics(phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, hUnique, hReserved);
 
@@ -1104,9 +1281,6 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLStatistics(SQLHSTMT phstmt,
         return rc;
     }
 
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
-
     if(pTableName == NULL || cbTableName == SQL_NULL_DATA)
     {
         rc = SQL_ERROR;
@@ -1139,25 +1313,69 @@ SQLRETURN SQL_API SQLStatisticsW(SQLHSTMT        phstmt,
                                     SQLUSMALLINT hReserved)
 {
     SQLRETURN rc;
-    char szCatalogName[MAX_IDEN_LEN];
-    char szSchemaName[MAX_IDEN_LEN];
-    char szTableName[MAX_IDEN_LEN]; 
-    
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLStatisticsW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, hUnique, hReserved);
+    char szCatalogName[MAX_IDEN_LEN] = {0};
+    char szSchemaName[MAX_IDEN_LEN] = {0};
+    char szTableName[MAX_IDEN_LEN] = {0};
 
-    wchar_to_utf8(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
+    if (IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLStatisticsW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName,
+                            pwSchemaName, cchSchemaName, pwTableName,
+                            cchTableName, hUnique, hReserved);
+    }
 
-    rc = RsCatalog::RS_SQLStatistics(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
-                                  (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
-                                  (SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS,
-                                  hUnique,
-                                  hReserved);
+    auto exitLog = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLStatisticsW(FUNC_RETURN, rc, phstmt, pwCatalogName,
+                                cchCatalogName, pwSchemaName, cchSchemaName,
+                                pwTableName, cchTableName, hUnique, hReserved);
+        }
+    });
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLStatisticsW(FUNC_RETURN, rc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, hUnique, hReserved);
+    if (!VALID_HSTMT(phstmt)) {
+        rc = SQL_INVALID_HANDLE;
+        return rc;
+    }
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    // Clear error list
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+    // Validate string parameters
+    if (!validateStringParams(pStmt, "catalog name", pwCatalogName,
+                              cchCatalogName, "schema name", pwSchemaName,
+                              cchSchemaName, "table name", pwTableName,
+                              cchTableName)) {
+
+		RS_LOG_ERROR("SQLStatisticsW",
+                     "Input validation failed. Check Diagnostice records.");
+		rc = SQL_ERROR;
+		return rc;
+    }
+
+    size_t copiedCharsCatalog = 0, copiedCharsSchema = 0, copiedCharsTable = 0;
+
+    // Convert to UTF-8
+    ConversionResult convertResult = convertWCharParams(
+        pStmt, pwCatalogName, cchCatalogName, szCatalogName, "Catalog Name",
+        "CATALOG", &copiedCharsCatalog, pwSchemaName, cchSchemaName,
+        szSchemaName, "Schema Name", "SCHEMA", &copiedCharsSchema, pwTableName,
+        cchTableName, szTableName, "Table Name", "TABLE", &copiedCharsTable);
+
+    if (convertResult == CONVERSION_ERROR ||
+        convertResult == CONVERSION_TRUNCATED) {
+        std::string msg = (convertResult == CONVERSION_ERROR)
+                              ? "Error processing Unicode data"
+                              : "Identifier name exceeds maximum length";
+        addError(&pStmt->pErrorList, "HY090", msg.data(), NULL, 0);
+        RS_LOG_ERROR("SQLStatisticsW", "%s", msg.data());
+		rc = SQL_ERROR;
+		return rc;
+    }
+
+    rc = RsCatalog::RS_SQLStatistics(
+        phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
+        (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
+        (SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS, hUnique,
+        hReserved);
 
     return rc;
 }
@@ -1185,6 +1403,13 @@ SQLRETURN  SQL_API SQLSpecialColumns(SQLHSTMT phstmt,
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLSpecialColumns(FUNC_CALL, 0, phstmt, hIdenType, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, hScope, hNullable);
 
+    if(!VALID_HSTMT(phstmt)) {
+        return SQL_INVALID_HANDLE;
+	}
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
     rc = RsCatalog::RS_SQLSpecialColumns(phstmt, hIdenType, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, hScope, hNullable);
 
     if(IS_TRACE_LEVEL_API_CALL())
@@ -1210,15 +1435,15 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLSpecialColumns(SQLHSTMT phstmt,
                                        SQLUSMALLINT hNullable)
 {
     SQLRETURN rc = SQL_SUCCESS;
+    if(!VALID_HSTMT(phstmt)) {
+        return SQL_INVALID_HANDLE;
+	}
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
     if (!VALID_HSTMT(phstmt)) {
         rc = SQL_INVALID_HANDLE;
         return rc;
     }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     if(pTableName == NULL || cbTableName == SQL_NULL_DATA)
     {
@@ -1374,26 +1599,53 @@ SQLRETURN SQL_API SQLSpecialColumnsW(SQLHSTMT       phstmt,
                                         SQLUSMALLINT   hNullable)
 {
     SQLRETURN rc;
-    char szCatalogName[MAX_IDEN_LEN];
-    char szSchemaName[MAX_IDEN_LEN];
-    char szTableName[MAX_IDEN_LEN]; 
+    char szCatalogName[MAX_IDEN_LEN] = {0};
+    char szSchemaName[MAX_IDEN_LEN] = {0};
+    char szTableName[MAX_IDEN_LEN] = {0};
+    size_t copiedCharsCatalog = 0, copiedCharsSchema = 0, copiedCharsTable = 0;
+    if (IS_TRACE_LEVEL_API_CALL())
+        TraceSQLSpecialColumnsW(FUNC_CALL, 0, phstmt, hIdenType, pwCatalogName,
+                                cchCatalogName, pwSchemaName, cchSchemaName,
+                                pwTableName, cchTableName, hScope, hNullable);
+    auto traceGuard = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLSpecialColumnsW(
+                FUNC_RETURN, rc, phstmt, hIdenType, pwCatalogName,
+                copiedCharsCatalog, pwSchemaName, copiedCharsSchema,
+                pwTableName, copiedCharsTable, hScope, hNullable);
+        }
+    });
+    if (!VALID_HSTMT(phstmt)) {
+		rc = SQL_INVALID_HANDLE;
+        return rc;
+    }
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
     
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLSpecialColumnsW(FUNC_CALL, 0, phstmt, hIdenType, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, hScope, hNullable);
 
-    wchar_to_utf8(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
-
-
-    rc = RsCatalog::RS_SQLSpecialColumns(phstmt, hIdenType,
-                                (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
-                                (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
-                                (SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS,
-                                hScope,hNullable);
-
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLSpecialColumnsW(FUNC_RETURN, rc, phstmt, hIdenType, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, hScope, hNullable);
+    auto convertResult = convertWCharParams(
+        pStmt, pwCatalogName, cchCatalogName, szCatalogName, "Catalog Name",
+        "CATALOG", &copiedCharsCatalog, pwSchemaName, cchSchemaName,
+        szSchemaName, "Schema Name", "SCHEMA", &copiedCharsSchema, pwTableName,
+        cchTableName, szTableName, "Table Name", "TABLE", &copiedCharsTable);
+    if (convertResult == CONVERSION_ERROR ||
+        convertResult == CONVERSION_TRUNCATED) {
+        std::string msg = (convertResult == CONVERSION_ERROR)
+                              ? "Error processing Unicode data"
+                              : "Identifier name exceeds maximum length";
+        addError(&pStmt->pErrorList, "HY090", msg.data(), NULL, 0);
+        RS_LOG_ERROR("RSCAT", "%s", msg.data());
+        rc = SQL_ERROR;
+        return rc;
+    }
+	rc = RsCatalog::RS_SQLSpecialColumns(
+		phstmt, hIdenType,
+		(SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
+		(SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
+		(SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS, hScope,
+		hNullable);
 
     return rc;
 }
@@ -1418,6 +1670,12 @@ SQLRETURN SQL_API SQLProcedureColumns(SQLHSTMT           phstmt,
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLProcedureColumns(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pProcName, cbProcName, pColumnName, cbColumnName);
+
+    if(!VALID_HSTMT(phstmt))
+        return SQL_INVALID_HANDLE;
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     rc = RsCatalog::RS_SQLProcedureColumns(phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pProcName, cbProcName, pColumnName, cbColumnName);
 
@@ -1449,9 +1707,6 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
         rc = SQL_INVALID_HANDLE;
         return rc;
     }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
     {
@@ -2084,26 +2339,60 @@ SQLRETURN SQL_API SQLProcedureColumnsW(SQLHSTMT     phstmt,
                                         SQLSMALLINT  cchColumnName)
 {
     SQLRETURN rc;
-    char szCatalogName[MAX_IDEN_LEN];
-    char szSchemaName[MAX_IDEN_LEN];
-    char szProcName[MAX_IDEN_LEN]; 
-    char szColumnName[MAX_IDEN_LEN]; 
-    
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLProcedureColumnsW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwProcName, cchProcName, pwColumnName, cchColumnName);
+    char szCatalogName[MAX_IDEN_LEN] = {0};
+    char szSchemaName[MAX_IDEN_LEN] = {0};
+    char szProcName[MAX_IDEN_LEN] = {0};
+    char szColumnName[MAX_IDEN_LEN] = {0};
 
-    wchar_to_utf8(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwProcName, cchProcName, szProcName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwColumnName, cchColumnName, szColumnName, MAX_IDEN_LEN);
+    if (IS_TRACE_LEVEL_API_CALL())
+        TraceSQLProcedureColumnsW(FUNC_CALL, 0, phstmt, pwCatalogName,
+                                  cchCatalogName, pwSchemaName, cchSchemaName,
+                                  pwProcName, cchProcName, pwColumnName,
+                                  cchColumnName);
 
-    rc = RsCatalog::RS_SQLProcedureColumns(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
-                                        (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
-                                        (SQLCHAR *)((pwProcName) ? szProcName : NULL), SQL_NTS,
-                                        (SQLCHAR *)((pwColumnName) ? szColumnName : NULL), SQL_NTS);
+    auto traceGuard = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLProcedureColumnsW(FUNC_RETURN, rc, phstmt, pwCatalogName,
+                                      cchCatalogName, pwSchemaName,
+                                      cchSchemaName, pwProcName, cchProcName,
+                                      pwColumnName, cchColumnName);
+        }
+    });
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLProcedureColumnsW(FUNC_RETURN, rc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwProcName, cchProcName, pwColumnName, cchColumnName);
+    if (!VALID_HSTMT(phstmt)) {
+		rc = SQL_INVALID_HANDLE;
+		return rc;
+    }
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
+    size_t copiedCharsCatalog = 0, copiedCharsSchema = 0, copiedCharsProc = 0,
+           copiedCharsColumn = 0;
+
+    auto convertResult = convertWCharParams(
+        pStmt, pwCatalogName, cchCatalogName, szCatalogName, "Catalog Name",
+        "CATALOG", &copiedCharsCatalog, pwSchemaName, cchSchemaName,
+        szSchemaName, "Schema Name", "SCHEMA", &copiedCharsSchema, pwProcName,
+        cchProcName, szProcName, "Procedure Name", "PROCEDURE",
+        &copiedCharsProc, pwColumnName, cchColumnName, szColumnName,
+        "Column Name", "COLUMN", &copiedCharsColumn);
+    if (convertResult == CONVERSION_ERROR ||
+        convertResult == CONVERSION_TRUNCATED) {
+        std::string msg = (convertResult == CONVERSION_ERROR)
+                              ? "Error processing Unicode data"
+                              : "Identifier name exceeds maximum length";
+        addError(&pStmt->pErrorList, "HY090", msg.data(), NULL, 0);
+        RS_LOG_ERROR("RSCAT", "%s", msg.data());
+        rc = SQL_ERROR;
+		return rc;
+    }
+
+    rc = RsCatalog::RS_SQLProcedureColumns(
+        phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
+        (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
+        (SQLCHAR *)((pwProcName) ? szProcName : NULL), SQL_NTS,
+        (SQLCHAR *)((pwColumnName) ? szColumnName : NULL), SQL_NTS);
 
     return rc;
 }
@@ -2124,6 +2413,13 @@ SQLRETURN SQL_API SQLProcedures(SQLHSTMT           phstmt,
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLProcedures(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pProcName, cbProcName);
+
+    if(!VALID_HSTMT(phstmt)) {
+        return SQL_INVALID_HANDLE;
+	}
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     rc = RsCatalog::RS_SQLProcedures(phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pProcName, cbProcName);
 
@@ -2153,9 +2449,6 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedures(SQLHSTMT           phstmt,
         rc = SQL_INVALID_HANDLE;
         return rc;
     }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
     {
@@ -2261,23 +2554,52 @@ SQLRETURN SQL_API SQLProceduresW(SQLHSTMT    phstmt,
                                 SQLSMALLINT  cchProcName)
 {
     SQLRETURN rc;
-    char szCatalogName[MAX_IDEN_LEN];
-    char szSchemaName[MAX_IDEN_LEN];
-    char szProcName[MAX_IDEN_LEN]; 
+    char szCatalogName[MAX_IDEN_LEN] = {0};
+    char szSchemaName[MAX_IDEN_LEN] = {0};
+    char szProcName[MAX_IDEN_LEN] = {0};
+    size_t copiedCharsCatalog = 0, copiedCharsSchema = 0, copiedCharsProc = 0;
+    if (IS_TRACE_LEVEL_API_CALL())
+        TraceSQLProceduresW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName,
+                            pwSchemaName, cchSchemaName, pwProcName,
+                            cchProcName);
+    auto traceGuard = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLProceduresW(FUNC_RETURN, rc, phstmt, pwCatalogName,
+                                copiedCharsCatalog, pwSchemaName,
+                                copiedCharsSchema, pwProcName, copiedCharsProc);
+        }
+    });
+
+    if (!VALID_HSTMT(phstmt)) {
+        rc = SQL_INVALID_HANDLE;
+        return rc;
+    }
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
+    auto convertResult = convertWCharParams(
+        pStmt, pwCatalogName, cchCatalogName, szCatalogName, "Catalog Name",
+        "CATALOG", &copiedCharsCatalog, pwSchemaName, cchSchemaName,
+        szSchemaName, "Schema Name", "SCHEMA", &copiedCharsSchema, pwProcName,
+        cchProcName, szProcName, "Procedure Name", "PROCEDURE",
+        &copiedCharsProc);
     
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLProceduresW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwProcName, cchProcName);
+    if (convertResult == CONVERSION_ERROR ||
+        convertResult == CONVERSION_TRUNCATED) {
+        std::string msg = (convertResult == CONVERSION_ERROR)
+                              ? "Error processing Unicode data"
+                              : "Identifier name exceeds maximum length";
+        addError(&pStmt->pErrorList, "HY090", msg.data(), NULL, 0);
+        RS_LOG_ERROR("RSCAT", "%s", msg.data());
+        rc = SQL_ERROR;
+        return rc;
+    }
 
-    wchar_to_utf8(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwProcName, cchProcName, szProcName, MAX_IDEN_LEN);
-
-    rc = RsCatalog::RS_SQLProcedures(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
-                                  (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
-                                  (SQLCHAR *)((pwProcName) ? szProcName : NULL), SQL_NTS);
-
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLProceduresW(FUNC_RETURN, rc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwProcName, cchProcName);
+	rc = RsCatalog::RS_SQLProcedures(
+		phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL),
+		SQL_NTS, (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
+		(SQLCHAR *)((pwProcName) ? szProcName : NULL), SQL_NTS);
 
     return rc;
 }
@@ -2310,6 +2632,12 @@ SQLRETURN SQL_API SQLForeignKeys(SQLHSTMT               phstmt,
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLForeignKeys(FUNC_CALL, 0, phstmt, pPkCatalogName, cbPkCatalogName, pPkSchemaName, cbPkSchemaName, pPkTableName, cbPkTableName,
                                 pFkCatalogName, cbFkCatalogName, pFkSchemaName, cbFkSchemaName, pFkTableName, cbFkTableName);
+
+    if(!VALID_HSTMT(phstmt))
+        return SQL_INVALID_HANDLE;
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     rc = RsCatalog::RS_SQLForeignKeys(phstmt, pPkCatalogName, cbPkCatalogName, pPkSchemaName, cbPkSchemaName, pPkTableName, cbPkTableName,
                             pFkCatalogName, cbFkCatalogName, pFkSchemaName, cbFkSchemaName, pFkTableName, cbFkTableName);
@@ -2347,9 +2675,6 @@ SQLRETURN SQL_API RsCatalog::RS_SQLForeignKeys(SQLHSTMT               phstmt,
         rc = SQL_INVALID_HANDLE;
         return rc;
     }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
 	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
 	{
@@ -2471,35 +2796,73 @@ SQLRETURN SQL_API SQLForeignKeysW(SQLHSTMT         phstmt,
                                     SQLSMALLINT  cchFkTableName)
 {
     SQLRETURN rc;
-    char szPkCatalogName[MAX_IDEN_LEN];
-    char szPkSchemaName[MAX_IDEN_LEN];
-    char szPkTableName[MAX_IDEN_LEN]; 
-    char szFkCatalogName[MAX_IDEN_LEN];
-    char szFkSchemaName[MAX_IDEN_LEN];
-    char szFkTableName[MAX_IDEN_LEN]; 
+    char szPkCatalogName[MAX_IDEN_LEN] = {0};
+    char szPkSchemaName[MAX_IDEN_LEN] = {0};
+    char szPkTableName[MAX_IDEN_LEN] = {0};
+    char szFkCatalogName[MAX_IDEN_LEN] = {0};
+    char szFkSchemaName[MAX_IDEN_LEN] = {0};
+    char szFkTableName[MAX_IDEN_LEN] = {0};
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLForeignKeysW(FUNC_CALL, 0, phstmt, pwPkCatalogName, cchPkCatalogName, pwPkSchemaName, cchPkSchemaName, pwPkTableName, cchPkTableName,
-                                pwFkCatalogName, cchFkCatalogName, pwFkSchemaName, cchFkSchemaName, pwFkTableName, cchFkTableName);
+    size_t copiedCharsPkCatalog = 0, copiedCharsPkSchema = 0,
+           copiedCharsPkTable = 0, copiedCharsFkCatalog = 0,
+           copiedCharsFkSchema = 0, copiedCharsFkTable = 0;
 
-    wchar16_to_utf8_char(pwPkCatalogName, cchPkCatalogName, szPkCatalogName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwPkSchemaName, cchPkSchemaName, szPkSchemaName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwPkTableName, cchPkTableName, szPkTableName, MAX_IDEN_LEN);
+    if (IS_TRACE_LEVEL_API_CALL())
+        TraceSQLForeignKeysW(FUNC_CALL, 0, phstmt, pwPkCatalogName,
+                             cchPkCatalogName, pwPkSchemaName, cchPkSchemaName,
+                             pwPkTableName, cchPkTableName, pwFkCatalogName,
+                             cchFkCatalogName, pwFkSchemaName, cchFkSchemaName,
+                             pwFkTableName, cchFkTableName);
 
-    wchar16_to_utf8_char(pwFkCatalogName, cchFkCatalogName, szFkCatalogName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwFkSchemaName, cchFkSchemaName, szFkSchemaName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwFkTableName, cchFkTableName, szFkTableName, MAX_IDEN_LEN);
+    auto traceGuard = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLForeignKeysW(
+                FUNC_RETURN, rc, phstmt, pwPkCatalogName, cchPkCatalogName,
+                pwPkSchemaName, cchPkSchemaName, pwPkTableName, cchPkTableName,
+                pwFkCatalogName, cchFkCatalogName, pwFkSchemaName,
+                cchFkSchemaName, pwFkTableName, cchFkTableName);
+        }
+    });
 
-    rc = RsCatalog::RS_SQLForeignKeys(phstmt, (SQLCHAR *)((pwPkCatalogName) ? szPkCatalogName : NULL), SQL_NTS,
-                                   (SQLCHAR *)((pwPkSchemaName)  ? szPkSchemaName  : NULL), SQL_NTS,
-                                   (SQLCHAR *)((pwPkTableName)   ? szPkTableName   : NULL), SQL_NTS,
-                                   (SQLCHAR *)((pwFkCatalogName) ? szFkCatalogName : NULL), SQL_NTS,
-                                   (SQLCHAR *)((pwFkSchemaName)  ? szFkSchemaName  : NULL), SQL_NTS,
-                                   (SQLCHAR *)((pwFkTableName)   ? szFkTableName   : NULL), SQL_NTS);
+    if (!VALID_HSTMT(phstmt)) {
+        rc = SQL_INVALID_HANDLE;
+        return rc;
+    }
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLForeignKeysW(FUNC_RETURN, rc, phstmt, pwPkCatalogName, cchPkCatalogName, pwPkSchemaName, cchPkSchemaName, pwPkTableName, cchPkTableName,
-                                pwFkCatalogName, cchFkCatalogName, pwFkSchemaName, cchFkSchemaName, pwFkTableName, cchFkTableName);
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
+    auto convertResult = convertWCharParams(
+        pStmt, pwPkCatalogName, cchPkCatalogName, szPkCatalogName,
+        "PK Catalog Name", "CATALOG", &copiedCharsPkCatalog, pwPkSchemaName,
+        cchPkSchemaName, szPkSchemaName, "PK Schema Name", "SCHEMA",
+        &copiedCharsPkSchema, pwPkTableName, cchPkTableName, szPkTableName,
+        "PK Table Name", "TABLE", &copiedCharsPkTable, pwFkCatalogName,
+        cchFkCatalogName, szFkCatalogName, "FK Catalog Name", "CATALOG",
+        &copiedCharsFkCatalog, pwFkSchemaName, cchFkSchemaName, szFkSchemaName,
+        "FK Schema Name", "SCHEMA", &copiedCharsFkSchema, pwFkTableName,
+        cchFkTableName, szFkTableName, "FK Table Name", "TABLE",
+        &copiedCharsFkTable);
+    
+    if (convertResult == CONVERSION_ERROR ||
+        convertResult == CONVERSION_TRUNCATED) {
+        std::string msg = (convertResult == CONVERSION_ERROR)
+                              ? "Error processing Unicode data"
+                              : "Identifier name exceeds maximum length";
+        addError(&pStmt->pErrorList, "HY090", msg.data(), NULL, 0);
+        RS_LOG_ERROR("RSCAT", "%s", msg.data());
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+	rc = RsCatalog::RS_SQLForeignKeys(
+		phstmt, (SQLCHAR *)((pwPkCatalogName) ? szPkCatalogName : NULL),
+		SQL_NTS, (SQLCHAR *)((pwPkSchemaName) ? szPkSchemaName : NULL),
+		SQL_NTS, (SQLCHAR *)((pwPkTableName) ? szPkTableName : NULL),
+		SQL_NTS, (SQLCHAR *)((pwFkCatalogName) ? szFkCatalogName : NULL),
+		SQL_NTS, (SQLCHAR *)((pwFkSchemaName) ? szFkSchemaName : NULL),
+		SQL_NTS, (SQLCHAR *)((pwFkTableName) ? szFkTableName : NULL),
+		SQL_NTS);
 
     return rc;
 }
@@ -2524,6 +2887,13 @@ SQLRETURN SQL_API SQLPrimaryKeys(SQLHSTMT           phstmt,
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLPrimaryKeys(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName);
+
+    if (!VALID_HSTMT(phstmt))
+        return SQL_INVALID_HANDLE;
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    // Clear error list
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     rc = RsCatalog::RS_SQLPrimaryKeys(phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName);
 
@@ -2553,10 +2923,6 @@ SQLRETURN SQL_API RsCatalog::RS_SQLPrimaryKeys(SQLHSTMT           phstmt,
         rc = SQL_INVALID_HANDLE;
         return rc;
     }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
-
 
 	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
 	{
@@ -2672,25 +3038,55 @@ SQLRETURN SQL_API SQLPrimaryKeysW(SQLHSTMT     phstmt,
                                     SQLSMALLINT  cchTableName)
 {
     SQLRETURN rc;
-    char szCatalogName[MAX_IDEN_LEN];
-    char szSchemaName[MAX_IDEN_LEN];
-    char szTableName[MAX_IDEN_LEN]; 
+    char szCatalogName[MAX_IDEN_LEN] = {0};
+    char szSchemaName[MAX_IDEN_LEN] = {0};
+    char szTableName[MAX_IDEN_LEN] = {0};
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLPrimaryKeysW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName);
+    size_t copiedCharsCatalog = 0, copiedCharsSchema = 0, copiedCharsTable = 0;
 
-    wchar16_to_utf8_char(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar16_to_utf8_char(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
+    if (IS_TRACE_LEVEL_API_CALL())
+        TraceSQLPrimaryKeysW(FUNC_CALL, 0, phstmt, pwCatalogName,
+                             cchCatalogName, pwSchemaName, cchSchemaName,
+                             pwTableName, cchTableName);
 
-    rc = RsCatalog::RS_SQLPrimaryKeys(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
-                                    (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
-                                    (SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS);
+    auto traceGuard = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLPrimaryKeysW(
+                FUNC_RETURN, rc, phstmt, pwCatalogName, copiedCharsCatalog,
+                pwSchemaName, copiedCharsSchema, pwTableName, copiedCharsTable);
+        }
+    });
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLPrimaryKeysW(FUNC_RETURN, rc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName);
+    if (!VALID_HSTMT(phstmt)) {
+        return SQL_INVALID_HANDLE;
+    }
 
-    return rc;
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
+    auto convertResult = convertWCharParams(
+        pStmt, pwCatalogName, cchCatalogName, szCatalogName, "Catalog Name",
+        "CATALOG", &copiedCharsCatalog, pwSchemaName, cchSchemaName,
+        szSchemaName, "Schema Name", "SCHEMA", &copiedCharsSchema, pwTableName,
+        cchTableName, szTableName, "Table Name", "TABLE", &copiedCharsTable);
+    
+    if (convertResult == CONVERSION_ERROR ||
+        convertResult == CONVERSION_TRUNCATED) {
+        std::string msg = (convertResult == CONVERSION_ERROR)
+                              ? "Error processing Unicode data"
+                              : "Identifier name exceeds maximum length";
+        addError(&pStmt->pErrorList, "HY090", msg.data(), NULL, 0);
+        RS_LOG_ERROR("RSCAT", "%s", msg.data());
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+	rc = RsCatalog::RS_SQLPrimaryKeys(
+		phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL),
+		SQL_NTS, (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
+		(SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS);
+
+		return rc;
 }
 
 /*====================================================================================================================================================*/
@@ -2925,6 +3321,12 @@ SQLRETURN SQL_API SQLColumnPrivileges(SQLHSTMT           phstmt,
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLColumnPrivileges(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, pColumnName, cbColumnName);
 
+    if(!VALID_HSTMT(phstmt))
+        return SQL_INVALID_HANDLE;
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
     rc = RsCatalog::RS_SQLColumnPrivileges(phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName, pColumnName, cbColumnName);
 
     if(IS_TRACE_LEVEL_API_CALL())
@@ -2955,9 +3357,6 @@ SQLRETURN SQL_API RsCatalog::RS_SQLColumnPrivileges(SQLHSTMT           phstmt,
         rc = SQL_INVALID_HANDLE;
         return rc;
     }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
     {
@@ -3076,27 +3475,56 @@ SQLRETURN SQL_API SQLColumnPrivilegesW(SQLHSTMT      phstmt,
                                         SQLSMALLINT  cchColumnName)
 {
     SQLRETURN rc;
-    char szCatalogName[MAX_IDEN_LEN];
-    char szSchemaName[MAX_IDEN_LEN];
-    char szTableName[MAX_IDEN_LEN]; 
-    char szColumnName[MAX_IDEN_LEN]; 
+    char szCatalogName[MAX_IDEN_LEN] = {0};
+    char szSchemaName[MAX_IDEN_LEN] = {0};
+    char szTableName[MAX_IDEN_LEN] = {0}; 
+    char szColumnName[MAX_IDEN_LEN] = {0}; 
     
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLColumnPrivilegesW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, pwColumnName, cchColumnName);
 
-    wchar_to_utf8(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwColumnName, cchColumnName, szColumnName, MAX_IDEN_LEN);
+		
 
+    auto traceGuard = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLColumnPrivilegesW(
+                FUNC_RETURN, rc, phstmt, pwCatalogName, cchCatalogName,
+                pwSchemaName, cchSchemaName, pwTableName, cchTableName,
+                pwColumnName, cchColumnName);
+        }
+    });
+
+    if(!VALID_HSTMT(phstmt)) {
+		rc = SQL_INVALID_HANDLE;
+        return rc;
+	}
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+
+    size_t copiedCharsCatalog = 0, copiedCharsSchema = 0, copiedCharsTable = 0, copiedCharsColumn = 0;
+
+    auto convertResult = convertWCharParams(pStmt,
+        pwCatalogName, cchCatalogName, szCatalogName, "Catalog Name", "CATALOG", &copiedCharsCatalog,
+        pwSchemaName, cchSchemaName, szSchemaName, "Schema Name", "SCHEMA", &copiedCharsSchema,
+        pwTableName, cchTableName, szTableName, "Table Name", "TABLE", &copiedCharsTable,
+        pwColumnName, cchColumnName, szColumnName, "Column Name", "COLUMN", &copiedCharsColumn);
+    
+    if (convertResult == CONVERSION_ERROR ||
+        convertResult == CONVERSION_TRUNCATED) {
+        std::string msg = (convertResult == CONVERSION_ERROR)
+                              ? "Error processing Unicode data"
+                              : "Identifier name exceeds maximum length";
+        addError(&pStmt->pErrorList, "HY090", msg.data(), NULL, 0);
+        RS_LOG_ERROR("RSCAT", "%s", msg.data());
+		rc = SQL_ERROR;
+        return rc;
+    }
 
     rc = RsCatalog::RS_SQLColumnPrivileges(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
                                         (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
                                         (SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS,
                                         (SQLCHAR *)((pwColumnName) ? szColumnName : NULL), SQL_NTS);
-
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLColumnPrivilegesW(FUNC_RETURN, rc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName, pwColumnName, cchColumnName);
 
     return rc;
 }
@@ -3119,6 +3547,12 @@ SQLRETURN SQL_API SQLTablePrivileges(SQLHSTMT           phstmt,
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLTablePrivileges(FUNC_CALL, 0, phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName);
+
+    if(!VALID_HSTMT(phstmt))
+        return SQL_INVALID_HANDLE;
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     rc = RsCatalog::RS_SQLTablePrivileges(phstmt, pCatalogName, cbCatalogName, pSchemaName, cbSchemaName, pTableName, cbTableName);
 
@@ -3148,9 +3582,6 @@ SQLRETURN SQL_API RsCatalog::RS_SQLTablePrivileges(SQLHSTMT           phstmt,
         rc = SQL_INVALID_HANDLE;
         return rc;
     }
-
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
     {
@@ -3250,26 +3681,55 @@ SQLRETURN SQL_API SQLTablePrivilegesW(SQLHSTMT       phstmt,
                                         SQLSMALLINT  cchTableName)
 {
     SQLRETURN rc;
-    char szCatalogName[MAX_IDEN_LEN];
-    char szSchemaName[MAX_IDEN_LEN];
-    char szTableName[MAX_IDEN_LEN]; 
+    char szCatalogName[MAX_IDEN_LEN] = {0};
+    char szSchemaName[MAX_IDEN_LEN] = {0};
+    char szTableName[MAX_IDEN_LEN] = {0};
+    size_t copiedCharsCatalog = 0, copiedCharsSchema = 0, copiedCharsTable = 0;
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLTablePrivilegesW(FUNC_CALL, 0, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName);
+    if (IS_TRACE_LEVEL_API_CALL())
+        TraceSQLTablePrivilegesW(FUNC_CALL, 0, phstmt, pwCatalogName,
+                                 cchCatalogName, pwSchemaName, cchSchemaName,
+                                 pwTableName, cchTableName);
 
-    wchar_to_utf8(pwCatalogName, cchCatalogName, szCatalogName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwSchemaName, cchSchemaName, szSchemaName, MAX_IDEN_LEN);
-    wchar_to_utf8(pwTableName, cchTableName, szTableName, MAX_IDEN_LEN);
+    auto traceGuard = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLTablePrivilegesW(
+                FUNC_RETURN, rc, phstmt, pwCatalogName, copiedCharsCatalog,
+                pwSchemaName, copiedCharsSchema, pwTableName, copiedCharsTable);
+        }
+    });
 
+    if (!VALID_HSTMT(phstmt)) {
+        rc = SQL_INVALID_HANDLE;
+        return rc;
+    }
 
-    rc = RsCatalog::RS_SQLTablePrivileges(phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL), SQL_NTS,
-                                       (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
-                                       (SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS);
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLTablePrivilegesW(FUNC_RETURN, rc, phstmt, pwCatalogName, cchCatalogName, pwSchemaName, cchSchemaName, pwTableName, cchTableName);
+    auto convertResult = convertWCharParams(
+        pStmt, pwCatalogName, cchCatalogName, szCatalogName, "Catalog Name",
+        "CATALOG", &copiedCharsCatalog, pwSchemaName, cchSchemaName,
+        szSchemaName, "Schema Name", "SCHEMA", &copiedCharsSchema, pwTableName,
+        cchTableName, szTableName, "Table Name", "TABLE", &copiedCharsTable);
+    
+    if (convertResult == CONVERSION_ERROR ||
+        convertResult == CONVERSION_TRUNCATED) {
+        std::string msg = (convertResult == CONVERSION_ERROR)
+                              ? "Error processing Unicode data"
+                              : "Identifier name exceeds maximum length";
+        addError(&pStmt->pErrorList, "HY090", msg.data(), NULL, 0);
+        RS_LOG_ERROR("RSCAT", "%s", msg.data());
+        rc = SQL_ERROR;
+        return rc;
+    }
 
-    return rc;
+	rc = RsCatalog::RS_SQLTablePrivileges(
+		phstmt, (SQLCHAR *)((pwCatalogName) ? szCatalogName : NULL),
+		SQL_NTS, (SQLCHAR *)((pwSchemaName) ? szSchemaName : NULL), SQL_NTS,
+		(SQLCHAR *)((pwTableName) ? szTableName : NULL), SQL_NTS);
+
+	return rc;
 }
 
 /*====================================================================================================================================================*/

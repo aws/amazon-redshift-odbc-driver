@@ -28,7 +28,7 @@
 #include <aws/redshift/model/DescribeCustomDomainAssociationsResult.h>
 #include <aws/redshift-serverless/model/GetCredentialsRequest.h>
 
-
+#include "RsErrorException.h"
 using namespace RedshiftODBC;
 using namespace Redshift::IamSupport;
 using namespace Aws::Auth;
@@ -363,8 +363,6 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
         config.proxyPassword = m_settings.m_httpsProxyPassword;
     }
   
-    Aws::Redshift::RedshiftClient client(in_credentialsProvider, config);
-
     // Compose the ClusterCredentialRequest object
     Model::GetClusterCredentialsRequest request;
     if(m_settings.m_isCname) {
@@ -423,6 +421,8 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
     rs_string tempClusterIdentifier;
 
     try {
+        Aws::Redshift::RedshiftClient client(in_credentialsProvider, config);
+
         if (m_settings.m_isCname) {
             Model::DescribeCustomDomainAssociationsRequest describeRequest;
             describeRequest.SetCustomDomainName(m_settings.m_host);
@@ -473,10 +473,24 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
         outcome = client.GetClusterCredentials(request);
 
         RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialRequest: After GetClusterCredentials()");
-    } 
-    catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
-        RS_LOG_DEBUG("IAMCLNT", "Failed to call GetClusterCredentials. Exception: %s", ex.GetMessage().c_str());
-        throw ex;
+    } catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors> &ex) {
+        RS_LOG_DEBUG(
+            "IAMCLNT",
+            "Failed to call GetClusterCredentials. AWSError Exception: %s",
+            ex.GetMessage().c_str());
+        throw;
+    } catch (const ::RsErrorException &ex) {
+        RS_LOG_DEBUG("IAMCLNT",
+                     "Failed to create RedshiftClient. RsErrorException: %s",
+                     ex.getErrorMessage());
+        throw; // Re-throw RsErrorException as-is instead of converting to
+               // AWSError
+    } catch (const std::exception &ex) {
+        RS_LOG_DEBUG("IAMCLNT",
+                     "Failed to create RedshiftClient. std::exception: %s",
+                     ex.what());
+        throw; // Re-throw std::exception as-is instead of converting to
+               // AWSError
     }
 
     return outcome;
@@ -549,8 +563,6 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
 		config.proxyPassword = m_settings.m_httpsProxyPassword;
 	}
 
-	RedshiftClient client(in_credentialsProvider, config);
-
 	// Compose the ClusterCredentialRequest object
 	Model::GetClusterCredentialsWithIAMRequest request;
     if(m_settings.m_isCname) {
@@ -575,6 +587,8 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
     rs_string tempClusterIdentifierIAM;
 
     try {
+        Aws::Redshift::RedshiftClient client(in_credentialsProvider, config);
+
         if (m_settings.m_isCname) {
             Model::DescribeCustomDomainAssociationsRequest describeRequest;
             describeRequest.SetCustomDomainName(m_settings.m_host);
@@ -625,8 +639,18 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
         RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialswithIAMRequest: After GetClusterCredentialswithIAM()");
     } 
     catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
-        RS_LOG_DEBUG("IAMCLNT", "Failed to call GetClusterCredentialsWithIAM. Exception:%s", ex.GetMessage().c_str());
-        throw ex;
+        RS_LOG_DEBUG("IAMCLNT", "Failed to call GetClusterCredentialsWithIAM. AWSError Exception:%s", ex.GetMessage().c_str());
+        throw;
+    }
+    catch (const ::RsErrorException& ex)
+    {
+        RS_LOG_DEBUG("IAMCLNT", "Failed to create RedshiftClient. RsErrorException: %s", ex.getErrorMessage());
+        throw; // Re-throw RsErrorException as-is instead of converting to AWSError
+    }
+    catch (const std::exception& ex)
+    {
+        RS_LOG_DEBUG("IAMCLNT", "Failed to create RedshiftClient. std::exception: %s", ex.what());
+        throw; // Re-throw std::exception as-is instead of converting to AWSError
     }
 
     return outcome;
@@ -848,7 +872,27 @@ void RsIamClient::GetServerlessCredentials(
 		IAMUtils::ThrowConnectionExceptionWithInfo(
 			"Failed to get serverless credentials due to AWSCredentialsProvider being NULL.");
 	}
-	ProcessServerlessCredentialsOutcome(SendCredentialsRequest(in_credentialsProvider));
+        try {
+            ProcessServerlessCredentialsOutcome(
+                SendCredentialsRequest(in_credentialsProvider));
+        } catch (
+            const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors> &ex) {
+            RS_LOG_DEBUG("IAMCLNT",
+                         "Failed to get serverless credentials. AWSError: %s",
+                         ex.GetMessage().c_str());
+            throw;
+        } catch (const ::RsErrorException &ex) {
+            RS_LOG_DEBUG("IAMCLNT",
+                         "Failed to get serverless credentials. Error: %s",
+                         ex.getErrorMessage());
+            throw;
+        } catch (const std::exception &ex) {
+            RS_LOG_DEBUG(
+                "IAMCLNT",
+                "Failed to get serverless credentials. Exception: %s",
+                ex.what());
+            throw;
+        }
 }
 
 

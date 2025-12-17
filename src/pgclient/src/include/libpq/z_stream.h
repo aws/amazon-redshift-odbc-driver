@@ -9,6 +9,13 @@
 
 #include <stdlib.h>
 
+#ifdef _WIN32
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#else
+#include <sys/types.h>
+#endif
+
 /// Ugly hack
 #define Assert(condition)
 
@@ -27,6 +34,8 @@
 struct ZStream;
 typedef struct ZStream ZStream;
 
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 /*
@@ -103,3 +112,9 @@ char **zs_get_supported_algorithms(void);
 bool zs_is_valid_impl_id(unsigned int id);
 
 bool zs_buffered(ZStream * zs);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* Z_STREAM_H */

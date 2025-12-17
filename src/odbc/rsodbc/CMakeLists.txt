@@ -37,6 +37,7 @@ function(basic_settings TARGET_NAME)
         ${CMAKE_INCLUDE_PATH}
     )
     target_link_directories(${TARGET_NAME} PRIVATE  ${CMAKE_LIBRARY_PATH})
+    include_and_link_odbc(${TARGET_NAME})
     target_compile_options_rsodbc(${TARGET_NAME})
     target_compile_definitions_rsodbc(${TARGET_NAME})
     target_link_options_rsodbc(${TARGET_NAME})

@@ -126,7 +126,18 @@ EXPORTS
 	wchar16_to_utf8_char
 	wchar16_to_utf8_str
 	char_utf8_to_utf16_str
+	char_utf8_to_utf16_strlen
 	char_utf8_to_utf16_wchar
+	wchar32_to_utf8_char
+	char_utf8_to_utf32_strlen
+	sqlwchar_to_utf8_str
+	sqlwchar_to_utf8_char
+	utf8_to_sqlwchar_str
+	utf8_to_sqlwchar_strlen
+	utf8_to_sqlwchar_alloc
+	sqlwchar_to_utf8_alloc
+	sqlwcsnlen_cap
+	sizeofSQLWCHAR
 	rsodbcVersion
 	rsodbcDependencyVersion
 	getVersionedDependencyNames
@@ -142,6 +153,7 @@ EXPORTS
 	copyStrDataBigLen
 	copyWStrDataBigLen
 	copyStrDataLargeLen
+	copyWBinaryToHexDataBigLen
 	isStrConnectAttr
 	initializeColumnNames
 	getOdbc2ColumnName
@@ -158,15 +170,17 @@ EXPORTS
 	?typeInfoMap@RsMetadataAPIHelper@@2V?$unordered_map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@UDATA_TYPE_INFO@@U?$hash@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@U?$equal_to@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@UDATA_TYPE_INFO@@@std@@@2@@std@@B
 	?isEmptyString@@YA_NPEAE@Z
 	?isNullOrEmptyString@@YA_NPEAE@Z
-	?isNullOrEmptyString@@YA_NPEAE@Z
 	?getNullable@RsMetadataAPIHelper@@SAFAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?getTypeInfoMap@RsMetadataAPIHelper@@SA?BV?$unordered_map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@UDATA_TYPE_INFO@@U?$hash@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@U?$equal_to@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@UDATA_TYPE_INFO@@@std@@@2@@std@@XZ
 	?getTypeInfo@RsMetadataAPIHelper@@SA?AUTypeInfoResult@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@_N@Z
 	?getDataTypeNameStruct@RsMetadataAPIHelper@@SA?BUDataTypeName@1@XZ
 	?getRedshiftTypeNameStruct@RsMetadataAPIHelper@@SA?BURedshiftTypeName@1@XZ
-	?getErrorMessage@RsErrorException@@QEAAPEADXZ
+	?getErrorMessage@RsErrorException@@QEBAPEADXZ
 	?GetMicrosoftIdpHost@IAMUtils@IamSupport@Redshift@@SAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEAV45@@Z
-
+	zpq_deserialize_compressors
+	zpq_serialize_compressors
+	zpq_parse_compression_setting
+	makeNullTerminatedStr
 	??0IAMCredentials@IamSupport@Redshift@@QEAA@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@00@Z
 	??1IAMCredentials@IamSupport@Redshift@@UEAA@XZ
 	??0IAMConfiguration@IamSupport@Redshift@@QEAA@AEBVIAMCredentials@12@@Z
@@ -174,7 +188,6 @@ EXPORTS
 	??0BrowserIdcAuthPlugin@IamSupport@Redshift@@QEAA@AEBVIAMConfiguration@12@AEBV?$map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@U?$less@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@@std@@@2@@std@@@Z
 	??1BrowserIdcAuthPlugin@IamSupport@Redshift@@UEAA@XZ
 	?BuildOidcHostUrl@BrowserIdcAuthPlugin@IamSupport@Redshift@@QEAA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@@Z
-
 	?getSqlTablesColName@RsMetadataAPIHelper@@SAPEBDH@Z
 	?getSqlColumnsColName@RsMetadataAPIHelper@@SAPEBDH@Z
 	?getSqlPrimaryKeysColName@RsMetadataAPIHelper@@SAPEBDH@Z
@@ -195,3 +208,20 @@ EXPORTS
 	?sqlProcedureColumnsPostProcessing@RsMetadataAPIPostProcessor@@SAFPEAXAEBV?$vector@USHOWCOLUMNSResult@@V?$allocator@USHOWCOLUMNSResult@@@std@@@std@@@Z
 	?getProcedureFunctionColumnType@RsMetadataAPIHelper@@SAHAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?patternMatch@RsMetadataAPIHelper@@SA_NAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@0@Z
+	rs_strncpy_safe
+	RsFree
+	PQntuples
+	PQnfields
+	PQfname
+	PQgetvalue
+	getRsLoglevel
+	copyWBinaryDataBigLen
+	copySqlwForClient
+	convertWCharParamWithTruncCheck
+	?convertToUTF8@IAMUtils@IamSupport@Redshift@@SA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@5@@Z
+	?convertFromUTF8@IAMUtils@IamSupport@Redshift@@SA?AV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@5@@Z
+	?traceWStrValWithSmallLen@RsTrace@@IEAAXPEBDPEA_WF@Z
+	?traceWStrValWithLargeLen@RsTrace@@IEAAXPEBDPEA_WJ@Z
+	?tracePasswordConnectStringW@RsTrace@@IEAAXPEBDPEA_WF@Z
+	?traceArg@RsTrace@@IEAAXPEBDZZ
+	?isIODBC@@YA_NXZ

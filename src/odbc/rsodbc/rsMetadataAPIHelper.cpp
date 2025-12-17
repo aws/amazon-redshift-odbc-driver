@@ -953,6 +953,12 @@ bool RsMetadataAPIHelper::patternMatch(const std::string& str, const std::string
 }
 
 std::string RsMetadataAPIHelper::convertSqlLikeToRegex(const std::string& pattern) {
+    // Convert SQL LIKE pattern to ECMAScript regex pattern
+    // SQL LIKE wildcards: % (zero or more chars), _ (exactly one char)
+    // SQL LIKE escapes: \% (literal %), \_ (literal _), \\ (literal \)
+    // Key insight: % and _ are NOT regex metacharacters, so escaped SQL wildcards
+    // (\% and \_) should map to literal characters in regex without escaping
+    
     // Check if pattern only contains '%'
     bool onlyPercent = true;
     for (char c : pattern) {
@@ -972,16 +978,29 @@ std::string RsMetadataAPIHelper::convertSqlLikeToRegex(const std::string& patter
         char ch = pattern[i];
 
         if (ch == '\\' && i + 1 < pattern.length()) {
-            // Handle escaped characters
+            /*
+            Handle escaped characters in SQL LIKE pattern
+            SQL LIKE uses backslash to escape special characters: \%, \_, \\
+            */
             char nextChar = pattern[i + 1];
-            if (nextChar == '%' || nextChar == '_' || nextChar == '\\') {
-                // Escape the next character for regex
-                regexPattern += "\\";
+            if (nextChar == '%' || nextChar == '_') {
+                // SQL pattern: \% or \_ means literal % or _
+                // In regex: % and _ have no special meaning, so just add them literally
+                // Platform difference: Windows MSVC regex is lenient and accepts \_ or \%,
+                // but macOS/Linux libc++/libstdc++ strictly rejects invalid escape sequences like \_
+                // Fix: Don't escape % or _ in regex since they're not regex metacharacters
                 regexPattern += nextChar;
                 i += 2;
+            } else if (nextChar == '\\') {
+                // SQL pattern: \\ means literal backslash
+                // In regex: backslash must be escaped as \\ (two backslashes in regex)
+                // In C++ string literal: "\\\\" = 4 chars = 2 actual backslashes in the string
+                regexPattern += "\\\\";
+                i += 2;
             } else {
-                // Not a special escape, treat backslash literally
-                regexPattern += "\\\\"; // Escape backslash for regex
+                // Not a recognized SQL escape sequence, treat backslash literally
+                // Add escaped backslash to regex
+                regexPattern += "\\\\";
                 i += 1;
             }
         } else if (ch == '%') {

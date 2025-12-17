@@ -539,7 +539,7 @@ void AllocateBindings(HSTMT			lpStmt,
 								&cchColumnNameLength,
 								NULL));
 
-		lpThisBinding->siDisplaySize = std::max<SQLLEN>(cchDisplay, cchColumnNameLength);
+		lpThisBinding->siDisplaySize = (std::max<SQLLEN>)(cchDisplay, cchColumnNameLength);
 		if (lpThisBinding->siDisplaySize < NULL_SIZE)
 			lpThisBinding->siDisplaySize = NULL_SIZE;
 
@@ -602,7 +602,7 @@ void HandleError(SQLHANDLE	hHandle,
 	SQLSMALLINT	iRec = 0;
 	SQLINTEGER	iError;
 	SQLCHAR		szMessage[1000];
-	SQLCHAR		szState[SQL_SQLSTATE_SIZE];
+	SQLCHAR		szState[SQL_SQLSTATE_SIZE + 1];
 
 	if (RetCode == SQL_INVALID_HANDLE)
 	{

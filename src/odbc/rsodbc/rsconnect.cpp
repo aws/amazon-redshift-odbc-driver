@@ -25,6 +25,9 @@
 #include "resource.h"
 #endif
 
+#include <exception>
+#include <typeinfo>
+
 const bool CAN_OVERRIDE_DSN = true;
 
 RS_GLOBAL_VARS gRsGlobalVars;
@@ -342,11 +345,24 @@ SQLRETURN  SQL_API RS_CONN_INFO::RS_SQLConnect(SQLHDBC phdbc,
     char *szDsnName = NULL;
     char *szUserName = NULL;
     char *szPassword = NULL;
+    // Lambda to handle cleanup of allocated memory and return appropriate code
+    auto freeAndReturn = [&]() -> SQLRETURN {
+        if (szDsnName != NULL && szDsnName != (char *)szDSN) {
+            rs_free(szDsnName);
+        }
+        if (szUserName != NULL && szUserName != (char *)szUID) {
+            rs_free(szUserName);
+        }
+        if (szPassword != NULL && szPassword != (char *)szAuthStr) {
+            rs_free(szPassword);
+        }
+        return rc;
+    };
 
     if(!VALID_HDBC(phdbc))
     {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return freeAndReturn();
     }
 
     szDsnName = (char *)makeNullTerminatedStr((char *)szDSN, cchDSN, NULL);
@@ -359,22 +375,41 @@ SQLRETURN  SQL_API RS_CONN_INFO::RS_SQLConnect(SQLHDBC phdbc,
     if(szDsnName != NULL  && *szDsnName != '\0')
     {
         RS_CONNECT_PROPS_INFO *pConnectProps = pConn->pConnectProps;
+        if (NULL == pConnectProps) {
+            rc = SQL_ERROR;
+            addError(&pConn->pErrorList, "HY000", "Connect properties is NULL", 0, NULL);
+            RS_LOG_ERROR("RSCNN", "Connect properties is NULL.");
+            return freeAndReturn();
+        }
 
         if(!pConn->iInternal)
           pConn->resetConnectProps();
 
-        strncpy(pConnectProps->szDSN, szDsnName, MAX_IDEN_LEN-1);
-        pConnectProps->szDSN[MAX_IDEN_LEN-1] = '\0';
-
-        if(szUserName)
-        {
-            strncpy(pConnectProps->szUser, szUserName, MAX_IDEN_LEN-1);
-            pConnectProps->szUser[MAX_IDEN_LEN-1] = '\0';
+        if (NULL == rs_strncpy_safe(pConnectProps->szDSN, szDsnName,
+                                    sizeof(pConnectProps->szDSN))) {
+            rc = SQL_ERROR;
+            std::string err = "Failed to copy DSN: buffer size or invalid input";
+            addError(&pConn->pErrorList, "HY000", err.data(), 0, NULL);
+            RS_LOG_ERROR("RSCNN", "%s", err.data());
+            return freeAndReturn();
         }
 
-        if(szPassword) {
-            strncpy(pConnectProps->szPassword, szPassword, MAX_IDEN_LEN-1);
-            pConnectProps->szPassword[MAX_IDEN_LEN-1] = '\0';
+        if (szUserName) {
+            if (NULL == rs_strncpy_safe(pConnectProps->szUser, szUserName,
+                                        sizeof(pConnectProps->szUser))) {
+                // Not an error. User name can be unspecified in some
+                // authentication methods. Or DSN can already contain it.
+                RS_LOG_DEBUG("RSCNN", "Did not process user name.");
+            }
+        }
+
+        if (szPassword) {
+            if (NULL == rs_strncpy_safe(pConnectProps->szPassword, szPassword,
+                                        sizeof(pConnectProps->szPassword))) {
+                // Not an error. Password can be unspecified in some
+                // authentication methods. Or DSN can already contain it.
+                RS_LOG_DEBUG("RSCNN", "Did not process password.");
+            }
         }
 
         // Read properties using DSN
@@ -386,7 +421,7 @@ SQLRETURN  SQL_API RS_CONN_INFO::RS_SQLConnect(SQLHDBC phdbc,
 		rc = pConn->readAuthProfile(FALSE);
 		if (rc == SQL_ERROR)
 		{
-			goto error;
+			return freeAndReturn();
 		}
 
         // Check for mandatory values
@@ -394,35 +429,24 @@ SQLRETURN  SQL_API RS_CONN_INFO::RS_SQLConnect(SQLHDBC phdbc,
             rc = SQL_ERROR;
             addError(&pConn->pErrorList, "HY000",
                     "User name is NULL or empty", 0, NULL);
-            goto error;
+            return freeAndReturn();
         }
 
         rc = doConnection(pConn);
 
         if(rc == SQL_ERROR) 
         {
-            goto error; 
+            return freeAndReturn();
         }
     }
     else
     {
         rc = SQL_ERROR;
         addError(&pConn->pErrorList,"HY000", "DSN is NULL or empty", 0, NULL);
-        goto error; 
+        return freeAndReturn();
     }
 
-error:
-
-    if(szDsnName != (char *)szDSN)
-        szDsnName = (char *)rs_free(szDsnName);
-
-    if(szUserName != (char *)szUID)
-        szUserName = (char *)rs_free(szUserName);
-
-    if(szPassword != (char *)szAuthStr)
-        szPassword = (char *)rs_free(szPassword);
-
-    return rc;
+    return freeAndReturn();
 }
 
 /*====================================================================================================================================================*/
@@ -430,37 +454,73 @@ error:
 //---------------------------------------------------------------------------------------------------------igarish
 // Unicode version of SQLConnect.
 //
-SQLRETURN SQL_API SQLConnectW(SQLHDBC             phdbc,
-                                SQLWCHAR*            wszDSN,
-                                SQLSMALLINT         cchDSN,
-                                SQLWCHAR*            wszUID,
-                                SQLSMALLINT         cchUID,
-                                SQLWCHAR*            wszAuthStr,
-                                SQLSMALLINT         cchAuthStr)
+SQLRETURN SQL_API SQLConnectW(SQLHDBC phdbc, SQLWCHAR *wszDSN,
+                              SQLSMALLINT cchDSN, SQLWCHAR *wszUID,
+                              SQLSMALLINT cchUID, SQLWCHAR *wszAuthStr,
+                              SQLSMALLINT cchAuthStr) 
 {
     SQLRETURN rc;
-    char szDsnName[MAX_IDEN_LEN];
-    char szUserName[MAX_IDEN_LEN];
-    char szPassword[MAX_IDEN_LEN]; 
-    
+    char szDsnName[MAX_IDEN_LEN] = {0};
+    char szUserName[MAX_IDEN_LEN] = {0};
+    char szPassword[MAX_IDEN_LEN] = {0};
+    size_t copiedChars = 0, totalCharsNeeded = 0;
+
     beginApiMutex(NULL, phdbc);
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLConnectW(FUNC_CALL, 0, phdbc, wszDSN, cchDSN, wszUID, cchUID, wszAuthStr, cchAuthStr);
+    if (IS_TRACE_LEVEL_API_CALL())
+        TraceSQLConnectW(FUNC_CALL, 0, phdbc, wszDSN, cchDSN, wszUID, cchUID,
+                         wszAuthStr, cchAuthStr);
 
-    wchar_to_utf8(wszDSN, cchDSN, szDsnName, MAX_IDEN_LEN);
-    wchar_to_utf8(wszUID, cchUID, szUserName, MAX_IDEN_LEN);
-    wchar_to_utf8(wszAuthStr, cchAuthStr, szPassword, MAX_IDEN_LEN);
+    auto cleanupGuard = make_scope_exit([&]() noexcept {
+        rs_secure_zero(szDsnName, MAX_IDEN_LEN);
+        rs_secure_zero(szUserName, MAX_IDEN_LEN);
+        rs_secure_zero(szPassword, MAX_IDEN_LEN);
+    });
 
-    rc = RS_CONN_INFO::RS_SQLConnect(phdbc, (SQLCHAR *)szDsnName, SQL_NTS, (SQLCHAR *)((wszUID) ? szUserName : NULL), SQL_NTS,
-                              (SQLCHAR *)((wszAuthStr) ? szPassword : NULL), SQL_NTS);
+    auto traceGuard = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL())
+            TraceSQLConnectW(FUNC_RETURN, rc, phdbc, wszDSN, cchDSN, wszUID,
+                             cchUID, wszAuthStr, cchAuthStr);
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLConnectW(FUNC_RETURN, rc, phdbc, wszDSN, cchDSN, wszUID, cchUID, wszAuthStr, cchAuthStr);
+        endApiMutex(NULL, phdbc);
+    });
 
-    endApiMutex(NULL, phdbc);
+    bool truncation = false;
 
-    return rc; 
+    copiedChars = totalCharsNeeded = 0;
+    copiedChars = sqlwchar_to_utf8_char(wszDSN, cchDSN, szDsnName, MAX_IDEN_LEN,
+                                        &totalCharsNeeded);
+    truncation |= (copiedChars < totalCharsNeeded);
+
+    copiedChars = totalCharsNeeded = 0;
+    copiedChars = sqlwchar_to_utf8_char(wszUID, cchUID, szUserName,
+                                        MAX_IDEN_LEN, &totalCharsNeeded);
+    truncation |= (copiedChars < totalCharsNeeded);
+
+    copiedChars = totalCharsNeeded = 0;
+    copiedChars = sqlwchar_to_utf8_char(wszAuthStr, cchAuthStr, szPassword,
+                                        MAX_IDEN_LEN, &totalCharsNeeded);
+    truncation |= (copiedChars < totalCharsNeeded);
+
+    if (truncation) {
+        RS_CONN_INFO *pConn = (RS_CONN_INFO *)phdbc;
+        if (pConn) {
+            addError(&pConn->pErrorList, "HY090",
+                     "Input string exceeds maximum length for DSN/UID/PWD", 0,
+                     NULL);
+        }
+        RS_LOG_ERROR("RSCNN",
+                     "Input string exceeds maximum length for DSN/UID/PWD");
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+    rc = RS_CONN_INFO::RS_SQLConnect(
+        phdbc, (SQLCHAR *)szDsnName, SQL_NTS,
+        (SQLCHAR *)((wszUID) ? szUserName : NULL), SQL_NTS,
+        (SQLCHAR *)((wszAuthStr) ? szPassword : NULL), SQL_NTS);
+
+    return rc;
 }
 
 /*====================================================================================================================================================*/
@@ -829,48 +889,126 @@ SQLRETURN SQL_API SQLDriverConnectW(SQLHDBC             phdbc,
                                     SQLSMALLINT*        pcchConnStrOut,
                                     SQLUSMALLINT        hDriverCompletion)
 {
-    SQLRETURN rc;
+    SQLRETURN rc = SQL_SUCCESS;
     char *szConnStrIn = NULL;
-    char *szConnStrOut = NULL;
-    size_t len;
-    std::string utf8Str;
-    
+    size_t szConnStrInLen = 0;
+    size_t copiedChars = 0;
+    bool truncation = false;
+    size_t totalCharsNeeded = 0;
+    RS_CONN_INFO *pConn = nullptr;
+
     beginApiMutex(NULL, phdbc);
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLDriverConnectW(FUNC_CALL, 0, phdbc, hwnd, wszConnStrIn, cchConnStrIn, wszConnStrOut, cchConnStrOut, pcchConnStrOut, hDriverCompletion);
-
-    len = wchar16_to_utf8_str(wszConnStrIn, cchConnStrIn, utf8Str);
-    szConnStrIn = (char *)((len > 0) ? rs_calloc(sizeof(char),len + 1) : NULL);
-    memcpy(szConnStrIn, utf8Str.data(), len);
-    szConnStrIn[len] = '\0';
-
-    if(wszConnStrOut != NULL)
-    {
-        if(cchConnStrOut >= 0)
-            szConnStrOut = (char *)rs_calloc(sizeof(char),cchConnStrOut + 1);
-        else
-            szConnStrOut = NULL;
+    if (IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLDriverConnectW(FUNC_CALL, 0, phdbc, hwnd, wszConnStrIn,
+                               cchConnStrIn, wszConnStrOut, cchConnStrOut,
+                               pcchConnStrOut, hDriverCompletion);
     }
-    else
-        szConnStrOut = NULL;
 
-    rc = RS_CONN_INFO::RS_SQLDriverConnect(phdbc, hwnd, (SQLCHAR *)szConnStrIn, cchConnStrIn, (SQLCHAR *)szConnStrOut, cchConnStrOut, pcchConnStrOut, hDriverCompletion);
-
-    if(SQL_SUCCEEDED(rc)) {
-        len = char_utf8_to_utf16_wchar(szConnStrOut, cchConnStrOut, wszConnStrOut, cchConnStrOut);
-        if (pcchConnStrOut) {
-            *pcchConnStrOut = len;
+    auto traceGuard = make_scope_exit([&]() noexcept {
+        szConnStrIn = (char *)rs_free(szConnStrIn);
+        if (truncation && pConn) {
+            addError(&pConn->pErrorList, "01004", "String truncation occured.",
+                     0, NULL);
         }
+
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLDriverConnectW(FUNC_RETURN, rc, phdbc, hwnd, wszConnStrIn,
+                                   cchConnStrIn, wszConnStrOut, copiedChars,
+                                   pcchConnStrOut, hDriverCompletion);
+        }
+
+        endApiMutex(NULL, phdbc);
+    });
+
+    if (!VALID_HDBC(phdbc)) {
+        rc = SQL_INVALID_HANDLE;
+        return rc;
     }
 
-    szConnStrIn = (char *)rs_free(szConnStrIn);
-    szConnStrOut = (char *)rs_free(szConnStrOut);
+    pConn = (RS_CONN_INFO *)phdbc;
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLDriverConnectW(FUNC_RETURN, rc, phdbc, hwnd, wszConnStrIn, cchConnStrIn, wszConnStrOut, cchConnStrOut, pcchConnStrOut, hDriverCompletion);
+    // Convert input connection string (W -> UTF-8)
+    szConnStrInLen =
+        sqlwchar_to_utf8_alloc(wszConnStrIn, cchConnStrIn, &szConnStrIn);
 
-    endApiMutex(NULL, phdbc);
+    if (wszConnStrIn && cchConnStrIn != 0 && szConnStrInLen == 0 &&
+        szConnStrIn == NULL) {
+        addError(&pConn->pErrorList, "HY001",
+                 "Memory allocation failure converting connection string", 0,
+                 NULL);
+        rc = SQL_ERROR;
+        return rc; // traceGuard will fire
+    }
+
+    // Sanity checks on output buffer length
+    if (wszConnStrOut && cchConnStrOut < 0) {
+        // HY090: Invalid buffer length
+        addError(&pConn->pErrorList, "HY090",
+                 "Invalid buffer length specified (must be >= 0)", 0, NULL);
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+    // Internal ANSI buffer for RS_SQLDriverConnect
+    // We make this independent of the caller's buffer size so we always
+    // have the full ANSI connection string available.
+    // Also, we make it large enough for JWT/OAuth/SAML/IAM tokens
+    const SQLSMALLINT ansiBufSize =
+        (std::numeric_limits<SQLSMALLINT>::max)() - 1;  // leave room for NUL
+    std::vector<char> szConnStrOut(ansiBufSize + 1, 0); // +1 for safety
+    SQLSMALLINT ansiLength = 0;                         // bytes, excluding NUL
+
+    rc = RS_CONN_INFO::RS_SQLDriverConnect(
+        phdbc, hwnd, (SQLCHAR *)szConnStrIn, szConnStrInLen,
+        (SQLCHAR *)szConnStrOut.data(), (SQLSMALLINT)ansiBufSize, &ansiLength,
+        hDriverCompletion);
+    ansiLength = (std::max<SQLSMALLINT>)(ansiLength, 0);
+    // Compute how many bytes we actually have from ANSI side
+    size_t bytesAvailable = (std::min)(ansiLength, ansiBufSize);
+
+    if (SQL_SUCCEEDED(rc)) {
+        if (wszConnStrOut && cchConnStrOut > 0) {
+            // Normal case: attempt to convert into caller's buffer
+            copiedChars = utf8_to_sqlwchar_str(
+                szConnStrOut.data(), bytesAvailable, wszConnStrOut,
+                cchConnStrOut, &totalCharsNeeded);
+
+            if (copiedChars < totalCharsNeeded) {
+                rc = SQL_SUCCESS_WITH_INFO;
+                truncation = true;
+            }
+        } else if (wszConnStrOut != NULL && cchConnStrOut == 0) {
+            // Non-NULL pointer with zero-length buffer => truncation by spec
+            rc = SQL_SUCCESS_WITH_INFO;
+            truncation = true;
+            // We do not touch wszConnStrOut here, only length.
+        } else {
+            // wszConnStrOut == NULL: pure length inquiry
+            rc = SQL_SUCCESS;
+        }
+
+        if (pcchConnStrOut) {
+            totalCharsNeeded = totalCharsNeeded > 0
+                                   ? totalCharsNeeded
+                                   : utf8_to_sqlwchar_strlen(
+                                         szConnStrOut.data(), bytesAvailable);
+            *pcchConnStrOut = static_cast<SQLSMALLINT>(totalCharsNeeded);
+        }
+    } else if (pcchConnStrOut) {
+        // Error path: provide best-effort length hint.
+        size_t estimatedLen = 0;
+
+        if (ansiLength > 0) {
+            // We can estimate from the ANSI output we got
+            estimatedLen =
+                utf8_to_sqlwchar_strlen(szConnStrOut.data(), bytesAvailable);
+        } else if (wszConnStrIn && szConnStrInLen > 0) {
+            // Fall back to input string length estimate
+            estimatedLen = utf8_to_sqlwchar_strlen(szConnStrIn, szConnStrInLen);
+        }
+        *pcchConnStrOut = static_cast<SQLSMALLINT>(estimatedLen);
+    }
 
     return rc;
 }
@@ -930,127 +1068,130 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLBrowseConnect(SQLHDBC          phdbc,
     if(!VALID_HDBC(phdbc))
     {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
+    }
+    RS_CONN_INFO *pConn = (RS_CONN_INFO *)phdbc;
+
+    // Clear error list
+    pConn->pErrorList = clearErrorList(pConn->pErrorList);
+
+    if ((cbConnStrIn != SQL_NTS) && (cbConnStrIn < 0))
+    {
+        addError(&pConn->pErrorList,"HY000","Invalid connection string length", 0, NULL);
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+    pszBrowseConnectInStr = rs_strdup((char *)szConnStrIn, cbConnStrIn);
+    pConnectProps = pConn->pConnectProps;
+
+    if(pConn->iBrowseIteration == 0)
+    {
+        pConn->resetConnectProps();
+        pConn->setConnectStr(pszBrowseConnectInStr);
     }
     else
-    {
-        RS_CONN_INFO *pConn = (RS_CONN_INFO *)phdbc;
+        pConn->appendConnectStr(pszBrowseConnectInStr);
 
-        // Clear error list
-        pConn->pErrorList = clearErrorList(pConn->pErrorList);
+    // Free it bcoz we already copied it.
+    pszBrowseConnectInStr = (char *)rs_free(pszBrowseConnectInStr);
 
-        if ((cbConnStrIn != SQL_NTS) && (cbConnStrIn < 0))
-        {
-            addError(&pConn->pErrorList,"HY000","Invalid connection string length", 0, NULL);
-            rc = SQL_ERROR;
-            goto error;
-        }
+    (pConn->iBrowseIteration)++;
 
-        pszBrowseConnectInStr = rs_strdup((char *)szConnStrIn, cbConnStrIn);
-        pConnectProps = pConn->pConnectProps;
-
-        if(pConn->iBrowseIteration == 0)
-        {
-            pConn->resetConnectProps();
-            pConn->setConnectStr(pszBrowseConnectInStr);
-        }
-        else
-          pConn->appendConnectStr(pszBrowseConnectInStr);
-
-        // Free it bcoz we already copied it.
-        pszBrowseConnectInStr = (char *)rs_free(pszBrowseConnectInStr);
-
-        (pConn->iBrowseIteration)++;
-
-        pConnStr = pConn->getConnectStr();
-        
-        iNeedMoreData = RS_CONN_INFO::doesNeedMoreBrowseConnectStr(pConnStr, (char *)szConnStrOut, cbConnStrOut, pcbConnStrOut, pConn->iBrowseIteration, pConn);
-        if(iNeedMoreData > 0)
-        {
-            rc = SQL_NEED_DATA;
-            goto error;
-        }
-        else
-        if(iNeedMoreData < 0)
-        {
-            addError(&pConn->pErrorList,"01S00","Invalid connection string attribute", 0, NULL);
-            rc = SQL_ERROR;
-            pConn->iBrowseIteration = 0;
-            goto error;
-        }
-        else
-            pConn->iBrowseIteration = 0;
-
-        // Parse the input string for DSN
-        pConn->parseConnectString(pConnStr, SQL_NTS, FALSE, TRUE);
-
-        // Read reg using DSN
-        pConn->readMoreConnectPropsFromRegistry(TRUE);
-
-        // Parse the input string for all
-        pConn->parseConnectString(pConnStr, SQL_NTS, TRUE, FALSE);
-        initTraceFromConnectionString(pConn->pConnectProps);
-
-        if (pConnectProps->szDSN[0] != '\0')
-        {
-            pConn->iInternal = TRUE;
-            rc = RS_CONN_INFO::RS_SQLConnect(phdbc, (SQLCHAR *)(pConnectProps->szDSN), SQL_NTS, (SQLCHAR *)(pConnectProps->szUser), SQL_NTS, (SQLCHAR *)(pConnectProps->szPassword), SQL_NTS);
-            pConn->iInternal = FALSE;
-        }
-        else
-        { 
-            /* DSN less connection 
-            */
-
-			// Check for AuthProfile
-			rc = pConn->readAuthProfile(TRUE);
-			if (rc == SQL_ERROR)
-			{
-				goto error;
-			}
-
-            if(pConnectProps->szHost[0] == '\0'
-                || pConnectProps->szPort[0] == '\0'
-                || pConnectProps->szDatabase[0] == '\0'
-                || pConnectProps->szUser[0] == '\0')
-            {
-                addError(&pConn->pErrorList,"HY000", "Required keyword(s) HOST/PORT/Database/UID does not found in connection string", 0, NULL);
-                rc = SQL_ERROR;
-            }
-            else
-            {
-                rc = doConnection(pConn);
-            }
-        }
-
-        if(rc != SQL_SUCCESS) 
-            goto error;
-
-        if(pConnStr)
-            actualOutputLen = strlen(pConnStr);
-
-        if(pcbConnStrOut)
-            *pcbConnStrOut = (short)actualOutputLen;
-
-        if(szConnStrOut && (cbConnStrOut > 0))
-        {
-            *szConnStrOut = '\0';
-
-            strncpy((char *)szConnStrOut,pConnStr,cbConnStrOut-1);
-        }
-
-        if(szConnStrOut && (cbConnStrOut > 0))
-        {
-            if(actualOutputLen > strlen((char *)szConnStrOut))
-                rc = SQL_SUCCESS_WITH_INFO;
-        }
-        else
-        if(actualOutputLen > 0)
-            rc = SQL_SUCCESS_WITH_INFO;
-
+    pConnStr = pConn->getConnectStr();
+    
+    iNeedMoreData = RS_CONN_INFO::doesNeedMoreBrowseConnectStr(pConnStr, (char *)szConnStrOut, cbConnStrOut, pcbConnStrOut, pConn->iBrowseIteration, pConn);
+    if (iNeedMoreData > 0) {
+        rc = SQL_NEED_DATA;
+        return rc;
+    } else if (iNeedMoreData < 0) {
+        addError(&pConn->pErrorList, "01S00",
+                 "Invalid connection string attribute", 0, NULL);
+        rc = SQL_ERROR;
+        pConn->iBrowseIteration = 0;
+        return rc;
+    } else {
+        pConn->iBrowseIteration = 0;
     }
 
-error: 
+    // Parse the input string for DSN
+    pConn->parseConnectString(pConnStr, SQL_NTS, FALSE, TRUE);
+
+    // Read reg using DSN
+    pConn->readMoreConnectPropsFromRegistry(TRUE);
+
+    // Parse the input string for all
+    pConn->parseConnectString(pConnStr, SQL_NTS, TRUE, FALSE);
+    initTraceFromConnectionString(pConn->pConnectProps);
+
+    if (pConnectProps->szDSN[0] != '\0')
+    {
+        pConn->iInternal = TRUE;
+        rc = RS_CONN_INFO::RS_SQLConnect(phdbc, (SQLCHAR *)(pConnectProps->szDSN), SQL_NTS, (SQLCHAR *)(pConnectProps->szUser), SQL_NTS, (SQLCHAR *)(pConnectProps->szPassword), SQL_NTS);
+        pConn->iInternal = FALSE;
+    }
+    else
+    { 
+        /* DSN less connection 
+        */
+
+        // Check for AuthProfile
+        rc = pConn->readAuthProfile(TRUE);
+        if (rc == SQL_ERROR)
+        {
+            return rc;
+        }
+
+        if(pConnectProps->szHost[0] == '\0'
+            || pConnectProps->szPort[0] == '\0'
+            || pConnectProps->szDatabase[0] == '\0'
+            || pConnectProps->szUser[0] == '\0')
+        {
+            addError(&pConn->pErrorList,"HY000", "Required keyword(s) HOST/PORT/Database/UID does not found in connection string", 0, NULL);
+            rc = SQL_ERROR;
+        }
+        else
+        {
+            rc = doConnection(pConn);
+        }
+    }
+
+    if(rc != SQL_SUCCESS) {
+        return rc;
+    }
+
+    if(pConnStr) {
+        actualOutputLen = strlen(pConnStr);
+    }
+
+    if (pcbConnStrOut) {
+        // Clamp to SHRT_MAX to avoid overflow UB on cast
+        size_t req = actualOutputLen;
+        if (req > SHRT_MAX) {
+            req = SHRT_MAX;
+        }
+        *pcbConnStrOut = (SQLSMALLINT)req;
+    }
+
+    if (szConnStrOut && cbConnStrOut > 0) {
+        // Always NUL-terminate the output buffer
+        szConnStrOut[0] = '\0';
+        // Copy up to cbConnStrOut - 1 chars and ensure NUL
+        strncpy((char *)szConnStrOut, pConnStr ? pConnStr : "",
+                cbConnStrOut - 1);
+        szConnStrOut[cbConnStrOut - 1] = '\0';
+
+        // If required length >= capacity (excluding NUL), it was truncated
+        if (actualOutputLen >= (size_t)cbConnStrOut) {
+            rc = SQL_SUCCESS_WITH_INFO;
+            /* Optional but correct: 01004 for truncation */
+            addError(&pConn->pErrorList, "01004",
+                        "String data, right truncated", 0, NULL);
+        }
+    } else if (actualOutputLen > 0) {
+        // Caller didn’t provide a buffer but wants length
+        rc = SQL_SUCCESS_WITH_INFO;
+    }
 
     return rc;
 }
@@ -1060,51 +1201,151 @@ error:
 //---------------------------------------------------------------------------------------------------------igarish
 // Unicode version of SQLBrowseConnect.
 //
-SQLRETURN SQL_API SQLBrowseConnectW(SQLHDBC     phdbc,
+SQLRETURN SQL_API SQLBrowseConnectW(SQLHDBC      phdbc,
                                     SQLWCHAR*    wszConnStrIn,
                                     SQLSMALLINT  cchConnStrIn,
-                                    SQLWCHAR*     wszConnStrOut,
-                                    SQLSMALLINT   cchConnStrOut,
-                                    SQLSMALLINT*  pcchConnStrOut)
+                                    SQLWCHAR*    wszConnStrOut,
+                                    SQLSMALLINT  cchConnStrOut,
+                                    SQLSMALLINT* pcchConnStrOut)
 {
-    SQLRETURN rc;
-    char *szConnStrIn;
-    char *szConnStrOut;
-    size_t len;
+    SQLRETURN   rc = SQL_SUCCESS;
+    char*       szConnStrIn   = nullptr;
+    size_t      szConnStrInLen = 0;
+    size_t      copiedChars   = 0;
+    size_t      totalCharsNeeded = 0;
+    bool        truncation    = false;
+    RS_CONN_INFO* pConn       = nullptr;
+
+    if (!VALID_HDBC(phdbc)) {
+        return SQL_INVALID_HANDLE;
+    }
 
     beginApiMutex(NULL, phdbc);
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLBrowseConnectW(FUNC_CALL, 0, phdbc, wszConnStrIn, cchConnStrIn, wszConnStrOut, cchConnStrOut, pcchConnStrOut);
-
-    len = calculate_utf8_len(wszConnStrIn, cchConnStrIn);
-
-    szConnStrIn = (char *)((len > 0) ? rs_calloc(sizeof(char), len + 1) : NULL);
-
-    if(wszConnStrOut != NULL)
-    {
-        if(cchConnStrOut >= 0)
-            szConnStrOut = (char *)rs_calloc(sizeof(char), cchConnStrOut + 1);
-        else
-            szConnStrOut = NULL;
+    if (IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLBrowseConnectW(FUNC_CALL, 0, phdbc,
+                               wszConnStrIn, cchConnStrIn,
+                               wszConnStrOut, cchConnStrOut,
+                               pcchConnStrOut);
     }
-    else
-        szConnStrOut = NULL;
 
-    wchar_to_utf8(wszConnStrIn, cchConnStrIn, szConnStrIn, len);
+    auto traceGuard = make_scope_exit([&]() noexcept {
+        szConnStrIn = (char*)rs_free(szConnStrIn);
 
-    rc = RS_CONN_INFO::RS_SQLBrowseConnect(phdbc, (SQLCHAR *)szConnStrIn, cchConnStrIn, (SQLCHAR *)szConnStrOut, cchConnStrOut, pcchConnStrOut);
+        if (truncation && pConn) {
+            addError(&pConn->pErrorList,
+                     "01004",
+                     "String data, right truncation occurred.",
+                     0,
+                     NULL);
+        }
 
-    if(SQL_SUCCEEDED(rc) || rc == SQL_NEED_DATA)
-        utf8_to_wchar(szConnStrOut, cchConnStrOut, wszConnStrOut, cchConnStrOut);
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLBrowseConnectW(FUNC_RETURN, rc, phdbc,
+                                   wszConnStrIn, cchConnStrIn,
+                                   wszConnStrOut,
+                                   (SQLSMALLINT)copiedChars,
+                                   pcchConnStrOut);
+        }
 
-    szConnStrIn = (char *)rs_free(szConnStrIn);
-    szConnStrOut = (char *)rs_free(szConnStrOut);
+        endApiMutex(NULL, phdbc);
+    });
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLBrowseConnectW(FUNC_RETURN, rc, phdbc, wszConnStrIn, cchConnStrIn, wszConnStrOut, cchConnStrOut, pcchConnStrOut);
+    pConn = (RS_CONN_INFO*)phdbc;
 
-    endApiMutex(NULL, phdbc);
+    // ---- Input conversion: SQLWCHAR -> UTF-8 ----
+    szConnStrInLen =
+        sqlwchar_to_utf8_alloc(wszConnStrIn, cchConnStrIn, &szConnStrIn);
+
+    if (wszConnStrIn && cchConnStrIn != 0 &&
+        szConnStrInLen == 0 && szConnStrIn == nullptr) {
+        addError(&pConn->pErrorList, "HY001",
+                 "Memory allocation failure converting connection string", 0,
+                 NULL);
+        return SQL_ERROR;  // traceGuard will fire
+    }
+
+    // ---- Validate output buffer length ----
+    if (wszConnStrOut && cchConnStrOut < 0) {
+        addError(&pConn->pErrorList, "HY090",
+                 "Invalid buffer length specified (must be >= 0)", 0, NULL);
+        return SQL_ERROR;  // traceGuard will fire
+    }
+
+    // ---- Internal ANSI buffer for RS_SQLBrowseConnect ----
+    // Make this independent of caller's buffer size so we always have
+    // the full ANSI/UTF-8 connection string available.
+    const SQLSMALLINT ansiBufSize =
+        (std::numeric_limits<SQLSMALLINT>::max)() - 1;  // leave room for NUL
+    std::vector<char> ansiOut(ansiBufSize + 1, 0);      // +1 for safety
+    SQLSMALLINT ansiLength = 0;                         // bytes, excl. NUL
+
+    rc = RS_CONN_INFO::RS_SQLBrowseConnect(
+        phdbc,
+        (SQLCHAR*)szConnStrIn,
+        (SQLSMALLINT)szConnStrInLen,
+        (SQLCHAR*)ansiOut.data(),
+        ansiBufSize,
+        &ansiLength);
+    // Normalize ansiLength / bytesAvailable
+    ansiLength = (std::max<SQLSMALLINT>)(ansiLength, 0);
+    size_t bytesAvailable = (std::min<size_t>)(ansiLength, ansiBufSize);
+
+    if (SQL_SUCCEEDED(rc) || rc == SQL_NEED_DATA) {
+        // ---- Convert ANSI result into caller's wide buffer (if any) ----
+        if (wszConnStrOut && cchConnStrOut > 0) {
+            copiedChars = utf8_to_sqlwchar_str(
+                ansiOut.data(),
+                (SQLINTEGER)bytesAvailable,
+                wszConnStrOut,
+                cchConnStrOut,
+                &totalCharsNeeded);
+
+            if (copiedChars < totalCharsNeeded) {
+                // Caller buffer too small -> truncation
+                truncation = true;
+                if (rc == SQL_SUCCESS) {
+                    rc = SQL_SUCCESS_WITH_INFO;
+                }
+            }
+        } else if (wszConnStrOut != nullptr && cchConnStrOut == 0) {
+            // Non-NULL buffer pointer with zero size: truncation by spec
+            truncation = true;
+            if (rc == SQL_SUCCESS) {
+                rc = SQL_SUCCESS_WITH_INFO;
+            }
+            // Don't touch wszConnStrOut; only report length below.
+        } else {
+            // wszConnStrOut == NULL: pure length inquiry
+            // rc stays as returned by RS_SQLBrowseConnect (SUCCESS/NEED_DATA)
+        }
+
+        // ---- Report length in WCHARS (full output length, not truncated) ----
+        if (pcchConnStrOut) {
+            if (totalCharsNeeded == 0) {
+                totalCharsNeeded = utf8_to_sqlwchar_strlen(
+                    ansiOut.data(),
+                    (SQLINTEGER)bytesAvailable);
+            }
+            *pcchConnStrOut = (SQLSMALLINT)totalCharsNeeded;
+        }
+    } else {
+        // ---- Error path: provide best-effort length hint ----
+        if (pcchConnStrOut) {
+            size_t estimatedLen = 0;
+
+            if (ansiLength > 0) {
+                estimatedLen = utf8_to_sqlwchar_strlen(
+                    ansiOut.data(),
+                    (SQLINTEGER)bytesAvailable);
+            } else if (szConnStrIn && szConnStrInLen > 0) {
+                estimatedLen = utf8_to_sqlwchar_strlen(
+                    szConnStrIn,
+                    (SQLINTEGER)szConnStrInLen);
+            }
+            *pcchConnStrOut = (SQLSMALLINT)estimatedLen;
+        }
+    }
 
     return rc;
 }
@@ -3259,24 +3500,25 @@ static void
 copyCommonConnectionProperties(RS_IAM_CONN_PROPS_INFO *pIamProps,
                                RS_CONNECT_PROPS_INFO *pConnectProps) {
     rs_strncpy(pIamProps->szSslMode, pConnectProps->szSslMode,
-               std::min<int>(sizeof(pIamProps->szSslMode), sizeof(pConnectProps->szSslMode)));
+               sizeof(pIamProps->szSslMode));
     rs_strncpy(pIamProps->szHost, pConnectProps->szHost,
-               std::min<int>(sizeof(pIamProps->szHost), sizeof(pConnectProps->szHost)));
+               sizeof(pIamProps->szHost));
     rs_strncpy(pIamProps->szPort, pConnectProps->szPort,
-               std::min<int>(sizeof(pIamProps->szPort), sizeof(pConnectProps->szPort)));
+               sizeof(pIamProps->szPort));
     rs_strncpy(pIamProps->szDatabase, pConnectProps->szDatabase,
-               std::min<int>(sizeof(pIamProps->szDatabase), sizeof(pConnectProps->szDatabase)));
-    if (strlen(pConnectProps->szCaFile) > 0) { //overwrite
-        RS_LOG_DEBUG("RSCNN", "%s : setting pIamProps->szCaFile from  '%s' to '%s' of size:%d", __func__,
-                     pIamProps->szCaFile, pConnectProps->szCaFile, strlen(pConnectProps->szCaFile));
+               sizeof(pIamProps->szDatabase));
+    if (strlen(pConnectProps->szCaFile) > 0) { // overwrite
+        RS_LOG_DEBUG(
+            "RSCNN",
+            "Setting pIamProps->szCaFile from  '%s' to '%s' of size:%d",
+            pIamProps->szCaFile, pConnectProps->szCaFile,
+            strlen(pConnectProps->szCaFile));
         rs_strncpy(pIamProps->szCaFile, pConnectProps->szCaFile,
-                std::min<int>(sizeof(pIamProps->szCaFile), sizeof(pConnectProps->szCaFile)));
-
+                   sizeof(pIamProps->szCaFile));
     }
     rs_strncpy(pIamProps->szCaPath, pConnectProps->szCaPath,
-               std::min<int>(sizeof(pIamProps->szCaPath), sizeof(pConnectProps->szCaPath)));
+               sizeof(pIamProps->szCaPath));
 }
-
 
 static void invokeNativePluginAuthentication(RS_CONN_INFO* pConn, bool isIAMAuth) { 
     RsIamEntry::NativePluginAuthentication(isIAMAuth,
@@ -3365,20 +3607,30 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
 					pConn->pConnectProps->pHttpsProps,
 					pConn->iamSettings);
 			}
-		}
-		catch (RsErrorException& ex)
-		{
-			// Add error and return SQL_ERROR
-			addError(&pConn->pErrorList, "HY000", ex.getErrorMessage(), 0, pConn);
-			rc = SQL_ERROR;
-			return rc;
-		}
-		catch (...)
-		{
-			addError(&pConn->pErrorList, "HY000", "IAM Unknown Error", 0, pConn);
-			rc = SQL_ERROR;
-			return rc;
-		}
+        } catch (const RsErrorException &ex) {
+            // log output format for typeid(ex).name() depends on the compiler
+            // implementation
+            RS_LOG_ERROR("doConnection",
+                         "Caught RsErrorException, typeid=%s, msg=%s",
+                         typeid(ex).name(), ex.getErrorMessage());
+            addError(&pConn->pErrorList, "HY000", ex.getErrorMessage(),
+                        0, pConn);
+            return SQL_ERROR;
+        } catch (const std::exception &ex) {
+            // log output format for typeid(ex).name() depends on the compiler
+            // implementation
+            RS_LOG_ERROR("doConnection",
+                            "Caught std::exception, typeid=%s, msg=%s",
+                            typeid(ex).name(), ex.what());
+            addError(&pConn->pErrorList, "HY000", (char *)ex.what(), 0,
+                        pConn);
+            return SQL_ERROR;
+        } catch (...) {
+            RS_LOG_ERROR("doConnection", "Caught unknown exception");
+            addError(&pConn->pErrorList, "HY000",
+                        (char *)"IAM Unknown Error", 0, pConn);
+            return SQL_ERROR;
+        }
 
 		if (!isNativeAuth)
 		{

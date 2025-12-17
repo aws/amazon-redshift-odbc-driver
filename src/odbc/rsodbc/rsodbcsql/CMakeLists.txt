@@ -6,13 +6,9 @@ add_executable(${EXECUTABLE_NAME} ${SOURCES})
 
 target_link_libraries(${EXECUTABLE_NAME} ${odbc_manager_lib_list})
 
-if (RS_ODBC_DIR)
-    target_include_directories(${EXECUTABLE_NAME} PRIVATE ${RS_ODBC_DIR}/include)
-    target_link_directories(${EXECUTABLE_NAME} PRIVATE ${RS_ODBC_DIR}/lib)
-endif()
-
 target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_INCLUDE_PATH})
 target_link_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_LIBRARY_PATH})
+include_and_link_odbc(${EXECUTABLE_NAME})
 
 if (WIN32)
     target_compile_definitions(${EXECUTABLE_NAME} PRIVATE WIN32)

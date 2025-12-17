@@ -200,9 +200,23 @@ int RsIni::getPrivateProfileStringWithFullPath(const char *pSectionName, const c
 	if (pKey == NULL)
 		return(iSize - iSizeLeft);
 
-	strncpy(pReturn, pDflt, iSize);
+      if (pReturn != pDflt) {
+         if (pDflt == NULL) {
+             RS_LOG_ERROR("RSIni::getPrivateProfileString",
+                          "No default value provided for section: %s",
+                          (pSectionName ? pSectionName : "UNKNOWN_SECTION"));
+             return 0;
+         }
+         strncpy(pReturn, pDflt, iSize);
+      } else {
+         RS_LOG_ERROR("RSIni::getPrivateProfileString",
+                     "Failed to copy value to its own for section:%s",
+                     (pSectionName ? pSectionName : "UNKNOWN_SECTION"));
+         return 0;
+      }
+   int pDfltLen = pDflt ? strlen(pDflt) : 0;
 
-	return((iSize <= strlen(pDflt)) ? iSize : strlen(pDflt));
+	return((iSize <= pDfltLen) ? iSize : pDfltLen);
 }
 
 /*====================================================================================================================================================*/

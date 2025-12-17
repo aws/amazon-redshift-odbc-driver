@@ -189,4 +189,5 @@ function(get_rsodbc_deps rsodbc_deps)
 endfunction()
 
 function(basic_build_settings)
+  configure_asan()
 endfunction()

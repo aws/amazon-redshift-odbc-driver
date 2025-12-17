@@ -20,17 +20,25 @@ SQLRETURN SQL_API SQLExecDirectW(SQLHSTMT   phstmt,
 {
     SQLRETURN rc;
     char *szCmd;
-    size_t len;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    size_t copiedChars = 0, len = 0;
+    RS_STMT_INFO *pStmt = nullptr;
+    std::string utf8Str;
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLExecDirectW(FUNC_CALL, 0, phstmt, pwCmd, cchLen);
 
+    auto exitLog = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLExecDirectW(FUNC_RETURN, rc, phstmt, pwCmd, copiedChars);
+        }
+    });
+
     if(!VALID_HSTMT(phstmt))
     {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
+    pStmt = (RS_STMT_INFO *)phstmt;
 
     if(!(pStmt->pExecThread))
     {
@@ -47,24 +55,27 @@ SQLRETURN SQL_API SQLExecDirectW(SQLHSTMT   phstmt,
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
-        goto error; 
+        return rc; 
     }
-    {
-      /*
-        Note:
-        Based on the current value of SQL_WCHART_CONVERT macro,
-        SQLWCHAR is typedefed to unsigned short(16 bytes in all
-        platforms). This is a hotfix. It is recommended to move
-        wchar16_to_utf8_str() to wchar_to_utf8() in the future to
-        a) adjust its behavior for supporting a situation when
-        SQL_WCHART_CONVERT is typedefed to wchar_t. b) Let all unicode
-        conversions use the same bugfixed method.
-       */
-      std::string utf8Str;
-      len = wchar16_to_utf8_str(pwCmd, cchLen, utf8Str);
-      szCmd = (char *)checkLenAndAllocatePaStrBuf(len, pStmt->pCmdBuf);
-      memcpy(szCmd, utf8Str.c_str(), len);  // szCmd is already null terminated
+
+    copiedChars = sqlwchar_to_utf8_str(pwCmd, cchLen, utf8Str);
+    if (copiedChars == 0) {
+        rc = SQL_ERROR;
+        std::string err =
+            "Invalid SQL Statement: Unicode to UTF-8 conversion failed.";
+        RS_LOG_ERROR("RSEXE", "%s", err.c_str());
+        addError(&pStmt->pErrorList, "HY000", err.data(), 0, NULL);
+        return rc;
     }
+    szCmd = (char *)checkLenAndAllocatePaStrBuf(copiedChars + 1, pStmt->pCmdBuf);
+    if (!szCmd) {
+        rc = SQL_ERROR;
+        RS_LOG_ERROR("RSEXE", "Memory allocation error");
+        addError(&pStmt->pErrorList, "HY001", "Memory allocation error", 0, NULL);
+        return rc;
+    }
+    memcpy(szCmd, utf8Str.data(), copiedChars);
+    szCmd[copiedChars] = '\0';
 
     if(szCmd)
     {
@@ -85,8 +96,9 @@ SQLRETURN SQL_API SQLExecDirectW(SQLHSTMT   phstmt,
             {
                 rc = createLastBatchMultiInsertCmd(pStmt, pLastBatchMultiInsertCmd);
                 pLastBatchMultiInsertCmd = NULL;
-                if(rc == SQL_ERROR)
-                    goto error;
+                if(rc == SQL_ERROR) {
+                    return rc;
+                }
             }
         }
     }
@@ -109,11 +121,6 @@ SQLRETURN SQL_API SQLExecDirectW(SQLHSTMT   phstmt,
     }
 
     rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCmd, SQL_NTS, TRUE, FALSE, TRUE, TRUE);
-
-error:
-
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLExecDirectW(FUNC_RETURN, rc, phstmt, pwCmd, cchLen);
 
     return rc;
 }
@@ -595,7 +602,7 @@ SQLRETURN   SQL_API SQLBulkOperations(SQLHSTMT   phstmt, SQLSMALLINT hOperation)
         case SQL_FETCH_BY_BOOKMARK:
         {
             rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+            addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented-SQLBulkOperations:hOperation ", 0, NULL);
             goto error; 
         }
 
@@ -717,74 +724,149 @@ SQLRETURN SQL_API SQLNativeSqlW(SQLHDBC      phdbc,
 {
     SQLRETURN rc;
     char *szCmd;
-    char *szSqlStrOut = NULL;
-    size_t len;
-    RS_CONN_INFO *pConn = (RS_CONN_INFO *)phdbc;
-    
+    std::vector<char> szSqlStrOut;
+    RS_CONN_INFO *pConn = nullptr;
+    std::string utf8Str;
+    size_t ansiTextLen = 0;
+    size_t allocation = 0;
+    size_t totalCharsNeeded = 0;
+    size_t copiedChars = 0;
+    bool hasInputChars = false;
+
     beginApiMutex(NULL, phdbc);
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLNativeSqlW(FUNC_CALL, 0, phdbc, wszSqlStrIn, cchSqlStrIn, wszSqlStrOut, cchSqlStrOut, pcchSqlStrOut);
+    if (IS_TRACE_LEVEL_API_CALL())
+        TraceSQLNativeSqlW(FUNC_CALL, 0, phdbc, wszSqlStrIn, cchSqlStrIn,
+                           wszSqlStrOut, cchSqlStrOut, pcchSqlStrOut);
 
-    if(!VALID_HDBC(phdbc))
-    {
+    auto exitLog = make_scope_exit([&]() noexcept {
+        // Release cmd allocated buf, if any
+        if (pConn && pConn->pCmdBuf) {
+            releasePaStrBuf(pConn->pCmdBuf);
+        }
+
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLNativeSqlW(FUNC_RETURN, rc, phdbc, wszSqlStrIn, cchSqlStrIn,
+                               wszSqlStrOut, copiedChars, pcchSqlStrOut);
+        }
+
+        endApiMutex(NULL, phdbc);
+    });
+
+    if (!VALID_HDBC(phdbc)) {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
+
+    pConn = (RS_CONN_INFO *)phdbc;
 
     // Clear error list
     pConn->pErrorList = clearErrorList(pConn->pErrorList);
 
     // Release previously allocated buf, if any
     releasePaStrBuf(pConn->pCmdBuf);
-
-    if(wszSqlStrIn == NULL)
-    {
+    // Some Sanity checks
+    if (wszSqlStrIn == NULL) {
         rc = SQL_ERROR;
-        addError(&pConn->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
-        goto error; 
+        addError(&pConn->pErrorList, "HY009", "Invalid use of null pointer", 0,
+                 NULL);
+        RS_LOG_ERROR("RS_SQLNativeSqlW", "Invalid use of null pointer");
+        return rc;
+    }
+    if (wszSqlStrOut && cchSqlStrOut < 0) {
+        rc = SQL_ERROR;
+        addError(&pConn->pErrorList, "HY090",
+                 "Invalid buffer length specified (must be >= 0)", 0, NULL);
+        RS_LOG_ERROR("RS_SQLNativeSqlW",
+                     "Invalid buffer length specified (must be >= 0)");
+        return rc;
     }
 
-    len = calculate_utf8_len(wszSqlStrIn, cchSqlStrIn);
-    szCmd = (char *)checkLenAndAllocatePaStrBuf(len, pConn->pCmdBuf);
+    // To determine whether the user really intended to pass some text.
+    hasInputChars = wszSqlStrIn && cchSqlStrIn != 0 &&
+                    (cchSqlStrIn > 0 || !isFirstSqlwcharNull(wszSqlStrIn));
+    // Convert input Unicode to UTF-8
+    ansiTextLen = sqlwchar_to_utf8_str(wszSqlStrIn, cchSqlStrIn, utf8Str);
 
-    if((wszSqlStrOut != NULL) && (cchSqlStrOut >= 0))
-        szSqlStrOut = (char *)rs_calloc(sizeof(char),cchSqlStrOut + 1);
+    // If they claimed to have input chars, but conversion produced nothing,
+    // treat it as malformed Unicode.
+    if (hasInputChars && ansiTextLen == 0 && utf8Str.empty()) {
+        addError(&pConn->pErrorList, "HY000",
+                 "Invalid or malformed Unicode in input.", 0, NULL);
+        RS_LOG_ERROR("RS_SQLNativeSqlW",
+                     "Invalid or malformed Unicode in input.");
+        rc = SQL_ERROR;
+        return rc;
+    }
 
-    wchar_to_utf8(wszSqlStrIn, cchSqlStrIn, szCmd, len);
+    // In non trivial case, Allocate the maximum amount possible for query
+    // length in redshift. This call to API may just be a SQL-Query lenth query
+    allocation = ((wszSqlStrOut != NULL) && (cchSqlStrOut >= 0))
+                     ? (ansiTextLen * 4 + 1)
+                     : (ansiTextLen > 0 ? ansiTextLen * 4 + 1 : 1024);
+    szSqlStrOut.resize(allocation, 0);
 
-    if(szCmd)
-    {
-        int numOfODBCEscapeClauses = countODBCEscapeClauses(NULL,pConn->pCmdBuf->pBuf, SQL_NTS);
+    // Handle empty string case - allocate at least 1 byte for null terminator
+    szCmd = (char *)checkLenAndAllocatePaStrBuf(
+        (ansiTextLen > 0) ? ansiTextLen : 1, pConn->pCmdBuf);
 
-        if(numOfODBCEscapeClauses > 0)
-        {
+    if (szCmd) {
+        if (ansiTextLen > 0) {
+            memcpy(szCmd, utf8Str.c_str(), ansiTextLen);
+        }
+        szCmd[ansiTextLen] = '\0'; // Ensure null termination for empty string
+        int numOfODBCEscapeClauses =
+            countODBCEscapeClauses(NULL, pConn->pCmdBuf->pBuf, SQL_NTS);
+
+        if (numOfODBCEscapeClauses > 0) {
             char *pTempCmd = rs_strdup(pConn->pCmdBuf->pBuf, SQL_NTS);
 
             releasePaStrBuf(pConn->pCmdBuf);
-            szCmd = (char *)replaceParamMarkerAndODBCEscapeClause(NULL, pTempCmd, SQL_NTS, pConn->pCmdBuf, 0, numOfODBCEscapeClauses);
+            szCmd = (char *)replaceParamMarkerAndODBCEscapeClause(
+                NULL, pTempCmd, SQL_NTS, pConn->pCmdBuf, 0,
+                numOfODBCEscapeClauses);
             pTempCmd = (char *)rs_free(pTempCmd);
         }
     }
 
-    rc = RsExecute::RS_SQLNativeSql(phdbc, (SQLCHAR *)szCmd, SQL_NTS, (SQLCHAR *)szSqlStrOut, cchSqlStrOut, pcchSqlStrOut, TRUE);
+    rc = RsExecute::RS_SQLNativeSql(phdbc, (SQLCHAR *)szCmd, SQL_NTS,
+                                    (SQLCHAR *)szSqlStrOut.data(), szSqlStrOut.size(),
+                                    pcchSqlStrOut, TRUE);
+    if (SQL_SUCCEEDED(rc)) {
+        if (!wszSqlStrOut) {
+            // Length-only query: just compute Unicode length
+            totalCharsNeeded = utf8_to_sqlwchar_strlen(szSqlStrOut.data(), SQL_NTS);
+            copiedChars = 0;
+        } else if (cchSqlStrOut == 0) {
+            // Caller gave non-null buffer but size 0: report full length,
+            // treat as truncation
+            totalCharsNeeded = utf8_to_sqlwchar_strlen(szSqlStrOut.data(), SQL_NTS);
+            copiedChars = 0;
+            addError(&pConn->pErrorList, "01004",
+                     "String data, right truncation.", 0, NULL);
+            rc = SQL_SUCCESS_WITH_INFO;
+        } else {
+            // Normal scenario: convert UTF-8 -> SQLWCHAR into caller's buffer
+            copiedChars =
+                utf8_to_sqlwchar_str(szSqlStrOut.data(), SQL_NTS, wszSqlStrOut,
+                                     cchSqlStrOut, &totalCharsNeeded);
+        }
 
-    if(SQL_SUCCEEDED(rc))
-        utf8_to_wchar(szSqlStrOut, cchSqlStrOut, wszSqlStrOut, cchSqlStrOut);
+        if (pcchSqlStrOut) {
+            *pcchSqlStrOut = (SQLINTEGER)totalCharsNeeded;
+        }
 
-error:
-
-    // Release cmd allocated buf, if any
-    releasePaStrBuf(pConn->pCmdBuf);
-
-    szSqlStrOut = (char *)rs_free(szSqlStrOut);
-
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLNativeSqlW(FUNC_RETURN, rc, phdbc, wszSqlStrIn, cchSqlStrIn, wszSqlStrOut, cchSqlStrOut, pcchSqlStrOut);
-
-    endApiMutex(NULL, phdbc);
+        // Check for truncation in the "normal" case
+        if (wszSqlStrOut && cchSqlStrOut > 0 &&
+            totalCharsNeeded >= (size_t)cchSqlStrOut) {
+            if (rc != SQL_SUCCESS_WITH_INFO) {
+                // We have NOT already emitted this warning
+                addError(&pConn->pErrorList, "01004",
+                         "String data, right truncation.", 0, NULL);
+            }
+            rc = SQL_SUCCESS_WITH_INFO;
+        }
+    }
 
     return rc;
 }
-
-   

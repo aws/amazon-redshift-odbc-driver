@@ -91,17 +91,17 @@ namespace Redshift
 		private:
 			// @brief Disabled assignment operator to avoid warning.
 			IAMBrowserAzureOAuth2CredentialsProvider& operator=(const IAMBrowserAzureOAuth2CredentialsProvider& in_browserProvider);
-
+// LINUX is used in Mac build too, so order of LINUX and APPLE are important
 #if (defined(_WIN32) || defined(_WIN64))
 			const char* command_ = "start \"\" \"";
+			const char* subcommand_ = "\"";
+#elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
+			const char* command_ = "open \"";
 			const char* subcommand_ = "\"";
 #elif (defined(LINUX) || defined(__linux__))
 			const char* command_ = "URL=\"";
 			// Trying so hard to open browser on Linux as some commands couldn't work.
 			const char* subcommand_ = "\"; xdg-open $URL || sensible-browser $URL || x-www-browser $URL || gnome-open $URL";
-#elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
-			const char* command_ = "open \"";
-			const char* subcommand_ = "\"";
 #endif
 		};
 	}

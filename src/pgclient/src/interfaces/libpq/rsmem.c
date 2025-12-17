@@ -51,3 +51,4 @@ void *rs_free(void * block)
     return NULL;
 }
 
+void RsFree(void* p) { free(p); }  // uses the DLL's CRT

@@ -132,6 +132,7 @@ void IAMBrowserAzureCredentialsProvider::LaunchBrowser(const rs_string& uri)
     RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::LaunchBrowser");
 
 	//  Avoid system calls where possible for LOGIN_URL to help avoid possible remote code execution
+// LINUX is used in Mac build too, so order of LINUX and APPLE are important
 #if (defined(_WIN32) || defined(_WIN64))
 	if (static_cast<int>(
 		reinterpret_cast<intptr_t>(
@@ -142,11 +143,6 @@ void IAMBrowserAzureCredentialsProvider::LaunchBrowser(const rs_string& uri)
 				NULL,
 				NULL,
 				SW_SHOWNORMAL))) <= 32)
-#elif (defined(LINUX) || defined(__linux__))
-
-    rs_string open_uri = command_ + uri + subcommand_;
-
-    if (system(open_uri.c_str()) == -1)
 #elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
 	CFURLRef url = CFURLCreateWithBytes(
 		NULL,                        // allocator
@@ -161,6 +157,11 @@ void IAMBrowserAzureCredentialsProvider::LaunchBrowser(const rs_string& uri)
 		CFRelease(url);
 	}
 	else
+#elif (defined(LINUX) || defined(__linux__))
+
+    rs_string open_uri = command_ + uri + subcommand_;
+
+    if (system(open_uri.c_str()) == -1)
 #endif
     {
         IAMUtils::ThrowConnectionExceptionWithInfo("Couldn't open a URI or some error occurred.");

@@ -1,8 +1,9 @@
+#include "common.h"
 #include "iam/plugins/BrowserIdcAuthPlugin.h"
 #include "iam/core/IAMUtils.h"
 #include "iam/core/IAMConfiguration.h"
 #include "iam/RsErrorException.h"
-#include "common.h"
+
 
 using namespace Redshift::IamSupport;
 

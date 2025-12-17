@@ -96,7 +96,9 @@ class RsTrace {
         RS_LOG_DEBUG(TAG, buffer.c_str());
     }
 
-private:
+protected:
+    const std::string& getBuffer() const { return buffer; }
+    void clearBuffer() { buffer.clear(); }
     void traceError(const char *fmt,...);
     void traceAPICall(const char *fmt,...);
     void traceArg(const char *fmt,...);
@@ -172,8 +174,8 @@ private:
 
     void traceData(const char *pArgName, SQLSMALLINT hType, SQLPOINTER pValue, SQLLEN cbLen);
 
-    void tracePasswordConnectString(char *var,char *szConnStr, SQLSMALLINT  cbConnStr);
-    void tracePasswordConnectStringW(char *var,SQLWCHAR *wszConnStr, SQLSMALLINT  cchConnStr);
+    void tracePasswordConnectString(const char *var,const char *szConnStr, SQLSMALLINT  cbConnStr);
+    void tracePasswordConnectStringW(const char *var,SQLWCHAR *wszConnStr, SQLSMALLINT  cchConnStr);
 
 public:
 

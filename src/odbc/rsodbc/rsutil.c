@@ -22,6 +22,8 @@
 #include <string>
 #include <iostream>
 #include <codecvt>
+#include <optional>
+#include <mutex>
 
 #ifdef WIN32
 #include <winsock.h>
@@ -192,7 +194,46 @@ char* sqlTypeNameMap(short value){
         NAME(SQL_TYPE_TIME)
         NAME(SQL_TYPE_TIMESTAMP)
     }
-    return "unknown";
+    static thread_local char buf[32];
+    snprintf(buf, sizeof(buf), "unknown(%d)", value);
+    return buf;
+#undef NAME
+}
+
+char* cTypeNameMap(short value){
+#define NAME(TYPE) case TYPE: return #TYPE;
+    switch (value) {
+        NAME(SQL_C_CHAR)
+        NAME(SQL_C_WCHAR)
+        NAME(SQL_C_SHORT)
+        NAME(SQL_C_SSHORT)
+        NAME(SQL_C_USHORT)
+        NAME(SQL_C_LONG)
+        NAME(SQL_C_SLONG)
+        NAME(SQL_C_ULONG)
+        NAME(SQL_C_FLOAT)
+        NAME(SQL_C_DOUBLE)
+        NAME(SQL_C_BIT)
+        NAME(SQL_C_TINYINT)
+        NAME(SQL_C_STINYINT)
+        NAME(SQL_C_UTINYINT)
+        NAME(SQL_C_SBIGINT)
+        NAME(SQL_C_UBIGINT)
+        NAME(SQL_C_BINARY)
+        NAME(SQL_C_TYPE_DATE)
+        NAME(SQL_C_TYPE_TIME)
+        NAME(SQL_C_TYPE_TIMESTAMP)
+        NAME(SQL_C_NUMERIC)
+        NAME(SQL_C_DEFAULT)
+        NAME(SQL_C_DATE)
+        NAME(SQL_C_TIME)
+        NAME(SQL_C_TIMESTAMP)
+        NAME(SQL_C_INTERVAL_YEAR_TO_MONTH)
+        NAME(SQL_C_INTERVAL_DAY_TO_SECOND)
+    }
+    static thread_local char buf[32];
+    snprintf(buf, sizeof(buf), "unknown(%d)", value);
+    return buf;
 #undef NAME
 }
 
@@ -211,9 +252,9 @@ unsigned char hex_to_binary(char in_hex);
 #endif
 
 #ifdef WIN32
-int intervald2s_out_wchar(INTERVALD2S_STRUCT* d2s, WCHAR *buf, int buf_len);
-int intervaly2m_out_wchar(INTERVALY2M_STRUCT* y2m, WCHAR *buf, int buf_len);
-int intervaly2m_out_wchar(INTERVALD2S_STRUCT* d2s, WCHAR *buf, int buf_len);
+int intervald2s_out_wchar(INTERVALD2S_STRUCT* d2s, SQLWCHAR *buf, int buf_len);
+int intervaly2m_out_wchar(INTERVALY2M_STRUCT* y2m, SQLWCHAR *buf, int buf_len);
+int intervaly2m_out_wchar(INTERVALD2S_STRUCT* d2s, SQLWCHAR *buf, int buf_len);
 #endif
 
 /*====================================================================================================================================================*/
@@ -258,56 +299,74 @@ char *rs_strdup(const char *src, size_t cbLen)
     return dest;
 }
 
-/*====================================================================================================================================================*/
-
-//---------------------------------------------------------------------------------------------------------igarish
-// If given string is not null terminated then allocated the memory (if needed) and null terminate it.
-// This we have to do because libpq calls always expect null terminated string.
-unsigned char *makeNullTerminatedStr(char *pData, size_t cbLen, RS_STR_BUF *pPaStrBuf)
+/**
+ * Creates a null-terminated string from potentially non-null-terminated input
+ * 
+ * @param pData   Input string data (may not be null-terminated)
+ * @param cbLen   Length of data in bytes, or SQL_NTS if already null-terminated, or SQL_NULL_DATA if null.
+ *                 If SQL_NTS, pData is assumed to be null-terminated and assigned to RS_STR_BUF as is.
+ *                 If SQL_NULL_DATA, pData is ignored and NULL is returned.
+ * @param pPaStrBuf Buffer management structure. If provided, will be used to track allocated memory.
+ *                  If null, memory will be allocated but caller is responsible for freeing it.
+ * 
+ * @return Pointer to null-terminated string, or NULL on error/null input.
+ *         If pPaStrBuf is NULL, caller must free the returned pointer (if not NULL).
+ */
+unsigned char *makeNullTerminatedStr(char *pData, int64_t cbLen, RS_STR_BUF *pPaStrBuf)
 {
+    // Initialize buffer management structure if provided
     resetPaStrBuf(pPaStrBuf);
-
-    if(pData != NULL && cbLen != SQL_NULL_DATA)
-    {
-        if(INT_LEN(cbLen) == SQL_NTS)
-        {
-            if(pPaStrBuf)
-                pPaStrBuf->pBuf = pData;
-
-            return (unsigned char *)pData;
-        }
-        else
-        {
-            unsigned char *szData;
-
-            if(pPaStrBuf)
-            {
-                if(cbLen > SHORT_STR_DATA)
-                {
-                    pPaStrBuf->pBuf = (char *) rs_malloc(cbLen + 1);
-                    szData = (unsigned char *) (pPaStrBuf->pBuf);
-                    pPaStrBuf->iAllocDataLen = (int) cbLen;
-                }
-                else
-                {
-                    pPaStrBuf->pBuf = pPaStrBuf->buf;
-                    szData = (unsigned char *)(pPaStrBuf->pBuf);
-                    pPaStrBuf->iAllocDataLen = 0;
-                }
-            }
-            else
-            {
-                szData = (unsigned char *) rs_malloc(cbLen + 1);
-            }
-
-            memcpy(szData, pData, cbLen);
-            szData[cbLen] = '\0';
-
-            return szData;
-        }
-    }
-    else
+    
+    // Handle NULL data or SQL_NULL_DATA
+    if (pData == NULL || cbLen == SQL_NULL_DATA) {
         return NULL;
+    }
+
+    // Already null-terminated string case
+    if (INT_LEN(cbLen) == SQL_NTS) {
+        if (pPaStrBuf) pPaStrBuf->pBuf = pData;
+        return (unsigned char *)pData;
+    } 
+    // Invalid length case
+    else if (cbLen < 0) {
+        return NULL;
+    }
+    // Need to create null-terminated copy
+    else {
+        // Use rs_strnlen to safely find actual string length without reading beyond cbLen
+        size_t actualLen = rs_strnlen(pData, cbLen);
+        unsigned char *szData = NULL;
+
+        // Check for integer overflow in allocation size
+        if (actualLen > SIZE_MAX - 1) {
+            return NULL;
+        }
+
+        if (pPaStrBuf) {
+            if (actualLen > SHORT_STR_DATA) {
+                // Need to dynamically allocate memory
+                pPaStrBuf->pBuf = (char *)rs_malloc(actualLen + 1);
+                if (!pPaStrBuf->pBuf) return NULL; // Check allocation success
+                
+                szData = (unsigned char *)(pPaStrBuf->pBuf);
+                pPaStrBuf->iAllocDataLen = (int)actualLen;
+            } else {
+                // Use the built-in buffer for small strings
+                pPaStrBuf->pBuf = pPaStrBuf->buf;
+                szData = (unsigned char *)(pPaStrBuf->pBuf);
+                pPaStrBuf->iAllocDataLen = 0;
+            }
+        } else {
+            // No buffer management provided, allocate directly
+            szData = (unsigned char *)rs_malloc(actualLen + 1);
+            if (!szData) return NULL; // Check allocation success
+        }
+        
+        // Copy the data and null-terminate
+        memcpy(szData, pData, actualLen);
+        szData[actualLen] = '\0';
+        return szData;
+    }
 }
 
 /*====================================================================================================================================================*/
@@ -783,47 +842,33 @@ SQLRETURN copyStrDataSmallLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest,
 //---------------------------------------------------------------------------------------------------------igarish
 // Copy large string data.
 //
-SQLRETURN copyStrDataLargeLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLINTEGER cbLen, SQLINTEGER *pcbLen)
-{
+SQLRETURN copyStrDataLargeLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest,
+                              SQLINTEGER cbLen, SQLINTEGER *pcbLen) {
     SQLRETURN rc = SQL_SUCCESS;
-    int len = (pSrc && (iSrcLen != SQL_NULL_DATA)) 
-                ? ((iSrcLen == SQL_NTS) ? (int) strlen(pSrc) : iSrcLen) 
-                : 0;
+    int len = (pSrc && (iSrcLen != SQL_NULL_DATA))
+                  ? ((iSrcLen == SQL_NTS) ? (int)strlen(pSrc) : iSrcLen)
+                  : 0;
 
-    if(pDest != NULL)
-    {
-        if(len > 0)
-        {
-            if(len < cbLen)
-            {
+    if (pDest != NULL) {
+        if (len > 0) {
+            if (len < cbLen) {
                 strncpy(pDest, pSrc, len);
                 pDest[len] = '\0';
-            }
-            else
-            {
-                if(cbLen > 0)
-                {
-                    strncpy(pDest,pSrc, cbLen-1);
-                    pDest[cbLen-1] = '\0';
-                    rc = SQL_SUCCESS_WITH_INFO;
+            } else {
+                if (cbLen > 0) {
+                    strncpy(pDest, pSrc, cbLen - 1);
+                    pDest[cbLen - 1] = '\0';
                 }
-                else
-                    rc = SQL_SUCCESS_WITH_INFO;
+                rc = SQL_SUCCESS_WITH_INFO;
             }
-        }
-        else
-        {
-            if(cbLen > 0)
+        } else {
+            if (cbLen > 0)
                 pDest[0] = '\0';
         }
     }
-    else
-        rc = SQL_SUCCESS_WITH_INFO;
 
-    if(pcbLen != NULL)
+    if (pcbLen != NULL)
         *pcbLen = len;
-    else
-        rc = SQL_SUCCESS;
 
     return rc;
 }
@@ -1199,14 +1244,59 @@ SQLRETURN copyBinaryToHexDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
-// Copy big WCHAR string data.
+// Copy UTF-8 source string to wide character (SQLWCHAR) destination buffer with support for sequential fetches.
 //
-// cbLen and pcbLen are in bytes
+// Converts UTF-8 encoded source data to platform-specific wide character format (UTF-16 on Windows, UTF-32 on Linux).
+// Supports partial data retrieval through sequential fetches using cbLenOffset.
+//
+// Parameters:
+//   pStmt        - Statement handle for error reporting (can be NULL)
+//   pSrc         - Source UTF-8 string buffer
+//   iSrcLen      - Source length in bytes, or SQL_NTS if null-terminated, or SQL_NULL_DATA for NULL
+//   pDest        - Destination wide character buffer (must not be NULL)
+//   cbLen        - Destination buffer size in bytes (must be >= 0)
+//   cbLenOffset  - [in/out] Character offset for sequential fetches; reset to 0 when complete
+//   pcbLenInd    - [out] Bytes available at start of call, or SQL_NULL_DATA for NULL
+//
+// Returns:
+//   SQL_SUCCESS           - All data copied successfully
+//   SQL_SUCCESS_WITH_INFO - Data truncated (01004 warning added)
+//   SQL_ERROR             - Invalid parameters (HY090 or HY009 error added)
+//
+// Notes:
+//   - All length parameters (cbLen, pcbLenInd) are in bytes, not characters
+//   - Destination buffer is always null-terminated when cchLen > 0
+//   - Allocates temporary buffer for conversion; caller need not free
+//   - Sequential fetches: cbLenOffset tracks position across multiple calls
 SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
-                             SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen,
+                             SQLINTEGER iSrcLen, SQLWCHAR *pDest, SQLLEN cbLen,
                              SQLLEN *cbLenOffset, SQLLEN *pcbLenInd) {
 
-    // TODO: Move the check for cbLen and pDest to SQLGetData API
+// 1024 characters * max 4 bytes per UTF-8 char
+#define MAX_LOG_STRING_LENGTH 1024 * 4
+    auto contextCreator = [&]() -> std::string {
+        // This lambda will only generate information only when needed,
+        // minimizing overhead
+        std::ostringstream oss;
+        auto pSrcLen = rs_strnlen(pSrc, MAX_LOG_STRING_LENGTH);
+        oss << "pStmt=" << pStmt << ", iSrcLen=" << iSrcLen
+            << ", cbLen=" << cbLen
+            << ", cbLenOffset=" << ((cbLenOffset != NULL) ? *cbLenOffset : -999)
+            << ", pcbLenInd=" << pcbLenInd << ", strlen(pSrc)=" << pSrcLen;
+        return oss.str();
+    };
+    // Sanity checks
+    if (iSrcLen < 0 && iSrcLen != SQL_NTS && iSrcLen != SQL_NULL_DATA) {
+        if (pStmt) {
+            addError(&pStmt->pErrorList, "HY090", "Invalid string length.", 0,
+                     NULL);
+        }
+        auto context = contextCreator();
+        RS_LOG_ERROR("RSUTIL", "Invalid string length. Context: %s",
+                     context.c_str());
+        return SQL_ERROR;
+    }
+
     if (cbLen < 0) {
         if (pStmt) {
             addError(&pStmt->pErrorList, "HY090",
@@ -1214,8 +1304,11 @@ SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
                      "than or equal to 0) ",
                      0, NULL);
         }
-        RS_LOG_ERROR("RSUTIL", "Invalid buffer length specified (length "
-                               "must be greater than or equal to 0) ");
+        auto context = contextCreator();
+        RS_LOG_ERROR("RSUTIL",
+                     "Invalid buffer length specified (length "
+                     "must be greater than or equal to 0). Context: %s",
+                     context.c_str());
         return SQL_ERROR;
     }
     if (pDest == NULL) {
@@ -1238,7 +1331,7 @@ SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
                        : 0;
 
     // Maximum number of wide characters the buffer can hold
-    int cchLen = (int)(cbLen / sizeof(WCHAR));
+    int cchLen = (int)(cbLen / sizeofSQLWCHAR());
 
     // Handle NULL data case
     if (pSrc == NULL || iSrcLen == SQL_NULL_DATA) {
@@ -1262,8 +1355,9 @@ SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
             *pcbLenInd = 0; // Empty string has length 0
         }
         if (cchLen > 0) {
-            pDest[0] = L'\0';
-            return SQL_SUCCESS; // Return SUCCESS even with zero buffer
+            setFirstSqlwcharNull(pDest);
+            // Return SUCCESS even with zero buffer
+            return SQL_SUCCESS;
         }
         // We can't even fit NULL
         if (pStmt) {
@@ -1272,37 +1366,96 @@ SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
                        "small to hold the entire data.",
                        0, NULL);
         }
-        RS_LOG_DEBUG("RSUTIL", "String data, right truncation occurred: Buffer "
-                               "too small to hold the entire data.");
+        auto context = contextCreator();
+        RS_LOG_DEBUG("RSUTIL",
+                     "String data, right truncation occurred: Buffer "
+                     "too small to hold the entire data. Context: %s",
+                     context.c_str());
         return SQL_SUCCESS_WITH_INFO;
     }
 
     // Determine character count and length after conversion
-    std::u16string wcharStr;
-    int wcharLen = char_utf8_to_utf16_str(pSrc, bytesLen, wcharStr);
-    int totalWcharBytes = wcharLen * sizeof(WCHAR);
+    static const size_t SHORT_BUFFER_LENGTH = 256;
+    const int ut = get_app_unicode_type();
 
-    // Get current position for sequential fetches (in characters)
-    int currentChar = (cbLenOffset) ? *cbLenOffset : 0;
+    union {
+        uint16_t u16[SHORT_BUFFER_LENGTH];
+        uint32_t u32[SHORT_BUFFER_LENGTH];
+    } sbuf; // lives to end of function
 
-    // Set the indicator to length of data available at the start of current
-    // call
-    if (pcbLenInd) {
-        *pcbLenInd = (wcharLen - currentChar) * sizeof(WCHAR);
+    SQLWCHAR *wcharStr = NULL;
+    size_t wcharLen = 0;
+    bool useHeap = false;
+
+    const bool canUseStack =
+        (bytesLen >= 0) && ((size_t)bytesLen + 1 <= SHORT_BUFFER_LENGTH);
+
+    if (canUseStack) {
+        if (ut == SQL_DD_CP_UTF32) {
+            wcharStr = (SQLWCHAR *)sbuf.u32; // 256 UTF-32 units
+        } else {
+            wcharStr = (SQLWCHAR *)sbuf.u16; // 256 UTF-16 units
+        }
+        wcharLen =
+            utf8_to_sqlwchar_str(pSrc, bytesLen, wcharStr, SHORT_BUFFER_LENGTH,
+                                 /*totalNeeded*/ NULL, ut);
+    } else {
+        wcharStr = NULL;
+        wcharLen = utf8_to_sqlwchar_alloc(pSrc, bytesLen, &wcharStr, ut);
+        useHeap = true;
     }
 
-    // Check if we've already fetched everything
+    // Detect conversion failure for both heap and stack paths:
+    // - heap path: wcharStr == nullptr on failure
+    // - stack path: wcharStr != nullptr but wcharLen == 0 on failure (with
+    // bytesLen > 0)
+    if ((bytesLen > 0) && (!wcharStr || wcharLen == 0)) {
+        // Free only if heap-allocated
+        if (useHeap && wcharStr) {
+            wcharStr = (SQLWCHAR *)rs_free(wcharStr);
+        }
+        if (pStmt) {
+            addError(&pStmt->pErrorList, "HY000", "Unicode conversion failed.",
+                     0, NULL);
+        }
+        auto context = contextCreator();
+        RS_LOG_ERROR("RSUTIL", "Unicode conversion failed. Context: %s",
+                     context.c_str());
+        return SQL_ERROR;
+    }
+
+    // currentChar: Starting position in the converted wide character string for
+    // this fetch. Used for sequential fetches where the application retrieves
+    // data in multiple calls. Tracks how many characters have already been
+    // returned in previous calls.
+    int currentChar = (cbLenOffset) ? *cbLenOffset : 0;
+
+    // If offset is at or past the end, all data has been fetched
     if (currentChar >= wcharLen) {
         if (cbLenOffset) {
             *cbLenOffset = 0; // Reset offset
         }
+        if (pcbLenInd) {
+            *pcbLenInd = 0; // No remaining data
+        }
+        if (useHeap && wcharStr) {
+            wcharStr = (SQLWCHAR *)rs_free(wcharStr);
+        }
         return SQL_SUCCESS;
     }
 
-    // Calculate remaining characters and how many we can copy
+    // Calculate how many characters remain to be fetched from currentChar
+    // position
     int remainingChars = wcharLen - currentChar;
+    // Set the indicator to length of data available at the start of current
+    // call This matches the behavior of copyStrDataBigLen
+    if (pcbLenInd) {
+        *pcbLenInd = remainingChars * sizeofSQLWCHAR();
+    }
 
-    // Calculate the safe number of wide characters to copy, ensuring:
+    // Calculate how many characters to copy in this call, starting from
+    // currentChar. Limited by: buffer capacity (cchLen - 1 for null terminator)
+    // and remaining data. ensuring:
     // 1. We have a valid destination buffer (cchLen > 0)
     // 2. We reserve space for null terminator (cchLen - 1)
     // 3. We don't copy more than available remaining characters (MIN with
@@ -1312,11 +1465,22 @@ SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
 
     // Copy data if destination buffer is provided
     if (cchLen > 0) {
-        if (copyChars > 0) {
-            std::u16string portion = wcharStr.substr(currentChar, copyChars);
-            memcpy(pDest, portion.c_str(), copyChars * sizeof(WCHAR));
+        // Final green light to do the copy and null termination
+        if (copyChars > 0 && currentChar >= 0 &&
+            (currentChar + copyChars) <= wcharLen && wcharStr) {
+            memcpy(pDest, (char *)wcharStr + (currentChar * sizeofSQLWCHAR()),
+                   copyChars * sizeofSQLWCHAR());
         }
-        pDest[copyChars] = L'\0'; // always null-terminate
+        // Write null terminator with proper size for current Unicode format
+        if ((copyChars * sizeofSQLWCHAR()) < cbLen) {
+            memset((char *)pDest + (copyChars * sizeofSQLWCHAR()), 0,
+                   sizeofSQLWCHAR());
+        }
+    } // else check the offset or cchLen == 0 :
+
+    // Free only if heap allocated
+    if (useHeap && wcharStr) {
+        wcharStr = (SQLWCHAR *)rs_free(wcharStr);
     }
 
     // Handle sequential fetch offset updating
@@ -1324,15 +1488,17 @@ SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
         if (remainingChars > copyChars) {
             // More data remains, update offset and signal truncation
             *cbLenOffset += copyChars;
+            std::string err =
+                "String data, right truncation occurred: Buffer too small to "
+                "hold the entire data";
             if (pStmt) {
-                addWarning(&pStmt->pErrorList, "01004",
-                           "String data, right truncation occurred: Buffer too "
-                           "small to hold the entire data.",
-                           0, NULL);
+                addWarning(&pStmt->pErrorList, "01004", err.data(), 0, NULL);
             }
-            RS_LOG_DEBUG("RSUTIL",
-                         "String data, right truncation occurred: Buffer "
-                         "too small to hold the entire data.");
+            err += ": remainingChars(" + std::to_string(remainingChars) +
+                   ") > copyChars(" + std::to_string(copyChars) +
+                   ") Context:" + contextCreator();
+
+            RS_LOG_DEBUG("RSUTIL", "%s", err.data());
             return SQL_SUCCESS_WITH_INFO;
         } else {
             // All data fetched, reset offset
@@ -1342,16 +1508,17 @@ SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
     } else {
         // Not using sequential fetches
         if (remainingChars > copyChars && cchLen > 0) {
-            // Truncation occurred
+            std::string err =
+                "String data, right truncation occurred: Buffer too small to "
+                "hold the entire data";
             if (pStmt) {
-                addWarning(&pStmt->pErrorList, "01004",
-                           "String data, right truncation occurred: Buffer too "
-                           "small to hold the entire data.",
-                           0, NULL);
+                addWarning(&pStmt->pErrorList, "01004", err.data(), 0, NULL);
             }
-            RS_LOG_DEBUG("RSUTIL",
-                         "String data, right truncation occurred: Buffer "
-                         "too small to hold the entire data.");
+            err += ": remainingChars(" + std::to_string(remainingChars) +
+                   ") > copyChars(" + std::to_string(copyChars) + ") cchLen(" +
+                   std::to_string(cchLen) + ") Context:" + contextCreator();
+
+            RS_LOG_DEBUG("RSUTIL", "%s", err.data());
             return SQL_SUCCESS_WITH_INFO;
         }
     }
@@ -1365,8 +1532,12 @@ SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
                        "small to hold the entire data.",
                        0, NULL);
         }
-        RS_LOG_DEBUG("RSUTIL", "String data, right truncation occurred: Buffer "
-                               "too small to hold the entire data.");
+
+        auto context = contextCreator();
+        RS_LOG_DEBUG("RSUTIL",
+                     "String data, right truncation occurred: Buffer "
+                     "too small to hold the entire data. Context: %s",
+                     context.c_str());
         return SQL_SUCCESS_WITH_INFO;
     }
 
@@ -1376,147 +1547,138 @@ SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc,
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
-// Copy big WCHAR string data from LONGVARBINARY in HEX format (VARBYTE, GEOMETRY, GEOGRAPHY  etc.
+// Copy big SQLWCHAR string data from LONGVARBINARY in HEX format (VARBYTE, GEOMETRY, GEOGRAPHY  etc.
 //
 // cbLen and pcbLen are in bytes
-SQLRETURN copyWBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
+SQLRETURN SQL_API copyWBinaryDataBigLen(const char *pSrc,
+                                        SQLINTEGER iSrcLen,
+                                        SQLWCHAR  *pDest,
+                                        SQLLEN     cbLen,
+                                        SQLLEN    *pcbLen)
 {
-	SQLRETURN rc = SQL_SUCCESS;
-	int len = (pSrc && (iSrcLen != SQL_NULL_DATA))
-		? iSrcLen
-		: 0;
-	int cchLen = (int)((cbLen > 0) ? cbLen / sizeof(WCHAR) : cbLen);
+    const bool hasData   = (pSrc && iSrcLen != SQL_NULL_DATA && iSrcLen > 0);
+    const size_t inBytes = hasData ? static_cast<size_t>(iSrcLen) : 0u;
+    const size_t charSz  = static_cast<size_t>(sizeofSQLWCHAR());
+    const size_t cchCap  = (cbLen > 0) ? static_cast<size_t>(cbLen) / charSz : 0u;
 
-	if (pDest != NULL)
-	{
-		if (len > 0)
-		{
-			int tempLen = 0;
-			if (len < cchLen)
-			{
-				tempLen = len;
-			}
-			else
-			{
-				if (cchLen > 0)
-				{
-					tempLen = cchLen - 1;
-					rc = SQL_SUCCESS_WITH_INFO;
-				}
-				else
-					rc = SQL_SUCCESS_WITH_INFO;
-			}
+    if (pcbLen) {
+        unsigned long long need =
+            static_cast<unsigned long long>(inBytes) * charSz;
+        if (need > static_cast<unsigned long long>((std::numeric_limits<SQLLEN>::max)())) {
+            *pcbLen = 0;
+            return SQL_ERROR;
+        }
+        *pcbLen = static_cast<SQLLEN>(need); // bytes, excl NUL
+    }
 
-			if (tempLen > 0)
-			{
-				char *pTempDest = (char *)pDest;
+    if (!pDest || cchCap == 0) return SQL_SUCCESS; // length inquiry / no capacity
 
-				pDest[tempLen] = L'\0';
+    const size_t toCopy = (cchCap - 1u < inBytes) ? (cchCap - 1u) : inBytes;
 
-				while (tempLen > 0)
-				{
-					*pTempDest = *pSrc;
-					pTempDest += sizeof(WCHAR);
-					pSrc++;
-					tempLen--;
-				} // WCHAR loop
-			}
-		}
-		else
-		{
-			if (cchLen > 0)
-				pDest[0] = L'\0';
-		}
-	}
-	else
-		rc = SQL_SUCCESS_WITH_INFO;
+    // Bulk zero the region we’ll use: toCopy chars + 1 NUL
+    unsigned char* outB = reinterpret_cast<unsigned char*>(pDest);
+    std::memset(outB, 0, (toCopy + 1u) * charSz);
 
-	if (pcbLen != NULL)
-		*pcbLen = len * sizeof(WCHAR);
-	else
-		rc = SQL_SUCCESS;
+    // Write low byte of each wide cell
+    const unsigned char* uSrc = reinterpret_cast<const unsigned char*>(pSrc);
+    for (size_t i = 0; i < toCopy; ++i) {
+        outB[i * charSz + 0] = uSrc[i];
+    }
 
-	return rc;
+    return (toCopy < inBytes) ? SQL_SUCCESS_WITH_INFO : SQL_SUCCESS;
 }
 
 /*====================================================================================================================================================*/
 
-SQLRETURN copyWBinaryToHexDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen)
+/*
+ * Hex-encode binary -> wide string (W=2 or W=4 at runtime).
+ * - Each input byte becomes two ASCII hex chars (uppercase).
+ * - *pcbLen returns required BYTES (excluding the null terminator) at the client's wchar width.
+ * - Returns:
+ *     SQL_SUCCESS            when fully written or length-only query
+ *     SQL_SUCCESS_WITH_INFO  when truncated (buffer too small)
+ *     SQL_ERROR              on length overflow (required bytes > SQLLEN max)
+ *
+ * Notes:
+ * - Does NOT write anything if pDest==NULL or cbLen<=0 (length-only query).
+ * - Always null-terminates if there is at least 1 wchar of capacity.
+ * - Uses runtime wchar width: size_t charSize = sizeofSQLWCHAR();  // 2 or 4
+ * - Assumes native endianness zero-extends ASCII (0x41 -> 0x0041 / 0x00000041).
+ *   If you need specific endianness, add byte swaps accordingly.
+ */
+SQLRETURN SQL_API copyWBinaryToHexDataBigLen(const char *psrc,
+                                             SQLINTEGER iSrcLen,
+                                             SQLWCHAR *pDest,
+                                             SQLLEN cbLen,
+                                             SQLLEN *pcbLen)
 {
-	SQLRETURN rc = SQL_SUCCESS;
-	int len = (pSrc && (iSrcLen != SQL_NULL_DATA))
-		? iSrcLen
-		: 0;
-	const char * hex = "0123456789ABCDEF";
-	int cchLen = (int)((cbLen > 0) ? cbLen / sizeof(WCHAR) : cbLen);
+    static const char HEX[] = "0123456789ABCDEF";
 
-	if (cchLen & 1)
-	{
-		// Reduce the size by 1 to make it even
-		cchLen--;
-	}
+    const unsigned char* pSrc = (const unsigned char*)psrc;
+    const bool hasData = (pSrc && iSrcLen != SQL_NULL_DATA && iSrcLen > 0);
+    const size_t inBytes = hasData ? (size_t)iSrcLen : 0u;
+    const size_t requiredChars = inBytes * 2u;
 
-	if (pDest != NULL)
-	{
-		if (len > 0)
-		{
-			int output_len = 0;
+    const size_t w = (size_t)sizeofSQLWCHAR();     // 2 or 4 at runtime
+    // sanity
+    if (w != 2 && w != 4) return SQL_ERROR;
 
-			len = iSrcLen * 2;
+    // Report required BYTES (no NUL)
+    if (pcbLen) {
+        unsigned long long need = (unsigned long long)requiredChars * (unsigned long long)w;
+        if (need > (unsigned long long)(std::numeric_limits<SQLLEN>::max)()) {
+            *pcbLen = 0;
+            return SQL_ERROR;
+        }
+        *pcbLen = (SQLLEN)need;
+    }
 
-			if (len < cchLen)
-			{
-				output_len = len;
-			}
-			else
-			{
-				if (cchLen > 0)
-				{
-					output_len = cchLen - 1;
-					rc = SQL_SUCCESS_WITH_INFO;
-				}
-				else
-					rc = SQL_SUCCESS_WITH_INFO;
-			}
+    // Length-only / no capacity
+    if (!pDest || cbLen <= 0) return SQL_SUCCESS;
 
-			if (output_len > 0)
-			{
-				char *pTempDest = (char *)pDest;
+    // Capacity in characters
+    size_t capChars = (size_t)((unsigned long long)cbLen / (unsigned long long)w);
+    if (capChars == 0) return SQL_SUCCESS;
 
-				pDest[output_len] = L'\0';
+    // Leave room for NUL and keep even count (pairs per byte)
+    size_t usable = (capChars > 0) ? (capChars - 1u) : 0u;
+    if (usable > requiredChars) usable = requiredChars;
+    if (usable & 1u) usable -= 1u;
 
-				for (int outputIndex = 0; outputIndex < output_len; outputIndex += 2)
-				{
-					*pTempDest = hex[(*pSrc >> 4) & 0xF];
-					pTempDest += sizeof(WCHAR);
-					*pTempDest = hex[*pSrc & 0xF];
-					pTempDest += sizeof(WCHAR);
-					pSrc++;
-				}
-			}
-			else
-			{
-				if (cchLen > 0)
-					pDest[0] = L'\0';
-			}
-		}
-		else
-		{
-			if (cchLen > 0)
-				pDest[0] = L'\0';
-		}
-	}
-	else
-		rc = SQL_SUCCESS_WITH_INFO;
+    unsigned char* wp = (unsigned char*)pDest;     // byte writer
+    size_t produced = 0;                            // chars (not bytes)
 
-	if (pcbLen != NULL)
-		*pcbLen = len * sizeof(WCHAR);
-	else
-		rc = SQL_SUCCESS;
+    auto put_wchar = [&](uint32_t ascii) {
+        if (w == 2) {
+            uint16_t v = (uint16_t)ascii;
+            std::memcpy(wp, &v, 2);
+            wp += 2;
+        } else { // w == 4
+            uint32_t v = ascii;
+            std::memcpy(wp, &v, 4);
+            wp += 4;
+        }
+        ++produced;
+    };
 
-	return rc;
+    for (size_t i = 0; i < inBytes && produced + 2u <= usable; ++i) {
+        unsigned v = pSrc[i];
+        put_wchar((uint32_t)HEX[(v >> 4) & 0xF]);
+        put_wchar((uint32_t)HEX[v & 0xF]);
+    }
+
+    // NUL terminator (one wchar)
+    if (w == 2) {
+        uint16_t z = 0;
+        std::memcpy(wp, &z, 2);
+    } else {
+        uint32_t z = 0;
+        std::memcpy(wp, &z, 4);
+    }
+
+    const bool truncated = (requiredChars > usable);
+    return truncated ? SQL_SUCCESS_WITH_INFO : SQL_SUCCESS;
 }
-
 
 /*====================================================================================================================================================*/
 
@@ -1920,10 +2082,14 @@ SQLRETURN getGucVariableVal(RS_CONN_INFO *pConn, char *pVarName, char *pVarVal, 
         {
             rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0);
 
-            if(rc == SQL_SUCCESS)
-                rc = RS_STMT_INFO::RS_SQLGetData((RS_STMT_INFO *)phstmt,1, SQL_C_CHAR, pVarVal, iBufLen, NULL, TRUE);
-			else
-				pVarVal[0] = 0;
+            if (rc == SQL_SUCCESS) {
+                SQLLEN pcbLenIndInternal = (std::numeric_limits<SQLLEN>::min)();
+                rc = RS_STMT_INFO::RS_SQLGetData((RS_STMT_INFO *)phstmt, 1,
+                                                 SQL_C_CHAR, pVarVal, iBufLen,
+                                                 NULL, TRUE, pcbLenIndInternal);
+            } else {
+                pVarVal[0] = 0;
+            }
 
             rc = RS_SQLFreeHandle(SQL_HANDLE_STMT, phstmt);
         }
@@ -1963,10 +2129,15 @@ SQLRETURN getOneQueryVal(RS_CONN_INFO *pConn, char * pSqlCmd, char *pVarBuf, int
 		{
 			rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, SQL_FETCH_NEXT, 0);
 
-			if (rc == SQL_SUCCESS)
-				rc = RS_STMT_INFO::RS_SQLGetData((RS_STMT_INFO *)phstmt, 1, SQL_C_CHAR, pVarBuf, iBufLen, NULL, TRUE);
+            if (rc == SQL_SUCCESS) {
+                SQLLEN pcbLenIndInternal =
+                    (std::numeric_limits<SQLLEN>::min)();
+                rc = RS_STMT_INFO::RS_SQLGetData(
+                    (RS_STMT_INFO *)phstmt, 1, SQL_C_CHAR, pVarBuf,
+                    iBufLen, NULL, TRUE, pcbLenIndInternal);
+            }
 
-			rc = RS_SQLFreeHandle(SQL_HANDLE_STMT, phstmt);
+            rc = RS_SQLFreeHandle(SQL_HANDLE_STMT, phstmt);
 		}
 		else
 			goto error;
@@ -2013,10 +2184,11 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
         getRsVal(pColData, iColDataLen, hSQLType, &rsVal, hType, format,
                     pDescRec, hRsSpecialType, FALSE);
 
-    RS_LOG_DEBUG("RSUTIL",
-                    "convertSQLDataToCData hCType=%d hSQLType=%d "
-                    "format=%d iColDataLen=%d iConversion=%d",
-                    hType, hSQLType, format, iColDataLen, iConversion);
+    RS_LOG_TRACE("RSUTIL",
+                 "convertSQLDataToCData C-Type=%s SQL-Type=%s "
+                 "format=%d iColDataLen=%d iConversion=%d",
+                 cTypeNameMap(hType), sqlTypeNameMap(hSQLType), format,
+                 iColDataLen, iConversion);
 
     switch(hType)
     {
@@ -2344,7 +2516,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
             {
                 case SQL_CHAR:
 				{
-                    rc = copyWStrDataBigLen(pStmt, rsVal.pcVal, iColDataLen,(WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+                    rc = copyWStrDataBigLen(pStmt, rsVal.pcVal, iColDataLen,(SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
                     break;
                 }
 
@@ -2354,7 +2526,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                         rc = copyWStrDataBigLen(pStmt, 
                             iConversion ? rsVal.pcVal : pColData, 
                             iColDataLen, 
-                            (WCHAR *)pBuf, 
+                            (SQLWCHAR *)pBuf, 
                             cbLen, 
                             cbLenOffset, 
                             pcbLenInd);
@@ -2364,13 +2536,13 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 						if (iColDataLen > 0)
 						{
 							if (hRsSpecialType == TIMETZOID)
-								len = time_out_wchar(rsVal.tzVal.time, (WCHAR *)pBuf, cbLen, &(rsVal.tzVal.zone));
+								len = time_out_wchar(rsVal.tzVal.time, (SQLWCHAR *)pBuf, cbLen, &(rsVal.tzVal.zone));
 							else
 							if (hRsSpecialType == TIMESTAMPTZOID)
 							{
 								char *pTimeZone = libpqParameterStatus(pStmt->phdbc, "TimeZone");
 
-								len = timestamp_out_wchar(rsVal.llVal, (WCHAR *)pBuf, cbLen, pTimeZone);
+								len = timestamp_out_wchar(rsVal.llVal, (SQLWCHAR *)pBuf, cbLen, pTimeZone);
 							}
 						}
 						else
@@ -2392,7 +2564,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 
 								len = timestamp_out(rsVal.llVal, (char *)tempBuf, sizeof(tempBuf), pTimeZone);
 							}
-							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2410,7 +2582,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 
 				case SQL_LONGVARCHAR:
 				{
-					rc = copyWStrDataBigLen(pStmt, rsVal.pcVal, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+					rc = copyWStrDataBigLen(pStmt, rsVal.pcVal, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					break;
 				}
 
@@ -2425,12 +2597,12 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 						)
 					{
 						// Convert Binary to Hex
-						rc = copyWBinaryToHexDataBigLen(rsVal.pcVal, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
+						rc = copyWBinaryToHexDataBigLen(rsVal.pcVal, iColDataLen, (SQLWCHAR *)pBuf, cbLen, pcbLenInd);
 					}
 					else
 					{
 						// Already in HEX format
-						rc = copyWBinaryDataBigLen(rsVal.pcVal, iColDataLen, (WCHAR *)pBuf, cbLen, pcbLenInd);
+						rc = copyWBinaryDataBigLen(rsVal.pcVal, iColDataLen, (SQLWCHAR *)pBuf, cbLen, pcbLenInd);
 					}
 
 					break;
@@ -2443,10 +2615,10 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                     // Now put bit into app buf
                     if(cbLen > 0)
                     {
-                        rc = copyWStrDataBigLen(pStmt, (char *)((rsVal.bVal == 1) ? "1" : "0"), 1, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+                        rc = copyWStrDataBigLen(pStmt, (char *)((rsVal.bVal == 1) ? "1" : "0"), 1, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
                     }
                     else 
-                        rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd); 
+                        rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd); 
 
                     break;
                 }
@@ -2454,12 +2626,12 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_SMALLINT:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
 						if (iColDataLen > 0)
-							len = swprintf((WCHAR *)pBuf, cbLen, L"%hd", rsVal.hVal);
+							len = swprintf((SQLWCHAR *)pBuf, cbLen, L"%hd", rsVal.hVal);
 						else
 							len = 0;
 
@@ -2472,7 +2644,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = snprintf((char *)tempBuf, sizeof(tempBuf), "%hd", rsVal.hVal);
-							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2492,12 +2664,12 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_INTEGER:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
 						if (iColDataLen > 0)
-							len = swprintf((WCHAR *)pBuf, cbLen, L"%d", rsVal.iVal);
+							len = swprintf((SQLWCHAR *)pBuf, cbLen, L"%d", rsVal.iVal);
 						else
 							len = 0;
 
@@ -2510,7 +2682,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = snprintf((char *)tempBuf, sizeof(tempBuf), "%d", rsVal.iVal);
-							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2529,12 +2701,12 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_BIGINT:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
 						if (iColDataLen > 0)
-							len = swprintf((WCHAR *)pBuf, cbLen, L"%lld", rsVal.llVal);
+							len = swprintf((SQLWCHAR *)pBuf, cbLen, L"%lld", rsVal.llVal);
 						else
 							len = 0;
 
@@ -2547,7 +2719,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = snprintf((char *)tempBuf, sizeof(tempBuf), "%lld", rsVal.llVal);
-							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2566,12 +2738,12 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_REAL:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
 						if (iColDataLen > 0)
-							len = swprintf((WCHAR *)pBuf, cbLen, L"%g", rsVal.fVal);
+							len = swprintf((SQLWCHAR *)pBuf, cbLen, L"%g", rsVal.fVal);
 						else
 							len = 0;
 
@@ -2584,7 +2756,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = snprintf((char *)tempBuf, sizeof(tempBuf), "%g", rsVal.fVal);
-							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2603,12 +2775,12 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_DOUBLE:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
 						if (iColDataLen > 0)
-							len = swprintf((WCHAR *)pBuf, cbLen, L"%g", rsVal.dVal);
+							len = swprintf((SQLWCHAR *)pBuf, cbLen, L"%g", rsVal.dVal);
 						else
 							len = 0;
 
@@ -2621,7 +2793,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = snprintf((char *)tempBuf, sizeof(tempBuf), "%g", rsVal.dVal);
-							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2639,12 +2811,12 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_TYPE_DATE:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
 						if (iColDataLen > 0)
-							len = date_out_wchar(rsVal.iVal, (WCHAR *)pBuf, cbLen);
+							len = date_out_wchar(rsVal.iVal, (SQLWCHAR *)pBuf, cbLen);
 						else
 							len = 0;
 
@@ -2657,7 +2829,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = date_out(rsVal.iVal, (char *)tempBuf, sizeof(tempBuf));
-							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2676,12 +2848,12 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_TYPE_TIMESTAMP:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
 						if (iColDataLen > 0)
-							len = timestamp_out_wchar(rsVal.llVal, (WCHAR *)pBuf, cbLen, NULL);
+							len = timestamp_out_wchar(rsVal.llVal, (SQLWCHAR *)pBuf, cbLen, NULL);
 						else
 							len = 0;
 
@@ -2694,7 +2866,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = timestamp_out(rsVal.llVal, (char *)tempBuf, sizeof(tempBuf), NULL);
-							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2714,15 +2886,15 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_INTERVAL_DAY_TO_SECOND:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen,(WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen,(SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
 						if (iColDataLen > 0)
 							if (hSQLType == SQL_INTERVAL_YEAR_TO_MONTH)
-								len = intervaly2m_out_wchar(&(rsVal.y2mVal), (WCHAR *)pBuf, cbLen);
+								len = intervaly2m_out_wchar(&(rsVal.y2mVal), (SQLWCHAR *)pBuf, cbLen);
 							else
-								len = intervald2s_out_wchar(&(rsVal.d2sVal), (WCHAR *)pBuf, cbLen);
+								len = intervald2s_out_wchar(&(rsVal.d2sVal), (SQLWCHAR *)pBuf, cbLen);
 						else
 							len = 0;
 
@@ -2737,7 +2909,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 								len = intervaly2m_out(&(rsVal.y2mVal), (char *)tempBuf, sizeof(tempBuf));
 							else
 								len = intervald2s_out(&(rsVal.d2sVal), (char *)tempBuf, sizeof(tempBuf));
-							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -2756,7 +2928,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_DECIMAL:
 				{
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 						if (iColDataLen > 0)
@@ -2769,10 +2941,10 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							convertScaledIntegerToNumericString(pnVal, pNumData, num_data_len);
 
 #ifdef WIN32
-							len = swprintf((WCHAR *)pBuf, INT_LEN(cbLen), L"%s", tempBuf);
+							len = swprintf((SQLWCHAR *)pBuf, INT_LEN(cbLen), L"%s", tempBuf);
 #endif
 #if defined LINUX 
-							rc = copyWStrDataBigLen(pStmt, tempBuf, strlen(tempBuf), (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, strlen(tempBuf), (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 							if (pcbLenInd)
 								len = *pcbLenInd;
 #endif
@@ -2793,12 +2965,12 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_TYPE_TIME:
                 {
 					if (IS_TEXT_FORMAT(format))
-						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+						rc = copyWStrDataBigLen(pStmt, pColData, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					else
 					{
 #ifdef WIN32
 						if (iColDataLen > 0)
-							len = time_out_wchar(rsVal.llVal, (WCHAR *)pBuf, cbLen, NULL);
+							len = time_out_wchar(rsVal.llVal, (SQLWCHAR *)pBuf, cbLen, NULL);
 						else
 							len = 0;
 
@@ -2811,7 +2983,7 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							char tempBuf[MAX_TEMP_BUF_LEN];
 
 							len = time_out(rsVal.llVal, (char *)tempBuf, sizeof(tempBuf), NULL);
-							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (WCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
+							rc = copyWStrDataBigLen(pStmt, tempBuf, len, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 						}
 						else
 						{
@@ -7783,55 +7955,71 @@ void printHexSQLCHAR(SQLCHAR *sqlchar, int len,
     }
 }
 
-void printHexSQLWCHR(SQLWCHAR *sqlwchr, int len,
-                     const std::function<void(const std::string &)> &logFunc) {
-    logFunc("Printing SQLWCHAR* as hex bytes:");
-
-    // Number of bytes to read
-    const int numBytes = 1024;
-    std::vector<unsigned char> buffer(numBytes, 0);
-
-    bool safeToRead = false;
-    try {
-        // Attempt to copy the bytes from the SQLWCHAR* variable
-        std::memcpy(buffer.data(), sqlwchr, len * sizeof(SQLWCHAR));
-        safeToRead = true;
-    } catch (const std::exception &e) {
-        logFunc("Exception occurred while reading memory: " +
-                std::string(e.what()) + "\n");
-        // Copy as many bytes as safely accessible
-        int i;
-        for (i = 0; i < len * sizeof(SQLWCHAR) && i < numBytes; ++i) {
-            try {
-                buffer[i] = reinterpret_cast<unsigned char *>(sqlwchr)[i];
-            } catch (const std::exception &e) {
-                break; // Stop copying if an exception occurs
-            }
-        }
-        // Null-terminate the accessible portion of buffer if partial read
-        for (; i < numBytes; ++i) {
-            buffer[i] = 0;
-        }
+void printHexSQLWCHR(SQLWCHAR *sqlwchr,
+                     int charLen, // code units or SQL_NTS
+                     const std::function<void(const std::string &)> &logFunc,
+                     int cuSize_) {
+    constexpr int kMaxDumpBytes = 1024; // hard cap for logging
+    if (!sqlwchr) {
+        logFunc("Printing SQLWCHAR* as hex bytes:");
+        logFunc("Error: sqlwchr pointer is null");
+        return;
     }
 
-    if (safeToRead) {
-        // If memory was safely read, proceed to print it
-        std::vector<char> hexString(
-            numBytes * 4,
-            0); // Each byte needs 3 chars ("XX ") and one for null-terminator
-        int pos = 0;
-        logFunc("Hex bytes:");
-        for (int i = 0; i < len * sizeof(SQLWCHAR) && i < numBytes; ++i) {
-            pos += std::sprintf(&hexString[pos], "%02X ", buffer[i]);
-            if ((i + 1) % 16 == 0) {
-                // Add a newline every 16 bytes for readability
-                hexString[pos++] = '\n';
-            }
+    const int cuSize = cuSize_ ;
+
+    // Determine how many code units to copy
+    int codeUnits = 0;
+    if (charLen == SQL_NTS) {
+        // Scan for NUL terminator in *code units*, capped by our byte limit
+        const int kMaxCU = kMaxDumpBytes / cuSize;
+        const SQLWCHAR *p = sqlwchr;
+        while (codeUnits < kMaxCU && p[codeUnits] != 0) {
+            ++codeUnits;
         }
-        hexString[pos] = '\0'; // Null-terminate the string
-        logFunc(hexString.data());
+        // Include the terminator if it fits
+        if (codeUnits < kMaxCU)
+            ++codeUnits;
+    } else if (charLen >= 0) {
+        codeUnits = charLen;
+    } else {
+        // Unknown length: show up to the cap (best-effort debug)
+        codeUnits = kMaxDumpBytes / cuSize;
+    }
+
+    // Compute bytes, cap to our buffer
+    const int totalBytesToCopy = codeUnits * cuSize;
+    const int bytesToCopy = (std::min<int>)(totalBytesToCopy, kMaxDumpBytes);
+
+    // Copy to a local buffer (bounded)
+    std::vector<unsigned char> buffer(bytesToCopy);
+    std::memcpy(buffer.data(), sqlwchr, static_cast<size_t>(bytesToCopy));
+
+    // Build hex dump (with newlines every 16 bytes)
+    std::string out;
+    out.reserve(bytesToCopy * 3 + (bytesToCopy ? (bytesToCopy - 1) / 16 : 0) +
+                8);
+
+    logFunc("Printing SQLWCHAR* as hex bytes:");
+    logFunc("Hex bytes:");
+    for (int i = 0; i < bytesToCopy; ++i) {
+        char tmp[4];
+        std::snprintf(tmp, sizeof(tmp), "%02X", buffer[i]);
+        out.append(tmp);
+        out.push_back(' ');
+        if (((i + 1) % 16) == 0)
+            out.push_back('\n');
+    }
+    if (!out.empty() && out.back() == ' ')
+        out.pop_back();
+    logFunc(out);
+
+    if (bytesToCopy < totalBytesToCopy) {
+        logFunc("[TRUNCATED: showing first " + std::to_string(bytesToCopy) +
+                " of " + std::to_string(totalBytesToCopy) + " bytes]");
     }
 }
+
 //---------------------------------------------------------------------------------------------------------igarish
 // Get parameter value as string from C buffer using given C data type.
 //
@@ -7889,51 +8077,67 @@ char *getParamVal(char *pParamData, SQLLEN iParamDataLen, SQLLEN *plParamDataStr
             case SQL_C_WCHAR:
             {
                 size_t cchLen;
-                
-                if(iParamDataLen >= 0 && plParamDataStrLenInd != NULL)
-                {
-                    if(iParamDataLen == 0 && iIndicator > 0)
-                        iParamDataLen = iIndicator;
-                    else
-                    if(iParamDataLen > 0 && iIndicator >= 0)
-                    {
-                        iParamDataLen = redshift_min(iParamDataLen, iIndicator);
-                    }
-                }
 
-                cchLen = (iParamDataLen > 0) ? iParamDataLen/sizeof(WCHAR) : iParamDataLen;
-
-                if(iIndicator == SQL_NULL_DATA)
-                {
-                    pBindParamStrBuf->pBuf = NULL;
-                }
-                else
-                if(iIndicator == SQL_NTS || iParamDataLen > 0)
-                {
-                    /* uncomment for debuging purposes only
-                    auto myLoggingLambda = [](const std::string& message) {
-                        RS_LOG_TRACE("RSUTL", "%s", message.data());
-                    };
-                    */
+                auto convertAndAllocate = [&](size_t cchLen) -> bool {
                     std::string utf8Str;
                     static const int charsize = sizeof(SQLCHAR);
-                    // printHexSQLWCHR((SQLWCHAR *)pParamData, cchLen, myLoggingLambda);
-                    size_t len = wchar16_to_utf8_str((SQLWCHAR *)pParamData,
-                                                     cchLen, utf8Str);
+                    size_t len = sqlwchar_to_utf8_str((SQLWCHAR *)pParamData,
+                                                      cchLen, utf8Str);
+
                     size_t bufSize = len;
-                    pBindParamStrBuf->pBuf = (char *)rs_malloc(bufSize + charsize);
+                    pBindParamStrBuf->pBuf =
+                        (char *)rs_malloc(bufSize + charsize);
+                    if (!pBindParamStrBuf->pBuf) {
+                        RS_LOG_ERROR("RSUTIL",
+                                     "Memory allocation for %zu bytes failed "
+                                     "in convertAndAllocate",
+                                     (bufSize + charsize));
+                        return false;
+                    }
                     pBindParamStrBuf->iAllocDataLen = (int)(bufSize + charsize);
-                    memcpy(pBindParamStrBuf->pBuf, (char *)utf8Str.c_str(), bufSize);
-                    memset((char *)pBindParamStrBuf->pBuf + bufSize, '\0', charsize);
-                    // printHexSQLCHAR((SQLCHAR *)pBindParamStrBuf->pBuf, bufSize + charsize, myLoggingLambda);
-                }
-                else
-                if(iParamDataLen == 0)
-                {
+                    memcpy(pBindParamStrBuf->pBuf, (char *)utf8Str.c_str(),
+                           bufSize);
+                    memset((char *)pBindParamStrBuf->pBuf + bufSize, '\0',
+                           charsize);
+                    return true;
+                };
+
+                if (iIndicator == SQL_NULL_DATA) {
+                    pBindParamStrBuf->pBuf = NULL;
+                } else if (iIndicator == SQL_NTS) {
+                    // SQL_NTS: Find the actual length of wide string
+                    // Respect buffer size limit even for null-terminated strings
+                    size_t maxChars = (iParamDataLen > 0)
+                                          ? iParamDataLen / sizeofSQLWCHAR()
+                                          : kSQLWCHAR_SCAN_CAP;
+                    cchLen = sqlwcsnlen_cap((SQLWCHAR *)pParamData, maxChars);
+                    if (!convertAndAllocate(cchLen)) {
+                        break;
+                    }
+                } else if (iParamDataLen > 0) {
+                    // Use the provided length in bytes, convert to character
+                    // count
+                    if (plParamDataStrLenInd != NULL && iIndicator >= 0) {
+                        iParamDataLen = redshift_min(iParamDataLen, iIndicator);
+                    }
+
+                    cchLen = iParamDataLen / sizeofSQLWCHAR();
+                    if (!convertAndAllocate(cchLen)) {
+                        break;
+                    }
+                } else if (iParamDataLen == 0 && iIndicator > 0 &&
+                           plParamDataStrLenInd != NULL) {
+                    // Use indicator as the data length
+                    iParamDataLen = iIndicator;
+
+                    cchLen = iParamDataLen / sizeofSQLWCHAR();
+                    if (!convertAndAllocate(cchLen)) {
+                        break;
+                    }
+                } else if (iParamDataLen == 0) {
                     pBindParamStrBuf->buf[0] = '\0';
                     pBindParamStrBuf->pBuf = pBindParamStrBuf->buf;
-                }
-                else
+                } else
                     pBindParamStrBuf->pBuf = NULL;
 
                 break;
@@ -12340,8 +12544,9 @@ int updateOutBindParametersValue(RS_STMT_INFO *pStmt)
 				{
 					if(pOutParamRecNums[iParamNumber] != 0)
 					{
+                        SQLLEN pcbLenIndInternal = (std::numeric_limits<SQLLEN>::min)();
 						rc = RS_STMT_INFO::RS_SQLGetData(pStmt, iOutParamResultIndex + 1, pDescRec->hType,
-							pDescRec->pValue, pDescRec->cbLen, pDescRec->pcbLenInd, TRUE);
+							pDescRec->pValue, pDescRec->cbLen, pDescRec->pcbLenInd, TRUE, pcbLenIndInternal);
 						if (rc == SQL_ERROR)
 						{
 							pOutParamRecNums = (int *)rs_free(pOutParamRecNums);
@@ -12374,8 +12579,49 @@ char *rs_strncpy(char *dest, const char *src, size_t n)
 
 	strncpy(dest, src, data_len);
 	dest[data_len] = '\0';
-
 	return dest;
+}
+
+/**
+ * @brief Safely copies a null-terminated string into a fixed-size buffer.
+ *
+ * Copies at most (n - 1) characters from `src` to `dest` and always
+ * null-terminates the result (if `n > 0`). This avoids buffer overflows
+ * and ensures that `dest` is always a valid null-terminated C string.
+ *
+ * Unlike `strncpy()`, this function does not pad the rest of the buffer
+ * with nulls, and it guarantees a trailing '\0' even when `src` is longer
+ * than (n - 1).
+ *
+ * Defensive checks also reject:
+ *   - NULL pointers
+ *   - Zero-length buffers (n == 0)
+ *   - The special ODBC sentinel value SQL_NTS ((size_t)-3)
+ *
+ * If `src == dest`, no copying is performed, but null-termination is still enforced.
+ *
+ * @param dest Destination buffer (must have at least `n` bytes)
+ * @param src  Null-terminated input string
+ * @param n    Size of destination buffer, including space for '\0'
+ *
+ * @return Pointer to `dest` on success, or NULL on invalid input
+ */
+char *rs_strncpy_safe(char *dest, const char *src, size_t n) {
+    if (!dest || !src || n == 0 || n == (size_t)SQL_NTS || n > INT_MAX) {
+        return NULL;
+    }
+
+    const size_t cap = n - 1;       // bytes we can actually copy
+    size_t len = rs_strnlen(src, cap);
+
+    // Bound to capacity (defensive; len is already <= cap)
+    if (len > cap) len = cap;
+
+    if (len && src != dest) {
+        memmove(dest, src, len);
+    }
+    dest[len] = '\0';
+    return dest;
 }
 
 /*====================================================================================================================================================*/
@@ -12723,7 +12969,7 @@ INTERVALD2S_STRUCT parse_intervald2s(const char *buf, int buf_len) {
 
 #ifdef WIN32
 
-int date_out_wchar(int date, WCHAR *buf, int buf_len)
+int date_out_wchar(int date, SQLWCHAR *buf, int buf_len)
 {
 	char* result;
 	struct pg_tm tt, *tm = &tt;
@@ -12752,7 +12998,7 @@ int date_out_wchar(int date, WCHAR *buf, int buf_len)
 
 /*====================================================================================================================================================*/
 
-int timestamp_out_wchar(long long timestamp, WCHAR *buf, int buf_len, char *session_timezone)
+int timestamp_out_wchar(long long timestamp, SQLWCHAR *buf, int buf_len, char *session_timezone)
 {
 	struct pg_tm tt, *tm = &tt;
 	long long fsec;
@@ -12812,7 +13058,7 @@ int timestamp_out_wchar(long long timestamp, WCHAR *buf, int buf_len, char *sess
  * intervaly2m_out_wchar()
  * Convert an year-month interval to string.
  */
-int intervaly2m_out_wchar(INTERVALY2M_STRUCT* y2m, WCHAR *buf, int buf_len) {
+int intervaly2m_out_wchar(INTERVALY2M_STRUCT* y2m, SQLWCHAR *buf, int buf_len) {
     int len = 0;
 
     if (y2m->year != 0) {
@@ -12832,7 +13078,7 @@ int intervaly2m_out_wchar(INTERVALY2M_STRUCT* y2m, WCHAR *buf, int buf_len) {
  * intervald2s_out_wchar()
  * Convert a day-second interval to string.
  */
-int intervald2s_out_wchar(INTERVALD2S_STRUCT* d2s, WCHAR *buf, int buf_len) {
+int intervald2s_out_wchar(INTERVALD2S_STRUCT* d2s, SQLWCHAR *buf, int buf_len) {
     int len = 0;
 
     if (d2s->day != 0) {
@@ -12849,7 +13095,7 @@ int intervald2s_out_wchar(INTERVALD2S_STRUCT* d2s, WCHAR *buf, int buf_len) {
 
 /*====================================================================================================================================================*/
 
-int time_out_wchar(long long time, WCHAR *buf, int buf_len, int *tzp)
+int time_out_wchar(long long time, SQLWCHAR *buf, int buf_len, int *tzp)
 {
 	struct pg_tm tt, *tm = &tt;
 	long long fsec;
@@ -13195,9 +13441,8 @@ StringMap parseConnectionString(const std::string &connStr) {
 
     // Check for an error.
     if (('\0' == *currentPos) || (0 == keyLength)) {
-      printf(
-          "Error parsing Connectionstring: Key parsing finished too "
-          "early\n");
+      RS_LOG_ERROR("RSUTIL", "Error parsing Connectionstring: Key parsing finished too early %d:%d",
+                   (int)keyLength, (int)(*currentPos));
       return StringMap();
     }
 
@@ -13274,7 +13519,6 @@ StringMap parseConnectionString(const std::string &connStr) {
       std::string valueVariant(valueBuff.data(),
                                valueBuff.size() - 1);  // processed version
       res[keyStr] = trim(valueVariant);
-      // std::cout << keyStr << " -> " << valueVariant << std::endl;
     }
 
     // Skip whitespace.
@@ -13486,4 +13730,221 @@ std::string escapedFilter(const std::string& input)
     }
 
     return output;
+}
+
+/*====================================================================================================================================================*/
+
+SQLRETURN copySqlwForClient(void *dst, const void *src, size_t totalCharsNeeded,
+                            size_t cchLen, SQLLEN *pcbLen, size_t *copiedChars,
+                            size_t charSize) {
+    if (pcbLen) {
+        if (totalCharsNeeded <= (std::numeric_limits<SQLLEN>::max)() / charSize) {
+            *pcbLen = static_cast<SQLLEN>(totalCharsNeeded * charSize);
+        } else {
+            *pcbLen = (std::numeric_limits<SQLLEN>::max)();
+            /*
+                Even if it is length query we return error:
+                - Client calls with dst=NULL to query required buffer size
+                - Function detects overflow, caps *pcbLen to SQLLEN::max,
+               returns SQL_SUCCESS
+               - Client allocates SQLLEN::max bytes, believing it's
+               sufficient
+               - Client calls again with allocated buffer
+               - Data still doesn't fit because actual size > SQLLEN::max
+            */
+            RS_LOG_ERROR(
+                "RSUTIL",
+                "totalCharsNeeded too large to copy to Client buffer:%zu",
+                totalCharsNeeded);
+            return SQL_ERROR;
+        }
+    }
+
+    if (!dst || cchLen == 0) {
+        if (copiedChars) {
+            *copiedChars = 0;
+        }
+        return SQL_SUCCESS; // Length query
+    }
+
+    const bool hasRoomForAll =
+        (totalCharsNeeded < SIZE_MAX && cchLen >= totalCharsNeeded + 1);
+    const size_t srcCharsToCopy =
+        hasRoomForAll ? totalCharsNeeded : (cchLen - 1);
+
+    copyAndTerminateSqlwchar(dst, cchLen, src, srcCharsToCopy, charSize,
+                             copiedChars);
+
+    return hasRoomForAll ? SQL_SUCCESS : SQL_SUCCESS_WITH_INFO;
+}
+
+/*====================================================================================================================================================*/
+
+void setNthSqlwcharNull(void *dst, size_t charIndex) {
+    if (!dst)
+        return;
+    size_t size = sizeofSQLWCHAR();
+    if (charIndex > SIZE_MAX / size) {
+        RS_LOG_ERROR("RSUTIL", "setNthSqlwcharNull: charIndex out of range:%zu",
+                     charIndex);
+        return;
+    }
+    void *ptr = static_cast<char *>(dst) + (charIndex * size);
+    std::memset(ptr, 0, size);
+}
+
+/*====================================================================================================================================================*/
+
+void setFirstSqlwcharNull(void *dst) {
+    if (!dst) {
+        RS_LOG_WARN("RSUTIL", "setFirstSqlwcharNull: dst is NULL");
+        return;
+    }
+    std::memset(dst, 0, sizeofSQLWCHAR());
+}
+
+/*====================================================================================================================================================*/
+
+bool isFirstSqlwcharNull(const void *src) {
+    if (!src)
+        return true;
+    size_t size = sizeofSQLWCHAR();
+    if (size == 2) {
+        return *static_cast<const uint16_t *>(src) == 0;
+    } else if (size == 4) {
+        return *static_cast<const uint32_t *>(src) == 0;
+    }
+    return std::memcmp(src, "\0\0\0\0", size) == 0;
+}
+
+/*====================================================================================================================================================*/
+
+ConversionResult
+convertWCharParamWithTruncCheck(SQLWCHAR *pwParam, SQLSMALLINT cchParam,
+                                char *szParam, size_t bufLen,
+                                const char *paramName, const char *logTag,
+                                RS_STMT_INFO *pStmt, size_t *copiedChars) {
+    if (!copiedChars || !pStmt || !szParam) {
+        RS_LOG_ERROR(
+            (logTag ? logTag : "RSUTIL"),
+            "Insufficient data submitted for unicode conversion: %s %s %s",
+            (copiedChars ? "" : "Invalid Char Count output, "),
+            (pStmt ? "" : "Invalid Statement, "),
+            (szParam ? "" : "Invalid String output"));
+        if (pStmt) {
+            addError(&pStmt->pErrorList, (char *)"HY000",
+                     "Insufficient data submitted for unicode conversion", 0,
+                     NULL);
+        }
+        return CONVERSION_ERROR;
+    }
+
+    // Handle NULL or empty input - these are valid for catalog functions
+    if (!pwParam || cchParam == 0 || (cchParam == SQL_NTS && sqlwcsnlen_cap(pwParam, 1) == 0)) {
+        *copiedChars = 0;
+        if (bufLen > 0) {
+            szParam[0] = 0;
+        } else {
+            RS_LOG_ERROR((logTag ? logTag : "RSUTIL"),
+                         "Invalid Buffer length %zu for %s",
+                         bufLen, (paramName ? paramName : "UNKNOWN_PARAM"));
+            addError(&pStmt->pErrorList, (char *)"HY090",
+                     "Invalid string or buffer length", 0, NULL);
+            return CONVERSION_ERROR;
+        }
+        return CONVERSION_SUCCESS;
+    }
+
+    // At this point: pwParam is non-NULL and indicates non-empty content
+    size_t totalNeeded = 0;
+    *copiedChars =
+        sqlwchar_to_utf8_char(pwParam, cchParam, szParam, bufLen, &totalNeeded);
+    const char *paramName_ = (paramName ? paramName : "UNKNOWN_PARAM");
+    // Detect conversion failure: non-empty input produced zero output
+    if (*copiedChars == 0 && totalNeeded == 0) {
+        RS_LOG_ERROR((logTag ? logTag : "RSUTIL"),
+                     "Invalid Unicode sequence in %s", paramName_);
+        char errorMsg[256] = {0};
+        snprintf(errorMsg, sizeof(errorMsg), "Invalid Unicode sequence in %s",
+                 paramName_);
+        addError(&pStmt->pErrorList, (char *)"HY000", errorMsg, 0, NULL);
+        return CONVERSION_ERROR;
+    }
+
+    // Check for truncation
+    if (*copiedChars < totalNeeded) {
+        RS_LOG_WARN((logTag ? logTag : "RSUTIL"),
+                    "Buffer too small for %s. Truncated from %zu to %zu",
+                    paramName_, totalNeeded, *copiedChars);
+        char errorMsg[256] = {0};
+        snprintf(errorMsg, sizeof(errorMsg),
+                 "String data for %s, right truncated", paramName_);
+        addError(&pStmt->pErrorList, (char *)"01004", errorMsg, 0, NULL);
+        return CONVERSION_TRUNCATED;
+    }
+
+    return CONVERSION_SUCCESS;
+}
+
+DriverManagerInfo detectDriverManager() {
+    RS_LOG_INFO("RSUTIL", "Detecting Driver Manager ... ");
+    DriverManagerInfo info;
+
+#ifdef WIN32
+    HMODULE handle = GetModuleHandle(NULL);
+    if (!handle)
+        return info;
+
+    const auto GetSymbol = [=](const char *symbol) {
+        return GetProcAddress(handle, symbol);
+    };
+    const auto HasSymbol = [=](const char *symbol) {
+        return !!GetSymbol(symbol);
+    };
+
+    if (HasSymbol("SQLDriverConnectW")) {
+        info.family = DriverManagerInfo::WINDOWS;
+        info.version = "Windows";
+    }
+#else
+    void *handle = dlopen(NULL, RTLD_LAZY);
+    if (!handle)
+        return info;
+    RS_LOG_TRACE("RSUTIL", "detectDriverManager !handle ");
+    const auto GetSymbol = [=](const char *symbol) {
+        return dlsym(handle, symbol);
+    };
+    const auto HasSymbol = [=](const char *symbol) {
+        RS_LOG_TRACE("RSUTIL", "detectDriverManager HasSymbol ");
+        return !!GetSymbol(symbol);
+    };
+
+    if (const char *version = static_cast<char *>(GetSymbol("iodbc_version"))) {
+        info.family = DriverManagerInfo::IODBC;
+        info.version = version;
+    } else if (HasSymbol("uodbc_get_stats")) {
+        info.family = DriverManagerInfo::UNIXODBC;
+        info.version = HasSymbol("ODBCGetTryWaitValue") ? "2.3.x+" : "2.2.x";
+    } else if (HasSymbol("odbcapi_symtab")) {
+        info.family = DriverManagerInfo::IODBC;
+        info.version = "Unknown";
+    }
+#endif
+
+    return info;
+}
+
+bool isIODBC() {
+    static std::optional<bool> isIODBC_;
+    static std::once_flag flag;
+#ifdef WIN32
+    return false; // Windows doesn't use unixODBC
+#else
+    std::call_once(flag, [&]() {
+        DriverManagerInfo dmInfo = detectDriverManager();
+        RS_LOG_INFO("RSUTIL", "Driver Manager Family=%d", dmInfo.family);
+        isIODBC_ = dmInfo.family == DriverManagerInfo::IODBC;
+    });
+    return *isIODBC_;
+#endif
 }
