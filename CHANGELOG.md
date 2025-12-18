@@ -1,6 +1,14 @@
 Changelog
 =========
 
+v2.1.12 (2025-12-18)
+---------------------
+1. Added apple macOS support with ARM64 and x86_64 architecture compatibility
+2. Added support for both iODBC and unixODBC driver managers on apple macOS
+3. Added UTF-32 encoding support on macOS complementing the existing UTF-16 support
+4. Extended SQLSetEnvAttr and SQLSetConnectAttr to support SQL_ATTR_APP_UNICODE_TYPE, SQL_ATTR_APP_WCHAR_TYPE, and SQL_ATTR_DRIVER_UNICODE_TYPE attributes
+5. Enhanced all ODBC wide character APIs with improved Unicode conversions, comprehensive input and buffer validations, robust error handling, and ODBC specification-compliant return codes (SQL_SUCCESS, SQL_SUCCESS_WITH_INFO)
+
 v2.1.11 (2025-11-20)
 ---------------------
 1. Added the idp_partition parameter which allows users to authenticate against Azure Active Directory across different Microsoft cloud environments (e.g., Global, US Gov, China).

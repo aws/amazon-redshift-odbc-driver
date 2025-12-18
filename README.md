@@ -19,7 +19,7 @@ Windows: https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install-win.htm
 
 Linux: https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install-linux.html
 
-macOSX: https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install-macos.html (Under Construction)
+macOSX: https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install-mac.html
 
 ## Build Driver
 Amazon Redshift recommends downloading and using the prebuilt driver installer from [AWS Redshift documentation](https://docs.aws.amazon.com/redshift/latest/mgmt/odbc20-install-win.html) for the best experience.
@@ -61,7 +61,7 @@ Optionally you can also provide the desired driver version number in the build c
 
 e.g. build64.sh --version=2.1.12.0 --create-package=yes --public-dir=/path/to/where/package/will/be/stored --build-type=Release
 
-It builds `librsodbc64.so` file under `src/odbc/rsodbc/Release` directory.
+It builds `librsodbc64.so` and `librsodbc64.dylib` file under `cmake-build/install/` directory. The installers (rpm or pkg) will be stored in the specified `public-dir`.
 
 ### Installation and Configuration of Driver
 
