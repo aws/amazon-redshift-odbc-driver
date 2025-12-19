@@ -32,9 +32,11 @@ else
     $CMAKE --version
 fi
 
-# CMake build options
+# CMake build options.
 ENABLE_TESTING=${ENABLE_TESTING:=0}     # Control whether tests are enabled, default is disabled
-echo "ENABLE_TESTING: $ENABLE_TESTING" 
+echo "ENABLE_TESTING: $ENABLE_TESTING"
+USE_IODBC_FOR_TESTS=${USE_IODBC_FOR_TESTS:=OFF}  # Use iODBC for tests on macOS (SQLWCHAR=4)
+echo "USE_IODBC_FOR_TESTS: $USE_IODBC_FOR_TESTS" 
 
 # Set build and install directories
 RS_BUILD_DIR=${RS_BUILD_DIR:="$PWD/cmake-build"}   # Build directory, default is ./cmake-build
@@ -114,10 +116,18 @@ fi
 if [ -n "${RS_ODBC_DIR}" ]; then
     cmake_command="${cmake_command} -DRS_ODBC_DIR=${RS_ODBC_DIR}"
 fi
+if [ -n "${RS_ODBC_DIR_TEST}" ]; then
+    cmake_command="${cmake_command} -DRS_ODBC_DIR_TEST=${RS_ODBC_DIR_TEST}"
+fi
 
 # Add testing option if specified
 if [ -n "${ENABLE_TESTING}" ]; then
     cmake_command="${cmake_command} -DENABLE_TESTING=${ENABLE_TESTING}"
+fi
+
+# Add iODBC option if specified (macOS only)
+if [ "$OS" = "Darwin" ] && [ -n "${USE_IODBC_FOR_TESTS}" ]; then
+    cmake_command="${cmake_command} -DUSE_IODBC_FOR_TESTS=${USE_IODBC_FOR_TESTS}"
 fi
 
 # Add version if specified, otherwise CMake will read from version.txt

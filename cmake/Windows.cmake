@@ -119,7 +119,7 @@ endfunction()
 function(target_link_libraries_rsodbc TARGET_NAME)
   target_link_libraries(
     ${TARGET_NAME}
-    PUBLIC ${RS_STATIC_LIBS}
+    PRIVATE ${RS_STATIC_LIBS}
            shell32
            odbccp32
            libcrypto

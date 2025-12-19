@@ -41,21 +41,26 @@ SQLRETURN SQL_API SQLPrepareW(SQLHSTMT  phstmt,
                                 SQLWCHAR* pwCmd,
                                 SQLINTEGER cchLen)
 {
-    SQLRETURN rc;
-    char *szCmd;
-    size_t len;
+    SQLRETURN rc = SQL_SUCCESS;
+    char *szCmd = NULL;
+    size_t copiedChars = 0, len = 0;
     std::string u8Str;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
     char *pLastBatchMultiInsertCmd = NULL;
 
-    if(IS_TRACE_LEVEL_API_CALL())
+    if (IS_TRACE_LEVEL_API_CALL())
         TraceSQLPrepareW(FUNC_CALL, 0, phstmt, pwCmd, cchLen);
+    auto exitLog = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLPrepareW(FUNC_RETURN, rc, phstmt, pwCmd, cchLen);
+        }
+    });
 
     if(!VALID_HSTMT(phstmt))
     {
         rc = SQL_INVALID_HANDLE;
-        goto error;
+        return rc;
     }
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
@@ -66,18 +71,48 @@ SQLRETURN SQL_API SQLPrepareW(SQLHSTMT  phstmt,
     pStmt->iFunctionCall = FALSE;
     pStmt->resetMultiInsertInfo();
 
-    if(pwCmd == NULL)
-    {
+    // --- Argument validation ---
+    if (pwCmd == NULL) {
+        addError(&pStmt->pErrorList, "HY009", "Invalid use of null pointer", 0, NULL);
+        RS_LOG_ERROR("SQLPrepareW", "Invalid use of null pointer");
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
-        goto error; 
+        return rc;
     }
-    len = wchar16_to_utf8_str(pwCmd, cchLen, u8Str);
-    szCmd = (char *)checkLenAndAllocatePaStrBuf(len, pStmt->pCmdBuf);
-    memcpy(szCmd, u8Str.data(), len);
-    szCmd[len] = '\0';
+    if (cchLen < 0 && cchLen != SQL_NTS) {
+        addError(&pStmt->pErrorList, "HY090", "Invalid string or buffer length", 0, NULL);
+        RS_LOG_ERROR("SQLPrepareW", "Invalid string or buffer length");
+        rc = SQL_ERROR;
+        return rc;
+    }
+    if (cchLen == 0) {
+        addError(&pStmt->pErrorList, "HY000", "Empty statement text.", 0, NULL);
+        RS_LOG_ERROR("SQLPrepareW", "Empty statement text.");
+        rc = SQL_ERROR;
+        return rc;
+    }
 
-    if(szCmd)
+    // --- Unicode → UTF-8 conversion ---
+    copiedChars = sqlwchar_to_utf8_str(pwCmd, cchLen, u8Str);
+
+    // Empty after conversion is also an error
+    if (copiedChars == 0) {
+        addError(&pStmt->pErrorList, "HY000", "Empty statement text.", 0, NULL);
+        RS_LOG_ERROR("SQLPrepareW", "Empty statement text.");
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+    // Allocate buffer for SQL text (below will ensure +1 for NUL)
+    szCmd = (char *)checkLenAndAllocatePaStrBuf(copiedChars, pStmt->pCmdBuf);
+    if (!szCmd) {
+        addError(&pStmt->pErrorList, "HY001", "Memory allocation error", 0, NULL);
+        rc = SQL_ERROR;
+        return rc;
+    }
+    memcpy(szCmd, u8Str.data(), copiedChars);
+    szCmd[copiedChars] = '\0';
+
+    // Multi-insert transform
     {
         // Look for INSERT command with array binding, which can convert into Multi INSERT
         char *pszMultiInsertCmd = parseForMultiInsertCommand(
@@ -96,35 +131,36 @@ SQLRETURN SQL_API SQLPrepareW(SQLHSTMT  phstmt,
             {
                 rc = createLastBatchMultiInsertCmd(pStmt, pLastBatchMultiInsertCmd);
                 pLastBatchMultiInsertCmd = NULL;
-                if(rc == SQL_ERROR)
-                    goto error;
+                if (rc == SQL_ERROR) {
+                    return rc;
+                }
             }
         }
     }
 
-    if(szCmd)
-    {
-        int numOfParamMarkers = countParamMarkers(pStmt->pCmdBuf->pBuf, SQL_NTS);
-        int numOfODBCEscapeClauses = countODBCEscapeClauses(pStmt,pStmt->pCmdBuf->pBuf, SQL_NTS);
+    // Replace param markers / ODBC escapes if present
+    if (szCmd && *szCmd) {
+        int numPM = countParamMarkers(pStmt->pCmdBuf->pBuf, SQL_NTS);
+        int numEsc = countODBCEscapeClauses(pStmt, pStmt->pCmdBuf->pBuf, SQL_NTS);
+        setParamMarkerCount(pStmt, numPM);
 
-        setParamMarkerCount(pStmt,numOfParamMarkers);
-
-        if(numOfParamMarkers > 0 || numOfODBCEscapeClauses > 0)
-        {
-            char *pTempCmd = rs_strdup(pStmt->pCmdBuf->pBuf, SQL_NTS);
-
+        if (numPM > 0 || numEsc > 0) {
+            char *tmp = rs_strdup(pStmt->pCmdBuf->pBuf, SQL_NTS);
             releasePaStrBuf(pStmt->pCmdBuf);
-            szCmd = (char *)replaceParamMarkerAndODBCEscapeClause(pStmt, pTempCmd, SQL_NTS, pStmt->pCmdBuf, numOfParamMarkers, numOfODBCEscapeClauses);
-            pTempCmd = (char *)rs_free(pTempCmd);
+            szCmd = (char *)replaceParamMarkerAndODBCEscapeClause(pStmt, tmp, SQL_NTS,
+                                                                  pStmt->pCmdBuf, numPM, numEsc);
+            tmp = (char *)rs_free(tmp);
         }
     }
 
-    rc = RsPrepare::RS_SQLPrepare(phstmt, (SQLCHAR *)szCmd, SQL_NTS, TRUE, TRUE, FALSE, TRUE);
-
-error:
-
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLPrepareW(FUNC_RETURN, rc, phstmt, pwCmd, cchLen);
+    // Final prepare (guard against accidental empties)
+    if (!szCmd || !*szCmd) {
+        addError(&pStmt->pErrorList, "HY000", "Empty statement text.", 0, NULL);
+        rc = SQL_ERROR;
+        return rc;
+    }
+    rc = RsPrepare::RS_SQLPrepare(phstmt, (SQLCHAR*)szCmd, (SQLINTEGER)strlen(szCmd),
+                                  TRUE, TRUE, FALSE, TRUE);
 
     return rc;
 }
@@ -139,14 +175,40 @@ SQLRETURN SQL_API SQLSetCursorNameW(SQLHSTMT  phstmt,
                                     SQLSMALLINT cchLen)
 {
     SQLRETURN rc;
-    char szCursorName[MAX_IDEN_LEN];
+    char szCursorName[MAX_IDEN_LEN] = {0};
 
+
+    if(!VALID_HSTMT(phstmt))
+    {
+        rc = SQL_INVALID_HANDLE;
+        return rc;
+    }
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLSetCursorNameW(FUNC_CALL, 0, phstmt, pwCursorName, cchLen);
+    if (pwCursorName == NULL) {
+        RS_LOG_ERROR("SQLSetCursorNameW",
+                     "Invalid cursor name. NULL pointer provided.");
+        addError(&pStmt->pErrorList, "HY090",
+                 "Invalid string or buffer length", 0, NULL);
+        return SQL_ERROR;
+    }
+    std::string utf8Str;
+    size_t copiedChars = sqlwchar_to_utf8_str(pwCursorName, cchLen, utf8Str);
+    if (copiedChars > 0 && copiedChars < MAX_IDEN_LEN) {
+        memcpy(szCursorName, utf8Str.data(), copiedChars);
+        szCursorName[copiedChars] = '\0';
 
-    wchar_to_utf8(pwCursorName, cchLen, szCursorName, MAX_IDEN_LEN);
-
-    rc = RsPrepare::RS_SQLSetCursorName(phstmt, (SQLCHAR *)szCursorName, SQL_NTS);
+        rc = RsPrepare::RS_SQLSetCursorName(phstmt, (SQLCHAR *)szCursorName,
+                                            copiedChars);
+    } else {
+        RS_LOG_ERROR("SQLSetCursorNameW",
+                     "Invalid cursor name. Conversion to UTF-8 failed. copiedChars:%d/%d",
+                     copiedChars, MAX_IDEN_LEN);
+        addError(&pStmt->pErrorList, "HY090",
+                 "Invalid string or buffer length", 0, NULL);
+        rc = SQL_ERROR;
+    }
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLSetCursorNameW(FUNC_RETURN, rc, phstmt, pwCursorName, cchLen);
@@ -206,6 +268,7 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLSetCursorName(SQLHSTMT phstmt,
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
+        RS_LOG_ERROR("RS_SQLSetCursorName", "Invalid use of null pointer");
         goto error; 
     }
 
@@ -213,6 +276,7 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLSetCursorName(SQLHSTMT phstmt,
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY090", "Invalid string or buffer length", 0, NULL);
+        RS_LOG_ERROR("RS_SQLSetCursorName", "Invalid string or buffer length");
         goto error; 
     }
 
@@ -222,6 +286,7 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLSetCursorName(SQLHSTMT phstmt,
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY001", "Memory allocation error", 0, NULL);
+        RS_LOG_ERROR("RS_SQLSetCursorName", "Memory allocation error");
         goto error; 
     }
 
@@ -232,6 +297,7 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLSetCursorName(SQLHSTMT phstmt,
         {
             rc = SQL_ERROR;
             addError(&pStmt->pErrorList,"34000", "Invalid cursor name", 0, NULL);
+            RS_LOG_ERROR("RS_SQLSetCursorName", "Invalid cursor name");
             goto error; 
         }
 
@@ -248,6 +314,7 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLSetCursorName(SQLHSTMT phstmt,
             {
                 rc = SQL_ERROR;
                 addError(&pStmt->pErrorList,"3C000", "Duplicate cursor name", 0, NULL);
+                RS_LOG_ERROR("RS_SQLSetCursorName", "Duplicate cursor name");
                 goto error; 
             }
         } // Loop
@@ -261,6 +328,7 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLSetCursorName(SQLHSTMT phstmt,
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"24000", "Invalid cursor state", 0, NULL);
+        RS_LOG_ERROR("RS_SQLSetCursorName", "Invalid cursor state");
         goto error; 
     }
 
@@ -283,23 +351,92 @@ SQLRETURN SQL_API SQLGetCursorNameW(SQLHSTMT  phstmt,
                                     SQLSMALLINT*    pcchLen)
 {
     SQLRETURN rc;
-    char *pCursorName = NULL;
+    char pCursorName[MAX_IDEN_LEN] = {0};
 
-    if(IS_TRACE_LEVEL_API_CALL())
+    if (IS_TRACE_LEVEL_API_CALL())
         TraceSQLGetCursorNameW(FUNC_CALL, 0, phstmt, pwCursorName, cchLen, pcchLen);
 
-    if((pwCursorName != NULL) && (cchLen >= 0))
-        pCursorName = (char *)rs_calloc(sizeof(char),cchLen + 1);
 
-    rc = RsPrepare::RS_SQLGetCursorName(phstmt, (SQLCHAR *)pCursorName, cchLen, pcchLen);
+    if(!VALID_HSTMT(phstmt))
+    {
+        rc = SQL_INVALID_HANDLE;
+        return rc;
+    }
 
-    if(SQL_SUCCEEDED(rc))
-        utf8_to_wchar(pCursorName, cchLen, pwCursorName, cchLen);
+    // Ask core to produce the cursor name in UTF-8.
+    rc = RsPrepare::RS_SQLGetCursorName(
+        phstmt,
+        reinterpret_cast<SQLCHAR*>(pCursorName),
+        MAX_IDEN_LEN,
+        /* pcchLen out is irrelevant here; we re-compute wide length below */ 
+        nullptr
+    );
 
-    pCursorName = (char *)rs_free(pCursorName);
+    size_t totalCharsNeeded = 0;   // logical length in chars (no terminator)
+    size_t copiedChars      = 0;   // chars actually copied (no terminator)
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLGetCursorNameW(FUNC_RETURN, rc, phstmt, pwCursorName, cchLen, pcchLen);
+    if (SQL_SUCCEEDED(rc) && pCursorName[0] != '\0') {
+        // Convert UTF-8 -> client SQLWCHAR width into a temp buffer.
+        SQLWCHAR *tempBuffer = nullptr;
+        const size_t srcLenBytes = std::strlen(pCursorName);
+        totalCharsNeeded = utf8_to_sqlwchar_alloc(
+            pCursorName, srcLenBytes, &tempBuffer
+        );
+
+        if (tempBuffer) {
+            // Capacity from client: cchLen (chars, incl. terminator).
+            const size_t capChars =
+                (cchLen > 0) ? static_cast<size_t>(cchLen) : 0;
+
+            if (pwCursorName && capChars > 0) {
+                // Copy + terminate using shared helpers.
+                // Reports truncation via return code and copiedChars output.
+                rc = copySqlwForClient(
+                    /* dst         */ pwCursorName,
+                    /* src         */ tempBuffer,
+                    /* needed chars*/ totalCharsNeeded,
+                    /* cchLen      */ capChars,
+                    /* pcbLen(bytes)*/ nullptr,
+                    /* copiedChars */ &copiedChars,
+                    /* charSize    */ sizeofSQLWCHAR()
+                );
+            } else {
+                // No buffer or zero capacity: report "would need" size.
+                rc = SQL_SUCCESS_WITH_INFO;
+                copiedChars = 0;
+
+                // If caller passed a non-null buffer with zero cap, ensure
+                // it is at least a valid empty string.
+                if (pwCursorName) {
+                    setFirstSqlwcharNull(pwCursorName);
+                }
+            }
+
+            // Per ODBC, pcchLen returns required length in *characters*
+            // (not including the terminator), regardless of truncation.
+            if (pcchLen) {
+                *pcchLen = static_cast<SQLSMALLINT>(totalCharsNeeded);
+            }
+
+            rs_free(tempBuffer);
+        } else {
+            // Conversion failed.
+            rc = SQL_ERROR;
+            if (pcchLen) *pcchLen = 0;
+            if (pwCursorName) setFirstSqlwcharNull(pwCursorName);
+        }
+    } else {
+        // No name available. Return empty and length = 0.
+        if (pcchLen) {
+            *pcchLen = 0;
+        }
+    }
+
+    if (IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLGetCursorNameW(
+            FUNC_RETURN, rc, phstmt, pwCursorName, copiedChars, pcchLen
+        );
+    }
 
     return rc;
 }
@@ -353,6 +490,7 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLGetCursorName(SQLHSTMT phstmt,
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
+        RS_LOG_ERROR("RS_SQLGetCursorName", "Invalid use of null pointer");
         goto error; 
     }
 
@@ -360,6 +498,7 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLGetCursorName(SQLHSTMT phstmt,
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY090", "Invalid string or buffer length", 0, NULL);
+        RS_LOG_ERROR("RS_SQLGetCursorName", "Invalid string or buffer length");
         goto error; 
     }
 
@@ -367,6 +506,7 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLGetCursorName(SQLHSTMT phstmt,
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY015", "No cursor name available", 0, NULL);
+        RS_LOG_ERROR("RS_SQLGetCursorName", "No cursor name available");
         goto error; 
     }
 

@@ -541,7 +541,7 @@ void RsTrace::traceDiagIdentifierOutput(SQLSMALLINT hDiagIdentifier,
         case SQL_DIAG_SQLSTATE:
         {
             if(iUnicode)
-                traceWStrValWithSmallLen("*pwDiagInfo",(SQLWCHAR *)pDiagInfo, (cbLen > 0) ? cbLen/sizeof(WCHAR) : cbLen);
+                traceWStrValWithSmallLen("*pwDiagInfo",(SQLWCHAR *)pDiagInfo, (cbLen > 0 && sizeofSQLWCHAR() > 0) ? cbLen/sizeofSQLWCHAR() : cbLen);
             else
                 traceStrValWithSmallLen("*pDiagInfo",(char *)pDiagInfo,cbLen);
 
@@ -1639,7 +1639,7 @@ void RsTrace::traceGetInfoOutput(SQLUSMALLINT hInfoType,
         case SQL_XOPEN_CLI_YEAR:
         {
             if(iUnicode)
-                traceWStrValWithSmallLen("*pwInfoValue",(SQLWCHAR *)pInfoValue, (cbLen > 0 ) ? cbLen/sizeof(WCHAR) : cbLen);
+                traceWStrValWithSmallLen("*pwInfoValue",(SQLWCHAR *)pInfoValue, (cbLen > 0 && sizeofSQLWCHAR() > 0) ? cbLen/sizeofSQLWCHAR() : cbLen);
             else
                 traceStrValWithSmallLen("*pInfoValue",(char *)pInfoValue, cbLen);
             break;
@@ -2184,7 +2184,7 @@ void RsTrace::traceConnectAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQ
         || iAttribute == SQL_ATTR_TRANSLATE_LIB)
     {
         if(iUnicode)
-            traceWStrValWithLargeLen(pArgName, (SQLWCHAR *)pVal, (cbLen > 0) ? cbLen/sizeof(WCHAR) : cbLen);
+            traceWStrValWithLargeLen(pArgName, (SQLWCHAR *)pVal, (cbLen > 0 && sizeofSQLWCHAR() > 0) ? cbLen/sizeofSQLWCHAR() : cbLen);
         else
             traceStrValWithLargeLen(pArgName, (char *)pVal, cbLen);
     }
@@ -2266,7 +2266,7 @@ void RsTrace::traceStmtAttrVal(const char *pArgName, SQLINTEGER iAttribute,SQLPO
         || iAttribute == SQL_ATTR_TRANSLATE_LIB)
     {
         if(iUnicode)
-            traceWStrValWithLargeLen(pArgName, (SQLWCHAR *)pVal, (cbLen > 0) ? cbLen/sizeof(WCHAR) : cbLen);
+            traceWStrValWithLargeLen(pArgName, (SQLWCHAR *)pVal, (cbLen > 0 && sizeofSQLWCHAR() > 0) ? cbLen/sizeofSQLWCHAR() : cbLen);
         else
             traceStrValWithLargeLen(pArgName, (char *)pVal, cbLen);
     }
@@ -2290,39 +2290,25 @@ void RsTrace::traceWStrValWithSmallLen(const char *pArgName, SQLWCHAR *pwVal, SQ
         if (cchLen == SQL_NULL_DATA) 
             traceArg("\t%s=NULL_DATA",pArgName);
         else 
-#ifdef WIN32
-        if (cchLen == SQL_NTS) 
-            traceArg("\t%s=%.*S",pArgName,TRACE_MAX_STR_VAL_LEN,pwVal);
-        else 
-        if(cchLen > 0) 
         {
-            traceArg("\t%s=%.*S",pArgName,(cchLen > TRACE_MAX_STR_VAL_LEN) ? TRACE_MAX_STR_VAL_LEN : cchLen,
-                                    pwVal);
-        } else {
-            traceArg("\tSKIPPED cchLen=%d", cchLen);
-        }
-#endif
-#if defined LINUX 
-        {
-            char *pTemp = (char *)convertWcharToUtf8(pwVal, cchLen);
+            std::string utf8str;
+            // Developer should guarantee cchLen is the actual populated size
+            cchLen = (cchLen < 0 && cchLen != SQL_NTS) ? 0 : cchLen;
+            size_t strLen = sqlwchar_to_utf8_str(pwVal, cchLen, utf8str);
 
-            if(pTemp)
-            {
-                if (cchLen == SQL_NTS)
-                    traceArg("\t%s=%.*s",pArgName,TRACE_MAX_STR_VAL_LEN,pTemp);
-                else
-                if(cchLen > 0)
-                {
-                    traceArg("\t%s=%.*s",pArgName,(cchLen > TRACE_MAX_STR_VAL_LEN) ? TRACE_MAX_STR_VAL_LEN : cchLen,
-                                                pTemp);
-                } else {
-                    traceArg("\tSKIPPED cchLen=%d", cchLen);
-                }
+            if (!utf8str.empty()) {
+                size_t capped = (std::min<size_t>)(
+                    strLen, static_cast<size_t>(TRACE_MAX_STR_VAL_LEN));
+                int safeLen = static_cast<int>(
+                    (std::min<size_t>)(capped, static_cast<size_t>(INT_MAX)));
+
+                traceArg("\t%s=%.*s", pArgName, safeLen, utf8str.c_str());
+            } else {
+                traceArg("\t%s=SKIPPED cchLen=%d",
+                         (pArgName ? pArgName : "UNKNOWN_ARG"),
+                         static_cast<int>(cchLen));
             }
-
-            pTemp = (char *)rs_free(pTemp);
         }
-#endif
     }
 }
 
@@ -2337,36 +2323,23 @@ void RsTrace::traceWStrValWithLargeLen(const char *pArgName, SQLWCHAR *pwVal, SQ
         if (cchLen == SQL_NULL_DATA) 
             traceArg("\t%s=NULL_DATA",pArgName);
         else 
-#ifdef WIN32
-        if (cchLen == SQL_NTS) 
-            traceArg("\t%s=%.*S",pArgName,TRACE_MAX_STR_VAL_LEN,pwVal);
-        else 
-        if(cchLen > 0) 
         {
-            traceArg("\t%s=%.*S",pArgName,(cchLen > TRACE_MAX_STR_VAL_LEN) ? TRACE_MAX_STR_VAL_LEN : cchLen,
-                                    pwVal);
-        }
-#endif
-#if defined LINUX 
-        {
-            char *pTemp = (char *)convertWcharToUtf8(pwVal, cchLen);
-
-            if(pTemp)
-            {
-                if (cchLen == SQL_NTS)
-                    traceArg("\t%s=%.*s",pArgName,TRACE_MAX_STR_VAL_LEN,pTemp);
-                else
-                if(cchLen > 0)
-                {
-                    traceArg("\t%s=%.*s",pArgName,(cchLen > TRACE_MAX_STR_VAL_LEN) ? TRACE_MAX_STR_VAL_LEN : cchLen,
-                                                pTemp);
-                }
+            std::string utf8str;
+            // Developer should guarantee cchLen is the actual populated size
+            cchLen = (cchLen < 0 && cchLen != SQL_NTS) ? 0 : cchLen;
+            size_t copiedChars = sqlwchar_to_utf8_str(pwVal, cchLen, utf8str);
+            if (!utf8str.empty()) {
+                size_t capped = (std::min<size_t>)(
+                    copiedChars, static_cast<size_t>(TRACE_MAX_STR_VAL_LEN));
+                int safeLen = static_cast<int>(
+                    (std::min<size_t>)(capped, static_cast<size_t>(INT_MAX)));
+                traceArg("\t%s=%.*s", pArgName, safeLen, utf8str.c_str());
+            } else {
+                traceArg("\t%s=SKIPPED cchLen=%d",
+                         (pArgName ? pArgName : "UNKNOWN_ARG"),
+                         static_cast<int>(cchLen));
             }
-
-            pTemp = (char *)rs_free(pTemp);
         }
-#endif
-
     }
 }
 
@@ -2483,7 +2456,12 @@ void RsTrace::traceData(const char *pArgName, SQLSMALLINT hType, SQLPOINTER pVal
 
         case SQL_C_WCHAR:
         {
-            traceWStrValWithLargeLen(pArgName,(SQLWCHAR *)pValue,(SQLINTEGER)cbLen);
+            size_t capChars =
+                (cbLen > 0) ? (size_t)(cbLen / sizeofSQLWCHAR()) : 0;
+            SQLINTEGER n = (SQLINTEGER)sqlwcsnlen_cap(
+                (SQLWCHAR *)pValue,
+                (std::min)(capChars, (size_t)kSQLWCHAR_SCAN_CAP));
+            traceWStrValWithLargeLen(pArgName, (SQLWCHAR *)pValue, n);
             break;
         }
 
@@ -6375,7 +6353,7 @@ void RsTrace::TraceSQLColAttributesW(int iCallOrRet,
             {
                 if(isStrFieldIdentifier(hFieldIdentifier))
                 {
-                    traceWStrValWithSmallLen("*pwValue",(SQLWCHAR *)pwValue, (cbLen > 0) ? cbLen/sizeof(WCHAR) : cbLen);
+                    traceWStrValWithSmallLen("*pwValue",(SQLWCHAR *)pwValue, (cbLen > 0 && sizeofSQLWCHAR() > 0) ? cbLen/sizeofSQLWCHAR() : cbLen);
                     traceStrOutSmallLen("*pcbLen",pcbLen);
                 }
                 else
@@ -6424,7 +6402,7 @@ void RsTrace::TraceSQLColAttributeW(int iCallOrRet,
             {
                 if(isStrFieldIdentifier(hFieldIdentifier))
                 {
-                    traceWStrValWithSmallLen("*pwValue",(SQLWCHAR *)pwValue,(cbLen > 0) ? cbLen/sizeof(WCHAR) : cbLen);
+                    traceWStrValWithSmallLen("*pwValue",(SQLWCHAR *)pwValue,(cbLen > 0 && sizeofSQLWCHAR() > 0) ? cbLen/sizeofSQLWCHAR() : cbLen);
                     traceStrOutSmallLen("*pcbLen",pcbLen);
                 }
                 else
@@ -6528,7 +6506,7 @@ void RsTrace::TraceSQLGetDescFieldW(int iCallOrRet,
             {
                 if(isStrFieldIdentifier(hFieldIdentifier))
                 {
-                    traceWStrValWithLargeLen("*pwValue",(SQLWCHAR *)pwValue,(cbLen > 0) ? cbLen/sizeof(WCHAR) : cbLen);
+                    traceWStrValWithLargeLen("*pwValue",(SQLWCHAR *)pwValue,(cbLen > 0 && sizeofSQLWCHAR() > 0) ? cbLen/sizeofSQLWCHAR() : cbLen);
                     traceStrOutLargeLen("*pcbLen",pcbLen);
                 }
                 else
@@ -6627,7 +6605,7 @@ void RsTrace::TraceSQLSetDescFieldW(int iCallOrRet,
             if(isStrFieldIdentifier(hFieldIdentifier))
             {
                 tracePointer("pwValue",pwValue);
-                traceWStrValWithLargeLen("*pwValue",(SQLWCHAR *)pwValue,(cbLen > 0) ? cbLen/sizeof(WCHAR) : cbLen);
+                traceWStrValWithLargeLen("*pwValue",(SQLWCHAR *)pwValue,(cbLen > 0 && sizeofSQLWCHAR() > 0) ? cbLen/sizeofSQLWCHAR() : cbLen);
             }
             else
             if(cbLen == sizeof(short))
@@ -7131,7 +7109,7 @@ void RsTrace::TraceSQLTablesW(int iCallOrRet,
 //---------------------------------------------------------------------------------------------------------igarish
 // Replace password with * in the trace file.
 //
-void RsTrace::tracePasswordConnectString(char *var,char *szConnStr, SQLSMALLINT  cbConnStr)
+void RsTrace::tracePasswordConnectString(const char *var,const char *szConnStr, SQLSMALLINT  cbConnStr)
 {
     if (!szConnStr || cbConnStr < 0) {
         return;
@@ -7161,13 +7139,15 @@ void RsTrace::tracePasswordConnectString(char *var,char *szConnStr, SQLSMALLINT 
 //---------------------------------------------------------------------------------------------------------igarish
 // Replace password with * in the trace file.
 //
-void RsTrace::tracePasswordConnectStringW(char *var,SQLWCHAR *wszConnStr, SQLSMALLINT  cchConnStr)
+void RsTrace::tracePasswordConnectStringW(const char *var,SQLWCHAR *wszConnStr, SQLSMALLINT  cchConnStr)
 {
-    char *pTemp = (char *)convertWcharToUtf8(wszConnStr, cchConnStr);
-
-    tracePasswordConnectString(var, pTemp, cchConnStr);
-
-    pTemp = (char *)rs_free(pTemp);
+    std::string utf8str;
+    // Developer should gurantee cchConnStr is the actual populated size
+    cchConnStr = (cchConnStr < 0 && cchConnStr != SQL_NTS) ? 0 : cchConnStr;
+    size_t strLen = sqlwchar_to_utf8_str(wszConnStr, cchConnStr, utf8str);
+    const char *pTemp = (strLen > 0) ? utf8str.data() : nullptr;
+    SQLSMALLINT safeLen = (strLen > SHRT_MAX) ? SHRT_MAX : (SQLSMALLINT)strLen;
+    tracePasswordConnectString(var, pTemp, safeLen);
 }
 
 

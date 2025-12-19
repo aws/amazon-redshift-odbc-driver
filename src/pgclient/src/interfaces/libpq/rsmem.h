@@ -23,6 +23,7 @@ void *rs_malloc(size_t size);
 void *rs_calloc(size_t NumOfElements, size_t SizeOfElements);
 void *rs_realloc(void *memory, size_t newSize);
 void *rs_free(void * block);
+void RsFree(void* block); //returns void not void* and also aims to use the DLL's CRT
 
 #ifdef __cplusplus
 }

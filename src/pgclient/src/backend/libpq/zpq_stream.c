@@ -895,6 +895,10 @@ zpq_parse_compression_setting(char *val, zpq_compressor * *compressors, size_t *
 {
 	int			i;
 	char	  **supported_algorithms = zs_get_supported_algorithms();
+	if (supported_algorithms == NULL)
+	{
+		return 0;
+	}
 	size_t		n_supported_algorithms = 0;
 	char	   *protocol_extension = strchr(val, ';');
 
@@ -909,6 +913,8 @@ zpq_parse_compression_setting(char *val, zpq_compressor * *compressors, size_t *
 	{
 		n_supported_algorithms += 1;
 	}
+	free(supported_algorithms);
+	supported_algorithms = NULL;
 
 	if (pg_strcasecmp(val, "true") == 0 ||
 		pg_strcasecmp(val, "yes") == 0 ||
@@ -951,12 +957,24 @@ zpq_deserialize_compressors(char const *c_string, zpq_compressor * *compressors,
 										 * algorithms to avoid duplicates in
 										 * compressors */
 	char	  **supported_algorithms = zs_get_supported_algorithms();
+	if (supported_algorithms == NULL)
+	{
+		return false;
+	}
 	size_t		n_supported_algorithms = 0;
 	char	   *c_string_dup = strdup(c_string);	/* following parsing can
 													 * modify the string */
 	char	   *p = c_string_dup;
 
 	*n_compressors = 0;
+    *compressors = NULL;  // Initialize to NULL for safety
+
+    // Check for memory allocation failure
+    if (c_string_dup == NULL) {
+        free(supported_algorithms);  // Free the array from zs_get_supported_algorithms
+		supported_algorithms = NULL;
+        return false;
+    }
 
 	while (supported_algorithms[n_supported_algorithms] != NULL)
 	{
@@ -964,6 +982,14 @@ zpq_deserialize_compressors(char const *c_string, zpq_compressor * *compressors,
 	}
 
 	*compressors = (zpq_compressor*)malloc(n_supported_algorithms * sizeof(zpq_compressor));
+    if (*compressors == NULL) {
+        free(c_string_dup);
+        free(supported_algorithms);
+		supported_algorithms = NULL;
+		c_string_dup = NULL;
+        return false;
+    }
+
 
 	while (*p != '\0')
 	{
@@ -984,6 +1010,9 @@ zpq_deserialize_compressors(char const *c_string, zpq_compressor * *compressors,
 				pg_log_warning("invalid compression level %s in compression option '%s'", col + 1, p);
 				free(*compressors);
 				free(c_string_dup);
+                free(supported_algorithms);
+				supported_algorithms = NULL;
+				c_string_dup = NULL;
 				*compressors = NULL;
 				*n_compressors = 0;
 				return false;
@@ -1000,6 +1029,9 @@ zpq_deserialize_compressors(char const *c_string, zpq_compressor * *compressors,
 					pg_log_warning("duplicate algorithm %s in compressors string %s", p, c_string);
 					free(*compressors);
 					free(c_string_dup);
+                    free(supported_algorithms);
+					supported_algorithms = NULL;
+					c_string_dup = NULL;
 					*compressors = NULL;
 					*n_compressors = 0;
 					return false;
@@ -1031,6 +1063,9 @@ zpq_deserialize_compressors(char const *c_string, zpq_compressor * *compressors,
 		*compressors = NULL;
 	}
 	free(c_string_dup);
+    free(supported_algorithms);  // Free the array from zs_get_supported_algorithms
+	c_string_dup = NULL;
+	supported_algorithms = NULL;
 	return true;
 }
 
@@ -1041,20 +1076,30 @@ zpq_serialize_compressors(zpq_compressor const *compressors, size_t n_compressor
 	char	   *p;
 	size_t		i;
 	size_t		total_len = 0;
-	char	  **supported_algorithms = zs_get_supported_algorithms();
+    char      **supported_algorithms = NULL;
 
-	if (n_compressors == 0)
-	{
-		return NULL;
-	}
+    if (n_compressors == 0 || compressors == NULL)
+    {
+        return NULL;
+    }
+
+    supported_algorithms = zs_get_supported_algorithms();
+    if (supported_algorithms == NULL)
+    {
+        return NULL;
+    }
 
 	for (i = 0; i < n_compressors; i++)
 	{
 		size_t		level_len;
-
-		if (!zs_is_valid_impl_id(compressors[i].impl))
+        unsigned int impl_id = (unsigned int)compressors[i].impl;
+        
+        // Make sure the algorithm ID is valid
+		if (!zs_is_valid_impl_id(impl_id))
 		{
-			pg_log_warning("algorithm impl_id %d is incorrect", compressors[i].impl);
+			pg_log_warning("algorithm impl_id %d is incorrect", impl_id);
+            free(supported_algorithms);
+			supported_algorithms = NULL;
 			return NULL;
 		}
 
@@ -1069,16 +1114,37 @@ zpq_serialize_compressors(zpq_compressor const *compressors, size_t n_compressor
 		 * single entry looks like "alg_name:compression_level," so +2 is for
 		 * ":" and "," symbols (or trailing null)
 		 */
-		total_len += strlen(supported_algorithms[compressors[i].impl]) + level_len + 2;
+		total_len += strlen(supported_algorithms[impl_id]) + level_len + 2;
 	}
 
-	res = p = (char*)malloc(total_len);
+    // Ensure space for null terminator
+    res = (char*)malloc(total_len + 1);
+    if (res == NULL) {
+        free(supported_algorithms);
+		supported_algorithms = NULL;
+        return NULL;
+    }
+    
+    p = res;
 
 	for (i = 0; i < n_compressors; i++)
 	{
-		p += sprintf(p, "%s:%d", supported_algorithms[compressors[i].impl], compressors[i].level);
+        unsigned int impl_id = (unsigned int)compressors[i].impl;
+        int written = sprintf(p, "%s:%d", supported_algorithms[impl_id], compressors[i].level);
+        if (written < 0) {
+            free(res);
+            free(supported_algorithms);
+			res = NULL;
+			supported_algorithms = NULL;
+            return NULL;
+        }
+        p += written;
 		if (i < n_compressors - 1)
 			*p++ = ',';
 	}
+    *p = '\0'; // Explicit null termination
+
+    free(supported_algorithms);
+	supported_algorithms = NULL;
 	return res;
 }

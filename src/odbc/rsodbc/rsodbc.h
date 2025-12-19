@@ -133,6 +133,7 @@
 #define SQL_CONOPT_START            1040
 
 #define SQL_ATTR_APP_WCHAR_TYPE			(SQL_CONOPT_START+21)
+#define SQL_ATTR_APP_UNICODE_TYPE			(SQL_CONOPT_START+22)
 #define SQL_ATTR_IGNORE_UNICODE_FUNCTIONS       (SQL_CONOPT_START+23)
 #define SQL_ATTR_DRIVER_UNICODE_TYPE            (SQL_CONOPT_START+25)
 
@@ -140,9 +141,7 @@
 #define SQL_DD_CP_UCS2                1
 #define SQL_DD_CP_UTF8                2
 #define SQL_DD_CP_UTF16                SQL_DD_CP_UCS2
-/* Determines whether the application/dbms is handling SQLWCHAR
- * as UCS2 or UTF8.
- */
+#define SQL_DD_CP_UTF32                3
 
 /* Proprietary Connection/Env Attributes. END */
 
@@ -578,7 +577,8 @@ class RS_STMT_INFO
                                       SQLPOINTER pValue,
                                       SQLLEN cbLen,
                                       SQLLEN *pcbLenInd,
-                                      int iInternal);
+                                      int iInternal,
+                                      SQLLEN &pcbLenIndInternal);
 
     static SQLRETURN  SQL_API RS_SQLColAttributeW(SQLHSTMT     phstmt,
                                             SQLUSMALLINT hCol,
@@ -586,7 +586,8 @@ class RS_STMT_INFO
                                             SQLPOINTER   pwValue,
                                             SQLSMALLINT  cbLen,
                                             SQLSMALLINT *pcbLen,
-                                            SQLLEN        *plValue);
+                                            SQLLEN        *plValue,
+                                            size_t      *pcopiedChars);
 
     static SQLRETURN  SQL_API RS_SQLColAttribute(SQLHSTMT        phstmt,
                                            SQLUSMALLINT hCol,
@@ -890,9 +891,9 @@ public:
  * ----------------
  */
 struct DATA_TYPE_INFO {
-    short sqlType;
-    short sqlDataType;
-    short sqlDateSub;
+    int sqlType;
+    int sqlDataType;
+    int sqlDateSub;
     std::string typeName;
 };
 

@@ -34,7 +34,7 @@ target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/od
 target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/pgclient/src/interfaces/libpq)
 target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/pgclient/src/include)
 target_compile_definitions_rsodbc(${EXECUTABLE_NAME})
-
+include_and_link_odbc(${EXECUTABLE_NAME})
 add_test(NAME ${TEST_NAME} COMMAND "${EXECUTABLE_NAME}")
 
 post_build_copy_dependency_files(${EXECUTABLE_NAME} ${CMAKE_CURRENT_BINARY_DIR})

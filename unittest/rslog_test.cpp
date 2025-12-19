@@ -96,7 +96,7 @@ TEST(RSLOG_TEST_SUITE, ProcessLogLine) {
     
     // Use regex to verify the format of the log line
     // Expected format: [LEVEL] timestamp [TEST_TAG:rslog_test.cpp:line] [threadid] [pid:123] message
-    std::regex formatRegex("\\[DEBUG\\].*\\[TEST_TAG:rslog_test\\.cpp:\\d+\\] \\[\\d+\\] \\[pid:\\d+\\]");
+    std::regex formatRegex("\\[DEBUG\\].*\\[TEST_TAG:rslog_test\\.cpp:\\d+\\] \\[(0x)?[0-9a-f]+\\] \\[pid:\\d+\\]");
     ASSERT_TRUE(std::regex_search(logContent, formatRegex)) 
         << "Log format does not match expected pattern. Actual content: " << logContent;
 

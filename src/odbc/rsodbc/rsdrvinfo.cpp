@@ -19,23 +19,45 @@ static SQLRETURN integerInfoResponse(SQLUINTEGER iData, SQLUINTEGER *phBuf, SQLS
 // Unicode version of SQLGetInfo.
 //
 SQLRETURN SQL_API SQLGetInfoW(SQLHDBC   phdbc,
-                                SQLUSMALLINT    hInfoType,
-                                SQLPOINTER        pwInfoValue,
-                                SQLSMALLINT     cbLen,
-                                SQLSMALLINT*    pcbLen)
+                              SQLUSMALLINT hInfoType,
+                              SQLPOINTER pwInfoValue,
+                              SQLSMALLINT cbLen,
+                              SQLSMALLINT* pcbLen)
 {
-    SQLRETURN rc;
-    SQLPOINTER pInfoValue = NULL;
-    int iRetType;
-    int allocFlag = FALSE;
-    SQLSMALLINT cchLen = cbLen/sizeof(WCHAR);
+    SQLRETURN rc = SQL_SUCCESS;
+    SQLPOINTER pInfoValue = NULL;   // retained for minimal churn (unused on string path)
+    int iRetType = 0;
+    int allocFlag = FALSE;          // retained for minimal churn
+    SQLSMALLINT cchLen = 0; // Computed after sanity checks
 
     beginApiMutex(NULL, phdbc);
-
-    if(IS_TRACE_LEVEL_API_CALL())
+    RS_CONN_INFO* pConn = phdbc ? (RS_CONN_INFO*)phdbc : nullptr;
+    if (IS_TRACE_LEVEL_API_CALL())
         TraceSQLGetInfoW(FUNC_CALL, 0, phdbc, hInfoType, pwInfoValue, cbLen, pcbLen);
 
-    switch(hInfoType)
+    // ---- scope_exit guards ----
+    SQLSMALLINT traceBytes = 0; // bytes actually valid to read from pwInfoValue
+
+    // Ensure unlock runs last (trace should run first), so construct unlockGuard first.
+    auto unlockGuard = make_scope_exit([&]() noexcept {
+        endApiMutex(NULL, phdbc);
+    });
+
+    auto traceGuard = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            try {
+                TraceSQLGetInfoW(FUNC_RETURN, rc, phdbc, hInfoType, pwInfoValue,
+                                 traceBytes, pcbLen);
+            } catch (...) {
+                // swallow to keep noexcept
+            }
+        }
+    });
+    // ---------------------------
+
+    // Classify string vs non-string (keeping your switch list)
+    bool isString = false;
+    switch (hInfoType)
     {
         case SQL_ACCESSIBLE_PROCEDURES:
         case SQL_ACCESSIBLE_TABLES:
@@ -60,7 +82,7 @@ SQLRETURN SQL_API SQLGetInfoW(SQLHDBC   phdbc,
         case SQL_ORDER_BY_COLUMNS_IN_SELECT:
         case SQL_ROW_UPDATES:
         case SQL_QUALIFIER_NAME_SEPARATOR:     /* SQL_CATALOG_NAME_SEPARATOR */
-        case SQL_QUALIFIER_TERM:             /*  SQL_CATALOG_TERM */
+        case SQL_QUALIFIER_TERM:               /* SQL_CATALOG_TERM */
         case SQL_SPECIAL_CHARACTERS:
         case SQL_MAX_ROW_SIZE_INCLUDES_LONG:
         case SQL_MULT_RESULT_SETS:
@@ -68,58 +90,126 @@ SQLRETURN SQL_API SQLGetInfoW(SQLHDBC   phdbc,
         case SQL_NEED_LONG_DATA_LEN:
         case SQL_OUTER_JOINS:
         case SQL_PROCEDURES:
-        case SQL_OWNER_TERM:                /* SQL_SCHEMA_TERM  */
+        case SQL_OWNER_TERM:                   /* SQL_SCHEMA_TERM  */
         case SQL_PROCEDURE_TERM:
         case SQL_SEARCH_PATTERN_ESCAPE:
         case SQL_SERVER_NAME:
         case SQL_TABLE_TERM:
         case SQL_USER_NAME:
         case SQL_XOPEN_CLI_YEAR:
-        {
-            if(pwInfoValue != NULL)
-            {
-                if(cbLen >= 0)
-                {
-                    pInfoValue = rs_calloc(sizeof(char), cchLen + 1);
-                    allocFlag = TRUE;
-                }
-            }
-
+            isString = true;
             break;
-        }
-
         default:
-        {
-            // int/short.
-            pInfoValue = pwInfoValue;
+            isString = false;
             break;
-        }
     }
 
-    rc = RsDrvInfo::RS_SQLGetInfo(phdbc, hInfoType, pInfoValue, cchLen, pcbLen, &iRetType);
-
-    if(SQL_SUCCEEDED(rc))
-    {
-        if(iRetType == SQL_C_CHAR)
-        {
-            if(pwInfoValue)
-                utf8_to_wchar((char *)pInfoValue, SQL_NTS, (WCHAR *)pwInfoValue, cchLen);
-
-            if(pcbLen)
-                *pcbLen = (*pcbLen) * sizeof(WCHAR);
+    // sanity check
+    if (isString && pwInfoValue != NULL && cbLen < 0) {
+        if (VALID_HDBC(phdbc) && pConn) {
+            pConn->pErrorList = clearErrorList(pConn->pErrorList);
+            addError(&pConn->pErrorList, "HY090",
+                     "Invalid string or buffer length", 0, NULL);
+            RS_LOG_ERROR("SQLGetInfoW", "Invalid string or buffer length");
         }
+        traceBytes = 0;
+        rc = SQL_ERROR;
+        return rc;
     }
 
-    if(allocFlag && pInfoValue)
-        pInfoValue = rs_free(pInfoValue);
+    if (!isString) {
+        // Non-string path: pass through; tracer must not read pwInfoValue as
+        // text.
+        rc = RsDrvInfo::RS_SQLGetInfo(phdbc, hInfoType, pwInfoValue, cbLen,
+                                      pcbLen, NULL);
+        traceBytes = 0;
+        return rc;
+    }
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLGetInfoW(FUNC_RETURN, rc, phdbc, hInfoType, pwInfoValue, cbLen, pcbLen);
+    cchLen = (cbLen > 0) ? (cbLen / sizeofSQLWCHAR()) : 0;
 
-    endApiMutex(NULL, phdbc);
+    // --- String path ---
 
-    return rc;
+    // 1) Probe for required UTF-8 size in BYTES and type.
+    SQLSMALLINT probeLen = 0;
+    rc = RsDrvInfo::RS_SQLGetInfo(phdbc, hInfoType, NULL, 0, &probeLen,
+                                  &iRetType);
+    if (!SQL_SUCCEEDED(rc)) {
+        traceBytes = 0;
+        return rc;
+    }
+    // (Optional) if (iRetType != SQL_C_CHAR) { /* tolerate or handle */ }
+
+    // 2) Single real fetch into exactly-sized UTF-8 buffer.
+    //   +1 for null termination
+    const int utf8BytesNeeded = (probeLen > 0 ? probeLen + 1 : 1);
+    std::string utf8(static_cast<size_t>(utf8BytesNeeded), '\0');
+    SQLSMALLINT gotUtf8 = 0; // BYTES written by driver
+
+    rc = RsDrvInfo::RS_SQLGetInfo(phdbc, hInfoType, utf8.data(),
+                                  utf8BytesNeeded, &gotUtf8, NULL);
+    if (!SQL_SUCCEEDED(rc)) {
+        traceBytes = 0;
+        return rc;
+    }
+
+    // Normalize to payload (exclude trailing '\0' if present).
+    size_t payloadBytes = 0;
+    if (gotUtf8 > 0) {
+        payloadBytes = static_cast<size_t>(gotUtf8);
+        if (payloadBytes > 0 && utf8[payloadBytes - 1] == '\0')
+            --payloadBytes;
+    } else {
+        const void *z = memchr(utf8.data(), 0, utf8.size());
+        payloadBytes =
+            z ? static_cast<const char *>(z) - utf8.data() : utf8.size();
+    }
+    utf8.resize(payloadBytes);
+
+    // 3) Convert (and count) in one step.
+    size_t needChars = utf8_to_sqlwchar_strlen(
+        utf8.c_str(), utf8.size()); // payload chars, no NUL
+    size_t copiedChars = 0;         // payload chars actually written (no NUL)
+
+    if (pwInfoValue == NULL || cbLen <= 0) {
+        // Length inquiry: return payload length in BYTES (exclude NUL)
+        if (pcbLen) {
+            *pcbLen = static_cast<SQLSMALLINT>(needChars * sizeofSQLWCHAR());
+        }
+        rc = SQL_SUCCESS;
+        traceBytes = 0;
+        return rc;
+    }
+
+    // Capacity in wide characters
+    const size_t capChars = static_cast<size_t>(cchLen);
+
+    // Perform the copy; your converter guarantees NUL-termination
+    size_t totalNeededChars = 0;
+    copiedChars = utf8_to_sqlwchar_str(
+        utf8.c_str(), utf8.size(), reinterpret_cast<SQLWCHAR *>(pwInfoValue),
+        static_cast<int>(capChars), &totalNeededChars);
+
+    // Report BYTES for payload only (exclude NUL)
+    if (pcbLen) {
+        *pcbLen = static_cast<SQLSMALLINT>(needChars * sizeofSQLWCHAR());
+    }
+
+    // Truncation: payload + NUL must fit
+    const bool willTruncate = (needChars + 1 > capChars);
+    rc = willTruncate ? SQL_SUCCESS_WITH_INFO : SQL_SUCCESS;
+
+    if (willTruncate && VALID_HDBC(phdbc) && pConn) {
+        addWarning(&pConn->pErrorList, "01004", "String data, right truncated",
+                   0, NULL);
+    }
+
+    // Bytes actually readable in pwInfoValue for tracing: payload bytes (no
+    // NUL)
+    traceBytes = static_cast<SQLSMALLINT>(copiedChars * sizeofSQLWCHAR());
+    return rc; // guards handle tracing and unlock
 }
+
 
 /*====================================================================================================================================================*/
 
@@ -184,6 +274,7 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
     {
         rc = SQL_ERROR;
         addError(&pConn->pErrorList,"HY090", "Invalid string or buffer length", 0, NULL);
+        RS_LOG_ERROR("SQLGetInfo", "Invalid string or buffer length");
         goto error; 
     }
 

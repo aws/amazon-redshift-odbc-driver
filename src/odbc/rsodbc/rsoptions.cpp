@@ -83,6 +83,12 @@ SQLRETURN SQL_API SQLSetConnectOptionW(SQLHDBC            phdbc,
     char *szValue = NULL;
     size_t len;
 
+    // Check valid HDBC
+    if(!VALID_HDBC(phdbc))
+    {
+        return SQL_INVALID_HANDLE;
+    }
+
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLSetConnectOptionW(FUNC_CALL, 0, phdbc, hOption, pwValue);
 
@@ -90,11 +96,13 @@ SQLRETURN SQL_API SQLSetConnectOptionW(SQLHDBC            phdbc,
         || hOption == SQL_OPT_TRACEFILE
         || hOption == SQL_TRANSLATE_DLL)
     {
-        len = calculate_utf8_len((WCHAR *)pwValue, SQL_NTS);
-
-        szValue = (char *)((len > 0) ? rs_calloc(sizeof(char), len + 1) : NULL);
-
-        wchar_to_utf8((WCHAR *)pwValue, SQL_NTS, szValue, len);
+        len = sqlwchar_to_utf8_alloc((SQLWCHAR *)pwValue, SQL_NTS, &szValue);
+        if(!szValue)
+        {
+            RS_CONN_INFO *pConn = (RS_CONN_INFO *)phdbc;
+            addError(&pConn->pErrorList,"HY001", "Memory allocation error", 0, NULL);
+            return SQL_ERROR;
+        }
     }
 
     rc = RsOptions::RS_SQLSetConnectOption(phdbc, hOption, (szValue) ? (SQLULEN) szValue : pwValue);
@@ -141,7 +149,7 @@ SQLRETURN SQL_API SQLGetConnectOptionW(SQLHDBC   phdbc,
     if(SQL_SUCCEEDED(rc))
     {
         if(szValue)
-            utf8_to_wchar(szValue, SQL_NTS, (WCHAR *)pwValue, strlen(szValue) + 1);
+            utf8_to_sqlwchar_str(szValue, SQL_NTS, (SQLWCHAR *)pwValue, strlen(szValue) + 1);
     }
 
     szValue = (char *)rs_free(szValue);
@@ -468,43 +476,53 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetConnectAttr(SQLHDBC phdbc,
     SQLRETURN rc = SQL_SUCCESS;
     int *piVal = (int *)pValue;
     void **ppVal = (void **)pValue;
-    RS_CONN_INFO *pConn = (RS_CONN_INFO *)phdbc;
     RS_CONN_ATTR_INFO *pConnAttr;
     RS_CONNECT_PROPS_INFO *pConnectProps;
 
     // Check valid HDBC
     if(!VALID_HDBC(phdbc))
     {
-        rc = SQL_INVALID_HANDLE;
-        goto error;
+        return SQL_INVALID_HANDLE;
     }
+    RS_CONN_INFO *pConn = (RS_CONN_INFO *)phdbc;
 
     // Clear error list
     pConn->pErrorList = clearErrorList(pConn->pErrorList);
 
-    if(!pValue) {
-        if(RsOptions::isStrConnectAttr(iAttribute)) {
-            if(!pcbLen) {
-                // For string attributes: pValue can be NULL only when querying buffer size,
-                // which requires a valid StringLengthPtr
-                // https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetconnectattr-function
-                addError(&pConn->pErrorList,"HY000", "Both ValuePtr and StringLengthPtr cannot be NULL", 0, NULL);
-                rc = SQL_ERROR;
-                goto error;
-            }
-        } else {
-            addError(&pConn->pErrorList,"HY000", "ValuePtr cannot be NULL", 0, NULL);
-            rc = SQL_ERROR;
-            goto error;
+    // String attrs: ValuePtr may be NULL only if StringLengthPtr is provided.
+    if (RsOptions::isStrConnectAttr(iAttribute)) {
+        if (!pValue && !pcbLen) {
+            // For string attributes: pValue can be NULL only when querying
+            // buffer size, which requires a valid StringLengthPtr
+            // https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetconnectattr-function
+            addError(&pConn->pErrorList, "HY009", "Invalid use of null pointer",
+                     0, NULL);
+            RS_LOG_ERROR(
+                "CONNATTR",
+                "String attr %d: ValuePtr and StringLengthPtr both NULL",
+                iAttribute);
+            return SQL_ERROR;
         }
-    }
-
-    // Only validate buffer length for string attributes
-    // For integer attributes, BufferLength should be ignored per ODBC spec
-    if (RsOptions::isStrConnectAttr(iAttribute) && cbLen < 0 && cbLen != SQL_NTS) {
-        rc = SQL_ERROR;
-        addError(&pConn->pErrorList, "HY090", "Invalid string or buffer length", 0, NULL);
-        goto error;
+        // Validate BufferLength only when we will actually write into ValuePtr.
+        if (pValue && cbLen < 0) {
+            addError(&pConn->pErrorList, "HY090",
+                     "Invalid string or buffer length", 0, NULL);
+            RS_LOG_ERROR("CONNATTR",
+                         "Invalid buffer length for string attr %d: %d",
+                         iAttribute, cbLen);
+            return SQL_ERROR;
+        }
+    } else {
+        // Non-string attrs: ValuePtr must not be NULL; 
+        // BufferLength is ignored by spec.
+        if (!pValue) {
+            addError(&pConn->pErrorList, "HY009", "Invalid use of null pointer",
+                     0, NULL);
+            RS_LOG_ERROR("CONNATTR", "Non-string attr %d: NULL ValuePtr",
+                         iAttribute);
+            return SQL_ERROR;
+        }
+        // Do NOT validate cbLen here (ignored).
     }
 
     pConnAttr = pConn->pConnAttr;
@@ -622,10 +640,18 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetConnectAttr(SQLHDBC phdbc,
             *piVal = 1;
             break;
         }
-
-        case SQL_ATTR_APP_WCHAR_TYPE: // DD DM specific attribute.
+        case SQL_ATTR_DRIVER_UNICODE_TYPE:
+        case SQL_ATTR_APP_WCHAR_TYPE:   // DD DM specific attribute.
+        case SQL_ATTR_APP_UNICODE_TYPE: // iODBC specific attribute for UTF-32
+                                        // apps
         {
-            *piVal = SQL_DD_CP_UTF16;
+            *piVal = get_app_unicode_type();
+            if (*piVal != SQL_DD_CP_UTF16 && *piVal != SQL_DD_CP_UTF32) {
+                RS_LOG_ERROR("CONNATTR", "Invalid app unicode type:%d", *piVal);
+                rc = SQL_ERROR;
+                addError(&pConn->pErrorList, "HY000", "Invalid unicode state.", 0, NULL);
+                return rc;
+            }
             break;
         }
 
@@ -639,12 +665,10 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetConnectAttr(SQLHDBC phdbc,
         {
             rc = SQL_ERROR;
             addError(&pConn->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLGetConnectAttr", 0, NULL);
-            goto error;
+            return rc;
         }
 
     } // Switch
-
-error:
 
     return rc;
 }
@@ -966,17 +990,17 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
                                            SQLINTEGER    cbLen)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    RS_CONN_INFO *pConn = (RS_CONN_INFO *)phdbc;
     RS_CONN_ATTR_INFO *pConnAttr;
     RS_CONNECT_PROPS_INFO *pConnectProps;
 
     int iVal = (int)(long)pValue;
-
+    RS_CONN_INFO *pConn = nullptr;
     if(!VALID_HDBC(phdbc))
     {
         rc = SQL_INVALID_HANDLE;
         goto error;
     }
+    pConn = (RS_CONN_INFO *)phdbc;
 
     // Clear error list
     pConn->pErrorList = clearErrorList(pConn->pErrorList);
@@ -1071,7 +1095,10 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
             if(pConn->isConnectionOpen())
             {
                 rc = SQL_ERROR;
-                addError(&pConn->pErrorList,"HY011", "Attribute cannot be set now", 0, NULL);
+                addError(
+                    &pConn->pErrorList, "HY011",
+                    "Attribute cannot be set now: SQL_ATTR_CURRENT_CATALOG", 0,
+                    NULL);
                 goto error;
             }
             else
@@ -1127,7 +1154,9 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
             if(pConn->isConnectionOpen())
             {
                 rc = SQL_ERROR;
-                addError(&pConn->pErrorList,"HY011", "Attribute cannot be set now", 0, NULL);
+                addError(&pConn->pErrorList, "HY011",
+                         "Attribute cannot be set now: SQL_ATTR_PACKET_SIZE", 0,
+                         NULL);
                 goto error;
             }
 
@@ -1206,7 +1235,10 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
                 if(!libpqIsTransactionIdle(pConn))
                 {
                     rc = SQL_ERROR;
-                    addError(&pConn->pErrorList,"HY011", "Attribute cannot be set now", 0, NULL);
+                    addError(
+                        &pConn->pErrorList, "HY011",
+                        "Attribute cannot be set now: SQL_ATTR_TXN_ISOLATION",
+                        0, NULL);
                     goto error;
                 }
 
@@ -1232,20 +1264,19 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
 
             break;
         }
-
-        case SQL_ATTR_APP_WCHAR_TYPE: // DD DM specific attribute.
-        {
-            if(iVal == SQL_DD_CP_UTF16)
-            {
-                // We support WCHAR as UTF-16. So that will be fine.
-            }
-            else
-            {
+        case SQL_ATTR_DRIVER_UNICODE_TYPE:
+        case SQL_ATTR_APP_UNICODE_TYPE:
+        case SQL_ATTR_APP_WCHAR_TYPE: {
+            int v = iVal;
+            if (v != SQL_DD_CP_UTF16 && v != SQL_DD_CP_UTF32) {
                 rc = SQL_ERROR;
-                addError(&pConn->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLSetConnectAttr-1", 0, NULL);
+                RS_LOG_ERROR("CONNATTR", "Invalid unicode type:%d", v);
+                addError(&pConn->pErrorList, "HY024",
+                         "Invalid Unicode type for CON attribute", 0, NULL);
                 goto error;
             }
-
+            // affects future DBCs / default behavior
+            set_process_unicode_type(v);
             break;
         }
 
@@ -1658,7 +1689,10 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetStmtAttr(SQLHSTMT    phstmt,
         default:
         {
             rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented::RS_SQLSetStmtAttr", 0, NULL);
+            std::string err =
+                "Optional feature not implemented in SQLSetStmtAttr:" +
+                std::to_string(iAttribute);
+            addError(&pStmt->pErrorList, "HYC00", err.data(), 0, NULL);
             goto error;
         }
     } // Switch
@@ -1670,99 +1704,218 @@ error:
 
 /*====================================================================================================================================================*/
 
-//---------------------------------------------------------------------------------------------------------igarish
-// Unicode version of SQLGetConnectAttr.
-//
+// ============================================================================
+// SQLGetConnectAttrW : Unicode version of SQLGetConnectAttr.
+// ============================================================================
+
 SQLRETURN  SQL_API SQLGetConnectAttrW(SQLHDBC        phdbc,
                                        SQLINTEGER    iAttribute, 
                                        SQLPOINTER    pwValue,
                                        SQLINTEGER    cbLen, 
                                        SQLINTEGER  *pcbLen)
 {
-    SQLRETURN rc;
-    char *szValue = NULL;
-    int strOption;
-    SQLINTEGER cchLen = cbLen/sizeof(WCHAR);
+    SQLRETURN rc = SQL_SUCCESS;
 
+    if(!VALID_HDBC(phdbc))
+    {
+        rc = SQL_INVALID_HANDLE;
+        return rc;
+    }
+    RS_CONN_INFO *pConn = (RS_CONN_INFO *)phdbc;
     beginApiMutex(NULL, phdbc);
 
-    if(IS_TRACE_LEVEL_API_CALL())
+    if (IS_TRACE_LEVEL_API_CALL())
         TraceSQLGetConnectAttrW(FUNC_CALL, 0, phdbc, iAttribute, pwValue, cbLen, pcbLen);
 
-    if(RsOptions::isStrConnectAttr(iAttribute))
-    {
-        strOption = TRUE;
+    bool isStr = RsOptions::isStrConnectAttr(iAttribute);
+    size_t copiedChars = 0;
 
-        if(pwValue != NULL && cbLen > 0)
-            szValue = (char *)rs_calloc(sizeof(char), cchLen + 1);
-        else
-            szValue = NULL;
-    }
-    else
-        strOption = FALSE;
-
-    rc = RsOptions::RS_SQLGetConnectAttr(phdbc, iAttribute, (szValue) ? (SQLPOINTER) szValue : pwValue,
-                                              (szValue) ? cchLen : cbLen, pcbLen);
-
-    if(SQL_SUCCEEDED(rc))
-    {
-        if(szValue)
-            utf8_to_wchar(szValue, cchLen, (WCHAR *)pwValue, cchLen);
-
-        if(strOption)
-        {
-            if(pcbLen)
-                (*pcbLen) =  (*pcbLen) * sizeof(WCHAR);
+    auto on_exit = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLGetConnectAttrW(FUNC_RETURN, rc, phdbc, iAttribute, pwValue,
+                                    copiedChars * sizeofSQLWCHAR(), pcbLen);
+        }
+        endApiMutex(NULL, phdbc);
+    });
+    // Early check to have parity with non-wide version.
+    // Validate BufferLength only if a destination buffer is supplied.
+    if (isStr && pwValue != nullptr) {
+        if (cbLen < 0) {
+            rc = SQL_ERROR;
+            RS_LOG_ERROR("CONNATTR", "Invalid buffer length: %d", cbLen);
+            addError(&pConn->pErrorList, "HY090",
+                     "Invalid string or buffer length", 0, NULL);
+            return rc;
+        }
+        // For W APIs: BufferLength must be a multiple of sizeof(SQLWCHAR)
+        if ((cbLen % (SQLINTEGER)sizeofSQLWCHAR()) != 0) {
+            rc = SQL_ERROR;
+            RS_LOG_ERROR("CONNATTR", "Unaligned BufferLength for Unicode: %d",
+                         cbLen);
+            addError(&pConn->pErrorList, "HY090",
+                     "Invalid string or buffer length (must be multiple of "
+                     "wide char size)",
+                     0, NULL);
+            return rc;
         }
     }
 
-    szValue = (char *)rs_free(szValue);
+    if (!isStr) {
+        // Non-string attributes: pass through unchanged.
+        return RsOptions::RS_SQLGetConnectAttr(phdbc, iAttribute, pwValue,
+                                               cbLen, pcbLen);
+    }
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLGetConnectAttrW(FUNC_RETURN, rc, phdbc, iAttribute, pwValue, cbLen, pcbLen);
+    // -------- STRING ATTRIBUTE GUARDS (per ODBC) --------
+    // If caller passed no buffer AND no length pointer -> HY009 (invalid null
+    // pointer).
+    if (pwValue == nullptr && pcbLen == nullptr) {
+        // Post HY009
+        addError(&pConn->pErrorList, "HY009", "Invalid use of null pointer", 0,
+                 NULL);
+        return SQL_ERROR;
+    }
 
-    endApiMutex(NULL, phdbc);
+    // Discover required UTF-8 length (bytes excl. NUL) from driver state.
+    SQLINTEGER utf8BytesRequired = 0;
+    rc = RsOptions::RS_SQLGetConnectAttr(phdbc, iAttribute, nullptr, 0,
+                                         &utf8BytesRequired);
+    if (!SQL_SUCCEEDED(rc)) {
+        return rc;
+    }
 
-    return rc;
+    // Fetch UTF-8 value locally (don’t touch caller buffer yet).
+    std::string utf8;
+    utf8.resize(
+        static_cast<size_t>((std::max<SQLINTEGER>)(0, utf8BytesRequired)) + 1,
+        '\0');
+    SQLINTEGER utf8BytesReturned = 0;
+
+    rc = RsOptions::RS_SQLGetConnectAttr(
+        phdbc, iAttribute, utf8.data(),
+        static_cast<SQLINTEGER>(utf8.size()), // include space for NUL
+        &utf8BytesReturned);
+    if (!SQL_SUCCEEDED(rc)) {
+        return rc;
+    }
+
+    utf8BytesReturned =
+        (utf8BytesReturned < 0)
+            ? 0
+            : (std::min<SQLINTEGER>)(utf8.size(), utf8BytesReturned);
+
+    size_t usedUtf8 = static_cast<size_t>(utf8BytesReturned);
+    if (usedUtf8 && utf8[usedUtf8 - 1] == '\0') {
+        --usedUtf8;
+    }
+
+    // Compute required wide code units (excluding NULL) without writing.
+    const size_t totalCharsNeeded =
+        utf8_to_sqlwchar_strlen(utf8.data(), static_cast<int>(usedUtf8),
+                                /*auto-detect*/ -1);
+    // bytes needed (excluding NULL) for W path
+    const SQLINTEGER requiredBytes =
+        static_cast<SQLINTEGER>(totalCharsNeeded * sizeofSQLWCHAR());
+    // No capacity if caller gave no buffer or zero/negative cbLen
+    const bool noCapacity = (pwValue == nullptr) || (cbLen <= 0);
+
+    // --- Spec-compliant guard rails ---
+    if (noCapacity && pcbLen == nullptr) {
+        // Invalid use of null pointer: nowhere to write and nowhere to report
+        // length
+        addError(&pConn->pErrorList, "HY009", "Invalid use of null pointer", 0,
+                 NULL);
+        return SQL_ERROR;
+    }
+
+    // If cbLen <= 0, there is no capacity to write into pwValue (even if DM
+    // passed a dummy pointer).
+    if (cbLen <= 0 || pwValue == nullptr) {
+        if (pcbLen) {
+            *pcbLen = requiredBytes;
+            // Length query
+            return SQL_SUCCESS;
+        } else {
+            // Both NULL cases are handled above. This is just defensive
+            // fallback
+            addError(&pConn->pErrorList, "HY009", "Invalid use of null pointer",
+                     0, NULL);
+            return SQL_ERROR;
+        }
+    }
+
+    // We have capacity (>0) and a non-NULL buffer: convert and copy.
+    const size_t capWide = static_cast<size_t>(cbLen) / sizeofSQLWCHAR();
+    copiedChars = utf8_to_sqlwchar_str(
+        utf8.data(), usedUtf8, static_cast<SQLWCHAR *>(pwValue), capWide);
+
+    // Ensure NUL termination if any capacity exists.
+    if (capWide > 0) {
+        const size_t term =
+            (copiedChars < capWide) ? copiedChars : (capWide - 1);
+        setNthSqlwcharNull(static_cast<SQLWCHAR *>(pwValue), term);
+    }
+    if (pcbLen)
+        *pcbLen = requiredBytes;
+
+    if (copiedChars < totalCharsNeeded) {
+        // Truncation occurred
+        addError(&pConn->pErrorList, "01004", "String data, right truncated", 0,
+                 NULL);
+        return SQL_SUCCESS_WITH_INFO;
+    }
+
+    return SQL_SUCCESS;
 }
 
 /*====================================================================================================================================================*/
 
-//---------------------------------------------------------------------------------------------------------igarish
-// Unicode version of SQLSetConnectAttr.
-//
+// ============================================================================
+// SQLSetConnectAttrW : Unicode version of SQLSetConnectAttr.
+// ============================================================================
+
 SQLRETURN  SQL_API SQLSetConnectAttrW(SQLHDBC    phdbc,
                                        SQLINTEGER    iAttribute, 
                                        SQLPOINTER    pwValue,
                                        SQLINTEGER    cbLen)
 {
+    /*
+    Note:
+    Consider adding beginApiMutex(NULL, phdbc) and endApiMutex(NULL, phdbc)
+    */
     SQLRETURN rc = SQL_SUCCESS;
-    char *szValue = NULL;
-    SQLINTEGER len = cbLen;
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLSetConnectAttrW(FUNC_CALL, 0, phdbc, iAttribute, pwValue, cbLen);
 
-    if(iAttribute == SQL_ATTR_CURRENT_CATALOG
-        || iAttribute == SQL_ATTR_TRACEFILE
-        || iAttribute == SQL_ATTR_TRANSLATE_LIB)
-    {
-        size_t cchLen = (cbLen != SQL_NTS) ? cbLen/sizeof(WCHAR) : cbLen;
+    // Common epilogue: trace + unlock, always runs.
+    auto on_exit = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL())
+            TraceSQLSetConnectAttrW(FUNC_RETURN, rc, phdbc, iAttribute, pwValue,
+                                    cbLen);
+    });
 
-        len = (SQLINTEGER) calculate_utf8_len((WCHAR *)pwValue, cchLen);
+    if ((iAttribute == SQL_ATTR_CURRENT_CATALOG ||
+         iAttribute == SQL_ATTR_TRACEFILE ||
+         iAttribute == SQL_ATTR_TRANSLATE_LIB) &&
+        pwValue) {
+        // cchLen is in client code units; if SQL_NTS, pass SQL_NTS through
+        const int cchLen = (cbLen != SQL_NTS)
+                               ? static_cast<int>(cbLen / sizeofSQLWCHAR())
+                               : SQL_NTS;
 
-        szValue = (char *)((len > 0) ? rs_calloc(sizeof(char), len + 1) : NULL);
+        std::string utf8Str;
+        // Autodetects UTF-16/32 under the hood; returns BYTES (excl. NUL)
+        const size_t outBytes = sqlwchar_to_utf8_str(
+            static_cast<const SQLWCHAR *>(pwValue), cchLen, utf8Str);
+        rc = RsOptions::RS_SQLSetConnectAttr(
+            phdbc, iAttribute, utf8Str.data(),
+            static_cast<SQLINTEGER>(outBytes));
+    } else {
 
-        wchar_to_utf8((WCHAR *)pwValue, cchLen, szValue, len);
+        // Non-string attributes or null value: forward unchanged.
+        rc = RsOptions::RS_SQLSetConnectAttr(phdbc, iAttribute, pwValue, cbLen);
     }
-
-    rc = RsOptions::RS_SQLSetConnectAttr(phdbc, iAttribute, (szValue) ? (SQLPOINTER) szValue : pwValue, len);
-
-    szValue = (char *)rs_free(szValue);
-
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLSetConnectAttrW(FUNC_RETURN, rc, phdbc, iAttribute, pwValue, cbLen);
-
     return rc;
 }
 
@@ -1938,6 +2091,23 @@ SQLRETURN  SQL_API SQLSetEnvAttr(SQLHENV phenv,
             break;
         }
 
+        case SQL_ATTR_APP_UNICODE_TYPE:
+        case SQL_ATTR_APP_WCHAR_TYPE:
+        case SQL_ATTR_DRIVER_UNICODE_TYPE: {
+            int v = iVal;
+            if (v != SQL_DD_CP_UTF16 && v != SQL_DD_CP_UTF32) {
+                rc = SQL_ERROR;
+                addError(&pEnv->pErrorList, "HY024",
+                         "Invalid Unicode type for ENV attribute", 0, NULL);
+                RS_LOG_ERROR("RS_SQLSetEnvAttr",
+                             "Invalid Unicode type for ENV attribute");
+                goto error;
+            }
+             // affects future DBCs / default behavior
+            set_process_unicode_type(v);
+            break;
+        }
+
         default:
         {
             rc = SQL_ERROR;
@@ -2017,9 +2187,18 @@ SQLRETURN  SQL_API SQLGetEnvAttr(SQLHENV phenv,
             break;
         }
 
-        case SQL_ATTR_DRIVER_UNICODE_TYPE:
-        {
-            *piVal = SQL_DD_CP_UTF16; // UTF-16 for DD DM
+        case SQL_ATTR_APP_UNICODE_TYPE:
+        case SQL_ATTR_APP_WCHAR_TYPE:
+        case SQL_ATTR_DRIVER_UNICODE_TYPE: {
+            *piVal = get_app_unicode_type();
+            if (*piVal != SQL_DD_CP_UTF16 && *piVal != SQL_DD_CP_UTF32) {
+                rc = SQL_ERROR;
+                addError(&pEnv->pErrorList, "HY000",
+                         "Invalid Unicode type for ENV attribute", 0, NULL);
+                RS_LOG_ERROR("RS_SQLGetEnvAttr",
+                             "Invalid Unicode type for ENV attribute");
+                goto error;
+            }
             break;
         }
 

@@ -7,6 +7,10 @@
 #ifndef ZPQ_STREAM_H
 #define ZPQ_STREAM_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define ZPQ_DEFAULT_COMPRESSION_LEVEL (1)
 #define ZPQ_INCOMPLETE_HEADER (-6)
 #define ZPQ_FATAL_ERROR (-7)
@@ -24,8 +28,6 @@ typedef struct zpq_compressor
 	unsigned int impl;			/* compression algorithm index */
 	int			level;			/* compression level */
 }			zpq_compressor;
-
-#endif
 
 /*
  * Create compression stream with rx/tx function for reading/sending compressed data.
@@ -118,3 +120,9 @@ bool
 
 /* Return the currently enabled compression algorithms */
 char	   *zpq_algorithms(ZpqStream * zpq);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* ZPQ_STREAM_H */

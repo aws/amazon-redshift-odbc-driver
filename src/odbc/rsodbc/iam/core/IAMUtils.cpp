@@ -15,6 +15,8 @@
 #include <string.h>
 #include <sstream>
 #include <regex>
+#include <codecvt>
+#include <locale>
 
 #include "rslock.h"
 #include "RsIamClient.h"
@@ -36,8 +38,6 @@
 using namespace Redshift::IamSupport;
 
 extern "C" {
-  size_t wchar_to_utf8(WCHAR *wszStr,size_t cchLen,char *szStr,size_t cbLen);
-  size_t utf8_to_wchar(char *szStr,size_t cbLen,WCHAR *wszStr,size_t cchLen);
   void *rs_calloc(size_t NumOfElements, size_t SizeOfElements);
   void *rs_free(void * block);
   char *getDriverPath();
@@ -246,48 +246,79 @@ rs_wstring IAMUtils::ReplaceAll(
     return io_string;
 }
 
-rs_string  IAMUtils::convertToUTF8(rs_wstring wstr) {
-//  if(wstr == NULL) return NULL;
-  if(wstr.empty()) return "";
+rs_string IAMUtils::convertToUTF8(rs_wstring wstr) {
+    if (wstr.empty())
+        return "";
 
-  std::string str( wstr.begin(), wstr.end() );
-  return str;
+    // Fast path: ASCII only -> keep old behavior exactly
+    bool isAsciiOnly = true;
+    for (wchar_t ch : wstr) {
+        if (ch > 0x7F) {
+            isAsciiOnly = false;
+            break;
+        }
+    }
 
-/*
-  size_t cbLen = wstr.length() * sizeof(WCHAR);
-  char *szStr = (char *)rs_calloc(cbLen + 1, sizeof(char));
+    if (isAsciiOnly) {
+        return std::string(wstr.begin(), wstr.end());
+    }
 
-
-  size_t len =  wchar_to_utf8((WCHAR *)wstr.c_str(), wstr.length(), szStr, cbLen);
-
-  rs_string str = rs_string(szStr);
-
-  rs_free(szStr);
-
-  return str;
-*/
+    // Non-ASCII path: proper Unicode → UTF-8 conversion
+    try {
+#ifdef _WIN32
+        static thread_local std::wstring_convert<
+            std::codecvt_utf8_utf16<wchar_t>>
+            converter;
+#else
+        static thread_local std::wstring_convert<std::codecvt_utf8<wchar_t>>
+            converter;
+#endif
+        return converter.to_bytes(wstr);
+    } catch (const std::exception &e) {
+        RS_LOG_ERROR("IAM", "convertToUTF8 failed: %s", e.what());
+        return "";
+    } catch (...) {
+        RS_LOG_ERROR("IAM", "convertToUTF8 failed with unknown error");
+        return "";
+    }
 }
 
-rs_wstring  IAMUtils::convertFromUTF8(rs_string str) {
-//  if(str == NULL) return NULL;
-  if(str.empty()) return L"";
+rs_wstring IAMUtils::convertFromUTF8(rs_string str) {
+    if (str.empty())
+        return L"";
 
-  std::wstring wstr( str.begin(), str.end() );
-  return wstr;
+    // Fast path: ASCII – keep old behavior byte-for-codepoint
+    bool isAsciiOnly = true;
+    for (unsigned char ch : str) {
+        if (ch > 0x7F) {
+            isAsciiOnly = false;
+            break;
+        }
+    }
 
-/*
-  size_t cbLen = str.length();
-  WCHAR *wszStr = (WCHAR *)rs_calloc(cbLen + 1, sizeof(WCHAR));
+    if (isAsciiOnly) {
+        // Exactly old behavior
+        return rs_wstring(str.begin(), str.end());
+    }
 
-
-  size_t len =  utf8_to_wchar((char *)str.c_str(), cbLen, wszStr, cbLen * sizeof(WCHAR));
-
-  rs_wstring wstr((wchar_t*)wszStr);
-
-  rs_free(wszStr);
-
-  return wstr;
-*/
+    // Non-ASCII: treat as real UTF-8
+    try {
+#ifdef _WIN32
+        static thread_local std::wstring_convert<
+            std::codecvt_utf8_utf16<wchar_t>>
+            converter;
+#else
+        static thread_local std::wstring_convert<std::codecvt_utf8<wchar_t>>
+            converter;
+#endif
+        return converter.from_bytes(str);
+    } catch (const std::exception &e) {
+        RS_LOG_ERROR("IAM", "convertFromUTF8 failed: %s", e.what());
+        return L"";
+    } catch (...) {
+        RS_LOG_ERROR("IAM", "convertFromUTF8 failed with unknown error");
+        return L"";
+    }
 }
 
 rs_wstring IAMUtils::toLower(rs_wstring  wstr) {
@@ -324,12 +355,11 @@ bool IAMUtils::isEqual(std::wstring s1, std::wstring  s2, bool caseSensitive)
  }
 
 rs_wstring IAMUtils::convertStringToWstring(rs_string  str) {
-  return (!str.empty()) ? rs_wstring(str.begin(),str.end()) : L"";
+  return convertFromUTF8(str);
 }
 
 rs_wstring IAMUtils::convertCharStringToWstring(char *str) {
-  rs_string temp = str;
-  return  convertStringToWstring(temp);
+  return str ? convertFromUTF8(rs_string(str)) : L"";
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 //this struct is use to create a callbackContext object which member variables will be used to store our aws-region 
@@ -357,7 +387,7 @@ void IAMUtils::AresCallBack(void* arg, int status, int timeouts, struct hostent*
     }     
     catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
         RS_LOG_DEBUG("IAM", "Exception thrown during AresCallBack execution. Exception: %s", ex.GetMessage().c_str());
-        throw ex;
+        throw;
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -409,7 +439,7 @@ rs_string IAMUtils::GetAwsRegionFromCname(const std::string& cnameEndpoint) {
         }
     } catch (const Aws::Client::AWSError<Aws::Redshift::RedshiftErrors>& ex) {
         RS_LOG_DEBUG("IAM", "Cannot fetch the aws region. Exception: %s", ex.GetMessage().c_str());
-        throw ex;
+        throw;
     }
     return "";
 }
@@ -661,8 +691,8 @@ std::string IAMUtils::maskCredentials(const std::string& content) {
                 "$1***masked***\""
             );
         } catch (const std::regex_error& e) {
-            RS_LOG_DEBUG("IAM", "Regex replacement for sensitive info failed: %s, code: %s\n",
-               std::string(e.what()), std::to_string(e.code()));
+            RS_LOG_DEBUG("IAM", "Regex replacement for sensitive info failed: %s, code: %d\n",
+               e.what(), e.code());
             maskedContent = "***content-masking-failed***";
             break;
         }

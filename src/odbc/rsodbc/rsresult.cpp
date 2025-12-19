@@ -212,45 +212,125 @@ error:
 //---------------------------------------------------------------------------------------------------------igarish
 // Unicode version of SQLDescribeCol.
 //
-SQLRETURN SQL_API SQLDescribeColW(SQLHSTMT            phstmt,
-                                    SQLUSMALLINT    hCol,
-                                    SQLWCHAR*        pwColName,
-                                    SQLSMALLINT     cchLen,
-                                    SQLSMALLINT*    pcchLen,
-                                    SQLSMALLINT*    pDataType,
-                                    SQLULEN*        pColSize,
-                                    SQLSMALLINT*    pDecimalDigits,
-                                    SQLSMALLINT*    pNullable)
-{
-    SQLRETURN rc;
-    char szColName[MAX_IDEN_LEN] = {0};
-    SQLSMALLINT hLen;
+SQLRETURN SQL_API SQLDescribeColW(SQLHSTMT phstmt, SQLUSMALLINT hCol,
+                                  SQLWCHAR *pwColName, SQLSMALLINT cchLen,
+                                  SQLSMALLINT *pcchLen, SQLSMALLINT *pDataType,
+                                  SQLULEN *pColSize,
+                                  SQLSMALLINT *pDecimalDigits,
+                                  SQLSMALLINT *pNullable) {
+    SQLRETURN rc = SQL_SUCCESS;
+    char szColName[MAX_IDEN_LEN + 1] = {0};
+    size_t copiedChars = 0;
+    size_t totalCharsNeeded = 0;
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLDescribeColW(FUNC_CALL, 0, phstmt, hCol, pwColName, cchLen, pcchLen, pDataType, pColSize, pDecimalDigits, pNullable);
-
-    if(cchLen < 0)
-        cchLen = 0;
-
-    hLen = redshift_min(MAX_IDEN_LEN - 1, cchLen);
-    rc = RS_STMT_INFO::RS_SQLDescribeCol(phstmt, hCol, (SQLCHAR *)((pwColName) ? szColName : NULL), (pwColName) ? hLen : 0,
-                            pcchLen, pDataType, pColSize, pDecimalDigits, pNullable);
-
-    if (SQL_SUCCEEDED(rc) && pwColName) {
-        // Convert to unicode
-      int strLen = char_utf8_to_utf16_wchar(szColName, strlen(szColName), pwColName, cchLen);
-      *pcchLen = strLen;
-      RS_LOG_TRACE("RSRES",
-                   "cchLen=%d sizeof(SQLWCHAR):%d strLen=%d *pcchLen=%d",
-                   (int)cchLen, sizeof(SQLWCHAR), strLen, *pcchLen);
-    } else {
-        RS_LOG_WARN("RSRES", "Possible failure:%d", SQL_SUCCEEDED(rc));
+    if (IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLDescribeColW(FUNC_CALL, 0, phstmt, hCol, pwColName, cchLen,
+                             pcchLen, pDataType, pColSize, pDecimalDigits,
+                             pNullable);
     }
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLDescribeColW(FUNC_RETURN, rc, phstmt, hCol, pwColName, cchLen, pcchLen, pDataType, pColSize, pDecimalDigits, pNullable);
+    // RAII: always trace the return once, no matter where we exit
+    auto trace_on_exit = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLDescribeColW(FUNC_RETURN, rc, phstmt, hCol, pwColName,
+                                 (SQLSMALLINT)copiedChars, pcchLen, pDataType,
+                                 pColSize, pDecimalDigits, pNullable);
+        }
+    });
 
-    return rc;
+    // Validate handle
+    if (!VALID_HSTMT(phstmt)) {
+        rc = SQL_INVALID_HANDLE;
+        return rc;
+    }
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    // Validate BufferLength
+    if (cchLen < 0) {
+        if (pcchLen)
+            *pcchLen = 0;
+        addError(&pStmt->pErrorList, "HY090", "Invalid string or buffer length",
+                 0, NULL);
+        RS_LOG_ERROR("SQLDescribeColW", "Invalid string or buffer length");
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+    // Inner ANSI call
+    rc = RS_STMT_INFO::RS_SQLDescribeCol(phstmt, hCol, (SQLCHAR *)szColName,
+                                         MAX_IDEN_LEN, nullptr, pDataType,
+                                         pColSize, pDecimalDigits, pNullable);
+    if (!SQL_SUCCEEDED(rc)) {
+        if (pcchLen)
+            *pcchLen = 0;
+        return rc;
+    }
+    if (szColName[0] == '\0') {
+        if (pcchLen)
+            *pcchLen = 0;
+        return rc;
+    }
+
+    // Compute required wide length
+    totalCharsNeeded = utf8_to_sqlwchar_strlen(szColName, SQL_NTS);
+
+    const size_t capChars = (cchLen > 0) ? (size_t)cchLen : 0;
+
+    // Length inquiry: no buffer → success, just set length
+    if (pwColName == nullptr) {
+        if (pcchLen)
+            *pcchLen = (SQLSMALLINT)totalCharsNeeded;
+        return rc;
+    }
+
+    // Zero-capacity buffer: truncation, no write
+    if (capChars == 0) {
+        if (pcchLen)
+            *pcchLen = (SQLSMALLINT)totalCharsNeeded;
+        if (rc == SQL_SUCCESS)
+            rc = SQL_SUCCESS_WITH_INFO;
+        addError(&pStmt->pErrorList, "01004", "String data, right truncated", 0,
+                 NULL);
+        return rc;
+    }
+
+    // Convert to temp wide buffer and copy
+    SQLWCHAR *tempBuffer = nullptr;
+    auto free_temp = make_scope_exit([&]() noexcept {
+        if (tempBuffer)
+            rs_free(tempBuffer);
+    });
+
+    const size_t srcLenBytes = std::strlen(szColName);
+    size_t allocLen =
+        utf8_to_sqlwchar_alloc(szColName, srcLenBytes, &tempBuffer);
+    if (!tempBuffer) {
+        if (pcchLen)
+            *pcchLen = 0;
+        addError(&pStmt->pErrorList, "HY000",
+                 "Memory allocation failure during character conversion", 0,
+                 NULL);
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+    SQLRETURN copy_rc =
+        copySqlwForClient(pwColName, tempBuffer, totalCharsNeeded, capChars,
+                          nullptr, &copiedChars, sizeofSQLWCHAR());
+
+    if (!SQL_SUCCEEDED(copy_rc)) {
+        if (pcchLen)
+            *pcchLen = 0;
+        rc = copy_rc;
+        return rc;
+    }
+
+    // Merge severities: any SWI wins
+    rc = (copy_rc == SQL_SUCCESS_WITH_INFO) ? SQL_SUCCESS_WITH_INFO : rc;
+    if (pcchLen)
+        *pcchLen = (SQLSMALLINT)totalCharsNeeded;
+
+    return rc; // both scope_exit guards run
 }
 
 /*====================================================================================================================================================*/
@@ -298,11 +378,12 @@ SQLRETURN SQL_API SQLColAttributesW(SQLHSTMT     phstmt,
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLColAttributesW(FUNC_CALL, 0, phstmt, hCol, hFieldIdentifier, pwValue, cbLen, pcbLen, plValue);
+    size_t copiedChars = 0;
+    rc = RS_STMT_INFO::RS_SQLColAttributeW(phstmt, hCol, hFieldIdentifier, pwValue, cbLen, pcbLen, plValue, &copiedChars);
 
-    rc = RS_STMT_INFO::RS_SQLColAttributeW(phstmt, hCol, hFieldIdentifier, pwValue, cbLen, pcbLen, plValue);
-
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLColAttributesW(FUNC_RETURN, rc, phstmt, hCol, hFieldIdentifier, pwValue, cbLen, pcbLen, plValue);
+    if(IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLColAttributesW(FUNC_RETURN, rc, phstmt, hCol, hFieldIdentifier, pwValue, copiedChars * sizeofSQLWCHAR(), pcbLen, plValue);
+    }
 
     return rc;
 }
@@ -592,6 +673,23 @@ SQLRETURN  SQL_API SQLGetData(SQLHSTMT phstmt,
                                   SQLLEN *pcbLenInd)
 {
     SQLRETURN rc;
+    /*
+    We use an additional internal variable (pcbLenIndInternal) because:
+
+    1- We coud use its value for other internal purposes
+    and NULL pcbLenInd will not be useful. This variable is used to safegurd
+    TraceSQLGetData(FUNC_RETURN) against attempting to print uninitialized
+    pValue buffer.
+
+    2- In RS_SQLGetData function, in certain conditions NULL pcbLenInd is useful
+    to trigger an error.
+
+    So for one some case, we can't afford to have NULL, and for other
+    another usecase, NULL is a trigger to do something necessary. Therefore we
+    simply introduced another variable.
+    */
+    SQLLEN pcbLenIndInternal = (std::numeric_limits<SQLLEN>::min)();
+
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
     if(IS_TRACE_LEVEL_API_CALL())
@@ -605,14 +703,18 @@ SQLRETURN  SQL_API SQLGetData(SQLHSTMT phstmt,
 
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
-
-    rc = RS_STMT_INFO::RS_SQLGetData(pStmt, hCol, hType, pValue, cbLen, pcbLenInd, FALSE);
+    rc = RS_STMT_INFO::RS_SQLGetData(pStmt, hCol, hType, pValue, cbLen,
+                                     pcbLenInd, FALSE, pcbLenIndInternal);
+    if (pcbLenInd &&
+        pcbLenIndInternal != (std::numeric_limits<SQLLEN>::min)()) {
+        *pcbLenInd = pcbLenIndInternal;
+    }
 
 error:
-
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLGetData(FUNC_RETURN, rc, phstmt, hCol, hType, pValue, cbLen, pcbLenInd);
-
+    if (IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLGetData(FUNC_RETURN, rc, phstmt, hCol, hType, pValue,
+                        cbLen, pcbLenInd);
+    }
     return rc;
 }
 
@@ -627,7 +729,8 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
                                   SQLPOINTER pValue, 
                                   SQLLEN cbLen,
                                   SQLLEN *pcbLenInd,
-								  int iInternal)
+                                  int iInternal,
+                                  SQLLEN &pcbLenIndInternal)
 
 {
     SQLRETURN rc = SQL_SUCCESS;
@@ -635,11 +738,27 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
 
     if(pcbLenInd)
         *pcbLenInd = 0L;
+    /*
+    We use an additional internal variable because:
+    1- We coud use its value for other internal purposes (in trace functions)
+    and NULL pcbLenInd will not be useful.
+    2- In this function, in certain conditions NULL pcbLenInd should emit an
+    error So for one some case, we can't afford to have NULL, and for other
+    another usecase, NULL is a trigger to do something necessary. Therefore we
+    simply introduced another variable
+    */
+    pcbLenIndInternal = 0;
 
     if(pResult)
     {
         if(pResult->iNumberOfCols && pStmt->pIRD->pDescRecHead)
         {
+
+			if(!iInternal && hCol == 0) {
+                rc = SQL_ERROR;
+                addError(&pStmt->pErrorList,"HY000", "SQLGetData: Bookmark is not supported", 0, NULL);
+                goto error; 
+            }
 			if(!iInternal && (hCol == pResult->iPrevhCol))
 			{
 				rc = SQL_NO_DATA;
@@ -648,8 +767,8 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
 
             if(hCol > 0 && hCol <= pResult->iNumberOfCols)
             {
-                int  iDataLen;
-				int format;
+                int  iDataLen = 0;
+				int format = 0;
                 char *pData = libpqGetData(pResult, hCol - 1, &iDataLen, &format);
                 RS_DESC_REC *pDescRec = &pStmt->pIRD->pDescRecHead[hCol - 1];
 
@@ -658,15 +777,18 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
                     *pcbLenInd = 0;
                     *pcbLenInd = iDataLen;
                 }
-
+                pcbLenIndInternal = iDataLen;
                 if (pValue && pData && (iDataLen != SQL_NULL_DATA)) {
                   rc = convertSQLDataToCData(
                       pStmt, pData, iDataLen, pDescRec->hType, pValue, cbLen,
-                      &(pResult->getColumnReadOffset(hCol)), pcbLenInd, hType,
+                      &(pResult->getColumnReadOffset(hCol)), &pcbLenIndInternal, hType,
                       pDescRec->hRsSpecialType, format, pDescRec);
+                      if(pcbLenInd) {
+                        *pcbLenInd = pcbLenIndInternal;
+                      }
                 } else if (iDataLen == SQL_NULL_DATA) {
                   if (pValue && (cbLen > 0)) *(char *)pValue = '\0';
-
+                    pcbLenIndInternal = SQL_NULL_DATA;
                     if(!pcbLenInd)
                     {
                         rc = SQL_ERROR;
@@ -801,14 +923,14 @@ SQLRETURN SQL_API SQLSetPos(SQLHSTMT  phstmt,
         || hOperation != SQL_POSITION)
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented: hOperation", 0, NULL);
         goto error; 
     }
     else
     if(hOperation == SQL_POSITION && hLockType != SQL_LOCK_NO_CHANGE)
     {
         rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+        addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented-SQL_POSITION", 0, NULL);
         goto error; 
     }
     else
@@ -866,13 +988,21 @@ SQLRETURN  SQL_API SQLColAttributeW(SQLHSTMT     phstmt,
 {
     SQLRETURN rc;
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLColAttributeW(FUNC_CALL, 0, phstmt, hCol, hFieldIdentifier, pwValue, cbLen, pcbLen, plValue);
+    if (IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLColAttributeW(FUNC_CALL, 0, phstmt, hCol, hFieldIdentifier,
+                              pwValue, cbLen, pcbLen, plValue);
+    }
 
-    rc = RS_STMT_INFO::RS_SQLColAttributeW(phstmt, hCol, hFieldIdentifier, pwValue, cbLen, pcbLen, plValue);
+    size_t copiedChars = 0;
+    rc = RS_STMT_INFO::RS_SQLColAttributeW(phstmt, hCol, hFieldIdentifier,
+                                           pwValue, cbLen, pcbLen, plValue,
+                                           &copiedChars);
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLColAttributeW(FUNC_RETURN, rc, phstmt, hCol, hFieldIdentifier, pwValue, cbLen, pcbLen, plValue);
+    if (IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLColAttributeW(FUNC_RETURN, rc, phstmt, hCol, hFieldIdentifier,
+                              pwValue, copiedChars * sizeofSQLWCHAR(), pcbLen,
+                              plValue);
+    }
 
     return rc;
 }
@@ -882,53 +1012,132 @@ SQLRETURN  SQL_API SQLColAttributeW(SQLHSTMT     phstmt,
 //---------------------------------------------------------------------------------------------------------igarish
 // Common function for SQLColAttributeW and SQLColAttributesW.
 //
-SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLColAttributeW(SQLHSTMT     phstmt,
-                                        SQLUSMALLINT hCol, 
-                                        SQLUSMALLINT hFieldIdentifier,
-                                        SQLPOINTER   pwValue, 
-                                        SQLSMALLINT  cbLen,
-                                        SQLSMALLINT *pcbLen, 
-                                        SQLLEN        *plValue)
-{
+SQLRETURN SQL_API RS_STMT_INFO::RS_SQLColAttributeW(
+    SQLHSTMT     phstmt,
+    SQLUSMALLINT hCol,
+    SQLUSMALLINT hFieldIdentifier,
+    SQLPOINTER   pwValue,     ///< Destination (client SQLWCHAR*)
+    SQLSMALLINT  cbLen,       ///< Buffer length in BYTES
+    SQLSMALLINT *pcbLen,      ///< OUT: bytes required
+    SQLLEN      *plValue,     ///< Numeric attr out (for non-string fields)
+    size_t      *pCopiedChars ///< OUT: number of characters copied
+) {
     SQLRETURN rc;
-    char *pValue = NULL;
-    int strOption;
-    SQLSMALLINT cchLen = 0;
+    size_t totalCharsNeeded = 0;
 
-    if(pcbLen)
+    const SQLSMALLINT ansiBufLen =
+        (std::numeric_limits<SQLSMALLINT>::max)(); // 32767
+    // +1 for NUL
+    std::vector<char> utf8Buf(static_cast<size_t>(ansiBufLen) + 1, 0);
+    char *pValue = utf8Buf.data(); // UTF-8 temp for string attrs
+
+    const size_t charSize = sizeofSQLWCHAR();
+    SQLSMALLINT cchLen = 0; // client capacity in CHARACTERS
+    const bool isStringAttribute = isStrFieldIdentifier(hFieldIdentifier) != 0;
+    SQLWCHAR *tempW = nullptr;
+
+    // Pre-clear pcbLen per ODBC convention.
+    if (pcbLen) {
         *pcbLen = 0;
+    }
 
-    strOption = isStrFieldIdentifier(hFieldIdentifier);
-
-    if(strOption)
-    {
-        if(cbLen < 0)
+    // Convert cbLen (bytes) -> cchLen (characters).
+    if (isStringAttribute) {
+        if (cbLen < 0) {
             cbLen = 0;
-
-        cchLen = cbLen/sizeof(WCHAR);
-        if(pwValue != NULL && cbLen >= 0)
-            pValue = (char *)rs_calloc(sizeof(char), cchLen + 1);
-    }
-
-    rc = RS_STMT_INFO::RS_SQLColAttribute(phstmt, hCol, hFieldIdentifier, (strOption) ? pValue : pwValue,
-                                                         (strOption) ? cchLen : cbLen, pcbLen, plValue);
-
-    if(SQL_SUCCEEDED(rc))
-    {
-        if(strOption)
-        {
-            // Convert to unicode
-            if(pwValue)
-                utf8_to_wchar((char *)pValue, cchLen, (WCHAR *)pwValue, cchLen);
-
-            if(pcbLen)
-                *pcbLen = *pcbLen * sizeof(WCHAR);
         }
+        cchLen = (cbLen >= static_cast<SQLSMALLINT>(charSize))
+                     ? static_cast<SQLSMALLINT>(cbLen / charSize)
+                     : 0;
     }
 
-    pValue = (char *)rs_free(pValue);
+    // Call ANSI/UTF-8 core. For string fields, hand it our UTF-8 buffer
+    // when caller wants data or length.
+    rc = RS_STMT_INFO::RS_SQLColAttribute(
+        phstmt, hCol, hFieldIdentifier,
+        isStringAttribute ? ((pwValue || pcbLen) ? pValue : nullptr) : pwValue,
+        isStringAttribute ? ansiBufLen : cbLen,
+        nullptr, // we compute pcbLen ourselves below
+        plValue);
 
-    return rc;
+    if (!SQL_SUCCEEDED(rc) || !isStringAttribute) {
+        // Non-string attr or error: return as-is.
+        return rc;
+    }
+
+    // STRING ATTRIBUTE handling
+    // Compute required CHAR count from the UTF-8 we got.
+    totalCharsNeeded = utf8_to_sqlwchar_strlen(pValue, SQL_NTS);
+
+    // Lambda to handle return with null terminator check
+    auto returnWithCheck = [&](SQLRETURN retCode) -> SQLRETURN {
+        if (retCode == SQL_SUCCESS_WITH_INFO) {
+            if (!VALID_HSTMT(phstmt) || !((RS_STMT_INFO *)phstmt)) {
+                RS_LOG_ERROR("RS_SQLColAttributeW",
+                             "Truncation happened without issuing SQLSTATE");
+            } else {
+                RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+                addError(&pStmt->pErrorList, "01004", "String truncated.", 0,
+                         NULL);
+                RS_LOG_ERROR("RS_SQLColAttributeW", "Truncation happened.");
+            }
+        }
+        tempW = (SQLWCHAR *)rs_free(tempW);
+        return retCode;
+    };
+
+    // Report required BYTES (no NUL) as per ODBC (clamp to SQLSMALLINT).
+    if (pcbLen) {
+        const size_t reqBytes = totalCharsNeeded * charSize;
+        const SQLSMALLINT maxSm = (std::numeric_limits<SQLSMALLINT>::max)();
+        *pcbLen = (reqBytes > static_cast<size_t>(maxSm))
+                      ? maxSm
+                      : static_cast<SQLSMALLINT>(reqBytes);
+    }
+
+    // If caller provided no buffer, this is a length inquiry only.
+    if (!pwValue) {
+        return returnWithCheck(SQL_SUCCESS);
+    }
+
+    // Caller provided a buffer, but with < 1 character of space.
+    if (cchLen == 0) {
+        return returnWithCheck(SQL_SUCCESS_WITH_INFO);
+    }
+
+    // Handle empty string specially - just set null terminator
+    if (totalCharsNeeded == 0) {
+        setFirstSqlwcharNull(pwValue);
+        return returnWithCheck(SQL_SUCCESS);
+    }
+    
+    // Convert to client SQLWCHAR width only if we actually need to copy.
+    const size_t convChars = utf8_to_sqlwchar_alloc(pValue, SQL_NTS, &tempW);
+
+    if (!tempW) {
+        // Conversion failure → error; ensure dest is safe for tracing.
+        if (VALID_HSTMT(phstmt) && ((RS_STMT_INFO *)phstmt)) {
+            RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+            addError(&pStmt->pErrorList, "22021",
+                     "Character conversion failure.", 0, NULL);
+        }
+        RS_LOG_ERROR("SQLColAttributeW", "Character conversion failure.");
+        return returnWithCheck(SQL_ERROR);
+    }
+
+    // Copy + terminate using shared helper, and get actual copied count.
+
+    const SQLRETURN copyRc = copySqlwForClient(
+        /* dst           */ pwValue,
+        /* src           */ tempW,
+        /* needed chars  */ convChars,
+        /* cchLen (chars)*/ static_cast<size_t>(cchLen),
+        /* pcbLen (bytes)*/ nullptr, // already set above
+        /* copiedChars   */ pCopiedChars,
+        /* charSize      */ charSize);
+
+    // Prefer truncation info from copy helper if it occurred.
+    return returnWithCheck(copyRc);
 }
 
 /*====================================================================================================================================================*/
@@ -997,6 +1206,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLColAttribute(SQLHSTMT        phstmt,
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY090", "Invalid string or buffer length", 0, NULL);
+        RS_LOG_ERROR("RS_SQLColAttribute", "Invalid string or buffer length");
         goto error; 
     }
     
@@ -1542,7 +1752,8 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                 case SQL_FETCH_BOOKMARK:
                 {
                     rc = SQL_ERROR;
-                    addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented", 0, NULL);
+                    RS_LOG_ERROR("RSRES", "RS_SQLFetchScroll: Unsupported hOperation=%d", hFetchOrientation);
+                    addError(&pStmt->pErrorList,"HYC00", "Optional feature not implemented: SQL_FETCH_BOOKMARK", 0, NULL);
                     goto error; 
                 }
 
@@ -1607,11 +1818,11 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                         char* pValueCharPtr_ = (char *) (pDescRec->pValue ? pDescRec->pValue : NULL);
                         pValueCharPtr_ += (lRowFetched * iValOffset) + iBindOffset;
                         pcbLenInd = (SQLLEN *)(pcbLenInd ? ((char *)pcbLenInd + iBindOffset) : NULL);
-                        rc1 = RS_STMT_INFO::RS_SQLGetData(pStmt, pDescRec->hRecNumber, pDescRec->hType,
-                                            (SQLPOINTER) pValueCharPtr_,
-                                            pDescRec->cbLen, 
-                                            pcbLenInd,
-											TRUE);
+                        SQLLEN pcbLenIndInternal = (std::numeric_limits<SQLLEN>::min)();
+                        rc1 = RS_STMT_INFO::RS_SQLGetData(
+                            pStmt, pDescRec->hRecNumber, pDescRec->hType,
+                            (SQLPOINTER)pValueCharPtr_, pDescRec->cbLen,
+                            pcbLenInd, TRUE, pcbLenIndInternal);
 
                         pStmt->pResultHead->getColumnReadOffset(pDescRec->hRecNumber) = 0;
                         //TODO: Check for SQL_SUCCESS_WITH_INFO

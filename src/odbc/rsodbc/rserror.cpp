@@ -8,6 +8,7 @@
 
 #include "rserror.h"
 #include "rsmin.h"
+#include <limits>
 
 /*====================================================================================================================================================*/
 
@@ -145,54 +146,75 @@ SQLRETURN  SQL_API RsError::RS_SQLError(SQLHENV phenv,
 //---------------------------------------------------------------------------------------------------------igarish
 // Unicode version of SQLError.
 //
-SQLRETURN SQL_API SQLErrorW(SQLHENV     phenv,
-                            SQLHDBC     phdbc,
-                            SQLHSTMT    phstmt,
-                            SQLWCHAR*    pwSqlState,
-                            SQLINTEGER* piNativeError,
-                            SQLWCHAR*    pwMessageText,
-                            SQLSMALLINT  cchLen,
-                            SQLSMALLINT* pcchLen)
-{
+SQLRETURN SQL_API SQLErrorW(SQLHENV phenv, SQLHDBC phdbc, SQLHSTMT phstmt,
+                            SQLWCHAR *pwSqlState, SQLINTEGER *piNativeError,
+                            SQLWCHAR *pwMessageText, SQLSMALLINT cchLen,
+                            SQLSMALLINT *pcchLen) {
     SQLRETURN rc;
-    char szSqlState[MAX_SQL_STATE_LEN];
-    char szErrMsg[MAX_ERR_MSG_LEN];
-    SQLSMALLINT hLen = redshift_min(MAX_ERR_MSG_LEN,cchLen);
+    char szSqlState[MAX_SQL_STATE_LEN + 1] = {0};
+    char szErrMsg[MAX_ERR_MSG_LEN + 1] = {0};
 
-    if(phstmt == NULL)
+    // Always give the inner ANSI function a real buffer+length so it can
+    // compute length, even if caller passed NULL/0 for the W buffer.
+    const SQLSMALLINT driverBufLen = (SQLSMALLINT)MAX_ERR_MSG_LEN;
+
+    size_t copiedCharsSqlState = 0;
+    size_t copiedCharsMsgText = 0;
+    size_t totalCharsNeeded = 0; // required wide chars (without terminator)
+
+    if (phstmt == NULL)
         beginApiMutex((phdbc) ? NULL : phenv, phdbc);
 
-    if(IS_TRACE_LEVEL_ERROR()
-        || IS_TRACE_LEVEL_API_CALL())
-    {
-        TraceSQLErrorW(FUNC_CALL, 0, phenv, phdbc, phstmt, pwSqlState, piNativeError, pwMessageText, cchLen, pcchLen);
+    if (IS_TRACE_LEVEL_ERROR() || IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLErrorW(FUNC_CALL, 0, phenv, phdbc, phstmt, pwSqlState,
+                       piNativeError, pwMessageText, cchLen, pcchLen);
     }
 
-    szSqlState[MAX_SQL_STATE_LEN - 1] = '\0';
-    if(hLen > 0)
-        szErrMsg[hLen - 1] = '\0';
-    else
-        szErrMsg[MAX_ERR_MSG_LEN - 1] = '\0';
-    rc = RsError::RS_SQLError(phenv, phdbc, phstmt, NULL, (SQLCHAR *)szSqlState, piNativeError, (SQLCHAR *)((pwMessageText) ? szErrMsg : NULL),
-                    (pwMessageText) ? hLen : 0, pcchLen, 1, TRUE);
+    // Always request ANSI message text into our temp buffer
+    rc = RsError::RS_SQLError(
+        phenv, phdbc, phstmt,
+        NULL,                  // pszCursor (unused)
+        (SQLCHAR *)szSqlState, // out SQLSTATE (ANSI)
+        piNativeError,         // out native code
+        (SQLCHAR *)szErrMsg,   // out ANSI message buffer (always non-NULL)
+        driverBufLen,          // buffer length (always > 0)
+        pcchLen,               // may be non-NULL; inner may set ANSI length
+        1, TRUE);
 
-    if(SQL_SUCCEEDED(rc))
-    {
-        // Convert to unicode
-        if(pwSqlState)
-            utf8_to_wchar(szSqlState, MAX_SQL_STATE_LEN, pwSqlState, MAX_SQL_STATE_LEN);
+    if (SQL_SUCCEEDED(rc)) {
+        if (pwSqlState)
+            copiedCharsSqlState = utf8_to_sqlwchar_str(
+                szSqlState, SQL_NTS, (SQLWCHAR*)pwSqlState, MAX_SQL_STATE_LEN + 1);
 
-        if(pwMessageText)
-            utf8_to_wchar(szErrMsg, SQL_NTS, pwMessageText, cchLen);
+        if (pwMessageText && cchLen > 0) {
+            copiedCharsMsgText = utf8_to_sqlwchar_str(
+                szErrMsg, SQL_NTS, (SQLWCHAR*)pwMessageText, cchLen, &totalCharsNeeded);
+
+            // Truncation if required chars + terminator exceed buffer
+            if (totalCharsNeeded + 1 > (size_t)cchLen) {
+                if (rc == SQL_SUCCESS)
+                    rc = SQL_SUCCESS_WITH_INFO;
+            }
+        } else {
+            // Length inquiry path: compute required chars (no copy)
+            totalCharsNeeded = utf8_to_sqlwchar_strlen(szErrMsg, SQL_NTS);
+        }
+
+        if (pcchLen) {
+            const auto maxSm = (std::numeric_limits<SQLSMALLINT>::max)();
+            *pcchLen = (totalCharsNeeded > (size_t)maxSm)
+                    ? maxSm
+                    : (SQLSMALLINT)totalCharsNeeded;
+        }
     }
 
-    if(IS_TRACE_LEVEL_ERROR()
-        || IS_TRACE_LEVEL_API_CALL())
-    {
-        TraceSQLErrorW(FUNC_RETURN, rc, phenv, phdbc, phstmt, pwSqlState, piNativeError, pwMessageText, cchLen, pcchLen);
+    if (IS_TRACE_LEVEL_ERROR() || IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLErrorW(FUNC_RETURN, rc, phenv, phdbc, phstmt, pwSqlState,
+                       piNativeError, pwMessageText,
+                       (SQLSMALLINT)copiedCharsMsgText, pcchLen);
     }
 
-    if(phstmt == NULL)
+    if (phstmt == NULL)
         endApiMutex((phdbc) ? NULL : phenv, phdbc);
 
     return rc;
@@ -320,9 +342,9 @@ SQLRETURN SQL_API SQLGetDiagRecW(SQLSMALLINT    hHandleType,
                                     SQLSMALLINT    *pcchLen)
 {
     SQLRETURN rc;
-    char szSqlState[MAX_SQL_STATE_LEN];
-    char szErrMsg[MAX_ERR_MSG_LEN];
-    SQLSMALLINT hLen = redshift_min(MAX_ERR_MSG_LEN,cchLen);
+    char szSqlState[MAX_SQL_STATE_LEN + 1] = {0};
+    char szErrMsg[MAX_ERR_MSG_LEN + 1] = {0};
+    size_t copiedCharsSqlState = 0, copiedCharsMsg = 0, totalCharsNeeded = 0;
 
     if(hHandleType == SQL_HANDLE_ENV)
         beginApiMutex(pHandle, NULL);
@@ -336,30 +358,46 @@ SQLRETURN SQL_API SQLGetDiagRecW(SQLSMALLINT    hHandleType,
         TraceSQLGetDiagRecW(FUNC_CALL, 0, hHandleType, pHandle, hRecNumber, pwSqlState, piNativeError, pwMessageText, cchLen, pcchLen);
     }
 
-    szSqlState[MAX_SQL_STATE_LEN - 1] = '\0';
+    SQLSMALLINT tempLen = 0;
+    rc = RsError::RS_SQLGetDiagRec(
+        hHandleType, pHandle, hRecNumber, (SQLCHAR *)szSqlState, piNativeError,
+        (SQLCHAR *)szErrMsg, MAX_ERR_MSG_LEN, &tempLen);
+    RS_LOG_TRACE("RSDIAG", "RS_SQLGetDiagRec rc:%d, pcbLen:%d", rc, tempLen);
 
-    if(hLen > 0)
-        szErrMsg[hLen - 1] = '\0';
-    else
-        szErrMsg[MAX_ERR_MSG_LEN - 1] = '\0';
+    if (SQL_SUCCEEDED(rc)) {
+        // Calculate Unicode length for message text
+        if (!pwMessageText) {
+            totalCharsNeeded = utf8_to_sqlwchar_strlen(szErrMsg, SQL_NTS);
+        } else {
+            copiedCharsMsg = utf8_to_sqlwchar_str(
+                szErrMsg, SQL_NTS, (SQLWCHAR *)pwMessageText,
+                (cchLen > 0 ? cchLen : 0), &totalCharsNeeded);
 
-    rc = RsError::RS_SQLGetDiagRec(hHandleType, pHandle, hRecNumber, (SQLCHAR *)szSqlState, piNativeError,  (SQLCHAR *)((pwMessageText) ? szErrMsg : NULL),
-                            (pwMessageText) ? hLen : 0, pcchLen);
+            if (copiedCharsMsg < totalCharsNeeded) {
+                rc = SQL_SUCCESS_WITH_INFO;
+            }
+        }
 
-    if(SQL_SUCCEEDED(rc))
-    {
-        // Convert to unicode
-        if(pwSqlState)
-            utf8_to_wchar(szSqlState, MAX_SQL_STATE_LEN, pwSqlState, MAX_SQL_STATE_LEN);
-
-        if(pwMessageText)
-            utf8_to_wchar(szErrMsg, SQL_NTS, pwMessageText, cchLen);
+        if (pcchLen) {
+            *pcchLen = (SQLSMALLINT)totalCharsNeeded;
+        }
+        
+        // Next, Convert SQL state to unicode
+        totalCharsNeeded = 0;
+        if (pwSqlState) {
+            // + 1, to include null-terminator
+            copiedCharsSqlState = utf8_to_sqlwchar_str(
+                szSqlState, SQL_NTS, (SQLWCHAR *)pwSqlState,
+                MAX_SQL_STATE_LEN + 1, &totalCharsNeeded);
+        }
     }
 
     if(IS_TRACE_LEVEL_ERROR()
         || IS_TRACE_LEVEL_API_CALL())
     {
-        TraceSQLGetDiagRecW(FUNC_RETURN, rc, hHandleType, pHandle, hRecNumber, pwSqlState, piNativeError, pwMessageText, cchLen, pcchLen);
+        TraceSQLGetDiagRecW(FUNC_RETURN, rc, hHandleType, pHandle, hRecNumber,
+                            pwSqlState, piNativeError, pwMessageText,
+                            copiedCharsMsg, pcchLen);
     }
 
     if(hHandleType == SQL_HANDLE_ENV)
@@ -832,10 +870,14 @@ SQLRETURN SQL_API SQLGetDiagFieldW(SQLSMALLINT     hHandleType,
                                     SQLSMALLINT     *pcbLen)
 {
     SQLRETURN rc;
-    SQLSMALLINT cchLen = cbLen/sizeof(WCHAR);
+    size_t copiedChars = 0, totalCharsNeeded = 0;
+    // + 1 : Making double sure RS_SQLGetDiagField output is null-terminated
+    char pDiagInfo[MAX_ERR_MSG_LEN + 1] = {0};
+    SQLSMALLINT cchLen = (cbLen < 0)
+                         ? 0
+                         : (SQLSMALLINT)(cbLen / sizeofSQLWCHAR());
+
     int iIsCharDiagIdentifier = isCharDiagIdentifier(hDiagIdentifier);
-    int iExtraBytes = (hDiagIdentifier == SQL_DIAG_SQLSTATE && (cbLen < (6 * sizeof(WCHAR)))) ? (6 * sizeof(WCHAR)) - cbLen : 0;
-    SQLPOINTER *pDiagInfo = (SQLPOINTER *)((iIsCharDiagIdentifier && cbLen >= 0) ? rs_malloc(cchLen + iExtraBytes + 1) : NULL);
     int iRetType;
 
     if(hHandleType == SQL_HANDLE_ENV)
@@ -851,27 +893,40 @@ SQLRETURN SQL_API SQLGetDiagFieldW(SQLSMALLINT     hHandleType,
     }
 
     rc = RsError::RS_SQLGetDiagField(hHandleType, pHandle, hRecNumber, hDiagIdentifier, (iIsCharDiagIdentifier) ? pDiagInfo : pwDiagInfo,
-                            (iIsCharDiagIdentifier) ? cchLen : cbLen, pcbLen, &iRetType);
+                            (iIsCharDiagIdentifier) ? MAX_ERR_MSG_LEN : cbLen, pcbLen, &iRetType);
 
-    if(SQL_SUCCEEDED(rc))
-    {
-        if(iRetType == SQL_C_CHAR && iIsCharDiagIdentifier)
-        {
+    if (SQL_SUCCEEDED(rc)) {
+        if (iRetType == SQL_C_CHAR && iIsCharDiagIdentifier) {
             // Convert to unicode
-            if(pwDiagInfo)
-                utf8_to_wchar((char *)pDiagInfo, cchLen, (WCHAR *)pwDiagInfo, cchLen);
-
-            if(pcbLen)
-                *pcbLen = *pcbLen * sizeof(WCHAR);
+            if (pwDiagInfo) {
+                copiedChars = utf8_to_sqlwchar_str((char *)pDiagInfo, strlen(pDiagInfo),
+                                                   (SQLWCHAR *)pwDiagInfo,
+                                                   cchLen, &totalCharsNeeded);
+            } else {
+                totalCharsNeeded =
+                    utf8_to_sqlwchar_strlen((char *)pDiagInfo, SQL_NTS);
+            }
+            if (pcbLen) {
+                *pcbLen = totalCharsNeeded * sizeofSQLWCHAR();
+            }
+            // In Length inquiry where pwDiagInfo is NULL, rc is SQL_SUCCESS
+            if (pwDiagInfo && copiedChars < totalCharsNeeded) {
+                rc = SQL_SUCCESS_WITH_INFO;
+                RS_LOG_INFO("RSDIAG", "Diag field truncated: %d/%d", copiedChars, totalCharsNeeded);
+            }
         }
     }
-
-    pDiagInfo = (SQLPOINTER *)rs_free(pDiagInfo);
 
     if(IS_TRACE_LEVEL_ERROR()
         || IS_TRACE_LEVEL_API_CALL())
     {
-        TraceSQLGetDiagFieldW(FUNC_RETURN, rc, hHandleType, pHandle, hRecNumber, hDiagIdentifier, pwDiagInfo, cbLen, pcbLen);
+        TraceSQLGetDiagFieldW(FUNC_RETURN, rc, hHandleType, pHandle, hRecNumber,
+                              hDiagIdentifier, pwDiagInfo,
+                              ((iRetType == SQL_C_CHAR && iIsCharDiagIdentifier)
+                                   ? (copiedChars * sizeofSQLWCHAR())
+                                   : cbLen)
+                                  ,
+                              pcbLen);
     }
 
     if(hHandleType == SQL_HANDLE_ENV)

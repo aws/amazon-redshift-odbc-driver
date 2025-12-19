@@ -152,7 +152,7 @@ else()
   message(STATUS "NO RS_MULTI_DEPS_DIRS")
 endif()
 
-# Process ODBC_DIR and RS_OPENSSL_DIR. They are assigned optional variables in
+# Process RS_DEPS_DIRS and RS_OPENSSL_DIR. They are assigned optional variables in
 # order to manage path search order in systems that usually have their own
 # versions of these libraries preinstalled.
 if(RS_ODBC_DIR)

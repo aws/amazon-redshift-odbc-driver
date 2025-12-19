@@ -9,6 +9,8 @@
 #pragma once
 
 #ifdef WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <winsock2.h>
 #include <windows.h>
 #endif
 
@@ -21,11 +23,15 @@
 #include <vector>
 #include <iostream>
 #include <stdexcept>
-
-//#include <strsafe.h>
+#include <cstring>
 
 #include "rsodbc.h"
 #include "rsmem.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <utility>
+#include <type_traits>
 
 #define SHORT_STR_DATA    4096
 #define SHORT_CMD_LEN    1024
@@ -227,7 +233,7 @@ extern "C"
 
 char *rs_strdup(const char *src, size_t cbLen);
 
-unsigned char *makeNullTerminatedStr(char *pData, size_t cbLen, RS_STR_BUF *pPaStrBuf);
+unsigned char *makeNullTerminatedStr(char *pData, int64_t cbLen, RS_STR_BUF *pPaStrBuf);
 
 void addConnection(RS_ENV_INFO *pEnv, RS_CONN_INFO *pConn);
 void removeConnection(RS_CONN_INFO *pConn);
@@ -295,13 +301,13 @@ SQLRETURN copyStrDataSmallLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest,
 SQLRETURN copyStrDataLargeLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLINTEGER cbLen, SQLINTEGER *pcbLen);
 SQLRETURN copyStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *cbLenOffset, SQLLEN *pcbLenInd);
 
-SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *cbLenOffset, SQLLEN *pcbLenInd);
+SQLRETURN copyWStrDataBigLen(RS_STMT_INFO *pStmt, const char *pSrc, SQLINTEGER iSrcLen, SQLWCHAR *pDest, SQLLEN cbLen, SQLLEN *cbLenOffset, SQLLEN *pcbLenInd);
 
 SQLRETURN copyBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
-SQLRETURN copyWBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
+SQLRETURN copyWBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, SQLWCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
 SQLRETURN copyHexToBinaryDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen, SQLLEN *cbLenOffset);
 SQLRETURN copyBinaryToHexDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, char *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
-SQLRETURN copyWBinaryToHexDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, WCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
+SQLRETURN copyWBinaryToHexDataBigLen(const char *pSrc, SQLINTEGER iSrcLen, SQLWCHAR *pDest, SQLLEN cbLen, SQLLEN *pcbLen);
 
 
 void resetPaStrBuf(RS_STR_BUF *pPaStrBuf);
@@ -488,15 +494,37 @@ int doesAnyOtherStreamingCursorOpen(RS_CONN_INFO *pConn, RS_STMT_INFO *pStmt);
 
 SQLRETURN getOneQueryVal(RS_CONN_INFO *pConn, char * pSqlCmd, char *pVarBuf, int iBufLen);
 int updateOutBindParametersValue(RS_STMT_INFO *pStmt);
+/**
+ * @brief Bounded strlen (C++17, portable).
+ *
+ * Examines at most maxlen bytes starting at s and returns the count
+ * of bytes before the first '\0'. If no terminator is found within the
+ * limit, returns maxlen. If s is nullptr or maxlen is 0, returns 0.
+ *
+ * Never reads past s + maxlen, does not modify memory, and does not throw.
+ * Semantics match POSIX `strnlen` except that nullptr is treated as length 0.
+ *
+ * @param s      pointer to a possibly unterminated character buffer
+ * @param maxlen maximum bytes to inspect
+ * @return number of bytes before '\0' (or maxlen if none found)
+ */
+inline size_t rs_strnlen(const char *s, size_t maxlen) {
+    if (!s) return 0;
+    for (size_t i = 0; i < maxlen; ++i) {
+        if (s[i] == '\0') return i;
+    }
+    return maxlen;
+}
 
 char *rs_strncpy(char *dest, const char *src, size_t n);
+char *rs_strncpy_safe(char *dest, const char *src, size_t n);
 char *rs_strncat(char *dest, const char *src, size_t n);
 
 #ifdef WIN32
 unsigned char *decode64Password(const char *input, int length);
-int date_out_wchar(int date, WCHAR *buf, int buf_len);
-int timestamp_out_wchar(long long timestamp, WCHAR *buf, int buf_len, char *session_timezone);
-int time_out_wchar(long long time, WCHAR *buf, int buf_len, int *tzp);
+int date_out_wchar(int date, SQLWCHAR *buf, int buf_len);
+int timestamp_out_wchar(long long timestamp, SQLWCHAR *buf, int buf_len, char *session_timezone);
+int time_out_wchar(long long time, SQLWCHAR *buf, int buf_len, int *tzp);
 #endif
 
 int date_out(int date, char *buf, int buf_len);
@@ -519,9 +547,9 @@ long long getInt64FromBinary(char *pColData, int idx);
 }
 
 #ifdef WIN32
-int intervald2s_out_wchar(INTERVALD2S_STRUCT* d2s, WCHAR *buf, int buf_len);
-int intervaly2m_out_wchar(INTERVALY2M_STRUCT* y2m, WCHAR *buf, int buf_len);
-int intervaly2m_out_wchar(INTERVALD2S_STRUCT* d2s, WCHAR *buf, int buf_len);
+int intervald2s_out_wchar(INTERVALD2S_STRUCT* d2s, SQLWCHAR *buf, int buf_len);
+int intervaly2m_out_wchar(INTERVALY2M_STRUCT* y2m, SQLWCHAR *buf, int buf_len);
+int intervaly2m_out_wchar(INTERVALD2S_STRUCT* d2s, SQLWCHAR *buf, int buf_len);
 #endif
 
 std::vector<Oid> getParamTypes(int iNoOfBindParams, RS_DESC_REC *pDescRecHead, RS_CONNECT_PROPS_INFO *pConnectProps);
@@ -580,6 +608,7 @@ bool isSqlAllTableTypes(SQLCHAR *pTableType, SQLSMALLINT cbTableType);
 std::string escapedFilter(const std::string& input);
 
 char* sqlTypeNameMap(short value);
+char* cTypeNameMap(short value);
 
 class ExceptionInvalidParameter : public std::invalid_argument {
   public:
@@ -587,7 +616,346 @@ class ExceptionInvalidParameter : public std::invalid_argument {
     ExceptionInvalidParameter(const std::string &message);
 };
 
-// print hex representation of SQLWCHAR and SQLCHAR
-void printHexSQLWCHR(SQLWCHAR* sqlwchr, int len, const std::function<void(const std::string&)>& logFunc);
-void printHexSQLCHAR(SQLCHAR* sqlchar, int len, const std::function<void(const std::string&)>& logFunc);
+/**
+ * Dump an SQLWCHAR buffer as hex bytes, safely.
+ *
+ * Contract:
+ *  - sqlwchr points to a buffer of SQLWCHAR code units (2 or 4 bytes each).
+ *  - charLen is the number of code units (NOT bytes), or SQL_NTS for NUL-terminated.
+ *  - On builds where sizeof(SQLWCHAR)==2, supplementary code points must be
+ *    represented as surrogate pairs; thus charLen counts *code units* (pairs count as 2).
+ *  - Output is truncated to kMaxDumpBytes for safety.
+ */
+void printHexSQLWCHR(SQLWCHAR *sqlwchr, int charLen,
+                     const std::function<void(const std::string &)> &logFunc,
+                     int cuSize = sizeof(SQLWCHAR));
+void printHexSQLCHAR(SQLCHAR *sqlchar, int charLen,
+                     const std::function<void(const std::string &)> &logFunc);
+
+/**
+ * @class scope_exit
+ * @brief Minimal RAII guard that runs a callable when the scope exits.
+ *
+ * ### What it does
+ * Runs a user-provided callable exactly once when the `scope_exit` object
+ * is destroyed (i.e., when the current scope ends), regardless of whether
+ * the scope exits normally (return) or via exception.
+ *
+ * ### Why use it
+ * - Centralize cleanup (logging, unlocking, tracing) in one place.
+ * - Eliminate duplicated epilogues and early-return boilerplate.
+ * - Make functions read linearly without `goto` or repeated code.
+ *
+ * ### Semantics
+ * - **Move-only.** Copying is disabled to prevent double execution.
+ * - **Destruction is `noexcept`.** Your callable must not throw.
+ * - **Releaseable.** Call `release()` to cancel execution if needed.
+ *
+ * ### Thread-safety
+ * - Thread-safe as long as the provided callable is thread-safe.
+ *
+ * ### Performance
+ * - Essentially zero-overhead after inlining (stores a small functor).
+ *
+ * ### C++23 tip
+ * When you start using C++23, prefer `std::scope_exit` from `<scope>` and drop
+ * this.
+ */
+template <class F> class scope_exit {
+    static_assert(std::is_nothrow_destructible<F>::value ||
+                      std::is_trivially_destructible<F>::value,
+                  "scope_exit functor should be noexcept-destructible");
+    static_assert(std::is_invocable<F>::value,
+                  "scope_exit requires a callable type");
+    static_assert(std::is_nothrow_invocable<F>::value,
+              "scope_exit functor must be noexcept-invocable");
+
+    F f_;
+    bool active_ = true;
+
+  public:
+    explicit scope_exit(F f) noexcept(
+        std::is_nothrow_move_constructible<F>::value)
+        : f_(std::move(f)) {}
+
+    scope_exit(const scope_exit &) = delete;
+    scope_exit &operator=(const scope_exit &) = delete;
+
+    scope_exit(scope_exit &&other) noexcept(
+        std::is_nothrow_move_constructible<F>::value)
+        : f_(std::move(other.f_)), active_(other.active_) {
+        other.active_ = false;
+    }
+
+    scope_exit& operator=(scope_exit&&) = delete;
+
+    ~scope_exit() noexcept {
+        if (active_) {
+            // The callable must not throw; keep this noexcept.
+            f_();
+        }
+    }
+
+    /// Prevent execution on destruction.
+    void release() noexcept { active_ = false; }
+};
+
+template <class F>
+inline scope_exit<typename std::decay<F>::type> make_scope_exit(F &&f) {
+    return scope_exit<typename std::decay<F>::type>(std::forward<F>(f));
+}
+
+
+/**
+ * @brief Copy up to (dstCapacityChars - 1) characters from src into dst and
+ *        write a full-width U+0000 terminator.
+ *
+ * @param dst              Destination buffer (SQLWCHAR*).
+ * @param dstCapacityChars Capacity in characters (code units).
+ * @param src              Source buffer, already in client width.
+ * @param srcChars         Number of characters to copy.
+ * @param charSize         Size of SQLWCHAR in bytes (2 or 4).
+ * @param copiedChars      Out: actual number of characters copied (no NUL).
+ */
+static inline void copyAndTerminateSqlwchar(void *dst, size_t dstCapacityChars,
+                                            const void *src, size_t srcChars,
+                                            size_t charSize,
+                                            size_t *copiedChars = nullptr) {
+    if (!dst || dstCapacityChars == 0) {
+        if (copiedChars) {
+            *copiedChars = 0;
+        }
+        return;
+    }
+
+    // Leave room for terminator
+    const size_t maxPayload =
+        (dstCapacityChars > 0) ? (dstCapacityChars - 1) : 0;
+    const size_t toCopy =
+        src ? (srcChars < maxPayload ? srcChars : maxPayload) : 0;
+
+    // Copy payload
+    if (toCopy) {
+        std::memcpy(dst, src, toCopy * charSize);
+    }
+
+    // Write full-width null terminator
+    if (charSize == 2) {
+        reinterpret_cast<uint16_t *>(dst)[toCopy] = 0;
+    } else if (charSize == 4) {
+        reinterpret_cast<uint32_t *>(dst)[toCopy] = 0;
+    } else {
+        std::memset(static_cast<char *>(dst) + toCopy * charSize, 0, charSize);
+    }
+
+    if (copiedChars) {
+        *copiedChars = toCopy;
+    }
+}
+
+/**
+ * @brief Copy a string into a client buffer with ODBC semantics.
+ *
+ * Delegates the actual copy/termination to copyAndTerminateSqlwchar().
+ *
+ * @param dst              Destination buffer (SQLWCHAR*).
+ * @param src              Source buffer (already in client width).
+ * @param totalCharsNeeded Logical length in characters (no terminator).
+ * @param cchLen           Client buffer size in characters (incl. NUL).
+ * @param pcbLen           Out: required size in bytes.
+ * @param copiedChars      Out: number of characters actually copied (no NUL).
+ * @param charSize         Width of SQLWCHAR (2 or 4).
+ */
+SQLRETURN copySqlwForClient(void *dst, const void *src, size_t totalCharsNeeded,
+                            size_t cchLen, SQLLEN *pcbLen, size_t *copiedChars,
+                            size_t charSize);
+
+/**
+ * @brief Set the Nth SQLWCHAR character in a buffer to null (0).
+ *
+ * Handles both UTF-16 (2-byte) and UTF-32 (4-byte) SQLWCHAR encodings.
+ *
+ * @param dst Pointer to the destination buffer (SQLWCHAR* or void*).
+ * @param charIndex Zero-based index of the character to set to null.
+ */
+void setNthSqlwcharNull(void *dst, size_t charIndex);
+
+/**
+ * @brief Set the first SQLWCHAR in a buffer to U+0000.
+ *
+ * This writes a full-width null terminator (0x0000 or 0x00000000)
+ * into the first character slot of the destination buffer.
+ *
+ * @param dst Pointer to the destination buffer (SQLWCHAR* or void*).
+ */
+void setFirstSqlwcharNull(void *dst);
+
+/**
+ * @brief Check if the first SQLWCHAR in a buffer is U+0000.
+ *
+ * @param src Pointer to the source buffer (SQLWCHAR* or void*).
+ * @return true if the first character is null, false otherwise.
+ */
+bool isFirstSqlwcharNull(const void *src);
+
+// Helper function to set SQLWCHAR to null if no characters were copied
+//
+static inline void setSqlwcharNullIfEmpty(SQLWCHAR *pwParam,
+                                          size_t copiedChars) {
+    if (pwParam && copiedChars == 0)
+        setFirstSqlwcharNull(pwParam);
+}
+
+// Variadic helper to set multiple SQLWCHAR parameters to null if empty
+//
+static inline void setSqlwcharParamsNullIfEmpty() {}
+
+template <typename... Args>
+static inline void setSqlwcharParamsNullIfEmpty(SQLWCHAR *pwParam,
+                                                size_t copiedChars,
+                                                Args... args) {
+    setSqlwcharNullIfEmpty(pwParam, copiedChars);
+    setSqlwcharParamsNullIfEmpty(args...);
+}
+
+/*====================================================================================================================================================*/
+
+/**
+ * @brief Result codes for wide character to UTF-8 conversion operations.
+ */
+enum ConversionResult {
+    CONVERSION_SUCCESS = 0,    /**< Conversion completed successfully */
+    CONVERSION_TRUNCATED = 1,  /**< Conversion succeeded but output was truncated */
+    CONVERSION_ERROR = 2       /**< Conversion failed due to invalid input or internal error */
+};
+
+/*====================================================================================================================================================*/
+
+/**
+ * @brief Convert wide character parameter to UTF-8 with error and truncation detection.
+ *
+ * Converts ODBC wide character input parameters to UTF-8 encoded strings, handling
+ * NULL inputs, empty strings, invalid Unicode sequences, and buffer truncation.
+ *
+ * @param pwParam      Input wide character string (may be NULL)
+ * @param cchParam     Length of input string in characters, or SQL_NTS for null-terminated
+ * @param szParam      Output buffer for UTF-8 encoded string
+ * @param bufLen       Size of output buffer in bytes
+ * @param paramName    Name of parameter for error messages (may be NULL)
+ * @param logTag       Tag for logging (may be NULL, defaults to "RSUTIL")
+ * @param pStmt        Statement handle for error reporting
+ * @param copiedChars  Output: number of bytes written to szParam (excluding null terminator)
+ *
+ * @return CONVERSION_SUCCESS if conversion completed without issues
+ * @return CONVERSION_TRUNCATED if output was truncated due to insufficient buffer space
+ * @return CONVERSION_ERROR if conversion failed due to invalid Unicode or internal error
+ */
+ConversionResult convertWCharParamWithTruncCheck(SQLWCHAR *pwParam, SQLSMALLINT cchParam,
+                                                  char *szParam, size_t bufLen,
+                                                  const char *paramName, const char *logTag,
+                                                  RS_STMT_INFO *pStmt, size_t *copiedChars);
+
+/**
+ * Information about the Driver Manager (DM) that loaded this driver.
+ *
+ * This structure identifies which ODBC Driver Manager is present in the
+ * current process (iODBC, unixODBC, Windows DM, or unknown), together with
+ * an optional version string if the DM exposes one.
+ *
+ * The detection is performed at runtime using weak symbol inspection
+ * (dlopen/dlsym on POSIX, GetProcAddress on Windows).  Only symbols that
+ * are globally exported by the Driver Manager are used as fingerprints.
+ *
+ * This information is used by the driver to adjust behavior that depends
+ * on DM-specific conventions—for example, iODBC on macOS typically uses a
+ * 4-byte SQLWCHAR (UTF-32 or "packed UTF-16 in W=4"), while unixODBC uses a
+ * 2-byte SQLWCHAR (UTF-16).
+ */
+struct DriverManagerInfo {
+    /**
+     * Enumeration of recognized Driver Manager families.
+     *
+     * UNKNOWN   – No recognized DM signatures were found.
+     * IODBC     – The iODBC Driver Manager is loaded (macOS or POSIX builds).
+     * UNIXODBC  – The unixODBC Driver Manager is loaded (Linux, some Unix).
+     * WINDOWS   – Microsoft ODBC Driver Manager (Windows only).
+     */
+    enum Family { UNKNOWN, IODBC, UNIXODBC, WINDOWS } family = UNKNOWN;
+
+    /**
+     * Optional, DM-reported version string (e.g., "3.52.12").
+     *
+     * Not all DMs export a formal version symbol. When not available,
+     * this field is left empty.
+     */
+    std::string version;
+
+    /**
+     * @return A human-readable string for the detected DM family.
+     */
+    const char *GetFamilyName() const {
+        switch (family) {
+        case IODBC:
+            return "iODBC";
+        case UNIXODBC:
+            return "unixODBC";
+        case WINDOWS:
+            return "Windows";
+        default:
+            return "Unknown";
+        }
+    }
+};
+
+/**
+ * Detect the active ODBC Driver Manager at runtime.
+ *
+ * This function inspects globally visible symbols in the current process
+ * to determine which ODBC Driver Manager (DM) loaded the driver.
+ * Typical detection rules:
+ *
+ *   - Presence of "iodbc_version"        → iODBC
+ *   - Presence of "uodbc_get_stats"      → unixODBC
+ *   - Win32 ODBC exports (SQLDriverConnectW, etc.) → Windows DM
+ *
+ * For POSIX platforms, the function uses dlopen(NULL) + dlsym().
+ * For Windows, GetModuleHandle() + GetProcAddress() is used.
+ *
+ * @return A DriverManagerInfo structure containing the detected DM family
+ *         and optional version information.
+ *
+ * @note Detection is best-effort. If no known DM signatures are found,
+ *       the family will be DriverManagerInfo::UNKNOWN.
+ */
+DriverManagerInfo detectDriverManager();
+
+/**
+ * Convenience helper indicating whether the active Driver Manager is iODBC.
+ *
+ * This function internally calls detectDriverManager() once and caches
+ * the result. Subsequent calls are inexpensive.
+ *
+ * Typical usage:
+ *   if (isIODBC()) {
+ *       // Enable UTF-32 / W=4 client-side Unicode decoding defaults
+ *       // on macOS, because iODBC commonly uses 4-byte SQLWCHAR.
+ *   }
+ *
+ * @return true if the currently loaded ODBC Driver Manager matches the
+ *         iODBC family; false otherwise.
+ */
+bool isIODBC();
+// explicit memory clearing using a secure zeroing
+// function that won't be optimized away by the compiler:
+static inline void rs_secure_zero(void *ptr, size_t len) {
+#ifdef _WIN32
+    SecureZeroMemory(ptr, len);
+#else
+    volatile unsigned char *p = (volatile unsigned char *)ptr;
+    while (len--) {
+        *p++ = 0;
+    }
+#endif
+}
+
 #endif /* C++ */

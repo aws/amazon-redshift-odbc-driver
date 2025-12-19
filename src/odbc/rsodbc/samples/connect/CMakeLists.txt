@@ -4,14 +4,10 @@ set_source_files_properties(${C_SOURCES} PROPERTIES LANGUAGE CXX )
 
 add_executable(${EXECUTABLE_NAME} ${SOURCES})
 
-if (RS_ODBC_DIR)
-    target_include_directories(${EXECUTABLE_NAME} PRIVATE ${RS_ODBC_DIR}/include)
-    target_link_directories(${EXECUTABLE_NAME} PRIVATE ${RS_ODBC_DIR}/lib)
-endif()
-
 target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_INCLUDE_PATH})
 target_link_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_LIBRARY_PATH})
-target_link_libraries(${EXECUTABLE_NAME} ${odbc_manager_lib_list})
+include_and_link_odbc(${EXECUTABLE_NAME})
+target_link_libraries(${EXECUTABLE_NAME} ${test_odbc_manager_lib_list})
 if (NOT WIN32)
     target_link_libraries(${EXECUTABLE_NAME} c)
 

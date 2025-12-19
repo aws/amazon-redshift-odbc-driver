@@ -8,6 +8,7 @@
 
 #include "rsdesc.h"
 #include "rsmin.h"
+#include "rsunicode.h"
 
 
 /*====================================================================================================================================================*/
@@ -494,41 +495,99 @@ SQLRETURN SQL_API SQLGetDescFieldW(SQLHDESC        phdesc,
                                     SQLINTEGER      *pcbLen)
 {
     SQLRETURN rc;
-    char *pValue = NULL;
-    int strOption;
+
+    char pValue[MAX_LARGE_TEMP_BUF_LEN] = {0};
+    const bool strOption = isStrFieldIdentifier(hFieldIdentifier) != 0;
+    // buffer length in SQLWCHARs (including room for NUL if present)
     SQLINTEGER cchLen = 0;
-    strOption = isStrFieldIdentifier(hFieldIdentifier);
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLGetDescFieldW(FUNC_CALL, 0, phdesc, hRecNumber, hFieldIdentifier, pwValue, cbLen, pcbLen);
+    if (IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLGetDescFieldW(FUNC_CALL, 0, phdesc, hRecNumber,
+                              hFieldIdentifier, pwValue, cbLen, pcbLen);
+    }
+    
+    if (!VALID_HDESC(phdesc)) {
+        return SQL_INVALID_HANDLE;
+    }
+    RS_DESC_INFO *pDesc = (RS_DESC_INFO *)phdesc;
 
-    if(strOption)
-    {
-        cchLen = cbLen/sizeof(WCHAR);
-        if(pwValue != NULL && cbLen > 0)
-            pValue = (char *)rs_calloc(sizeof(char), cchLen + 1);
+    if (strOption) {
+        cchLen = (cbLen > 0) ? (cbLen / (SQLINTEGER)sizeofSQLWCHAR()) : 0;
     }
 
-    rc = RsDesc::RS_SQLGetDescField(phdesc, hRecNumber, hFieldIdentifier, (strOption && pwValue) ? pValue : pwValue,
-                                (strOption && pwValue) ? cchLen : cbLen, pcbLen, FALSE);
+    SQLINTEGER tempLen = 0;
+    rc = RsDesc::RS_SQLGetDescField(
+        phdesc, hRecNumber, hFieldIdentifier,
+        strOption ? (SQLPOINTER)pValue : pwValue,
+        strOption ? (SQLINTEGER)(MAX_LARGE_TEMP_BUF_LEN - 1) : cbLen, &tempLen,
+        FALSE);
 
-    if(SQL_SUCCEEDED(rc))
-    {
-        if(strOption)
-        {
-            // Convert to unicode
-            if(pwValue)
-                utf8_to_wchar((char *)pValue, cchLen, (WCHAR *)pwValue, cchLen);
+    if (strOption && tempLen >= (MAX_LARGE_TEMP_BUF_LEN - 1)) {
+        rc = SQL_ERROR;
+        addError(&pDesc->pErrorList, "HY000",
+                 "Descriptor field exceeds maximum supported size", 0, NULL);
+        RS_LOG_ERROR("RSDESC",
+                     "Descriptor field exceeds maximum supported size %d",
+                     MAX_LARGE_TEMP_BUF_LEN - 1);
+        return rc;
+    }
 
-            if(pcbLen)
-                *pcbLen = *pcbLen * sizeof(WCHAR);
+    size_t copiedChars = 0; // for tracing only
+    if (SQL_SUCCEEDED(rc)) {
+        if (strOption) {
+            // Convert UTF-8 temp buffer -> SQLWCHAR*
+            SQLWCHAR *converted = nullptr;
+            size_t totalChars = utf8_to_sqlwchar_alloc(
+                (char *)pValue, SQL_NTS, &converted); // excludes NUL
+
+            // Always return required length in BYTES (without NUL)
+            if (pcbLen) {
+                *pcbLen = (SQLINTEGER)(totalChars * sizeofSQLWCHAR());
+            }
+
+            // Write into caller buffer (if provided and size > 0)
+            if (pwValue && cchLen > 0 && converted) {
+                // Reserve room for NUL
+                size_t avail = (cchLen > 0) ? (size_t)cchLen - 1 : 0;
+                size_t toCopy = (totalChars < avail) ? totalChars : avail;
+
+                if (toCopy > 0) {
+                    memmove(pwValue, converted, toCopy * sizeofSQLWCHAR());
+                }
+                // NUL-terminate at index toCopy
+                setNthSqlwcharNull(pwValue, toCopy);
+
+                // Truncation if source doesn't fit fully (excluding NULL)
+                if (totalChars > avail) {
+                    rc = SQL_SUCCESS_WITH_INFO;
+                    addError(&pDesc->pErrorList, "01004", "string truncated", 0,
+                             NULL);
+                }
+                copiedChars = toCopy;
+            }
+
+            // Length-only inquiry (no buffer or zero-size buffer) → SUCCESS
+            if (pwValue == NULL || cchLen == 0) {
+                rc = SQL_SUCCESS;
+                copiedChars = 0;
+            }
+
+            converted = (SQLWCHAR *)rs_free(converted);
+        }
+    } else {
+        // Propagate length for non-string fields or on failure (bytes)
+        // Note: pcbLen adjustment on failure for string fields is best effort
+        // and can be inaccurate
+        if (pcbLen) {
+            *pcbLen = tempLen * (strOption ? (SQLINTEGER)sizeofSQLWCHAR() : 1);
         }
     }
 
-    pValue = (char *)rs_free(pValue);
-
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLGetDescFieldW(FUNC_RETURN, rc, phdesc, hRecNumber, hFieldIdentifier, pwValue, cbLen, pcbLen);
+    if (IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLGetDescFieldW(
+            FUNC_RETURN, rc, phdesc, hRecNumber, hFieldIdentifier, pwValue,
+            (SQLINTEGER)(copiedChars * sizeofSQLWCHAR()), pcbLen);
+    }
 
     return rc;
 }
@@ -652,29 +711,79 @@ SQLRETURN SQL_API SQLGetDescRecW(SQLHDESC        phdesc,
                                  SQLSMALLINT     *phNullable)
 {
     SQLRETURN rc;
-    char szName[MAX_IDEN_LEN + 1];
-    short  hLen = redshift_min(MAX_IDEN_LEN, cchName);
+    char szName[MAX_IDEN_LEN + 1] = {0};
+    size_t totalCharsNeeded = 0, copiedChars = 0;
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLGetDescRecW(FUNC_CALL, 0, phdesc, hRecNumber, pwName, cchName, pcchName, phType, phSubType, plOctetLength, phPrecision, phScale, phNullable);
+    if (!VALID_HDESC(phdesc)) {
+        return SQL_INVALID_HANDLE;
+    }
+    RS_DESC_INFO *pDesc = (RS_DESC_INFO *)phdesc;
 
-    rc = RsDesc::RS_SQLGetDescRec(phdesc, hRecNumber, (SQLCHAR *)((pwName) ? szName : NULL),
-                                           (pwName)? hLen : cchName,
-                                            pcchName, phType, phSubType, plOctetLength, phPrecision, phScale, phNullable);
-
-    szName[hLen] = '\0';
-
-    if(rc == SQL_SUCCESS
-        || rc == SQL_SUCCESS_WITH_INFO)
-    {
-        // Convert to unicode
-        if(pwName)
-            utf8_to_wchar((char *)szName, SQL_NTS, (WCHAR *)pwName, cchName);
-
+    if (IS_TRACE_LEVEL_API_CALL()) {
+        TraceSQLGetDescRecW(FUNC_CALL, 0, phdesc, hRecNumber, pwName, cchName,
+                            pcchName, phType, phSubType, plOctetLength,
+                            phPrecision, phScale, phNullable);
     }
 
-    if(IS_TRACE_LEVEL_API_CALL())
-        TraceSQLGetDescRecW(FUNC_RETURN, rc, phdesc, hRecNumber, pwName, cchName, pcchName, phType, phSubType, plOctetLength, phPrecision, phScale, phNullable);
+    auto exitLog = make_scope_exit([&]() noexcept {
+        if (IS_TRACE_LEVEL_API_CALL()) {
+            TraceSQLGetDescRecW(FUNC_RETURN, rc, phdesc, hRecNumber, pwName,
+                                copiedChars, pcchName, phType, phSubType,
+                                plOctetLength, phPrecision, phScale,
+                                phNullable);
+        }
+    });
+
+    if (cchName < 0 && cchName != SQL_NTS) {
+        addError(&pDesc->pErrorList, "HY090", "Invalid string or buffer length",
+                 0, NULL);
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+    SQLSMALLINT ansiSize = 0;
+    rc = RsDesc::RS_SQLGetDescRec(
+        phdesc, hRecNumber, reinterpret_cast<SQLCHAR *>(szName), MAX_IDEN_LEN,
+        &ansiSize, phType, phSubType, plOctetLength, phPrecision, phScale,
+        phNullable);
+
+    if (SQL_SUCCEEDED(rc)) {
+        if (cchName < 0) {
+            cchName = 0;
+        }
+
+        if (cchName == 0 || !pwName) {
+            // Length inquiry only or no room → get required length
+            copiedChars = 0;
+            totalCharsNeeded = utf8_to_sqlwchar_strlen(szName, SQL_NTS);
+        } else {
+            copiedChars =
+                utf8_to_sqlwchar_str(szName, SQL_NTS, (SQLWCHAR *)pwName,
+                                     cchName, &totalCharsNeeded);
+        }
+
+        if (pcchName) {
+            *pcchName = static_cast<SQLSMALLINT>(totalCharsNeeded);
+        }
+
+        if (!pwName) {
+            // Length inquiry only: keep rc from RS_SQLGetDescRec
+            // i.e., DO NOT force rc = SQL_SUCCESS here.
+        } else if (rc == SQL_SUCCESS_WITH_INFO ||
+                   copiedChars < totalCharsNeeded) {
+            rc = SQL_SUCCESS_WITH_INFO;
+        }
+        if (ansiSize > MAX_IDEN_LEN && rc == SQL_SUCCESS) {
+            // internal bug in RS_SQLGetDescRec: it truncated but didn’t flag it
+            std::string err =
+                "Internal bug: RS_SQLGetDescRec truncated name but "
+                "did not return SQL_SUCCESS_WITH_INFO. ansiSize=" +
+                std::to_string(ansiSize) +
+                ", MAX_IDEN_LEN=" + std::to_string(MAX_IDEN_LEN);
+            RS_LOG_ERROR("RSDESC", "%s", err.c_str());
+            rc = SQL_SUCCESS_WITH_INFO;
+        }
+    }
 
     return rc;
 }
@@ -1034,8 +1143,12 @@ SQLRETURN  SQL_API SQLSetDescFieldW(SQLHDESC        phdesc,
     {
         isWritableString = TRUE;
 
-        if(pwValue)
-            wchar_to_utf8((WCHAR *)pwValue, (cbLen > 0) ? cbLen/sizeof(WCHAR) : cbLen, szName, MAX_IDEN_LEN);
+        if (pwValue) {
+            sqlwchar_to_utf8_char((SQLWCHAR *)pwValue,
+                                  (cbLen > 0) ? cbLen / sizeofSQLWCHAR()
+                                              : cbLen,
+                                  szName, MAX_IDEN_LEN);
+        }
     }
 
     rc = RsDesc::RS_SQLSetDescField(phdesc, hRecNumber, hFieldIdentifier, (isWritableString && pwValue) ? szName : pwValue,
