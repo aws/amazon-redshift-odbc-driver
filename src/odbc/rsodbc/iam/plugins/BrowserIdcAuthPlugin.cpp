@@ -227,6 +227,21 @@ void BrowserIdcAuthPlugin::InitializeIdcClient(const std::string& in_region) {
     RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::InitializeIdcClient");
     Aws::Client::ClientConfiguration client_config;
     client_config.region = in_region;
+
+    // Configure proxy settings if available
+    if (m_config.GetUsingHTTPSProxy() && m_config.GetUseProxyIdpAuth()) {
+        client_config.proxyHost = m_config.GetHTTPSProxyHost();
+        client_config.proxyPort = m_config.GetHTTPSProxyPort();
+        if (!m_config.GetHTTPSProxyUser().empty()) {
+            client_config.proxyUserName = m_config.GetHTTPSProxyUser();
+        }
+        if (!m_config.GetHTTPSProxyPassword().empty()) {
+            client_config.proxyPassword = m_config.GetHTTPSProxyPassword();
+        }
+        RS_LOG_DEBUG("IAMIDC", "Proxy configured: %s:%d", 
+            client_config.proxyHost.c_str(), client_config.proxyPort);
+    }
+
     pIdcClient_ = std::make_shared<SSOOIDCClient>(client_config);
 }
 

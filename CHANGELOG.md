@@ -1,6 +1,11 @@
 Changelog
 =========
 
+v2.1.13 (2025-12-19)
+---------------------
+1. Added proxy settings support for the Browser IdC Auth plugin, enabling authentication through proxy servers.
+
+
 v2.1.12 (2025-12-18)
 ---------------------
 1. Added apple macOS support with ARM64 and x86_64 architecture compatibility
