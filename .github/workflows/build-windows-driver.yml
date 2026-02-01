@@ -104,7 +104,7 @@ jobs:
         set "RS_MULTI_DEPS_DIRS=%VCPKG_INSTALL_DIR%"
         set "OPENSSL_ROOT_DIR=%VCPKG_INSTALL_DIR%"
         set "CMAKE_PREFIX_PATH=%VCPKG_INSTALL_DIR%"
-        build64.bat "--dependencies-install-dir=%VCPKG_INSTALL_DIR%" --version=2.1.13.0
+        build64.bat --dependencies-install-dir=%VCPKG_INSTALL_DIR% --version=2.1.13.0
 
     - name: Upload build artifacts
       if: always()

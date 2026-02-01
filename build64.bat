@@ -49,26 +49,28 @@ echo "LINK_PKG_PATH====== dir !LINK_PKG_PATH! ========"
 @REM dir !LINK_PKG_PATH!
 
 rem Parse command line arguments
-rem https://stackoverflow.com/questions/28103532/how-to-parse-command-line-arguments-with-switch-in-batch-file
 :parse_args
 if "%~1"=="" goto :end_parse_args
-set "temp_option="
-for %%a in (%*) do (
-   if not defined temp_option (
-      set arg=%%a
-      if "!arg:~0,1!" equ "-" (
-        set "temp_option=!arg!"
-      )
-   ) else (
-      echo arg=!arg!
-      echo value=%%a
-      if "!arg!"=="--version" set "RS_VERSION=%%a"
-      if "!arg!"=="--build-type" set "RS_BUILD_TYPE=%%a"
-      if "!arg!"=="--dependencies-install-dir" set "DEPENDENCIES_INSTALL_DIR=%%a"
-      set "temp_option!temp_option!=%%a"
-      set "temp_option="
-   )
+if "%~1"=="--version" (
+    set "RS_VERSION=%~2"
+    shift
+    shift
+    goto :parse_args
 )
+if "%~1"=="--build-type" (
+    set "RS_BUILD_TYPE=%~2"
+    shift
+    shift
+    goto :parse_args
+)
+if "%~1"=="--dependencies-install-dir" (
+    set "DEPENDENCIES_INSTALL_DIR=%~2"
+    shift
+    shift
+    goto :parse_args
+)
+shift
+goto :parse_args
 :end_parse_args
 
 if not defined DEPENDENCIES_INSTALL_DIR (
