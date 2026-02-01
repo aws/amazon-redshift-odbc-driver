@@ -90,6 +90,16 @@ echo Version: !RS_VERSION!
 echo Build Type: !RS_BUILD_TYPE!
 echo Dependencies Install: !DEPENDENCIES_INSTALL_DIR!
 
+rem Set OpenSSL and dependencies directories based on DEPENDENCIES_INSTALL_DIR
+if defined DEPENDENCIES_INSTALL_DIR (
+    if exist "!DEPENDENCIES_INSTALL_DIR!\openssl\Release" (
+        set "RS_OPENSSL_DIR=!DEPENDENCIES_INSTALL_DIR!\openssl\Release"
+        echo Using OpenSSL from: !RS_OPENSSL_DIR!
+    )
+    set "RS_MULTI_DEPS_DIRS=!DEPENDENCIES_INSTALL_DIR!"
+    echo Using dependencies from: !RS_MULTI_DEPS_DIRS!
+)
+
 rem Visual Studio environment settings
 set "VS_PATH="
 set "cmake_generator=Visual Studio 17 2022"
