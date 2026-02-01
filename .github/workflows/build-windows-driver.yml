@@ -56,7 +56,7 @@ jobs:
         tar -xzf openssl.tar.gz
         cd openssl-1.1.1w
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-        perl Configure VC-WIN64A --prefix=C:\odbc-deps shared
+        perl Configure VC-WIN64A --prefix=C:\odbc-deps\openssl\Release shared
         nmake
         nmake install
         cd ..
