@@ -25,17 +25,22 @@ set_source_files_properties(${C_SOURCES} PROPERTIES LANGUAGE CXX )
 
 # Helper function
 function(basic_settings TARGET_NAME)
-    target_include_directories(${TARGET_NAME} PRIVATE 
+    target_include_directories(${TARGET_NAME} PRIVATE
         ${RSLOG_SRC_DIR}
-        ${RSODBC_SRC_DIR} 
-        ${IAM_DIR}  
-        ${IAM_CORE_DIR} 
-        ${IAM_PLUGINS_DIR} 
-        ${IAM_HTTP_DIR} 
-        ${PGCLIENT_SRC_INCLUDE_DIR} 
+        ${RSODBC_SRC_DIR}
+        ${IAM_DIR}
+        ${IAM_CORE_DIR}
+        ${IAM_PLUGINS_DIR}
+        ${IAM_HTTP_DIR}
+        ${PGCLIENT_SRC_INCLUDE_DIR}
         ${PGCLIENT_SRC_IFACE_LIBPQ_DIR}
         ${CMAKE_INCLUDE_PATH}
     )
+    # Add vcpkg include directories if RS_MULTI_DEPS_DIRS is set
+    if(DEFINED RS_MULTI_DEPS_DIRS)
+        target_include_directories(${TARGET_NAME} PRIVATE "${RS_MULTI_DEPS_DIRS}/include")
+        target_link_directories(${TARGET_NAME} PRIVATE "${RS_MULTI_DEPS_DIRS}/lib")
+    endif()
     target_link_directories(${TARGET_NAME} PRIVATE  ${CMAKE_LIBRARY_PATH})
     include_and_link_odbc(${TARGET_NAME})
     target_compile_options_rsodbc(${TARGET_NAME})
