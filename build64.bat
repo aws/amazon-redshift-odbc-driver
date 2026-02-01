@@ -29,21 +29,21 @@ set "RS_ARTIFACTS_DIR=!LINK_PKG_PATH!\public"
 mkdir !RS_ARTIFACTS_DIR!
 rmdir /s/q !RS_ARTIFACTS_DIR!\*
 
-rem Initialize variables
+rem Initialize variables (preserve pre-set environment variables)
 set WIN_ODBC_BUILD_MSI=""
 set "CMAKE_ARGS_ODBC_VERSION="
-set RS_BUILD_DIR=
-set INSTALL_DIR=
+if not defined RS_BUILD_DIR set RS_BUILD_DIR=
+if not defined INSTALL_DIR set INSTALL_DIR=
 set RS_ROOT_DIR=!LINK_PKG_PATH!
-set ENABLE_TESTING=
-set RS_OPENSSL_DIR=
-set RS_MULTI_DEPS_DIRS=
-set RS_DEPS_DIRS=
-set RS_ODBC_DIR=
+if not defined ENABLE_TESTING set ENABLE_TESTING=
+if not defined RS_OPENSSL_DIR set RS_OPENSSL_DIR=
+if not defined RS_MULTI_DEPS_DIRS set RS_MULTI_DEPS_DIRS=
+if not defined RS_DEPS_DIRS set RS_DEPS_DIRS=
+if not defined RS_ODBC_DIR set RS_ODBC_DIR=
 set "RS_VERSION="
 set "RS_BUILD_TYPE=Release"
-set PYTHON_CMD=
-set PERL_CMD=
+if not defined PYTHON_CMD set PYTHON_CMD=
+if not defined PERL_CMD set PERL_CMD=
 
 echo "LINK_PKG_PATH====== dir !LINK_PKG_PATH! ========"
 @REM dir !LINK_PKG_PATH!
@@ -92,11 +92,17 @@ echo Dependencies Install: !DEPENDENCIES_INSTALL_DIR!
 
 rem Set OpenSSL and dependencies directories based on DEPENDENCIES_INSTALL_DIR
 if defined DEPENDENCIES_INSTALL_DIR (
-    if exist "!DEPENDENCIES_INSTALL_DIR!\openssl\Release" (
-        set "RS_OPENSSL_DIR=!DEPENDENCIES_INSTALL_DIR!\openssl\Release"
-        echo Using OpenSSL from: !RS_OPENSSL_DIR!
+    if not defined RS_OPENSSL_DIR (
+        if exist "!DEPENDENCIES_INSTALL_DIR!\openssl\Release" (
+            set "RS_OPENSSL_DIR=!DEPENDENCIES_INSTALL_DIR!\openssl\Release"
+            echo Using OpenSSL from: !RS_OPENSSL_DIR!
+        )
+    ) else (
+        echo RS_OPENSSL_DIR already set to: !RS_OPENSSL_DIR!
     )
-    set "RS_MULTI_DEPS_DIRS=!DEPENDENCIES_INSTALL_DIR!"
+    if not defined RS_MULTI_DEPS_DIRS (
+        set "RS_MULTI_DEPS_DIRS=!DEPENDENCIES_INSTALL_DIR!"
+    )
     echo Using dependencies from: !RS_MULTI_DEPS_DIRS!
 )
 
