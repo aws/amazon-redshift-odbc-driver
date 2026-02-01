@@ -1,4 +1,4 @@
-name: Build Windows ODBC Driver (Simplified)
+name: Build Windows ODBC Driver (Optimized)
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ fix-azure-oauth-scope ]
   workflow_dispatch:
+
+env:
+  VCPKG_BINARY_SOURCES: 'clear;x-gha,readwrite'
 
 jobs:
   build-windows:
@@ -29,14 +32,62 @@ jobs:
     - name: Install Perl (for OpenSSL)
       run: choco install strawberryperl -y
 
+    - name: Export GitHub Actions cache environment variables
+      uses: actions/github-script@v7
+      with:
+        script: |
+          core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
-        vcpkgGitCommitId: 'a42af01b72c28a8e1d7b48107b33e4f286a55ef6'
+        vcpkgGitCommitId: '01f602195983451bc83e72f4214af2cbc495aa94'
+        vcpkgJsonGlob: 'vcpkg.json'
 
-    - name: Install dependencies with vcpkg
+    - name: Cache vcpkg dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ github.workspace }}/vcpkg
+          ${{ github.workspace }}/vcpkg_installed
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
+        restore-keys: |
+          ${{ runner.os }}-vcpkg-
+
+    - name: Install dependencies with vcpkg (with retries)
       run: |
-        vcpkg install openssl:x64-windows aws-sdk-cpp[core,redshift,sts,identity-management]:x64-windows c-ares:x64-windows gtest:x64-windows
+        $maxRetries = 3
+        $retryCount = 0
+        $success = $false
+
+        while (-not $success -and $retryCount -lt $maxRetries) {
+          try {
+            Write-Host "Attempt $($retryCount + 1) of $maxRetries"
+            vcpkg install --triplet x64-windows `
+              openssl `
+              "aws-sdk-cpp[core,redshift,sts,identity-management]" `
+              c-ares `
+              gtest
+            $success = $true
+          }
+          catch {
+            $retryCount++
+            if ($retryCount -lt $maxRetries) {
+              Write-Host "Failed, waiting 10 seconds before retry..."
+              Start-Sleep -Seconds 10
+            }
+            else {
+              throw "Failed after $maxRetries attempts"
+            }
+          }
+        }
+      shell: pwsh
+
+    - name: Verify vcpkg installation
+      run: |
+        Write-Host "Checking vcpkg installation directory..."
+        Get-ChildItem "$env:VCPKG_ROOT\installed\x64-windows" -Recurse -Depth 2 | Select-Object -First 50
       shell: pwsh
 
     - name: Build ODBC Driver
@@ -53,4 +104,14 @@ jobs:
         path: |
           cmake-build/**/*
           src/odbc/rsodbc/install/*.msi
+        retention-days: 7
+
+    - name: Upload build logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: |
+          cmake-build/**/*.log
+          **/*.log
         retention-days: 7
