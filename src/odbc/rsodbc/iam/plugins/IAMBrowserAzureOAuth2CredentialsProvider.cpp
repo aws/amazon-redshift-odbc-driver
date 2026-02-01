@@ -211,7 +211,17 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 		/* Save the listen port from the server to know where to redirect the response. */
 		int port = srv.GetListenPort();
 		m_argsMap[IAM_KEY_LISTEN_PORT] = std::to_string(port);
-		rs_string scope = "openid%20" + m_argsMap[IAM_KEY_SCOPE];
+
+		// Build scope with URL encoding - add 'openid' if not present
+		rs_string scopeParam = m_argsMap[IAM_KEY_SCOPE];
+		rs_string scope;
+		if (scopeParam.find("openid") == rs_string::npos) {
+			scope = "openid%20" + scopeParam;
+			RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Added 'openid' to scope");
+		} else {
+			scope = scopeParam;
+			RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Scope already contains 'openid'");
+		}
 
 		/* Generate URI to request an authorization code.  */
 		rs_string idpHostUrl;
@@ -259,7 +269,19 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 	/* By default we enable verifying server certificate, use argument ssl_insecure = true to disable
 	verifying the server certificate (e.g., self-signed IDP server) */
 	bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
-	const rs_string scope = "openid " + m_argsMap[IAM_KEY_SCOPE];
+
+	// Get scope from connection parameters
+	rs_string scopeParam = m_argsMap[IAM_KEY_SCOPE];
+
+	// Add 'openid' to scope if not already present (matching JDBC driver behavior)
+	rs_string scope;
+	if (scopeParam.find("openid") == rs_string::npos) {
+		scope = "openid " + scopeParam;
+		RS_LOG_DEBUG("IAMCRD", "Added 'openid' prefix to scope. Final scope: %s", scope.c_str());
+	} else {
+		scope = scopeParam;
+		RS_LOG_DEBUG("IAMCRD", "Scope already contains 'openid': %s", scope.c_str());
+	}
 
 
 	const std::map<rs_string, rs_string> requestHeader =
@@ -268,7 +290,7 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 		{ "Accept", "application/json" }
 	};
 
-	const std::map<rs_string, rs_string> paramMap =
+	std::map<rs_string, rs_string> paramMap =
 	{
 		{ "grant_type", "authorization_code" },
 //		{ "requested_token_type", "urn:ietf:params:oauth:token-type:jwt" },
@@ -279,6 +301,13 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 		{ "redirect_uri", "http://localhost:" + m_argsMap[IAM_KEY_LISTEN_PORT] + "/redshift/" }
 //		{ "resource", m_argsMap[IAM_KEY_CLIENT_ID] }
 	};
+
+	// Add client_secret if provided (fixes GitHub Issue #16)
+	if (m_argsMap.find(IAM_KEY_CLIENT_SECRET) != m_argsMap.end() &&
+		!m_argsMap[IAM_KEY_CLIENT_SECRET].empty()) {
+		paramMap["client_secret"] = m_argsMap[IAM_KEY_CLIENT_SECRET];
+		RS_LOG_DEBUG("IAMCRD", "client_secret parameter added to token request");
+	}
 
 	HttpClientConfig config;
 	config.m_verifySSL = shouldVerifySSL;
