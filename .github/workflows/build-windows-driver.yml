@@ -42,8 +42,9 @@ jobs:
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
-        vcpkgGitCommitId: '01f602195983451bc83e72f4214af2cbc495aa94'
-        vcpkgJsonGlob: 'vcpkg.json'
+        vcpkgGitCommitId: 'master'
+      env:
+        VCPKG_FEATURE_FLAGS: '-compilertracking'
 
     - name: Cache vcpkg dependencies
       uses: actions/cache@v4
@@ -61,10 +62,15 @@ jobs:
         $retryCount = 0
         $success = $false
 
+        # Skip pkg-config to avoid MSYS2 downloads
+        $env:VCPKG_FORCE_SYSTEM_BINARIES = "1"
+
         while (-not $success -and $retryCount -lt $maxRetries) {
           try {
             Write-Host "Attempt $($retryCount + 1) of $maxRetries"
             vcpkg install --triplet x64-windows `
+              --x-feature=pkgconfig `
+              --no-print-usage `
               openssl `
               "aws-sdk-cpp[core,redshift,sts,identity-management]" `
               c-ares `
@@ -83,6 +89,8 @@ jobs:
           }
         }
       shell: pwsh
+      env:
+        X_VCPKG_REGISTRIES_CACHE: ${{ github.workspace }}/vcpkg-cache
 
     - name: Verify vcpkg installation
       run: |
