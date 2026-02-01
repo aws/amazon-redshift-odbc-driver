@@ -28,9 +28,9 @@ jobs:
       with:
         cmakeVersion: '~3.27.0'
 
-    - name: Install WiX Toolset
+    - name: Setup WiX Toolset PATH
       run: |
-        choco install wixtoolset --version=3.14.0 -y
+        # WiX is pre-installed on windows-2022 runners, just add to PATH
         echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Setup dependencies directory
