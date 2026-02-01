@@ -250,6 +250,7 @@ set "cmake_command=!cmake_command! %RS_DEPS_DIRS%"
 
 if defined RS_MULTI_DEPS_DIRS (
     set "cmake_command=!cmake_command! -DRS_MULTI_DEPS_DIRS=%RS_MULTI_DEPS_DIRS%"
+    set "cmake_command=!cmake_command! -DCMAKE_PREFIX_PATH=%RS_MULTI_DEPS_DIRS%"
 )
 
 if defined RS_ODBC_DIR (
