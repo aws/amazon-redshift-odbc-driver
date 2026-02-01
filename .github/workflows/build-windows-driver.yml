@@ -52,6 +52,7 @@ jobs:
       if: steps.cache-deps.outputs.cache-hit != 'true'
       shell: cmd
       run: |
+        set PATH=%PATH%;C:\Program Files\NASM
         curl -L -o openssl.tar.gz https://www.openssl.org/source/openssl-1.1.1w.tar.gz
         tar -xzf openssl.tar.gz
         cd openssl-1.1.1w
