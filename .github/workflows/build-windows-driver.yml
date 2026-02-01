@@ -69,7 +69,6 @@ jobs:
           try {
             Write-Host "Attempt $($retryCount + 1) of $maxRetries"
             vcpkg install --triplet x64-windows `
-              --x-feature=pkgconfig `
               --no-print-usage `
               openssl `
               "aws-sdk-cpp[core,redshift,sts,identity-management]" `
@@ -89,8 +88,6 @@ jobs:
           }
         }
       shell: pwsh
-      env:
-        X_VCPKG_REGISTRIES_CACHE: ${{ github.workspace }}/vcpkg-cache
 
     - name: Verify vcpkg installation
       run: |
