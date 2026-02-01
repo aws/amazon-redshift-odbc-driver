@@ -42,7 +42,7 @@ jobs:
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
-        vcpkgGitCommitId: 'master'
+        vcpkgGitCommitId: '6d7bf7ef2193e2d1c5798a5ff8811d533104c861'
       env:
         VCPKG_FEATURE_FLAGS: '-compilertracking'
 
