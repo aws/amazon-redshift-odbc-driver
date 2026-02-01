@@ -241,7 +241,7 @@ if "%RS_BUILD_TYPE%"=="Debug" (
 )
 
 if defined RS_OPENSSL_DIR (
-    set "cmake_command=!cmake_command! -DRS_OPENSSL_DIR=%RS_OPENSSL_DIR%"
+    set "cmake_command=!cmake_command! -DRS_OPENSSL_DIR=\"%RS_OPENSSL_DIR%\""
 ) else (
     echo "RS_OPENSSL_DIR not set"
 )
@@ -255,8 +255,8 @@ if defined RS_DEPS_DIRS (
 set "cmake_command=!cmake_command! %RS_DEPS_DIRS%"
 
 if defined RS_MULTI_DEPS_DIRS (
-    set "cmake_command=!cmake_command! -DRS_MULTI_DEPS_DIRS=%RS_MULTI_DEPS_DIRS%"
-    set "cmake_command=!cmake_command! -DCMAKE_PREFIX_PATH=%RS_MULTI_DEPS_DIRS%"
+    set "cmake_command=!cmake_command! -DRS_MULTI_DEPS_DIRS=\"%RS_MULTI_DEPS_DIRS%\""
+    set "cmake_command=!cmake_command! -DCMAKE_PREFIX_PATH=\"%RS_MULTI_DEPS_DIRS%\""
 )
 
 if defined RS_ODBC_DIR (
