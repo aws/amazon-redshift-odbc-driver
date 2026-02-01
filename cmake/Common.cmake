@@ -245,14 +245,22 @@ function(add_safe_include target lib_dir)
         endif()
     endif()
 
-    set(include_dir "${lib_dir}/${build_type}/include")
+    # Remove quotes from lib_dir if present
+    string(REPLACE "\"" "" lib_dir_clean "${lib_dir}")
+
+    # Try multiple include path patterns
+    set(include_dir "${lib_dir_clean}/${build_type}/include")
     if(EXISTS "${include_dir}")
         message(STATUS "Using include path: ${include_dir}")
         target_include_directories(${target} PRIVATE "${include_dir}")
-    elseif(EXISTS "${lib_dir}/include")
-        message(WARNING "Using fallback include path: ${lib_dir}/include")
-        target_include_directories(${target} PRIVATE "${lib_dir}/include")
+    elseif(EXISTS "${lib_dir_clean}/include")
+        message(STATUS "Using include path: ${lib_dir_clean}/include")
+        target_include_directories(${target} PRIVATE "${lib_dir_clean}/include")
+    elseif(EXISTS "${lib_dir_clean}")
+        # For vcpkg-style installations, include may be directly under lib_dir
+        message(STATUS "Using lib_dir as include base: ${lib_dir_clean}")
+        target_include_directories(${target} PRIVATE "${lib_dir_clean}/include")
     else()
-        message(FATAL_ERROR "No valid include path found in ${lib_dir}")
+        message(FATAL_ERROR "No valid include path found in ${lib_dir} (cleaned: ${lib_dir_clean})")
     endif()
 endfunction()
