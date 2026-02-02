@@ -237,9 +237,9 @@ if not exist "%RS_BUILD_DIR%" mkdir "%RS_BUILD_DIR%" || exit /b %ERRORLEVEL%
 set "cmake_command=cmake -G "%cmake_generator%" -B "%RS_BUILD_DIR%" -S "%RS_ROOT_DIR%" -DRS_BUILD_TYPE=%RS_BUILD_TYPE% -DCMAKE_INSTALL_PREFIX=%INSTALL_DIR% %CMAKE_ARGS_ODBC_VERSION%"
 
 if "%RS_BUILD_TYPE%"=="Debug" (
-    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebug"
+    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebugDLL"
 ) else (
-    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"
+    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL"
 )
 
 if defined RS_OPENSSL_DIR (
