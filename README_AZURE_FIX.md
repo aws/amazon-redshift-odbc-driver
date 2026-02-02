@@ -47,9 +47,14 @@ Driver מוסיף `openid` אוטומטית ✅
 
 ✅ קוד מוכן
 ✅ הוראות בנייה מוכנות
-⚠️ GitHub Actions build עדיין בעבודה (בעיות dependency)
+✅ GitHub Actions build מצליח
+✅ MSI Installer נבנה בהצלחה
 
-**המלצה**: בנה על Windows עם ההוראות המצורפות.
+**Build האחרון**: [Run #21601686394](https://github.com/ORELASH/amazon-redshift-odbc-driver/actions/runs/21601686394) - הצליח ב-21m53s
+
+**שינויים נוספים שבוצעו**:
+- תיקון WiX installer paths ל-OpenSSL 3.x (vcpkg)
+- עדכון build scripts לתמיכה בסביבת GitHub Actions
 
 ## קרדיטים
 
