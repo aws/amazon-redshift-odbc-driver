@@ -71,7 +71,7 @@ jobs:
             vcpkg install --triplet x64-windows `
               --no-print-usage `
               openssl `
-              "aws-sdk-cpp[core,redshift,sts,identity-management]" `
+              "aws-sdk-cpp[core,redshift,redshift-serverless,sts,sso-oidc,identity-management]" `
               c-ares `
               gtest
             $success = $true
