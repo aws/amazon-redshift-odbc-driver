@@ -269,8 +269,9 @@ endfunction()
 function(get_rsodbc_deps rsodbc_deps)
   message(STATUS "INSIDE get_rsodbc_deps")
   # s2n only in Linux, not in Darwin
+  # Note: vcpkg uses different naming: c-ares instead of cares
   set(${rsodbc_deps}
-      gtest gmock cares gssapi64 ${AWS_DEPENDENCIES}
+      gtest gmock c-ares cares gssapi64 ${AWS_DEPENDENCIES}
       PARENT_SCOPE)
 
   message(STATUS "INSIDE get_rsodbc_deps=> ${rsodbc_deps}")

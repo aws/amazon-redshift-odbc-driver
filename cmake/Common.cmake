@@ -83,7 +83,7 @@ function(get_rsodbc_static_libs RS_STATIC_LIBS)
             endif()
         endforeach()
         if(NOT ${PACKAGE}_FOUND)
-            message(WARNING "NOT FOUND STATIC for ${PACKAGE}")
+            message(STATUS "Library ${PACKAGE} not found in static search paths - will rely on linker search")
         endif()
     endforeach()
 
