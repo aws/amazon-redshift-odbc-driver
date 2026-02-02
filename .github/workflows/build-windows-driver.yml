@@ -68,7 +68,7 @@ jobs:
         while (-not $success -and $retryCount -lt $maxRetries) {
           try {
             Write-Host "Attempt $($retryCount + 1) of $maxRetries"
-            vcpkg install --triplet x64-windows `
+            vcpkg install --triplet x64-windows-static `
               --no-print-usage `
               openssl `
               "aws-sdk-cpp[core,redshift,sts,identity-management]" `
@@ -98,7 +98,7 @@ jobs:
     - name: Build ODBC Driver
       shell: cmd
       run: |
-        set "VCPKG_INSTALL_DIR=%VCPKG_ROOT%\installed\x64-windows"
+        set "VCPKG_INSTALL_DIR=%VCPKG_ROOT%\installed\x64-windows-static"
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
         set "RS_OPENSSL_DIR=%VCPKG_INSTALL_DIR%"
         set "RS_MULTI_DEPS_DIRS=%VCPKG_INSTALL_DIR%"
