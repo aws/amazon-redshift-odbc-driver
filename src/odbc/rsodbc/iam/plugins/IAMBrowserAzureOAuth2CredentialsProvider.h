@@ -1,7 +1,7 @@
 #ifndef _IAMBROWSERAZUREOAuth2CREDENTIALSPROVIDER_H_
 #define _IAMBROWSERAZUREOAuth2CREDENTIALSPROVIDER_H_
 
-#include "IAMJwtPluginCredentialsProvider.h"
+#include "IAMPluginCredentialsProvider.h"
 
 #include <map>
 
@@ -14,7 +14,7 @@ namespace Redshift
 	{
 		/// @brief IAMPluginCredentialsProvider implementation class.
 		///        Retrieves AWSCredentials using Browser plug-in.
-		class IAMBrowserAzureOAuth2CredentialsProvider : public IAMJwtPluginCredentialsProvider
+		class IAMBrowserAzureOAuth2CredentialsProvider : public IAMPluginCredentialsProvider
 		{
 		public:
 			/// @brief Constructor          Construct credentials provider using argument map
