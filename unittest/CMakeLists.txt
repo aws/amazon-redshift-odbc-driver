@@ -11,7 +11,8 @@ configure_file(${CMAKE_SOURCE_DIR}/version.txt ${CMAKE_CURRENT_BINARY_DIR}/versi
 add_executable(${EXECUTABLE_NAME} ${TEST_SOURCES})
 
 if (WIN32)
-    target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} ${CMAKE_FIND_LIBRARY_PREFIXES}rsodbc64 pq)
+    target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} ${CMAKE_FIND_LIBRARY_PREFIXES}rsodbc64
+        libcrypto libssl wldap32 secur32 pqport pq ws2_32 wsock32)
     add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
             $<TARGET_FILE:rsodbc64>  # Changed from rsodbc64-test
