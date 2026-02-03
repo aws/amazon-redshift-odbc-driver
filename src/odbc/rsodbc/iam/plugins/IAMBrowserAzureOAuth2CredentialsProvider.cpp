@@ -1,5 +1,4 @@
 #include "IAMBrowserAzureOAuth2CredentialsProvider.h"
-#include "IAMJwtBasicCredentialsProvider.h"
 #include "IAMUtils.h"
 #include "IAMHttpClient.h"
 #include "WEBServer.h"
