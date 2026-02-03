@@ -128,6 +128,18 @@ namespace Redshift
 			/// @return generated string
 			rs_string GenerateState();
 
+			/// @brief Generate PKCE code verifier (RFC 7636)
+			///
+			/// @return Base64URL-encoded random string (43-128 characters)
+			rs_string GenerateCodeVerifier();
+
+			/// @brief Generate PKCE code challenge from verifier (RFC 7636)
+			///
+			/// @param verifier    The code verifier
+			///
+			/// @return Base64URL-encoded SHA256 hash of verifier
+			rs_string GenerateCodeChallenge(const rs_string& verifier);
+
 			/// @brief Request an authorization code from /oauth2/authorize/
 			///
 			/// @return Authorization code
@@ -153,6 +165,10 @@ namespace Redshift
 		private:
 			// @brief Disabled assignment operator to avoid warning.
 			IAMBrowserAzureOAuth2CredentialsProvider& operator=(const IAMBrowserAzureOAuth2CredentialsProvider& in_browserProvider);
+
+			/// @brief PKCE code verifier (stored for token exchange)
+			rs_string m_codeVerifier;
+
 // LINUX is used in Mac build too, so order of LINUX and APPLE are important
 #if (defined(_WIN32) || defined(_WIN64))
 			const char* command_ = "start \"\" \"";

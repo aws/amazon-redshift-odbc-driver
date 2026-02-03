@@ -9,6 +9,7 @@
 #include <aws/core/http/HttpRequest.h>
 #include <aws/core/http/HttpResponse.h>
 #include <aws/core/utils/base64/Base64.h>
+#include <aws/core/utils/HashingUtils.h>
 #include <aws/core/utils/json/JsonSerializer.h>
 #include <aws/sts/STSClient.h>
 #include <aws/sts/model/AssumeRoleWithWebIdentityRequest.h>
@@ -129,6 +130,62 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::GenerateState()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+rs_string IAMBrowserAzureOAuth2CredentialsProvider::GenerateCodeVerifier()
+{
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::GenerateCodeVerifier");
+
+	// RFC 7636: code verifier must be 43-128 chars from [A-Z][a-z][0-9]-._~
+	const char chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+	const int chars_size = (sizeof(chars) / sizeof(*chars)) - 1;
+	const int verifier_length = 64; // Use 64 chars (middle of 43-128 range)
+
+	rs_string verifier;
+	verifier.reserve(verifier_length);
+
+	for (int i = 0; i < verifier_length; ++i)
+	{
+		verifier.push_back(chars[GenerateRandomInteger(0, chars_size - 1)]);
+	}
+
+	RS_LOG_DEBUG("IAMCRD", "Generated code_verifier (length=%d)", verifier_length);
+	return verifier;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+rs_string IAMBrowserAzureOAuth2CredentialsProvider::GenerateCodeChallenge(const rs_string& verifier)
+{
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::GenerateCodeChallenge");
+
+	// RFC 7636: code_challenge = BASE64URL(SHA256(ASCII(code_verifier)))
+	Aws::Utils::ByteBuffer verifierBuffer(
+		reinterpret_cast<const unsigned char*>(verifier.c_str()),
+		verifier.length());
+
+	Aws::Utils::ByteBuffer hashBuffer = Aws::Utils::HashingUtils::CalculateSHA256(verifierBuffer);
+
+	// Base64URL encode (using AWS SDK's Base64 with URL-safe encoding)
+	Aws::String base64Challenge = Aws::Utils::HashingUtils::Base64Encode(hashBuffer);
+
+	// Convert to URL-safe base64 (replace +/= with -_)
+	rs_string challenge = base64Challenge;
+	for (size_t i = 0; i < challenge.length(); ++i)
+	{
+		if (challenge[i] == '+') challenge[i] = '-';
+		else if (challenge[i] == '/') challenge[i] = '_';
+	}
+
+	// Remove padding '=' characters
+	size_t padding_pos = challenge.find('=');
+	if (padding_pos != rs_string::npos)
+	{
+		challenge = challenge.substr(0, padding_pos);
+	}
+
+	RS_LOG_DEBUG("IAMCRD", "Generated code_challenge (length=%d)", static_cast<int>(challenge.length()));
+	return challenge;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser(const rs_string& uri)
 {
 	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser");
@@ -197,6 +254,11 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 	This state will be verified in the token response.  */
 	rs_string state = GenerateState();
 
+	/* Generate PKCE code verifier and challenge (RFC 7636) */
+	m_codeVerifier = GenerateCodeVerifier();
+	rs_string codeChallenge = GenerateCodeChallenge(m_codeVerifier);
+	RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: PKCE enabled with S256 challenge method");
+
 	/* Let the server to listen on the random free port on the system. */
 	rs_string random_port = "0";
 
@@ -235,8 +297,9 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 			m_argsMap[IAM_KEY_LISTEN_PORT] +
 			"%2Fredshift%2F" +
 			"&response_mode=form_post&scope=" + scope +
-			"&state=" +
-			state;
+			"&state=" + state +
+			"&code_challenge=" + codeChallenge +
+			"&code_challenge_method=S256";
 
 
 
@@ -299,7 +362,8 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 		{ "scope", scope },
 		{ "client_id", m_argsMap[IAM_KEY_CLIENT_ID] },
 		{ "code", authCode },
-		{ "redirect_uri", "http://localhost:" + m_argsMap[IAM_KEY_LISTEN_PORT] + "/redshift/" }
+		{ "redirect_uri", "http://localhost:" + m_argsMap[IAM_KEY_LISTEN_PORT] + "/redshift/" },
+		{ "code_verifier", m_codeVerifier }  // PKCE (RFC 7636)
 //		{ "resource", m_argsMap[IAM_KEY_CLIENT_ID] }
 	};
 
@@ -309,6 +373,9 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 		paramMap["client_secret"] = m_argsMap[IAM_KEY_CLIENT_SECRET];
 		RS_LOG_DEBUG("IAMCRD", "client_secret parameter added to token request");
 	}
+
+	RS_LOG_DEBUG("IAMCRD", "RequestAccessToken: Sending token request with PKCE code_verifier");
+	RS_LOG_DEBUG("IAMCRD", "RequestAccessToken: scope='%s', grant_type='authorization_code'", scope.c_str());
 
 	HttpClientConfig config;
 	config.m_verifySSL = shouldVerifySSL;
