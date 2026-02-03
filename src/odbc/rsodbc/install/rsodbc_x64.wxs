@@ -5,10 +5,10 @@
 <!-- Product details -->
 
   <Product
-    Manufacturer="Amazon Web Services, Inc."
+    Manufacturer="Amazon Web Services, Inc. (Unofficial Fork by Orel)"
     Id="*"
     UpgradeCode="$(var.UpgradeCode)"
-    Name="Amazon Redshift ODBC Driver 64-bit"
+    Name="Amazon Redshift ODBC Driver 64-bit (Unofficial Fork v2.x - Azure OAuth Fix - NOT FOR PRODUCTION)"
     Version="$(var.VERSION)"
     Language="1033">
 
