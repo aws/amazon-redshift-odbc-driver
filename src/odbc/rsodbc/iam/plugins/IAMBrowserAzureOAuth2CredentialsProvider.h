@@ -39,7 +39,7 @@ namespace Redshift
 			/// @brief Get saml assertion from given connection settings
 			///
 			/// @return SAML assertion
-			rs_string GetJwtAssertion() override;
+			rs_string GetJwtAssertion();
 
 			/// @brief Browser OAuth based authentication.
 			///

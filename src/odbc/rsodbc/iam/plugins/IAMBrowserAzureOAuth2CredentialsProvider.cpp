@@ -40,7 +40,7 @@ namespace
 IAMBrowserAzureOAuth2CredentialsProvider::IAMBrowserAzureOAuth2CredentialsProvider(
 		const IAMConfiguration& in_config,
 	const std::map<rs_string, rs_string>& in_argsMap) :
-	IAMJwtPluginCredentialsProvider( in_config, in_argsMap)
+	IAMPluginCredentialsProvider( in_config, in_argsMap)
 {
 	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::IAMBrowserAzureOAuth2CredentialsProvider");
 	InitArgumentsMap();
