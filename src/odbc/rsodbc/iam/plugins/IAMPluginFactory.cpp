@@ -20,7 +20,8 @@ std::unique_ptr<IAMPluginCredentialsProvider> IAMPluginFactory::CreatePlugin(
 	}
     else
     {
-        RS_LOG_ERROR("IAM", "Unsupported authentication provider: " + IAMUtils::convertToUTF8(in_pluginName));
+        std::string errorMsg = "Unsupported authentication provider: " + IAMUtils::convertToUTF8(in_pluginName);
+        RS_LOG_ERROR("IAM", errorMsg.c_str());
         IAMUtils::ThrowConnectionExceptionWithInfo("Unsupported authentication provider. Only BrowserAzureADOAuth2 is supported.");
     }
 
