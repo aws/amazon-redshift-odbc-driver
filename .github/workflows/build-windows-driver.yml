@@ -106,6 +106,21 @@ jobs:
         set "CMAKE_PREFIX_PATH=%VCPKG_INSTALL_DIR%"
         build64.bat --dependencies-install-dir=%VCPKG_INSTALL_DIR% --version=2.1.13.0
 
+    - name: Run Unit Tests
+      shell: cmd
+      run: |
+        cd cmake-build\Release\unittest
+        all_unit_tests.exe --gtest_output=xml:test_results.xml
+      continue-on-error: false
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: cmake-build/Release/unittest/test_results.xml
+        retention-days: 7
+
     - name: Upload build artifacts
       if: always()
       uses: actions/upload-artifact@v4
