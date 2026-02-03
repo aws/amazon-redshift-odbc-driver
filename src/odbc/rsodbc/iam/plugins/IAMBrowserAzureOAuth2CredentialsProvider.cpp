@@ -157,11 +157,11 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::GenerateCodeChallenge(const 
 	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::GenerateCodeChallenge");
 
 	// RFC 7636: code_challenge = BASE64URL(SHA256(ASCII(code_verifier)))
-	Aws::Utils::ByteBuffer verifierBuffer(
-		reinterpret_cast<const unsigned char*>(verifier.c_str()),
-		verifier.length());
+	// Convert rs_string to Aws::String for AWS SDK functions
+	Aws::String awsVerifier(verifier.c_str(), verifier.length());
 
-	Aws::Utils::ByteBuffer hashBuffer = Aws::Utils::HashingUtils::CalculateSHA256(verifierBuffer);
+	// Calculate SHA256 hash
+	Aws::Utils::ByteBuffer hashBuffer = Aws::Utils::HashingUtils::CalculateSHA256(awsVerifier);
 
 	// Base64URL encode (using AWS SDK's Base64 with URL-safe encoding)
 	Aws::String base64Challenge = Aws::Utils::HashingUtils::Base64Encode(hashBuffer);
