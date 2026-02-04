@@ -232,15 +232,16 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 		rs_string idpHostUrl;
 		IAMUtils::GetMicrosoftIdpHost(m_argsMap.count(IAM_KEY_IDP_PARTITION) ? m_argsMap.at(IAM_KEY_IDP_PARTITION) : "", idpHostUrl);
 
-		// Construct redirect_uri explicitly for logging
-		rs_string redirect_uri = "http://localhost:" + m_argsMap[IAM_KEY_LISTEN_PORT] + "/redshift/";
+		// Use 127.0.0.1 instead of localhost to bypass proxy issues
+		// Most proxies don't intercept numeric IP addresses, especially loopback
+		rs_string redirect_uri = "http://127.0.0.1:" + m_argsMap[IAM_KEY_LISTEN_PORT] + "/redshift/";
 		RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: redirect_uri (unencoded): %s", redirect_uri.c_str());
 
 		const rs_string uri = idpHostUrl + "/" +
 			m_argsMap[IAM_KEY_IDP_TENANT] +
 			"/oauth2/v2.0/authorize?client_id=" +
 			m_argsMap[IAM_KEY_CLIENT_ID] +
-			"&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A" +
+			"&response_type=code&redirect_uri=http%3A%2F%2F127.0.0.1%3A" +
 			m_argsMap[IAM_KEY_LISTEN_PORT] +
 			"%2Fredshift%2F" +
 			"&response_mode=form_post&scope=" + scope +
