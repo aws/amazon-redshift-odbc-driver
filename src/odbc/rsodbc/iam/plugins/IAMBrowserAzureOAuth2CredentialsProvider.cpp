@@ -135,98 +135,30 @@ void IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser(const rs_string& ur
 {
 	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser: %s", uri.c_str());
 
+	//  Avoid system calls where possible for LOGIN_URL to help avoid possible remote code execution
 // LINUX is used in Mac build too, so order of LINUX and APPLE are important
 #if (defined(_WIN32) || defined(_WIN64))
-	// On Windows, try to launch browser with proxy bypass
-	// Find the default browser and launch it with --proxy-bypass-list parameter
+	RS_LOG_DEBUG("IAMCRD", "Launching browser using ShellExecute");
 
-	// Get proxy bypass list from connection string (or use default)
-	rs_string proxyBypassList = "localhost;127.0.0.1"; // default
-	if (m_argsMap.find(IAM_KEY_PROXY_BYPASS_LIST) != m_argsMap.end())
+	int result = static_cast<int>(
+		reinterpret_cast<intptr_t>(
+			ShellExecute(
+				NULL,
+				NULL,
+				uri.c_str(),
+				NULL,
+				NULL,
+				SW_SHOWNORMAL)));
+
+	RS_LOG_DEBUG("IAMCRD", "ShellExecute returned: %d", result);
+
+	if (result <= 32)
 	{
-		proxyBypassList = m_argsMap[IAM_KEY_PROXY_BYPASS_LIST];
-		RS_LOG_DEBUG("IAMCRD", "Using custom proxy bypass list: %s", proxyBypassList.c_str());
-	}
-	else
-	{
-		RS_LOG_DEBUG("IAMCRD", "Using default proxy bypass list: %s", proxyBypassList.c_str());
-	}
-
-	RS_LOG_DEBUG("IAMCRD", "Attempting to launch browser with proxy bypass");
-
-	// Try to find Chrome/Edge first (most common and support proxy bypass)
-	const char* browserPaths[] = {
-		"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-		"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-		"C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
-		"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
-	};
-
-	bool launched = false;
-	for (const char* browserPath : browserPaths)
-	{
-		// Check if browser exists
-		DWORD fileAttr = GetFileAttributesA(browserPath);
-		if (fileAttr != INVALID_FILE_ATTRIBUTES && !(fileAttr & FILE_ATTRIBUTE_DIRECTORY))
-		{
-			// Browser found, launch with proxy bypass
-			rs_string cmdLine = "\"";
-			cmdLine += browserPath;
-			cmdLine += "\" --proxy-bypass-list=\"";
-			cmdLine += proxyBypassList;
-			cmdLine += "\" \"";
-			cmdLine += uri;
-			cmdLine += "\"";
-
-			RS_LOG_DEBUG("IAMCRD", "Launching browser: %s", cmdLine.c_str());
-
-			STARTUPINFOA si = { sizeof(si) };
-			PROCESS_INFORMATION pi = { 0 };
-			si.dwFlags = STARTF_USESHOWWINDOW;
-			si.wShowWindow = SW_SHOWNORMAL;
-
-			if (CreateProcessA(
-				NULL,
-				const_cast<char*>(cmdLine.c_str()),
-				NULL,
-				NULL,
-				FALSE,
-				0,
-				NULL,
-				NULL,
-				&si,
-				&pi))
-			{
-				RS_LOG_DEBUG("IAMCRD", "Browser launched successfully with proxy bypass");
-				CloseHandle(pi.hProcess);
-				CloseHandle(pi.hThread);
-				launched = true;
-				break;
-			}
-			else
-			{
-				RS_LOG_DEBUG("IAMCRD", "Failed to launch browser with CreateProcess, error: %lu", GetLastError());
-			}
-		}
+		RS_LOG_DEBUG("IAMCRD", "ShellExecute failed with result: %d", result);
+		IAMUtils::ThrowConnectionExceptionWithInfo("Couldn't open a URI or some error occurred.");
 	}
 
-	if (!launched)
-	{
-		// Fallback: try default browser without proxy bypass
-		RS_LOG_DEBUG("IAMCRD", "Falling back to ShellExecute (no proxy bypass)");
-		if (static_cast<int>(
-			reinterpret_cast<intptr_t>(
-				ShellExecute(
-					NULL,
-					NULL,
-					uri.c_str(),
-					NULL,
-					NULL,
-					SW_SHOWNORMAL))) <= 32)
-		{
-			IAMUtils::ThrowConnectionExceptionWithInfo("Couldn't open a URI or some error occurred.");
-		}
-	}
+	RS_LOG_DEBUG("IAMCRD", "Browser launched successfully");
 
 #elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
 	// On macOS, set environment variables (works better than Windows)
