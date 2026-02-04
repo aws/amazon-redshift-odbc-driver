@@ -325,12 +325,21 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 		"HttpClientConfig.m_timeout: %ld",
 		config.m_timeout);
 
+	RS_LOG_DEBUG("IAMCRD", "RequestAccessToken: Proxy check - UsingHTTPSProxy=%d, UseProxyIdpAuth=%d",
+		m_config.GetUsingHTTPSProxy() ? 1 : 0,
+		m_config.GetUseProxyIdpAuth() ? 1 : 0);
+
 	if (m_config.GetUsingHTTPSProxy() && m_config.GetUseProxyIdpAuth())
 	{
 		config.m_httpsProxyHost = m_config.GetHTTPSProxyHost();
 		config.m_httpsProxyPort = m_config.GetHTTPSProxyPort();
 		config.m_httpsProxyUserName = m_config.GetHTTPSProxyUser();
 		config.m_httpsProxyPassword = m_config.GetHTTPSProxyPassword();
+		RS_LOG_DEBUG("IAMCRD", "RequestAccessToken: Using HTTPS proxy - Host=%s, Port=%d",
+			config.m_httpsProxyHost.c_str(),
+			config.m_httpsProxyPort);
+	} else {
+		RS_LOG_DEBUG("IAMCRD", "RequestAccessToken: NOT using proxy for IDP auth");
 	}
 
 	std::shared_ptr<IAMHttpClient> client = GetHttpClient(config);
