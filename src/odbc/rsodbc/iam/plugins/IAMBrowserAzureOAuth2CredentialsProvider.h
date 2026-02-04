@@ -2,6 +2,7 @@
 #define _IAMBROWSERAZUREOAuth2CREDENTIALSPROVIDER_H_
 
 #include "IAMPluginCredentialsProvider.h"
+#include "IAMJwtPluginCredentialsProvider.h"
 
 #include <map>
 
@@ -12,12 +13,6 @@ namespace Redshift
 {
 	namespace IamSupport
 	{
-		struct JWTAssertion
-		{
-			rs_string header;
-			rs_string payload;
-			rs_string signature;
-		};
 
 		/// @brief IAMPluginCredentialsProvider implementation class.
 		///        Retrieves AWSCredentials using Browser plug-in.
