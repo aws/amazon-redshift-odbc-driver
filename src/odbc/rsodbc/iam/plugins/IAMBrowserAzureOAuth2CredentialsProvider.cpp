@@ -140,7 +140,19 @@ void IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser(const rs_string& ur
 	// On Windows, try to launch browser with proxy bypass
 	// Find the default browser and launch it with --proxy-bypass-list parameter
 
-	RS_LOG_DEBUG("IAMCRD", "Attempting to launch browser with proxy bypass for localhost");
+	// Get proxy bypass list from connection string (or use default)
+	rs_string proxyBypassList = "localhost;127.0.0.1"; // default
+	if (m_argsMap.find(IAM_KEY_PROXY_BYPASS_LIST) != m_argsMap.end())
+	{
+		proxyBypassList = m_argsMap[IAM_KEY_PROXY_BYPASS_LIST];
+		RS_LOG_DEBUG("IAMCRD", "Using custom proxy bypass list: %s", proxyBypassList.c_str());
+	}
+	else
+	{
+		RS_LOG_DEBUG("IAMCRD", "Using default proxy bypass list: %s", proxyBypassList.c_str());
+	}
+
+	RS_LOG_DEBUG("IAMCRD", "Attempting to launch browser with proxy bypass");
 
 	// Try to find Chrome/Edge first (most common and support proxy bypass)
 	const char* browserPaths[] = {
@@ -160,7 +172,9 @@ void IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser(const rs_string& ur
 			// Browser found, launch with proxy bypass
 			rs_string cmdLine = "\"";
 			cmdLine += browserPath;
-			cmdLine += "\" --proxy-bypass-list=\"localhost;127.0.0.1\" \"";
+			cmdLine += "\" --proxy-bypass-list=\"";
+			cmdLine += proxyBypassList;
+			cmdLine += "\" \"";
 			cmdLine += uri;
 			cmdLine += "\"";
 
