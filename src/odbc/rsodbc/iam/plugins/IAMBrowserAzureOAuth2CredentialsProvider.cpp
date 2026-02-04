@@ -203,15 +203,19 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 	WEBServer srv(state, random_port, m_argsMap[IAM_KEY_IDP_RESPONSE_TIMEOUT]);
 
 	/* Launch WEB Server to wait the response with the authorization code from /oauth2/authorize/. */
+	RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Launching WEB server");
 	srv.LaunchServer();
 
 	try
 	{
+		RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Waiting for server to be ready");
 		WaitForServer(srv);
 
 		/* Save the listen port from the server to know where to redirect the response. */
 		int port = srv.GetListenPort();
 		m_argsMap[IAM_KEY_LISTEN_PORT] = std::to_string(port);
+
+		RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Server is listening on port: %d", port);
 
 		// Build scope with URL encoding - add 'openid' if not present
 		rs_string scopeParam = m_argsMap[IAM_KEY_SCOPE];
@@ -227,6 +231,11 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 		/* Generate URI to request an authorization code.  */
 		rs_string idpHostUrl;
 		IAMUtils::GetMicrosoftIdpHost(m_argsMap.count(IAM_KEY_IDP_PARTITION) ? m_argsMap.at(IAM_KEY_IDP_PARTITION) : "", idpHostUrl);
+
+		// Construct redirect_uri explicitly for logging
+		rs_string redirect_uri = "http://localhost:" + m_argsMap[IAM_KEY_LISTEN_PORT] + "/redshift/";
+		RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: redirect_uri (unencoded): %s", redirect_uri.c_str());
+
 		const rs_string uri = idpHostUrl + "/" +
 			m_argsMap[IAM_KEY_IDP_TENANT] +
 			"/oauth2/v2.0/authorize?client_id=" +
@@ -237,28 +246,36 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 			"&response_mode=form_post&scope=" + scope +
 			"&state=" + state;
 
-
+		RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Full authorization URI: %s", uri.c_str());
 
 		// Enforce URL validation
 		IAMUtils::ValidateURL(uri);
 
+		RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Launching browser with authorization URI");
 		LaunchBrowser(uri);
 	}
 	catch (RsErrorException & e)
 	{
+		RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Exception caught, joining server thread");
 		srv.Join();
 		throw e;
 	}
 
-
+	RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Waiting for server to complete (srv.Join())");
 	srv.Join();
+
+	RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Server completed. IsTimeout: %d", srv.IsTimeout());
 
 	if (srv.IsTimeout())
 	{
+		RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Connection timeout occurred");
 		IAMUtils::ThrowConnectionExceptionWithInfo("Connection timeout. Please verify the connection settings.");
 	}
 
-	return srv.GetCode();
+	rs_string authCode = srv.GetCode();
+	RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Retrieved authorization code (length: %zu)", authCode.size());
+
+	return authCode;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
