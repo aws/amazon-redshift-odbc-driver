@@ -130,62 +130,126 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::GenerateState()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser(const rs_string& uri)
 {
-	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser");
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser: %s", uri.c_str());
 
-	//  Avoid system calls where possible for LOGIN_URL to help avoid possible remote code execution
 // LINUX is used in Mac build too, so order of LINUX and APPLE are important
 #if (defined(_WIN32) || defined(_WIN64))
-	// Set NO_PROXY environment variable to bypass proxy for localhost
-	_putenv_s("NO_PROXY", "localhost,127.0.0.1");
-	_putenv_s("no_proxy", "localhost,127.0.0.1");
+	// On Windows, try to launch browser with proxy bypass
+	// Find the default browser and launch it with --proxy-bypass-list parameter
 
-	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser - Set NO_PROXY environment");
+	RS_LOG_DEBUG("IAMCRD", "Attempting to launch browser with proxy bypass for localhost");
 
-	if (static_cast<int>(
-		reinterpret_cast<intptr_t>(
-			ShellExecute(
+	// Try to find Chrome/Edge first (most common and support proxy bypass)
+	const char* browserPaths[] = {
+		"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+		"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+		"C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+		"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
+	};
+
+	bool launched = false;
+	for (const char* browserPath : browserPaths)
+	{
+		// Check if browser exists
+		DWORD fileAttr = GetFileAttributesA(browserPath);
+		if (fileAttr != INVALID_FILE_ATTRIBUTES && !(fileAttr & FILE_ATTRIBUTE_DIRECTORY))
+		{
+			// Browser found, launch with proxy bypass
+			rs_string cmdLine = "\"";
+			cmdLine += browserPath;
+			cmdLine += "\" --proxy-bypass-list=\"localhost;127.0.0.1\" \"";
+			cmdLine += uri;
+			cmdLine += "\"";
+
+			RS_LOG_DEBUG("IAMCRD", "Launching browser: %s", cmdLine.c_str());
+
+			STARTUPINFOA si = { sizeof(si) };
+			PROCESS_INFORMATION pi = { 0 };
+			si.dwFlags = STARTF_USESHOWWINDOW;
+			si.wShowWindow = SW_SHOWNORMAL;
+
+			if (CreateProcessA(
+				NULL,
+				const_cast<char*>(cmdLine.c_str()),
 				NULL,
 				NULL,
-				uri.c_str(),
+				FALSE,
+				0,
 				NULL,
 				NULL,
-				SW_SHOWNORMAL))) <= 32)
+				&si,
+				&pi))
+			{
+				RS_LOG_DEBUG("IAMCRD", "Browser launched successfully with proxy bypass");
+				CloseHandle(pi.hProcess);
+				CloseHandle(pi.hThread);
+				launched = true;
+				break;
+			}
+			else
+			{
+				RS_LOG_DEBUG("IAMCRD", "Failed to launch browser with CreateProcess, error: %lu", GetLastError());
+			}
+		}
+	}
+
+	if (!launched)
+	{
+		// Fallback: try default browser without proxy bypass
+		RS_LOG_DEBUG("IAMCRD", "Falling back to ShellExecute (no proxy bypass)");
+		if (static_cast<int>(
+			reinterpret_cast<intptr_t>(
+				ShellExecute(
+					NULL,
+					NULL,
+					uri.c_str(),
+					NULL,
+					NULL,
+					SW_SHOWNORMAL))) <= 32)
+		{
+			IAMUtils::ThrowConnectionExceptionWithInfo("Couldn't open a URI or some error occurred.");
+		}
+	}
+
 #elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
-	// Set NO_PROXY environment variable for macOS
+	// On macOS, set environment variables (works better than Windows)
 	setenv("NO_PROXY", "localhost,127.0.0.1", 1);
 	setenv("no_proxy", "localhost,127.0.0.1", 1);
 
-	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser - Set NO_PROXY environment");
+	RS_LOG_DEBUG("IAMCRD", "Set NO_PROXY environment for macOS");
 
 	CFURLRef url = CFURLCreateWithBytes(
-		NULL,                        // allocator
-		(UInt8*)uri.c_str(),         // URLBytes
-		uri.length(),                // length
-		kCFStringEncodingASCII,      // encoding
-		NULL                         // baseURL
+		NULL,
+		(UInt8*)uri.c_str(),
+		uri.length(),
+		kCFStringEncodingASCII,
+		NULL
 	);
-	if (url)
+	if (!url)
 	{
-		LSOpenCFURLRef(url, 0);
-		CFRelease(url);
+		IAMUtils::ThrowConnectionExceptionWithInfo("Couldn't open a URI or some error occurred.");
 	}
-	else
+
+	LSOpenCFURLRef(url, 0);
+	CFRelease(url);
+
 #elif (defined(LINUX) || defined(__linux__))
-	// Set NO_PROXY environment variable for Linux
+	// On Linux, set environment variables
 	setenv("NO_PROXY", "localhost,127.0.0.1", 1);
 	setenv("no_proxy", "localhost,127.0.0.1", 1);
 
-	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser - Set NO_PROXY environment");
+	RS_LOG_DEBUG("IAMCRD", "Set NO_PROXY environment for Linux");
 
 	rs_string open_uri = command_ + uri + subcommand_;
 
 	if (system(open_uri.c_str()) == -1)
-#endif
 	{
 		IAMUtils::ThrowConnectionExceptionWithInfo("Couldn't open a URI or some error occurred.");
 	}
+#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
