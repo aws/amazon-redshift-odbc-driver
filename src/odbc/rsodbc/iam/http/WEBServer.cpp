@@ -34,34 +34,51 @@ bool WEBServer::WEBServerInit()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void WEBServer::HandleConnection()
 {
-    RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection");
-    
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Starting");
+
     /* Trying to accept the pending incoming connection. */
     Socket ssck(listen_socket_.Accept());
-    
+
     ++connections_counter_;
-    
+
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Connection accepted, counter: %d", connections_counter_);
+
     if (ssck.SetNonBlocking())
     {
+        RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Socket set to non-blocking, creating stream");
+
         SocketStream socket_buffer(ssck);
         std::istream socket_stream(&socket_buffer);
 
+        RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Calling parser_.Parse()");
         STATUS status = parser_.Parse(socket_stream);
+
+        RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Parser returned status: %d", static_cast<int>(status));
+        RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Parser IsFinished(): %d", parser_.IsFinished());
 
         if (status == STATUS::SUCCEED)
         {
+            RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Sending ValidResponse");
             ssck.Send(ValidResponse.c_str(), ValidResponse.size(), 0);
         }
         else if (status == STATUS::FAILED)
         {
+            RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Sending InvalidResponse");
             ssck.Send(InvalidResponse.c_str(), InvalidResponse.size(), 0);
         }
         else
         {
+            RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Status is EMPTY_REQUEST, continuing to listen");
             /* Nothing is recevied from socket. Continue to listen. */
             return;
         }
     }
+    else
+    {
+        RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Failed to set socket to non-blocking");
+    }
+
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Finished");
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,7 +98,7 @@ void WEBServer::Listen()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void WEBServer::ListenerThread()
 {
-    RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread");
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Starting, timeout: %d seconds", timeout_);
 
     if (!WEBServerInit())
     {
@@ -89,17 +106,49 @@ void WEBServer::ListenerThread()
         return;
     }
 
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Server initialized successfully, listening on port: %d", listen_port_);
+
     auto start = std::chrono::system_clock::now();
 
     listening_.store(true);
 
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Entering listening loop");
+
+    int loop_count = 0;
     while ((std::chrono::system_clock::now() - start < std::chrono::seconds(timeout_)) && !parser_.IsFinished())
     {
+        loop_count++;
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - start).count();
+
+        if (loop_count % 10 == 1)  // Log every 10 iterations to avoid spam
+        {
+            RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Loop #%d, elapsed: %lld sec, parser finished: %d",
+                         loop_count, elapsed, parser_.IsFinished());
+        }
+
         Listen();
+
+        if (parser_.IsFinished())
+        {
+            RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Parser finished after %d loops, %lld seconds",
+                         loop_count, elapsed);
+            break;
+        }
     }
+
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - start).count();
+    bool timed_out = elapsed >= timeout_;
+
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Exited loop: loops=%d, elapsed=%lld sec, timeout=%d sec, timed_out=%d, parser_finished=%d, connections=%d",
+                 loop_count, elapsed, timeout_, timed_out, parser_.IsFinished(), connections_counter_);
 
     code_ = parser_.RetrieveAuthCode(state_);
     saml_ = parser_.RetrieveSamlResponse();
 
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Retrieved code length: %zu, saml length: %zu",
+                 code_.size(), saml_.size());
+
     listen_socket_.Close();
+
+    RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Socket closed, thread ending");
 }
