@@ -129,6 +129,7 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::GenerateState()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 void IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser(const rs_string& uri)
 {
 	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser");
@@ -136,6 +137,12 @@ void IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser(const rs_string& ur
 	//  Avoid system calls where possible for LOGIN_URL to help avoid possible remote code execution
 // LINUX is used in Mac build too, so order of LINUX and APPLE are important
 #if (defined(_WIN32) || defined(_WIN64))
+	// Set NO_PROXY environment variable to bypass proxy for localhost
+	_putenv_s("NO_PROXY", "localhost,127.0.0.1");
+	_putenv_s("no_proxy", "localhost,127.0.0.1");
+
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser - Set NO_PROXY environment");
+
 	if (static_cast<int>(
 		reinterpret_cast<intptr_t>(
 			ShellExecute(
@@ -146,6 +153,12 @@ void IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser(const rs_string& ur
 				NULL,
 				SW_SHOWNORMAL))) <= 32)
 #elif (defined(__APPLE__) || defined(__MACH__) || defined(PLATFORM_DARWIN))
+	// Set NO_PROXY environment variable for macOS
+	setenv("NO_PROXY", "localhost,127.0.0.1", 1);
+	setenv("no_proxy", "localhost,127.0.0.1", 1);
+
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser - Set NO_PROXY environment");
+
 	CFURLRef url = CFURLCreateWithBytes(
 		NULL,                        // allocator
 		(UInt8*)uri.c_str(),         // URLBytes
@@ -160,6 +173,11 @@ void IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser(const rs_string& ur
 	}
 	else
 #elif (defined(LINUX) || defined(__linux__))
+	// Set NO_PROXY environment variable for Linux
+	setenv("NO_PROXY", "localhost,127.0.0.1", 1);
+	setenv("no_proxy", "localhost,127.0.0.1", 1);
+
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::LaunchBrowser - Set NO_PROXY environment");
 
 	rs_string open_uri = command_ + uri + subcommand_;
 
@@ -232,16 +250,16 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 		rs_string idpHostUrl;
 		IAMUtils::GetMicrosoftIdpHost(m_argsMap.count(IAM_KEY_IDP_PARTITION) ? m_argsMap.at(IAM_KEY_IDP_PARTITION) : "", idpHostUrl);
 
-		// Use 127.0.0.1 instead of localhost to bypass proxy issues
+		// Use localhost instead of localhost to bypass proxy issues
 		// Most proxies don't intercept numeric IP addresses, especially loopback
-		rs_string redirect_uri = "http://127.0.0.1:" + m_argsMap[IAM_KEY_LISTEN_PORT] + "/redshift/";
+		rs_string redirect_uri = "http://localhost:" + m_argsMap[IAM_KEY_LISTEN_PORT] + "/redshift/";
 		RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: redirect_uri (unencoded): %s", redirect_uri.c_str());
 
 		const rs_string uri = idpHostUrl + "/" +
 			m_argsMap[IAM_KEY_IDP_TENANT] +
 			"/oauth2/v2.0/authorize?client_id=" +
 			m_argsMap[IAM_KEY_CLIENT_ID] +
-			"&response_type=code&redirect_uri=http%3A%2F%2F127.0.0.1%3A" +
+			"&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A" +
 			m_argsMap[IAM_KEY_LISTEN_PORT] +
 			"%2Fredshift%2F" +
 			"&response_mode=form_post&scope=" + scope +
