@@ -14,19 +14,30 @@ on:
         required: false
         default: 'false'
 
+env:
+  VCPKG_BINARY_SOURCES: 'clear;x-gha,readwrite'
+
 jobs:
   build-windows-msi:
-    runs-on: windows-2019
+    runs-on: windows-2022
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        lfs: true
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1
+    - name: Setup Git LFS
+      run: git lfs pull
 
-    - name: Setup CMake
-      uses: lukka/get-cmake@latest
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Install NASM
+      run: choco install nasm -y
+
+    - name: Install Perl (for OpenSSL)
+      run: choco install strawberryperl -y
 
     - name: Install WiX Toolset
       run: |
@@ -34,49 +45,99 @@ jobs:
         echo "C:\Program Files (x86)\WiX Toolset v3.11\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       shell: powershell
 
-    - name: Verify build tools
-      run: |
-        echo "=== CMake Version ==="
-        cmake --version
-        echo ""
-        echo "=== MSBuild Version ==="
-        msbuild /version
-        echo ""
-        echo "=== WiX Toolset ==="
-        candle.exe -? | Select-String "version"
-        echo ""
-        echo "=== Driver Version ==="
-        type version.txt
-      shell: powershell
+    - name: Export GitHub Actions cache environment variables
+      uses: actions/github-script@v7
+      with:
+        script: |
+          core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-    - name: Configure CMake
-      run: |
-        mkdir cmake-build
-        cd cmake-build
-        cmake -G "Visual Studio 16 2019" -A x64 -DCMAKE_BUILD_TYPE=Release -DENABLE_TEST_BUILD=OFF ..
-      shell: cmd
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgGitCommitId: '6d7bf7ef2193e2d1c5798a5ff8811d533104c861'
+      env:
+        VCPKG_FEATURE_FLAGS: '-compilertracking'
 
-    - name: Build Driver
-      run: |
-        cd cmake-build
-        cmake --build . --config Release --parallel
-      shell: cmd
+    - name: Cache vcpkg dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ github.workspace }}/vcpkg
+          ${{ github.workspace }}/vcpkg_installed
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
+        restore-keys: |
+          ${{ runner.os }}-vcpkg-
 
-    - name: Install Driver
+    - name: Install dependencies with vcpkg (with retries)
       run: |
-        cd cmake-build
-        cmake --install . --config Release
+        $maxRetries = 3
+        $retryCount = 0
+        $success = $false
+
+        # Skip pkg-config to avoid MSYS2 downloads
+        $env:VCPKG_FORCE_SYSTEM_BINARIES = "1"
+
+        while (-not $success -and $retryCount -lt $maxRetries) {
+          try {
+            Write-Host "Attempt $($retryCount + 1) of $maxRetries"
+            vcpkg install --triplet x64-windows `
+              --no-print-usage `
+              openssl `
+              "aws-sdk-cpp[core,redshift,redshift-serverless,sts,sso-oidc,identity-management]" `
+              c-ares `
+              gtest
+            $success = $true
+          }
+          catch {
+            $retryCount++
+            if ($retryCount -lt $maxRetries) {
+              Write-Host "Failed, waiting 10 seconds before retry..."
+              Start-Sleep -Seconds 10
+            }
+            else {
+              throw "Failed after $maxRetries attempts"
+            }
+          }
+        }
+      shell: pwsh
+
+    - name: Verify vcpkg installation
+      run: |
+        Write-Host "Checking vcpkg installation directory..."
+        Get-ChildItem "$env:VCPKG_ROOT\installed\x64-windows" -Recurse -Depth 2 | Select-Object -First 50
+      shell: pwsh
+
+    - name: Get driver version
+      id: version
+      run: |
+        $version = Get-Content version.txt -Raw
+        $version = $version.Trim()
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "Driver version: $version"
+      shell: pwsh
+
+    - name: Build ODBC Driver with MSI
       shell: cmd
+      run: |
+        set "VCPKG_INSTALL_DIR=%VCPKG_ROOT%\installed\x64-windows"
+        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        set "RS_OPENSSL_DIR=%VCPKG_INSTALL_DIR%"
+        set "RS_MULTI_DEPS_DIRS=%VCPKG_INSTALL_DIR%"
+        set "OPENSSL_ROOT_DIR=%VCPKG_INSTALL_DIR%"
+        set "CMAKE_PREFIX_PATH=%VCPKG_INSTALL_DIR%"
+        build64.bat --dependencies-install-dir=%VCPKG_INSTALL_DIR% --version=${{ steps.version.outputs.VERSION }}
 
     - name: Find MSI file
       id: find_msi
       run: |
-        $msiPath = Get-ChildItem -Path "cmake-build/install" -Filter "*.msi" -Recurse | Select-Object -First 1
-        if ($msiPath) {
-          echo "MSI_PATH=$($msiPath.FullName)" >> $env:GITHUB_OUTPUT
-          echo "MSI_NAME=$($msiPath.Name)" >> $env:GITHUB_OUTPUT
-          echo "Found MSI: $($msiPath.FullName)"
-          echo "Size: $([math]::Round($msiPath.Length / 1MB, 2)) MB"
+        $msiFiles = Get-ChildItem -Path . -Filter "*.msi" -Recurse | Where-Object { $_.FullName -notmatch '\\vcpkg\\' }
+        if ($msiFiles) {
+          $msiPath = $msiFiles[0].FullName
+          echo "MSI_PATH=$msiPath" >> $env:GITHUB_OUTPUT
+          echo "MSI_NAME=$($msiFiles[0].Name)" >> $env:GITHUB_OUTPUT
+          echo "Found MSI: $msiPath"
+          echo "Size: $([math]::Round($msiFiles[0].Length / 1MB, 2)) MB"
         } else {
           echo "ERROR: MSI file not found!"
           exit 1
@@ -142,7 +203,7 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### MSI Details" >> $GITHUB_STEP_SUMMARY
         echo "- **File**: ${{ steps.find_msi.outputs.MSI_NAME }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Location**: ${{ steps.find_msi.outputs.MSI_PATH }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version**: ${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
         echo "- **SHA256**: \`${{ steps.calculate_sha.outputs.SHA256 }}\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Download" >> $GITHUB_STEP_SUMMARY
