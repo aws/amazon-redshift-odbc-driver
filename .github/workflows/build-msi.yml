@@ -1,0 +1,150 @@
+name: Build Redshift ODBC MSI
+
+on:
+  push:
+    branches: [ main, master, fix-auth-cancel, fix-azure-oauth-scope ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create GitHub Release'
+        required: false
+        default: 'false'
+
+jobs:
+  build-windows-msi:
+    runs-on: windows-2019
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1
+
+    - name: Setup CMake
+      uses: lukka/get-cmake@latest
+
+    - name: Install WiX Toolset
+      run: |
+        choco install wixtoolset -y
+        echo "C:\Program Files (x86)\WiX Toolset v3.11\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      shell: powershell
+
+    - name: Verify build tools
+      run: |
+        echo "=== CMake Version ==="
+        cmake --version
+        echo ""
+        echo "=== MSBuild Version ==="
+        msbuild /version
+        echo ""
+        echo "=== WiX Toolset ==="
+        candle.exe -? | Select-String "version"
+        echo ""
+        echo "=== Driver Version ==="
+        type version.txt
+      shell: powershell
+
+    - name: Configure CMake
+      run: |
+        mkdir cmake-build
+        cd cmake-build
+        cmake -G "Visual Studio 16 2019" -A x64 -DCMAKE_BUILD_TYPE=Release ..
+      shell: cmd
+
+    - name: Build Driver
+      run: |
+        cd cmake-build
+        cmake --build . --config Release --parallel
+      shell: cmd
+
+    - name: Install Driver
+      run: |
+        cd cmake-build
+        cmake --install . --config Release
+      shell: cmd
+
+    - name: Find MSI file
+      id: find_msi
+      run: |
+        $msiPath = Get-ChildItem -Path "cmake-build/install" -Filter "*.msi" -Recurse | Select-Object -First 1
+        if ($msiPath) {
+          echo "MSI_PATH=$($msiPath.FullName)" >> $env:GITHUB_OUTPUT
+          echo "MSI_NAME=$($msiPath.Name)" >> $env:GITHUB_OUTPUT
+          echo "Found MSI: $($msiPath.FullName)"
+          echo "Size: $([math]::Round($msiPath.Length / 1MB, 2)) MB"
+        } else {
+          echo "ERROR: MSI file not found!"
+          exit 1
+        }
+      shell: powershell
+
+    - name: Calculate SHA256
+      id: calculate_sha
+      run: |
+        $hash = (Get-FileHash "${{ steps.find_msi.outputs.MSI_PATH }}" -Algorithm SHA256).Hash
+        echo "SHA256=$hash" >> $env:GITHUB_OUTPUT
+        echo "SHA256: $hash"
+        echo "$hash  ${{ steps.find_msi.outputs.MSI_NAME }}" | Out-File -FilePath "${{ steps.find_msi.outputs.MSI_PATH }}.sha256"
+      shell: powershell
+
+    - name: Upload MSI as artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: redshift-odbc-msi
+        path: |
+          ${{ steps.find_msi.outputs.MSI_PATH }}
+          ${{ steps.find_msi.outputs.MSI_PATH }}.sha256
+        retention-days: 90
+
+    - name: Create Release (if tag)
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ${{ steps.find_msi.outputs.MSI_PATH }}
+          ${{ steps.find_msi.outputs.MSI_PATH }}.sha256
+        body: |
+          ## Redshift ODBC Driver ${{ github.ref_name }}
+
+          ### What's Fixed
+          - Authentication cancellation now properly reports an error
+          - User canceling Azure AD login shows immediate clear error
+          - Closing browser during authentication shows immediate error
+
+          ### Downloads
+          - **MSI Installer**: `${{ steps.find_msi.outputs.MSI_NAME }}`
+          - **SHA256**: `${{ steps.calculate_sha.outputs.SHA256 }}`
+
+          ### Installation
+          1. Download the MSI file
+          2. Double-click to install
+          3. Configure ODBC DSN with BrowserAzureADOAuth2
+          4. Test authentication cancellation
+
+          ### Testing
+          - Try canceling Azure AD login → should show immediate error
+          - Try closing browser → should show immediate error
+          - Complete login → should work normally
+
+          Built on: ${{ github.event.head_commit.timestamp }}
+          Commit: ${{ github.sha }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build Summary
+      run: |
+        echo "## ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### MSI Details" >> $GITHUB_STEP_SUMMARY
+        echo "- **File**: ${{ steps.find_msi.outputs.MSI_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Location**: ${{ steps.find_msi.outputs.MSI_PATH }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **SHA256**: \`${{ steps.calculate_sha.outputs.SHA256 }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Download" >> $GITHUB_STEP_SUMMARY
+        echo "The MSI is available as a build artifact above" >> $GITHUB_STEP_SUMMARY
+      shell: bash
