@@ -248,7 +248,20 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAuthorizationCode()
 		IAMUtils::ThrowConnectionExceptionWithInfo("Connection timeout. Please verify the connection settings.");
 	}
 
-	return srv.GetCode();
+	rs_string authCode = srv.GetCode();
+	RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Retrieved authorization code (length: %zu)", authCode.size());
+
+	// Check if authorization code is empty - this can happen if user cancelled login or closed browser
+	if (authCode.empty())
+	{
+		RS_LOG_DEBUG("IAMCRD", "RequestAuthorizationCode: Authorization code is empty - authentication failed");
+		IAMUtils::ThrowConnectionExceptionWithInfo(
+			"Authentication failed. The authorization code was not received. "
+			"This may occur if you cancelled the login, closed the browser window, "
+			"or the OAuth flow did not complete successfully. Please try again.");
+	}
+
+	return authCode;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
