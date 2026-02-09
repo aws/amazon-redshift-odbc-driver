@@ -60,16 +60,19 @@ void WEBServer::HandleConnection()
         {
             RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Sending ValidResponse");
             ssck.Send(ValidResponse.c_str(), ValidResponse.size(), 0);
+            consecutive_empty_requests_ = 0;
         }
         else if (status == STATUS::FAILED)
         {
             RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Sending InvalidResponse");
             ssck.Send(InvalidResponse.c_str(), InvalidResponse.size(), 0);
+            consecutive_empty_requests_ = 0;
         }
         else
         {
-            RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Status is EMPTY_REQUEST, continuing to listen");
-            /* Nothing is recevied from socket. Continue to listen. */
+            RS_LOG_DEBUG("IAMHTTP", "WEBServer::HandleConnection - Status is EMPTY_REQUEST, consecutive count: %d", consecutive_empty_requests_);
+            /* Nothing is received from socket. This might indicate user closed browser. */
+            consecutive_empty_requests_++;
             return;
         }
     }
@@ -115,6 +118,8 @@ void WEBServer::ListenerThread()
     RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Entering listening loop");
 
     int loop_count = 0;
+    const int MAX_CONSECUTIVE_EMPTY_REQUESTS = 3;  // Exit early if browser disconnected
+
     while ((std::chrono::system_clock::now() - start < std::chrono::seconds(timeout_)) && !parser_.IsFinished())
     {
         loop_count++;
@@ -122,8 +127,8 @@ void WEBServer::ListenerThread()
 
         if (loop_count % 10 == 1)  // Log every 10 iterations to avoid spam
         {
-            RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Loop #%d, elapsed: %lld sec, parser finished: %d",
-                         loop_count, elapsed, parser_.IsFinished());
+            RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Loop #%d, elapsed: %lld sec, parser finished: %d, consecutive empty: %d",
+                         loop_count, elapsed, parser_.IsFinished(), consecutive_empty_requests_);
         }
 
         Listen();
@@ -132,6 +137,14 @@ void WEBServer::ListenerThread()
         {
             RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Parser finished after %d loops, %lld seconds",
                          loop_count, elapsed);
+            break;
+        }
+
+        // Check if user closed browser - exit early instead of waiting for timeout
+        if (connections_counter_ > 0 && consecutive_empty_requests_ >= MAX_CONSECUTIVE_EMPTY_REQUESTS)
+        {
+            RS_LOG_DEBUG("IAMHTTP", "WEBServer::ListenerThread - Detected browser disconnection after %d consecutive empty requests, exiting early",
+                         consecutive_empty_requests_);
             break;
         }
     }

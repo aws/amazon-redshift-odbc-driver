@@ -92,7 +92,8 @@ class WEBServer
         Socket listen_socket_;
         int listen_port_;
         int connections_counter_;
-        std::atomic<bool> listening_;           
+        std::atomic<bool> listening_;
+        int consecutive_empty_requests_;           
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -106,7 +107,8 @@ inline WEBServer::WEBServer( rs_string& state,
         listen_socket_(),
         listen_port_(0),
         connections_counter_(0),
-        listening_(false)
+        listening_(false),
+        consecutive_empty_requests_(0)
 {
     ; // Do nothing.
 }
