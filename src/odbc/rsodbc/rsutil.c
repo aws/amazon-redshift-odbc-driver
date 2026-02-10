@@ -8862,6 +8862,7 @@ int isWritableField(RS_DESC_INFO *pDesc, SQLSMALLINT hFieldIdentifier)
             case SQL_DESC_TABLE_NAME:
             case SQL_DESC_TYPE_NAME:
             case SQL_DESC_UNSIGNED:
+            case SQL_DESC_UPDATABLE:
             {
                 iIsWritable = FALSE;
                 break;
@@ -8877,7 +8878,6 @@ int isWritableField(RS_DESC_INFO *pDesc, SQLSMALLINT hFieldIdentifier)
             case SQL_DESC_PRECISION:
             case SQL_DESC_SCALE:
             case SQL_DESC_TYPE:
-            case SQL_DESC_UPDATABLE:
             {
                 if(iDescType == RS_IRD)
                     iIsWritable = FALSE;
