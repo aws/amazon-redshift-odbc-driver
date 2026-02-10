@@ -573,9 +573,14 @@ SQLRETURN SQL_API SQLGetDescFieldW(SQLHDESC        phdesc,
             }
 
             converted = (SQLWCHAR *)rs_free(converted);
+        } else {
+            // Propagate length for non-string fields
+            if (pcbLen) {
+                *pcbLen = tempLen;
+            }
         }
     } else {
-        // Propagate length for non-string fields or on failure (bytes)
+        // Propagate length on failure (bytes)
         // Note: pcbLen adjustment on failure for string fields is best effort
         // and can be inaccurate
         if (pcbLen) {
