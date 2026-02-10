@@ -471,14 +471,6 @@ void RsIamHelper::SetIamSettings(
         settings.m_disableCache = pIamProps->isDisableCache;
         settings.m_stsConnectionTimeout = pIamProps->iStsConnectionTimeout;
 
-        if(pHttpsProps) {
-            settings.m_httpsProxyHost = pHttpsProps->szHttpsHost;
-            settings.m_httpsProxyPort = pHttpsProps->iHttpsPort;
-            settings.m_httpsProxyUsername = pHttpsProps->szHttpsUser;
-            settings.m_httpsProxyPassword = pHttpsProps->szHttpsPassword;
-            settings.m_useProxyForIdpAuth = pHttpsProps->isUseProxyForIdp;
-        }
-
         settings.m_groupFederation = pIamProps->isGroupFederation;
     } else { 
         // Only IdC based programmatic and browser based plugins follow this flow.
@@ -498,11 +490,19 @@ void RsIamHelper::SetIamSettings(
         if (pIamProps->szPluginName[0] != '\0' && (_stricmp(pIamProps->szPluginName, PLUGIN_IDP_TOKEN_AUTH) == 0)) {
             // Explicitly disable caching for idc programmatic plugin. This is set false by default in RsSettings.h
             settings.m_disableCache = true;
-        } 
+        }
     }
 
     settings.m_caPath = pIamProps->szCaPath;
     settings.m_caFile = pIamProps->szCaFile;
+    
+    if (pHttpsProps) {
+        settings.m_httpsProxyHost = pHttpsProps->szHttpsHost;
+        settings.m_httpsProxyPort = pHttpsProps->iHttpsPort;
+        settings.m_httpsProxyUsername = pHttpsProps->szHttpsUser;
+        settings.m_httpsProxyPassword = pHttpsProps->szHttpsPassword;
+        settings.m_useProxyForIdpAuth = pHttpsProps->isUseProxyForIdp;
+    }
 }
 
 void RsIamHelper::SetCommonFederatedAuthSettings(RS_IAM_CONN_PROPS_INFO *pIamProps, RsSettings &settings) {

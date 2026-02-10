@@ -76,3 +76,71 @@ TEST(BROWSER_IDC_AUTH_TEST_SUITE, test_empty_region) {
     EXPECT_TRUE(BrowserIdcAuthPluginTest::TestRegionValidation("").empty());
     EXPECT_TRUE(BrowserIdcAuthPluginTest::TestRegionValidation("   ").empty());  // whitespace only
 }
+
+// Test proxy configuration for IdC client initialization
+TEST(BROWSER_IDC_AUTH_TEST_SUITE, test_proxy_configuration_enabled) {
+    IAMConfiguration config;
+    
+    // Configure proxy settings
+    config.SetHTTPSProxyHost("proxy.example.com");
+    config.SetHTTPSProxyPort(8080);
+    config.SetHTTPSProxyUser("proxyuser");
+    config.SetHTTPSProxyPassword("proxypass");
+    config.SetUsingHTTPSProxy(true);
+    config.SetUseProxyIdpAuth(true);
+    
+    // Verify proxy settings are configured
+    EXPECT_TRUE(config.GetUsingHTTPSProxy());
+    EXPECT_TRUE(config.GetUseProxyIdpAuth());
+    EXPECT_EQ(config.GetHTTPSProxyHost(), "proxy.example.com");
+    EXPECT_EQ(config.GetHTTPSProxyPort(), 8080);
+    EXPECT_EQ(config.GetHTTPSProxyUser(), "proxyuser");
+    EXPECT_EQ(config.GetHTTPSProxyPassword(), "proxypass");
+}
+
+TEST(BROWSER_IDC_AUTH_TEST_SUITE, test_proxy_configuration_disabled) {
+    IAMConfiguration config;
+    
+    // Configure proxy settings but disable proxy usage
+    config.SetHTTPSProxyHost("proxy.example.com");
+    config.SetHTTPSProxyPort(8080);
+    config.SetUsingHTTPSProxy(false);
+    config.SetUseProxyIdpAuth(false);
+    
+    // Verify proxy is disabled
+    EXPECT_FALSE(config.GetUsingHTTPSProxy());
+    EXPECT_FALSE(config.GetUseProxyIdpAuth());
+}
+
+TEST(BROWSER_IDC_AUTH_TEST_SUITE, test_proxy_without_credentials) {
+    IAMConfiguration config;
+    
+    // Configure proxy without username/password
+    config.SetHTTPSProxyHost("proxy.example.com");
+    config.SetHTTPSProxyPort(3128);
+    config.SetUsingHTTPSProxy(true);
+    config.SetUseProxyIdpAuth(true);
+    
+    // Verify proxy settings without credentials
+    EXPECT_TRUE(config.GetUsingHTTPSProxy());
+    EXPECT_TRUE(config.GetUseProxyIdpAuth());
+    EXPECT_EQ(config.GetHTTPSProxyHost(), "proxy.example.com");
+    EXPECT_EQ(config.GetHTTPSProxyPort(), 3128);
+    EXPECT_TRUE(config.GetHTTPSProxyUser().empty());
+    EXPECT_TRUE(config.GetHTTPSProxyPassword().empty());
+}
+
+TEST(BROWSER_IDC_AUTH_TEST_SUITE, test_proxy_idp_auth_flag) {
+    IAMConfiguration config;
+    
+    // Test UseProxyIdpAuth flag independently
+    config.SetUsingHTTPSProxy(true);
+    config.SetUseProxyIdpAuth(false);
+    
+    EXPECT_TRUE(config.GetUsingHTTPSProxy());
+    EXPECT_FALSE(config.GetUseProxyIdpAuth());
+    
+    // Enable IdP auth for proxy
+    config.SetUseProxyIdpAuth(true);
+    EXPECT_TRUE(config.GetUseProxyIdpAuth());
+}
