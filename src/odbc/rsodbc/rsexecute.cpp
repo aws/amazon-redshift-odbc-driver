@@ -10,6 +10,8 @@
 #include "rstransaction.h"
 #include "rsescapeclause.h"
 
+bool isFixedLengthDataType(short sqlType);
+
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
@@ -528,6 +530,22 @@ SQLRETURN  SQL_API SQLPutData(SQLHSTMT phstmt,
     {
         RS_DESC_REC *pDescRec = pStmt->pAPDRecDataAtExec;
 
+        // Check if SQLPutData has been called before for this parameter
+        // and if the target SQL type is fixed-length
+        if (pDescRec->pDataAtExec != NULL) {
+            // Check if the parameter type supports piecewise data transfer
+            // Only character and binary data types support data-at-execution in
+            // pieces. All other types (numeric, date/time, etc.) should return
+            // HY019
+            if (isFixedLengthDataType(pDescRec->hParamSQLType)) {
+                rc = SQL_ERROR;
+                addError(&pStmt->pErrorList, "HY019",
+                         "Non-character and non-binary data sent in pieces", 0,
+                         NULL);
+                goto error;
+            }
+        }
+
         if(pDescRec->pDataAtExec == NULL)
             pDescRec->pDataAtExec = allocateAndSetDataAtExec((char *)pData, (long) cbLen);
         else
@@ -885,4 +903,45 @@ SQLRETURN SQL_API SQLNativeSqlW(SQLHDBC      phdbc,
     }
 
     return rc;
+}
+
+/**
+ * isFixedLengthDataType
+ *
+ * Determines if the given SQL data type is a fixed-length type that does NOT
+ * support piecewise data transfer via SQLPutData.
+ *
+ * According to ODBC specification, only character and binary data types support
+ * data-at-execution in pieces. Fixed-length types (numeric, date/time, etc.)
+ * must be provided in a single SQLPutData call. Attempting to send fixed-length
+ * data in multiple pieces should result in SQLSTATE HY019 error.
+ *
+ * @param sqlType The SQL data type to check (e.g., SQL_INTEGER, SQL_CHAR, etc.)
+ *
+ * @return true if the type is fixed-length and does NOT support piecewise transfer
+ *         false if the type is character/binary and DOES support piecewise transfer
+ *
+ * Supported piecewise types:
+ *   - SQL_CHAR, SQL_VARCHAR, SQL_LONGVARCHAR (character types)
+ *   - SQL_WCHAR, SQL_WVARCHAR, SQL_WLONGVARCHAR (wide character types)
+ *   - SQL_BINARY, SQL_VARBINARY, SQL_LONGVARBINARY (binary types)
+ *
+ * All other types (SQL_INTEGER, SQL_FLOAT, SQL_DATE, etc.) are fixed-length
+ * and return true.
+ */
+bool isFixedLengthDataType(short sqlType) {
+    // Check if the sql type is character or binary data types
+    // These types support data-at-execution in pieces
+    if (sqlType == SQL_CHAR ||
+        sqlType == SQL_VARCHAR ||
+        sqlType == SQL_LONGVARCHAR ||
+        sqlType == SQL_WCHAR ||
+        sqlType == SQL_WVARCHAR ||
+        sqlType == SQL_WLONGVARCHAR ||
+        sqlType == SQL_BINARY ||
+        sqlType == SQL_VARBINARY ||
+        sqlType == SQL_LONGVARBINARY) {
+            return false; // Variable-length type, supports piecewise transfer
+    }
+    return true; // Fixed-length type, does NOT support piecewise transfer
 }

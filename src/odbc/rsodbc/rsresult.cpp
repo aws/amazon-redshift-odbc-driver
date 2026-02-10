@@ -588,6 +588,7 @@ SQLRETURN SQL_API SQLExtendedFetch(SQLHSTMT  phstmt,
     SQLRETURN rc1;
     void *pSavRowsFetchedPtr = NULL;
     void *pSavRowStatusPtr = NULL;
+    RS_ERROR_INFO *pSavedErrorList = NULL;
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLExtendedFetch(FUNC_CALL, 0, phstmt, hFetchOrientation, iFetchOffset, piRowCount, phRowStatus);
@@ -628,6 +629,14 @@ SQLRETURN SQL_API SQLExtendedFetch(SQLHSTMT  phstmt,
 
     rc = RS_STMT_INFO::RS_SQLFetchScroll(phstmt, hFetchOrientation, iFetchOffset);
 
+    // Save error state if fetch failed to prevent error list getting clear in
+    // following internal API called
+    if (rc != SQL_SUCCESS) {
+        RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+        pSavedErrorList = pStmt->pErrorList;
+        pStmt->pErrorList = NULL;
+    }
+
     // Reset user pointers
     if(piRowCount)
     {
@@ -652,6 +661,12 @@ SQLRETURN SQL_API SQLExtendedFetch(SQLHSTMT  phstmt,
     }
 
 error:
+    // Restore error state if it was saved
+    if (pSavedErrorList) {
+        RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+        pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+        pStmt->pErrorList = pSavedErrorList;
+    }
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLExtendedFetch(FUNC_RETURN, rc, phstmt, hFetchOrientation, iFetchOffset, piRowCount, phRowStatus);
@@ -676,8 +691,8 @@ SQLRETURN  SQL_API SQLGetData(SQLHSTMT phstmt,
     /*
     We use an additional internal variable (pcbLenIndInternal) because:
 
-    1- We coud use its value for other internal purposes
-    and NULL pcbLenInd will not be useful. This variable is used to safegurd
+    1- We could use its value for other internal purposes
+    and NULL pcbLenInd will not be useful. This variable is used to safeguard
     TraceSQLGetData(FUNC_RETURN) against attempting to print uninitialized
     pValue buffer.
 
@@ -740,7 +755,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
         *pcbLenInd = 0L;
     /*
     We use an additional internal variable because:
-    1- We coud use its value for other internal purposes (in trace functions)
+    1- We could use its value for other internal purposes (in trace functions)
     and NULL pcbLenInd will not be useful.
     2- In this function, in certain conditions NULL pcbLenInd should emit an
     error So for one some case, we can't afford to have NULL, and for other
@@ -749,8 +764,13 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
     */
     pcbLenIndInternal = 0;
 
-    if(pResult)
-    {
+    if (!iInternal && pValue == NULL) {
+        rc = SQL_ERROR;
+        addError(&pStmt->pErrorList, "HY009", "Invalid use of null pointer", 0, NULL);
+        goto error;
+    }
+
+    if (pResult) {
         if(pResult->iNumberOfCols && pStmt->pIRD->pDescRecHead)
         {
 
@@ -815,12 +835,10 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
             addError(&pStmt->pErrorList,"HY000", "No columns found", 0, NULL);
             goto error; 
         }
-    }
-    else
-    {
+    } else {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY000", "No result found", 0, NULL);
-        goto error; 
+        goto error;
     }
 
 error:
