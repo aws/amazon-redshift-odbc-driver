@@ -230,3 +230,4 @@ EXPORTS
 	?parseFunctionArguments@ODBCEscapeClauseProcessor@@SA_NAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEA_KAEAV?$vector@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V?$allocator@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@@3@PEAVRS_STMT_INFO@@HAEAHH@Z
 	?lookupSqlType@ODBCEscapeClauseProcessor@@SAPEBDAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?lookupIntervalToken@ODBCEscapeClauseProcessor@@SAPEBDAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?RS_SQLGetData@RS_STMT_INFO@@SAFPEAV1@GFPEAX_JPEA_JHAEA_J@Z

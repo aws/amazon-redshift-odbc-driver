@@ -294,15 +294,26 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLSetCursorName(SQLHSTMT phstmt,
         goto error; 
     }
 
-    if(pStmt->iStatus == RS_ALLOCATE_STMT
-            || pStmt->iStatus == RS_CLOSE_STMT)
-    {
-        if(_strnicmp(szCursorName, IMPLICIT_CURSOR_NAME_PREFIX, strlen(IMPLICIT_CURSOR_NAME_PREFIX)) == 0)
-        {
+    // Based on the ODBC spec, the Invalid cursor state error (SQLSTATE 24000)
+    // should be returned from SQLSetCursorName when the statement is in certain
+    // states that indicate it has already been executed or positioned. Once a
+    // statement has been executed, it's too late to set a cursor name. Below 3
+    // statement states are all valide states for setting a cursor name:
+    //   RS_ALLOCATE_STMT - indicate that the statement is allocated
+    //   RS_CLOSE_STMT - indicate that the statement is closed
+    //   RS_PREPARE_STMT - indicate that the statement is prepared (but not
+    //                     executed yet)
+    if (pStmt->iStatus == RS_ALLOCATE_STMT || pStmt->iStatus == RS_CLOSE_STMT ||
+        pStmt->iStatus == RS_PREPARE_STMT) {
+
+        if (_strnicmp(szCursorName, IMPLICIT_CURSOR_NAME_PREFIX,
+                      strlen(IMPLICIT_CURSOR_NAME_PREFIX)) == 0 ||
+            _strnicmp(szCursorName, IMPLICIT_CURSOR_NAME_PREFIX2,
+                      strlen(IMPLICIT_CURSOR_NAME_PREFIX2)) == 0) {
             rc = SQL_ERROR;
             addError(&pStmt->pErrorList,"34000", "Invalid cursor name", 0, NULL);
             RS_LOG_ERROR("RS_SQLSetCursorName", "Invalid cursor name");
-            goto error; 
+            goto error;
         }
 
         // Look for duplicate name
@@ -327,13 +338,11 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLSetCursorName(SQLHSTMT phstmt,
         min_len = redshift_min(strlen(szCursorName), MAX_IDEN_LEN - 1);
         strncpy(pStmt->szCursorName, szCursorName, min_len);
         pStmt->szCursorName[min_len] = '\0';
-    }
-    else
-    {
+    } else {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"24000", "Invalid cursor state", 0, NULL);
         RS_LOG_ERROR("RS_SQLSetCursorName", "Invalid cursor state");
-        goto error; 
+        goto error;
     }
 
 error:

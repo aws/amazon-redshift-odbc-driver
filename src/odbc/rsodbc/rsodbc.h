@@ -118,9 +118,11 @@
 
 #ifdef WIN32
 #define IMPLICIT_CURSOR_NAME_PREFIX "SQL_CUR"
+#define IMPLICIT_CURSOR_NAME_PREFIX2 "SQLCUR"
 #endif
 #if defined LINUX 
 #define IMPLICIT_CURSOR_NAME_PREFIX "sql_cur"
+#define IMPLICIT_CURSOR_NAME_PREFIX2 "sqlcur"
 #endif
 
 #define RS_TEXT_FORMAT     0
