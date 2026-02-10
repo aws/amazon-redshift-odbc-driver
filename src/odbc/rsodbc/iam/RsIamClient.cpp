@@ -318,27 +318,31 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
         inferredAwsRegion = hostnameTokens[2];
     }
 
-    if(m_settings.m_isCname && inferredAwsRegion.empty() ){
-    config.region = IAMUtils().GetAwsRegionFromCname(m_settings.m_host);
-    }
-    else
-    {
     config.region = m_settings.m_awsRegion.empty() ? inferredAwsRegion : m_settings.m_awsRegion;
     config.endpointOverride = IAMUtils::convertToUTF8(m_settings.m_endpointUrl);
+
+    RS_LOG_DEBUG("IAMCLNT",
+        "configured region=%s inferredAwsRegion=%s => config.region=%s",
+        m_settings.m_awsRegion.c_str(), inferredAwsRegion.c_str(), config.region.c_str());
+
+    if (m_settings.m_isCname && config.region.empty())
+    {
+        config.region = IAMUtils().GetAwsRegionFromCname(m_settings.m_host);
+        RS_LOG_DEBUG("IAMCLNT", "GetAwsRegionFromCname->%s", config.region.c_str());
     }
 
-	if (m_settings.m_stsConnectionTimeout > 0)
-	{
-		config.httpRequestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
-		config.connectTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
-		config.requestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
-	}
+    if (m_settings.m_stsConnectionTimeout > 0)
+    {
+        config.httpRequestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+        config.connectTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+        config.requestTimeoutMs = m_settings.m_stsConnectionTimeout * 1000;
+    }
 
-	RS_LOG_DEBUG("IAMCLNT",
-		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
-		config.httpRequestTimeoutMs,
-		config.connectTimeoutMs,
-		config.requestTimeoutMs);
+    RS_LOG_DEBUG("IAMCLNT",
+        "httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
+        config.httpRequestTimeoutMs,
+        config.connectTimeoutMs,
+        config.requestTimeoutMs);
 
 
 #ifndef _WIN32
@@ -520,14 +524,18 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
 		inferredAwsRegion = hostnameTokens[2];
 	}
 
-    if(m_settings.m_isCname && inferredAwsRegion.empty()){
-    config.region = IAMUtils().GetAwsRegionFromCname(m_settings.m_host);
-    }
-    else
-    {
 	config.region = m_settings.m_awsRegion.empty() ? inferredAwsRegion : m_settings.m_awsRegion;
 	config.endpointOverride = IAMUtils::convertToUTF8(m_settings.m_endpointUrl);
-    }
+	
+	RS_LOG_DEBUG("IAMCLNT",
+		"configured region=%s; inferredAwsRegion=%s; => config.region=%s",
+		m_settings.m_awsRegion.c_str(), inferredAwsRegion.c_str(), config.region.c_str());
+	
+	if (m_settings.m_isCname && config.region.empty())
+	{
+		config.region = IAMUtils().GetAwsRegionFromCname(m_settings.m_host);
+		RS_LOG_DEBUG("IAMCLNT", "GetAwsRegionFromCname=%s", config.region.c_str());
+	}
 
 	if (m_settings.m_stsConnectionTimeout > 0)
 	{
