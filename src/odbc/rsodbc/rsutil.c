@@ -8776,6 +8776,24 @@ RS_DESC_REC *checkAndAddDescRec(RS_DESC_INFO *pDesc, short hRecNumber, int iAtFr
         {
             pDescRec->hRecNumber = hRecNumber;
 
+            // Initialize default values for date time interval code
+            // to 0
+            pDescRec->hDateTimeIntervalCode = 0;
+
+            // Initialize default values based on descriptor type
+            if (pDesc->iType == RS_ARD || pDesc->iType == RS_APD) {
+                pDescRec->hType = SQL_C_DEFAULT;
+                pDescRec->hConciseType = SQL_C_DEFAULT;
+            } else {
+                // For IRD and IPD, leave as 0 until populated from metadata
+                pDescRec->hType = 0;
+                pDescRec->hConciseType = 0;
+            }
+
+            if (pDesc->iType == RS_IPD){
+                pDescRec->hInOutType = SQL_PARAM_INPUT;
+            }
+
             // Add in the list
             addDescriptorRec(pDesc, pDescRec,  iAtFront);
 
