@@ -9588,7 +9588,7 @@ short getDateTimeIntervalCode(short hDateTimeIntervalCode, short hType)
 //
 short getCTypeFromConciseType(short hConciseType, short hDateTimeIntervalCode, short hType)
 {
-    if(hType == 0)
+    if(hType == 0 || hType == SQL_C_DEFAULT)
     {
         if(hConciseType != 0)
         {
