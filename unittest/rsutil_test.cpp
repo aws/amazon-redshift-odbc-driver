@@ -1479,6 +1479,7 @@ TEST(copyStrDataLargeLen, test_copyStrDataLargeLen_null_pcbLen) {
     EXPECT_STREQ(buffer, "test");
 }
 
+
 // makeNullTerminatedStr
 
 class NullTerminatedStrTest : public ::testing::Test {

@@ -36,5 +36,3 @@ class RsExecute {
 };
 
 #endif // __RS_EXECUTE_H__
-
-

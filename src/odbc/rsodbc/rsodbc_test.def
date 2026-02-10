@@ -162,6 +162,7 @@ EXPORTS
 	getMaxRowsForCsc
 	getResultSetTypeForCsc
 	getResultConcurrencyTypeForCsc
+	releasePaStrBuf
 	?ValidateURL@IAMUtils@IamSupport@Redshift@@SAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?sqlTypeNameMap@@YAPEADF@Z
 	?getColumnSize@RsMetadataAPIHelper@@SAHAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@FF@Z
@@ -225,3 +226,7 @@ EXPORTS
 	?tracePasswordConnectStringW@RsTrace@@IEAAXPEBDPEA_WF@Z
 	?traceArg@RsTrace@@IEAAXPEBDZZ
 	?isIODBC@@YA_NXZ
+	?checkReplaceParamMarkerAndODBCEscapeClause@ODBCEscapeClauseProcessor@@SAPEAEPEAVRS_STMT_INFO@@PEAD_KPEAU_RS_STR_BUF@@H@Z
+	?parseFunctionArguments@ODBCEscapeClauseProcessor@@SA_NAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEA_KAEAV?$vector@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V?$allocator@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@@3@PEAVRS_STMT_INFO@@HAEAHH@Z
+	?lookupSqlType@ODBCEscapeClauseProcessor@@SAPEBDAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?lookupIntervalToken@ODBCEscapeClauseProcessor@@SAPEBDAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z

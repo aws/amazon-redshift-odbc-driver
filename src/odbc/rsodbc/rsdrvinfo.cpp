@@ -901,6 +901,7 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
                      | SQL_FN_NUM_PI 
                      | SQL_FN_NUM_POWER 
                      | SQL_FN_NUM_RADIANS
+                     | SQL_FN_NUM_RAND
                      | SQL_FN_NUM_ROUND 
                      | SQL_FN_NUM_SIGN 
                      | SQL_FN_NUM_SIN 
@@ -1177,9 +1178,12 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
                      | SQL_FN_STR_CHARACTER_LENGTH 
                      | SQL_FN_STR_CONCAT
                      | SQL_FN_STR_DIFFERENCE
+                     | SQL_FN_STR_INSERT
                      | SQL_FN_STR_LCASE
                      | SQL_FN_STR_LEFT
                      | SQL_FN_STR_LENGTH
+                     | SQL_FN_STR_LOCATE
+                     | SQL_FN_STR_LOCATE_2
                      | SQL_FN_STR_LTRIM 
                      | SQL_FN_STR_OCTET_LENGTH
                      | SQL_FN_STR_POSITION
@@ -1188,6 +1192,7 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
                      | SQL_FN_STR_RIGHT
                      | SQL_FN_STR_RTRIM 
                      | SQL_FN_STR_SOUNDEX
+                     | SQL_FN_STR_SPACE
                      | SQL_FN_STR_SUBSTRING 
                      | SQL_FN_STR_UCASE;
 
@@ -1243,9 +1248,12 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
                      | SQL_FN_TD_CURTIME
                      | SQL_FN_TD_EXTRACT
                      | SQL_FN_TD_NOW
+                     | SQL_FN_TD_DAYNAME
+                     | SQL_FN_TD_DAYOFWEEK
                      | SQL_FN_TD_DAYOFMONTH
                      | SQL_FN_TD_DAYOFYEAR
                      | SQL_FN_TD_MONTH
+                     | SQL_FN_TD_MONTHNAME
                      | SQL_FN_TD_QUARTER
                      | SQL_FN_TD_WEEK
                      | SQL_FN_TD_YEAR
