@@ -3907,7 +3907,7 @@ static void addTypeRow(char *szCatalogQuery, RS_TYPE_INFO *pTypeInfo)
 	int len;
 
 	len = strlen(szCatalogQuery);
-    snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS TYPE_NAME, ", pTypeInfo->szTypeName);
+    snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS TYPE_NAME, ", pTypeInfo->szTypeName.c_str());
 	len = strlen(szCatalogQuery);
     snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " %hd AS DATA_TYPE, ", pTypeInfo->hType);
 	len = strlen(szCatalogQuery);
@@ -3915,7 +3915,7 @@ static void addTypeRow(char *szCatalogQuery, RS_TYPE_INFO *pTypeInfo)
 
 	len = strlen(szCatalogQuery);
     if(pTypeInfo->szLiteralPrefix[0] != '\0') {
-        snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS LITERAL_PREFIX, ", pTypeInfo->szLiteralPrefix);
+        snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS LITERAL_PREFIX, ", pTypeInfo->szLiteralPrefix.c_str());
 	}
     else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS LITERAL_PREFIX, ");
@@ -3923,7 +3923,7 @@ static void addTypeRow(char *szCatalogQuery, RS_TYPE_INFO *pTypeInfo)
 
 	len = strlen(szCatalogQuery);
     if(pTypeInfo->szLiteralSuffix[0] != '\0') {
-        snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS LITERAL_SUFFIX, ", pTypeInfo->szLiteralSuffix);
+        snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS LITERAL_SUFFIX, ", pTypeInfo->szLiteralSuffix.c_str());
 	}
     else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS LITERAL_SUFFIX, ");
@@ -3931,7 +3931,7 @@ static void addTypeRow(char *szCatalogQuery, RS_TYPE_INFO *pTypeInfo)
 
 	len = strlen(szCatalogQuery);
     if(pTypeInfo->szCreateParams[0] != '\0') {
-        snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS CREATE_PARAMS, ", pTypeInfo->szCreateParams);
+        snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS CREATE_PARAMS, ", pTypeInfo->szCreateParams.c_str());
 	}
     else {
         snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " NULL AS CREATE_PARAMS, ");
@@ -3986,7 +3986,7 @@ static void addTypeRow(char *szCatalogQuery, RS_TYPE_INFO *pTypeInfo)
 	}
 
 	len = strlen(szCatalogQuery);
-    snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS LOCAL_TYPE_NAME, ", pTypeInfo->szLocalTypeName);
+    snprintf(szCatalogQuery + len, MAX_CATALOG_QUERY_LEN - len, " '%s' AS LOCAL_TYPE_NAME, ", pTypeInfo->szLocalTypeName.c_str());
 
 	len = strlen(szCatalogQuery);
     if(pTypeInfo->hMinScale != SQL_NULL_DATA) {
