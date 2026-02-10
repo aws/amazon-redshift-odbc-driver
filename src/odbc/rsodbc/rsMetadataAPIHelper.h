@@ -26,6 +26,30 @@
 #include <tuple>
 #include <set>
 
+
+// Define constant for SQLGetTypeInfo
+#define kTypeInfoColNum 19 // Number of column
+/* COLUMNS IN SQLGetTypeInfo() RESULT SET */
+#define kSQLGetTypeInfo_TYPE_NAME_COL_NUM 0
+#define kSQLGetTypeInfo_DATA_TYPE_COL_NUM 1
+#define kSQLGetTypeInfo_COLUMN_SIZE_COL_NUM 2
+#define kSQLGetTypeInfo_LITERAL_PREFIX_COL_NUM 3
+#define kSQLGetTypeInfo_LITERAL_SUFFIX_COL_NUM 4
+#define kSQLGetTypeInfo_CREATE_PARAMS_COL_NUM 5
+#define kSQLGetTypeInfo_NULLABLE_COL_NUM 6
+#define kSQLGetTypeInfo_CASE_SENSITIVE_COL_NUM 7
+#define kSQLGetTypeInfo_SEARCHABLE_COL_NUM 8
+#define kSQLGetTypeInfo_UNSIGNED_ATTRIBUTE_COL_NUM 9
+#define kSQLGetTypeInfo_FIXED_PREC_SCALE_COL_NUM 10
+#define kSQLGetTypeInfo_AUTO_UNIQUE_VAL_COL_NUM 11
+#define kSQLGetTypeInfo_LOCAL_TYPE_NAME_COL_NUM 12
+#define kSQLGetTypeInfo_MINIMUM_SCALE_COL_NUM 13
+#define kSQLGetTypeInfo_MAXIMUM_SCALE_COL_NUM 14
+#define kSQLGetTypeInfo_SQL_DATA_TYPE_COL_NUM 15
+#define kSQLGetTypeInfo_SQL_DATETIME_SUB_COL_NUM 16
+#define kSQLGetTypeInfo_NUM_PREC_RADIX_COL_NUM 17
+#define kSQLGetTypeInfo_INTERVAL_PRECISION_COL_NUM 18
+
 // Define constant for SQLTables
 // Spec:
 // https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqltables-function?view=sql-server-ver16
@@ -182,7 +206,7 @@
 
 #define kUnknownColumnSize 2147483647
 
-#define kODBC2DiffColumnNum 12
+#define kODBC2DiffColumnNum 14
 
 /*----------------
  * RsMetadataAPIHelper
@@ -331,6 +355,8 @@ class RsMetadataAPIHelper {
     static const std::string kSHOW_PARAMETERS_numeric_scale;
 
 
+    static const char* kTypeInfoCol[kTypeInfoColNum];
+    static const char* getSqlGetTypeInfoColName(int columnNum);
     static const char* kTablesCol[kTablesColNum];
     static const char* getSqlTablesColName(int columnNum);
     static const char* kColumnsCol[kColumnsColNum];
@@ -354,6 +380,12 @@ class RsMetadataAPIHelper {
     static const char* getOdbc2ColumnName(int columnNum);
     static const char* kOdbc3ColumnNames[];
     static void initializeColumnNames(RS_STMT_INFO* pStmt);
+
+    static constexpr const int kTypeInfoColDatatype[kTypeInfoColNum] = {
+        VARCHAROID, INT2OID, INT4OID, VARCHAROID, VARCHAROID,
+        VARCHAROID, INT2OID, INT2OID, INT2OID, INT2OID,
+        INT2OID, INT2OID, VARCHAROID, INT2OID, INT2OID,
+        INT2OID, INT2OID, INT4OID, INT2OID};
 
     static constexpr const int kTablesColDatatype[kTablesColNum] = {
         VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID, VARCHAROID,

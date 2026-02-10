@@ -1761,19 +1761,19 @@ SQLRETURN setQueryTimeoutInServer(RS_STMT_INFO *pStmt);
 */
 typedef struct _RS_TYPE_INFO
 {
-    char  szTypeName[MAX_IDEN_LEN];
+    std::string  szTypeName;
     short hType;
     int   iColumnSize;
-    char  szLiteralPrefix[10]; // ', 0x, {d ', {ts ' etc.
-    char  szLiteralSuffix[10]; // ', '} etc.
-    char  szCreateParams[MAX_IDEN_LEN]; // length, max length, (precision,scale) etc.
+    std::string  szLiteralPrefix; // ', 0x, {d ', {ts ' etc.
+    std::string  szLiteralSuffix; // ', '} etc.
+    std::string  szCreateParams; // length, max length, (precision,scale) etc.
     short hNullable;
     int   iCaseSensitive;
     int   iSearchable;
     int   iUnsigned;
     int   iFixedPrecScale;
     int   iAutoInc;
-    char  szLocalTypeName[MAX_IDEN_LEN];
+    std::string  szLocalTypeName;
     short hMinScale;
     short hMaxScale;
     short hSqlDataType;
@@ -1846,6 +1846,7 @@ void handleIRDInitializationError(RS_STMT_INFO *pStmt, char *errorMessage);
 SQLRETURN handleInitializeResultSetError(RS_STMT_INFO *pStmt, PGresAttDesc *column, int colNum, PGresult *result, char *errorMessage);
 void setDescRecAttributes(RS_STMT_INFO *pStmt, RS_DESC_REC *pDescRec, Oid pgType, const char *pName);
 SQLRETURN libpqInitializeResultSetField(RS_STMT_INFO *pStmt, char** tableCol, int colNum, int* tableColDatatype);
+SQLRETURN libpqCreateSQLGetTypeInfoCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<RS_TYPE_INFO>& typeInfo);
 SQLRETURN libpqCreateSQLCatalogsCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<std::string>& intermediateRS);
 SQLRETURN libpqCreateSQLSchemasCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<SHOWSCHEMASResult>& intermediateRS);
 SQLRETURN libpqCreateSQLTableTypesCustomizedResultSet(RS_STMT_INFO *pStmt, short columnNum, const std::vector<std::string> &tableTypeList);

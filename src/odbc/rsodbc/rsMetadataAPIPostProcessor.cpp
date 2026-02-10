@@ -17,6 +17,49 @@ RsMetadataAPIPostProcessor::RsMetadataAPIPostProcessor(RS_STMT_INFO* stmt) {
 
 //
 // Helper function to apply post-processing on intermediate result set for
+// SQLGetTypeInfo
+//
+SQLRETURN RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
+    SQLHSTMT phstmt, const std::vector<RS_TYPE_INFO> &typeInfo) {
+
+    RS_LOG_TRACE("sqlGetTypeInfoPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    if (!VALID_HSTMT(phstmt)) {
+        RS_LOG_ERROR("sqlGetTypeInfoPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        return SQL_INVALID_HANDLE;
+    }
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    // Initialize column names based on ODBC version
+    RsMetadataAPIHelper::initializeColumnNames(pStmt);
+
+    // Initialize column fields for getTypeInfo
+    SQLRETURN rc = metadataAPIHelper.initializeColumnField(
+        pStmt,
+        (char **)metadataAPIHelper.kTypeInfoCol,
+        kTypeInfoColNum,
+        (int *)metadataAPIHelper.kTypeInfoColDatatype);
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlGetTypeInfoPostProcessing",
+            PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
+        return rc;
+    }
+
+    // Apply post-processing
+    rc = libpqCreateSQLGetTypeInfoCustomizedResultSet(pStmt, kTypeInfoColNum,
+                                                   typeInfo);
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlGetTypeInfoPostProcessing",
+                     PostProcessorLoggings::RESULTSET_CREATION_FAILED);
+        return rc;
+    }
+
+    RS_LOG_TRACE("sqlGetTypeInfoPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    return rc;
+}
+
+//
+// Helper function to apply post-processing on intermediate result set for
 // SQLTables special call to retrieve catalog list
 //
 SQLRETURN RsMetadataAPIPostProcessor::sqlCatalogsPostProcessing(
