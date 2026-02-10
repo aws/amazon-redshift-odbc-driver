@@ -3118,100 +3118,11 @@ SQLRETURN  SQL_API SQLGetTypeInfo(SQLHSTMT phstmt,
 // Common function for SQLGetTypeInfo and SQLGetTypeInfoW.
 //
 SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
-                                        SQLSMALLINT hType)
-{
+                                        SQLSMALLINT hType) {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
-    int i; 
-    RS_TYPE_INFO typesInfo[MAX_TYPES] = 
-    {
-        { "boolean", SQL_BIT, 1, "", "", "", SQL_NULLABLE , SQL_FALSE,  SQL_PRED_BASIC , SQL_NULL_DATA , SQL_FALSE, SQL_NULL_DATA , "boolean", 
-           0, 0, SQL_BIT, SQL_NULL_DATA, 10, SQL_NULL_DATA
-        },
-        { "bigint", SQL_BIGINT, 19, "", "", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE , SQL_FALSE, SQL_FALSE, SQL_FALSE, "bigint", 
-           0, 0, SQL_BIGINT, SQL_NULL_DATA, 10, SQL_NULL_DATA
-        },
-        {
-          "character", SQL_CHAR, 65535, "\\'", "\\'", "length", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "char", 
-          SQL_NULL_DATA, SQL_NULL_DATA, SQL_CHAR, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
-        },
-        {
-          "numeric", SQL_NUMERIC, 19, "", "", "precision,scale", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "numeric", 
-          0, 18, SQL_NUMERIC, SQL_NULL_DATA, 10, SQL_NULL_DATA
-        },
-        {
-          "integer", SQL_INTEGER, 10, "", "", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "integer", 
-          0, 0, SQL_INTEGER, SQL_NULL_DATA, 10, SQL_NULL_DATA
-        },
-        {
-          "smallint", SQL_SMALLINT, 5, "", "", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "smallint", 
-          0, 0, SQL_SMALLINT, SQL_NULL_DATA, 10, SQL_NULL_DATA
-        },
-		{
-          "real", SQL_REAL, 24, "", "", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "real", 
-          SQL_NULL_DATA, SQL_NULL_DATA, SQL_REAL, SQL_NULL_DATA, 2, SQL_NULL_DATA
-        },
-        {
-          "double precision", SQL_DOUBLE, 53, "", "", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "double precision", 
-          SQL_NULL_DATA, SQL_NULL_DATA, SQL_DOUBLE, SQL_NULL_DATA, 2, SQL_NULL_DATA
-        },
-        {
-          "character varying", SQL_VARCHAR , 65535, "\\'", "\\'", "max length", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "varchar",
-          SQL_NULL_DATA, SQL_NULL_DATA, SQL_VARCHAR, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
-        },
-        {
-          "date", SQL_TYPE_DATE, 10, "{d \\'", "\\'}", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "date", 
-          SQL_NULL_DATA, SQL_NULL_DATA, SQL_DATE, SQL_CODE_DATE, SQL_NULL_DATA, SQL_NULL_DATA
-        },
-        {
-          "timestamp", SQL_TYPE_TIMESTAMP, 26, "{ts \\'", "\\'}", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "timestamp", 
-          0, 6, SQL_DATE, SQL_CODE_TIMESTAMP, SQL_NULL_DATA, SQL_NULL_DATA
-        },
-        {
-          "time", SQL_TYPE_TIME, 15, "{t \\'", "\\'}", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "time", 
-          0, 6, SQL_DATE, SQL_CODE_TIME, SQL_NULL_DATA, SQL_NULL_DATA
-        },
-		{
-			"timetz", SQL_TYPE_TIME, 21,  "\\'", "\\'", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "timetz",
-			0, 6, SQL_DATE, SQL_CODE_TIME, SQL_NULL_DATA, SQL_NULL_DATA
-		},
-		{
-			"timestamptz", SQL_TYPE_TIMESTAMP, 35,  "\\'", "\\'", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "timestamptz",
-			0, 6, SQL_DATE, SQL_CODE_TIMESTAMP, SQL_NULL_DATA, SQL_NULL_DATA
-		},
-		{
-			"bpchar", SQL_CHAR, 256, "\\'", "\\'", "length", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "bpchar",
-			SQL_NULL_DATA, SQL_NULL_DATA, SQL_CHAR, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
-		},
-		{
-			"geometry", SQL_LONGVARBINARY , 1000000, "\\'", "\\'", "max length", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "geometry",
-			SQL_NULL_DATA, SQL_NULL_DATA, SQL_LONGVARBINARY, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
-		},
-		{
-			"super", SQL_LONGVARCHAR , 4194304, "\\'", "\\'", "max length", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "super",
-			SQL_NULL_DATA, SQL_NULL_DATA, SQL_LONGVARCHAR, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
-		},
-		{
-			"varbyte", SQL_LONGVARBINARY , 1000000, "\\'", "\\'", "max length", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "varbyte",
-			SQL_NULL_DATA, SQL_NULL_DATA, SQL_LONGVARBINARY, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
-		},
-		{
-			"geography", SQL_LONGVARBINARY , 1000000, "\\'", "\\'", "max length", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "geography",
-			SQL_NULL_DATA, SQL_NULL_DATA, SQL_LONGVARBINARY, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA
-		},
-		{
-			"intervaly2m", SQL_INTERVAL_YEAR_TO_MONTH, 32, "\\'", "\\'", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "intervaly2m",
-			0, 0, SQL_INTERVAL, SQL_CODE_YEAR_TO_MONTH, SQL_NULL_DATA, SQL_NULL_DATA
-		},
-		{
-			"intervald2s", SQL_INTERVAL_DAY_TO_SECOND, 64, "\\'", "\\'", "", SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "intervald2s",
-			0, 0, SQL_INTERVAL, SQL_CODE_DAY_TO_SECOND, SQL_NULL_DATA, SQL_NULL_DATA
-		}
-    };
 
-    if(!VALID_HSTMT(phstmt))
-    {
+    if (!VALID_HSTMT(phstmt)) {
         rc = SQL_INVALID_HANDLE;
         return rc;
     }
@@ -3219,63 +3130,142 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
-    rs_strncpy(szCatalogQuery," SELECT ", sizeof(szCatalogQuery));
-    if(hType == SQL_ALL_TYPES)
-    {
-        for(i = 0; i < MAX_TYPES;i++)
-        {
-            if(i != 0)
-                rs_strncat(szCatalogQuery," UNION SELECT ", MAX_CATALOG_QUERY_LEN - strlen(szCatalogQuery));
-            addTypeRow(szCatalogQuery, &(typesInfo[i]));
-        }
-    }
-    else
-    {
-        int found = FALSE;
+    std::vector<RS_TYPE_INFO> typesInfo = {
+        {"boolean", SQL_BIT, 1, "", "", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_PRED_BASIC, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "boolean", 0,
+         0, SQL_BIT, SQL_NULL_DATA, 10, SQL_NULL_DATA},
+        {"bigint", SQL_BIGINT, 19, "", "", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "bigint", 0, 0,
+         SQL_BIGINT, SQL_NULL_DATA, 10, SQL_NULL_DATA},
+        {"geography", SQL_LONGVARBINARY, 1000000, "\'", "\'", "max length",
+         SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE,
+         SQL_NULL_DATA, "geography", SQL_NULL_DATA, SQL_NULL_DATA,
+         SQL_LONGVARBINARY, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"geometry", SQL_LONGVARBINARY, 1000000, "\'", "\'", "max length",
+         SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE,
+         SQL_NULL_DATA, "geometry", SQL_NULL_DATA, SQL_NULL_DATA,
+         SQL_LONGVARBINARY, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"varbyte", SQL_LONGVARBINARY, 1000000, "\'", "\'", "max length",
+         SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE,
+         SQL_NULL_DATA, "varbyte", SQL_NULL_DATA, SQL_NULL_DATA,
+         SQL_LONGVARBINARY, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"super", SQL_LONGVARCHAR, 4194304, "\'", "\'", "max length",
+         SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE,
+         SQL_NULL_DATA, "super", SQL_NULL_DATA, SQL_NULL_DATA, SQL_LONGVARCHAR,
+         SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"char", SQL_CHAR, 256, "\'", "\'", "length", SQL_NULLABLE, SQL_TRUE,
+         SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "char",
+         SQL_NULL_DATA, SQL_NULL_DATA, SQL_CHAR, SQL_NULL_DATA, SQL_NULL_DATA,
+         SQL_NULL_DATA},
+        {"character", SQL_CHAR, 65535, "\'", "\'", "length", SQL_NULLABLE,
+         SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA,
+         "char", SQL_NULL_DATA, SQL_NULL_DATA, SQL_CHAR, SQL_NULL_DATA,
+         SQL_NULL_DATA, SQL_NULL_DATA},
+        {"numeric", SQL_NUMERIC, 19, "", "", "precision,scale", SQL_NULLABLE,
+         SQL_FALSE, SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "numeric",
+         0, 18, SQL_NUMERIC, SQL_NULL_DATA, 10, SQL_NULL_DATA},
+        {"integer", SQL_INTEGER, 10, "", "", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "integer", 0, 0,
+         SQL_INTEGER, SQL_NULL_DATA, 10, SQL_NULL_DATA},
+        {"smallint", SQL_SMALLINT, 5, "", "", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "smallint", 0, 0,
+         SQL_SMALLINT, SQL_NULL_DATA, 10, SQL_NULL_DATA},
+        {"real", SQL_REAL, 24, "", "", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "real", SQL_NULL_DATA,
+         SQL_NULL_DATA, SQL_REAL, SQL_NULL_DATA, 2, SQL_NULL_DATA},
+        {"double precision", SQL_DOUBLE, 53, "", "", "", SQL_NULLABLE,
+         SQL_FALSE, SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE,
+         "double precision", SQL_NULL_DATA, SQL_NULL_DATA, SQL_DOUBLE,
+         SQL_NULL_DATA, 2, SQL_NULL_DATA},
+        {"date", SQL_DATE, 10, "{d \'", "\'}", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "date",
+         SQL_NULL_DATA, SQL_NULL_DATA, SQL_DATETIME, SQL_CODE_DATE,
+         SQL_NULL_DATA, SQL_NULL_DATA},
+        {"time", SQL_TIME, 15, "{t \'", "\'}", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "time", 0, 6,
+         SQL_DATETIME, SQL_CODE_TIME, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"timetz", SQL_TIME, 15, "{t \'", "\'}", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "timetz", 0,
+         6, SQL_DATETIME, SQL_CODE_TIME, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"timestamp", SQL_TIMESTAMP, 26, "{ts \'", "\'}", "", SQL_NULLABLE,
+         SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA,
+         "timestamp", 0, 6, SQL_DATETIME, SQL_CODE_TIMESTAMP, SQL_NULL_DATA,
+         SQL_NULL_DATA},
+        {"timestamptz", SQL_TIMESTAMP, 35, "\'", "\'", "", SQL_NULLABLE,
+         SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA,
+         "timestamptz", 0, 6, SQL_DATETIME, SQL_CODE_TIMESTAMP, SQL_NULL_DATA,
+         SQL_NULL_DATA},
+        {"character varying", SQL_VARCHAR, 65535, "\'", "\'", "max length",
+         SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE,
+         SQL_NULL_DATA, "varchar", SQL_NULL_DATA, SQL_NULL_DATA, SQL_VARCHAR,
+         SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"date", SQL_TYPE_DATE, 10, "{d \'", "\'}", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "date",
+         SQL_NULL_DATA, SQL_NULL_DATA, SQL_DATETIME, SQL_CODE_DATE,
+         SQL_NULL_DATA, SQL_NULL_DATA},
+        {"time", SQL_TYPE_TIME, 15, "{t \'", "\'}", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "time", 0, 6,
+         SQL_DATETIME, SQL_CODE_TIME, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"timetz", SQL_TYPE_TIME, 21, "\'", "\'", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "timetz", 0,
+         6, SQL_DATETIME, SQL_CODE_TIME, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"timestamp", SQL_TYPE_TIMESTAMP, 26, "{ts \'", "\'}", "", SQL_NULLABLE,
+         SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA,
+         "timestamp", 0, 6, SQL_DATETIME, SQL_CODE_TIMESTAMP, SQL_NULL_DATA,
+         SQL_NULL_DATA},
+        {"timestamptz", SQL_TYPE_TIMESTAMP, 35, "\'", "\'", "", SQL_NULLABLE,
+         SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA,
+         "timestamptz", 0, 6, SQL_DATETIME, SQL_CODE_TIMESTAMP, SQL_NULL_DATA,
+         SQL_NULL_DATA},
+        {"intervaly2m", SQL_INTERVAL_YEAR_TO_MONTH, 32, "\'", "\'", "",
+         SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE,
+         SQL_NULL_DATA, "intervaly2m", 0, 0, SQL_INTERVAL,
+         SQL_CODE_YEAR_TO_MONTH, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"intervald2s", SQL_INTERVAL_DAY_TO_SECOND, 64, "\'", "\'", "",
+         SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE,
+         SQL_NULL_DATA, "intervald2s", 0, 0, SQL_INTERVAL,
+         SQL_CODE_DAY_TO_SECOND, SQL_NULL_DATA, SQL_NULL_DATA}};
 
-        // Convert 2.0 date/time types to 3.0 date/time types
-        if(hType == SQL_DATE)
-            hType = SQL_TYPE_DATE;
-        else
-        if(hType == SQL_TIMESTAMP)
-            hType = SQL_TYPE_TIMESTAMP;
-        else
-        if(hType == SQL_TIME)
-            hType = SQL_TYPE_TIME;
-		else
-		if (hType == SQL_TINYINT)
-			hType = SQL_BIT;
+    if (hType == SQL_ALL_TYPES) {
+        rc = RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
+            phstmt, typesInfo);
+    } else {
+        int found = false;
 
-
-        for(i = 0; i < MAX_TYPES;i++)
-        {
-            if(typesInfo[i].hType == hType)
-            {
-                if(found){
-                    rs_strncat(szCatalogQuery," UNION SELECT ", MAX_CATALOG_QUERY_LEN - strlen(szCatalogQuery));
-                }
-                else{
-                    found = TRUE;
-                }
-                addTypeRow(szCatalogQuery, &(typesInfo[i]));
+        std::vector<RS_TYPE_INFO> tempTypeInfo = {};
+        for (int i = 0; i < typesInfo.size(); i++) {
+            if (typesInfo[i].hType == hType) {
+                tempTypeInfo.emplace_back(typesInfo[i]);
+                found = true;
             }
         }
 
-        if(!found)
-        {
+        if (!found) {
             rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HY004", "Invalid SQL data type", 0, NULL);
+            addError(&pStmt->pErrorList, "HY004", "Invalid SQL data type", 0,
+                     NULL);
             return rc;
         }
+        rc = RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
+            phstmt, tempTypeInfo);
     }
 
-    addOrderByClause(szCatalogQuery,"DATA_TYPE"); 
-
-    setCatalogQueryBuf(pStmt, szCatalogQuery);
-    rc = RsExecute::RS_SQLExecDirect(phstmt, (SQLCHAR *)szCatalogQuery, SQL_NTS, TRUE, FALSE, FALSE, TRUE);
-    resetCatalogQueryFlag(pStmt);
-
-	return rc;
+    if (!SQL_SUCCEEDED(rc)) {
+        std::string errorMsg = RsMetadataErrors::formatError(
+            RsMetadataErrors::POST_PROCESSING_FAILED,
+            RsMetadataErrors::TYPE_GET_TYPE_INFO);
+        RS_LOG_ERROR("RS_SQLGetTypeInfo", errorMsg.c_str());
+        addError(&pStmt->pErrorList,
+            const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
+            const_cast<char*>(errorMsg.c_str()),
+            0, NULL);
+        return rc;
+    }
+    // Reset the streaming cursor state
+    if (pStmt->pCscStatementContext && isStreamingCursorMode(pStmt) && !libpqIsEndOfStreamingCursorQuery(pStmt)) {
+        libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
+    }
+    return rc;
 }
 
 

@@ -27,6 +27,7 @@ namespace RsMetadataErrors {
     static const char* ERROR_PROCESS_RESULTS = "Failed to retrieve %s information - Error processing result set";
 
     // Specific operation types
+    static const char* TYPE_GET_TYPE_INFO = "get type info";
     static const char* TYPE_CATALOG = "catalog";
     static const char* TYPE_SCHEMA = "schema";
     static const char* TYPE_TABLE = "table";

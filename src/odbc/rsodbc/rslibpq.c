@@ -3220,6 +3220,95 @@ SQLRETURN libpqInitializeResultSetField(RS_STMT_INFO *pStmt, char **colName,
     return rc;
 }
 
+SQLRETURN libpqCreateSQLGetTypeInfoCustomizedResultSet(
+    RS_STMT_INFO *pStmt, short columnNum,
+    const std::vector<RS_TYPE_INFO> &typeInfo) {
+
+    const int typeInfoSize = typeInfo.size();
+    PGresult *res = pStmt->pResultHead->pgResult;
+
+    // Set the total column number
+    PQsetNumAttributes(res, columnNum);
+
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
+
+    // Set the total row number
+    pStmt->pResultHead->iNumberOfRowsInMem = typeInfoSize;
+
+    // Reset the current row number for fetching result
+    pStmt->pResultHead->iCurRow = -1;
+
+    // Return early if intermediate result set is empty
+    if (typeInfoSize == 0) {
+        return SQL_SUCCESS;
+    }
+
+    for (int i = 0; i < typeInfoSize; i++) {
+        PQsetvalue(res, i, kSQLGetTypeInfo_TYPE_NAME_COL_NUM,
+                   (char *)typeInfo[i].szTypeName.c_str(),
+                   typeInfo[i].szTypeName.size());
+        std::string dataType = std::to_string(typeInfo[i].hType);
+        PQsetvalue(res, i, kSQLGetTypeInfo_DATA_TYPE_COL_NUM, dataType.data(),
+                   dataType.size());
+        std::string columnSize = std::to_string(typeInfo[i].iColumnSize);
+        PQsetvalue(res, i, kSQLGetTypeInfo_COLUMN_SIZE_COL_NUM,
+                   columnSize.data(), columnSize.size());
+        PQsetvalue(res, i, kSQLGetTypeInfo_LITERAL_PREFIX_COL_NUM,
+                   (char *)typeInfo[i].szLiteralPrefix.c_str(),
+                   typeInfo[i].szLiteralPrefix.size());
+        PQsetvalue(res, i, kSQLGetTypeInfo_LITERAL_SUFFIX_COL_NUM,
+                   (char *)typeInfo[i].szLiteralSuffix.c_str(),
+                   typeInfo[i].szLiteralSuffix.size());
+        PQsetvalue(res, i, kSQLGetTypeInfo_CREATE_PARAMS_COL_NUM,
+                   (char *)typeInfo[i].szCreateParams.c_str(),
+                   typeInfo[i].szCreateParams.size());
+        std::string nullable = std::to_string(typeInfo[i].hNullable);
+        PQsetvalue(res, i, kSQLGetTypeInfo_NULLABLE_COL_NUM, nullable.data(),
+                   nullable.size());
+        std::string caseSensitive = std::to_string(typeInfo[i].iCaseSensitive);
+        PQsetvalue(res, i, kSQLGetTypeInfo_CASE_SENSITIVE_COL_NUM,
+                   caseSensitive.data(), caseSensitive.size());
+        std::string searchable = std::to_string(typeInfo[i].iSearchable);
+        PQsetvalue(res, i, kSQLGetTypeInfo_SEARCHABLE_COL_NUM,
+                   searchable.data(), searchable.size());
+        std::string unsignedAttr = std::to_string(typeInfo[i].iUnsigned);
+        PQsetvalue(res, i, kSQLGetTypeInfo_UNSIGNED_ATTRIBUTE_COL_NUM,
+                   unsignedAttr.data(), unsignedAttr.size());
+        std::string precScale = std::to_string(typeInfo[i].iFixedPrecScale);
+        PQsetvalue(res, i, kSQLGetTypeInfo_FIXED_PREC_SCALE_COL_NUM,
+                   precScale.data(), precScale.size());
+        std::string autoInc = std::to_string(typeInfo[i].iAutoInc);
+        PQsetvalue(res, i, kSQLGetTypeInfo_AUTO_UNIQUE_VAL_COL_NUM,
+                   autoInc.data(), autoInc.size());
+        PQsetvalue(res, i, kSQLGetTypeInfo_LOCAL_TYPE_NAME_COL_NUM,
+                   (char *)typeInfo[i].szLocalTypeName.c_str(),
+                   typeInfo[i].szLocalTypeName.size());
+        std::string minScale = std::to_string(typeInfo[i].hMinScale);
+        PQsetvalue(res, i, kSQLGetTypeInfo_MINIMUM_SCALE_COL_NUM,
+                   minScale.data(), minScale.size());
+        std::string maxScale = std::to_string(typeInfo[i].hMaxScale);
+        PQsetvalue(res, i, kSQLGetTypeInfo_MAXIMUM_SCALE_COL_NUM,
+                   maxScale.data(), maxScale.size());
+        std::string sqlDataType = std::to_string(typeInfo[i].hSqlDataType);
+        PQsetvalue(res, i, kSQLGetTypeInfo_SQL_DATA_TYPE_COL_NUM,
+                   sqlDataType.data(), sqlDataType.size());
+        std::string sqlDateTimeSub =
+            std::to_string(typeInfo[i].hSqlDateTimeSub);
+        PQsetvalue(res, i, kSQLGetTypeInfo_SQL_DATETIME_SUB_COL_NUM,
+                   sqlDateTimeSub.data(), sqlDateTimeSub.size());
+        std::string numPrexRadix = std::to_string(typeInfo[i].iNumPrexRadix);
+        PQsetvalue(res, i, kSQLGetTypeInfo_NUM_PREC_RADIX_COL_NUM,
+                   numPrexRadix.data(), numPrexRadix.size());
+        std::string intervalPrecision =
+            std::to_string(typeInfo[i].iIntervalPrecision);
+        PQsetvalue(res, i, kSQLGetTypeInfo_INTERVAL_PRECISION_COL_NUM,
+                   intervalPrecision.data(), intervalPrecision.size());
+    }
+
+    return SQL_SUCCESS;
+}
+
 // Helper function to create result set for SQLTables special call to get
 // catalog list
 SQLRETURN libpqCreateSQLCatalogsCustomizedResultSet(
