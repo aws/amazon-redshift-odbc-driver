@@ -36,7 +36,6 @@
 #define SHORT_STR_DATA    4096
 #define SHORT_CMD_LEN    1024
 
-#define MAX_ODBC_ESCAPE_CLAUSE_REPLACE_LEN 20
 #define MAX_AUDIT_CMDS_LEN 2048
 
 #define TRACE_KEY_NAME            "SOFTWARE\\Amazon\\Amazon Redshift ODBC Driver (x64)\\Driver"
@@ -47,8 +46,6 @@
 #define MAX_OPTION_VAL_LEN		 512
 
 #define PARAM_MARKER    '?'
-#define ODBC_ESCAPE_CLAUSE_START_MARKER    '{'
-#define ODBC_ESCAPE_CLAUSE_END_MARKER    '}'
 
 #define    SINGLE_QUOTE    '\''
 #define    DOUBLE_QUOTE    '\"' 
@@ -393,13 +390,6 @@ void resetAndReleaseDataAtExec(RS_STMT_INFO *pStmt);
 
 int isCharDiagIdentifier(SQLSMALLINT     hDiagIdentifier);
 
-int countParamMarkers(char *pData, size_t cbLen);
-int needToScanODBCEscapeClause(RS_STMT_INFO *pStmt);
-int countODBCEscapeClauses(RS_STMT_INFO *pStmt,char *pData, size_t cbLen);
-unsigned char *checkReplaceParamMarkerAndODBCEscapeClause(RS_STMT_INFO *pStmt,char *pData, size_t cbLen, RS_STR_BUF *pPaStrBuf, int iReplaceParamMarker);
-unsigned char *replaceParamMarkerAndODBCEscapeClause(RS_STMT_INFO *pStmt, char *pData, size_t cbLen, RS_STR_BUF *pPaStrBuf, int numOfParamMarkers, int numOfODBCEscapeClauses);
-int replaceODBCEscapeClause(RS_STMT_INFO *pStmt, char **ppDest, char *pDestStart, int iDestBufLen,char **ppSrc, size_t cbLen, int i, int numOfParamMarkers, int  *piParamNumber);
-
 int isScrollableCursor(RS_STMT_INFO *pStmt);
 int isUpdatableCursor(RS_STMT_INFO *pStmt);
 
@@ -440,14 +430,6 @@ SQLRETURN checkHdbcHandleAndAddError(SQLHDBC phdbc, SQLRETURN rc, char *pSqlStat
 
 int isODBC2Behavior(RS_STMT_INFO *pStmt);
 void mapToODBC2SqlState(RS_ENV_INFO *pEnv,char *pszSqlState);
-
-char *getNextTokenForODBCEscapeClause(char **ppSrc, size_t cbLen, int *pi, char *fnNameDelimiterList);
-const std::string *mapODBCFuncNameToPadbFuncName(char *pODBCFuncName, int iTokenLen);
-const char *mapODBCIntervalNameToPadbDatePartName(char *pODBCIntervalName, int iTokenLen);
-int checkDelimiterForODBCEscapeClauseToken(const char *pSrc, char *fnNameDelimiterList);
-int skipFunctionBracketsForODBCEscapeClauseToken(char **ppSrc, size_t cbLen, int i, int iBoth);
-int replaceODBCConvertFunc(RS_STMT_INFO *pStmt, char **ppDest, char *pDestStart, int iDestBufLen, char **ppSrc, size_t cbLen, int i, int numOfParamMarkers, int  *piParamNumber);
-const char *mapODBCSQLTypeToPadbSQLTypeName(char *pODBCSQLTypeName, int iTokenLen);
 
 void resetCatalogQueryFlag(RS_STMT_INFO *pStmt);
 

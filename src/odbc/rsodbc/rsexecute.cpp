@@ -8,6 +8,7 @@
 
 #include "rsexecute.h"
 #include "rstransaction.h"
+#include "rsescapeclause.h"
 
 /*====================================================================================================================================================*/
 
@@ -105,8 +106,11 @@ SQLRETURN SQL_API SQLExecDirectW(SQLHSTMT   phstmt,
 
     if(szCmd)
     {
-        int numOfParamMarkers = countParamMarkers(pStmt->pCmdBuf->pBuf, SQL_NTS);
-        int numOfODBCEscapeClauses = countODBCEscapeClauses(pStmt,pStmt->pCmdBuf->pBuf, SQL_NTS);
+        int numOfParamMarkers = ODBCEscapeClauseProcessor::countParamMarkers(
+            pStmt->pCmdBuf->pBuf, SQL_NTS);
+        int numOfODBCEscapeClauses =
+            ODBCEscapeClauseProcessor::countODBCEscapeClauses(
+                pStmt, pStmt->pCmdBuf->pBuf, SQL_NTS);
 
         setParamMarkerCount(pStmt,numOfParamMarkers);
 
@@ -115,7 +119,10 @@ SQLRETURN SQL_API SQLExecDirectW(SQLHSTMT   phstmt,
             char *pTempCmd = rs_strdup(pStmt->pCmdBuf->pBuf, SQL_NTS);
 
             releasePaStrBuf(pStmt->pCmdBuf);
-            szCmd = (char *)replaceParamMarkerAndODBCEscapeClause(pStmt, pTempCmd, SQL_NTS, pStmt->pCmdBuf, numOfParamMarkers, numOfODBCEscapeClauses);
+            szCmd = (char *)ODBCEscapeClauseProcessor::
+                replaceParamMarkerAndODBCEscapeClause(
+                    pStmt, pTempCmd, SQL_NTS, pStmt->pCmdBuf, numOfParamMarkers,
+                    numOfODBCEscapeClauses);
             pTempCmd = (char *)rs_free(pTempCmd);
         }
     }
@@ -280,12 +287,17 @@ SQLRETURN  SQL_API RsExecute::RS_SQLExecDirect(SQLHSTMT phstmt,
 
             if(!pszMultiInsertCmd)
             {
-                pszCmd = (char *)checkReplaceParamMarkerAndODBCEscapeClause(pStmt, (char *)pCmd, cbLen, pStmt->pCmdBuf, TRUE);
+                pszCmd = (char *)ODBCEscapeClauseProcessor::
+                    checkReplaceParamMarkerAndODBCEscapeClause(
+                        pStmt, (char *)pCmd, cbLen, pStmt->pCmdBuf, TRUE);
 
             }
             else
             {
-                pszCmd = (char *)checkReplaceParamMarkerAndODBCEscapeClause(pStmt, pszMultiInsertCmd, SQL_NTS, pStmt->pCmdBuf, TRUE);
+                pszCmd = (char *)ODBCEscapeClauseProcessor::
+                    checkReplaceParamMarkerAndODBCEscapeClause(
+                        pStmt, pszMultiInsertCmd, SQL_NTS, pStmt->pCmdBuf,
+                        TRUE);
                 pszMultiInsertCmd = (char *)rs_free(pszMultiInsertCmd);
 
                 if(pLastBatchMultiInsertCmd)
@@ -689,7 +701,9 @@ SQLRETURN SQL_API RsExecute::RS_SQLNativeSql(SQLHDBC   phdbc,
         // Release previously allocated buf, if any
         releasePaStrBuf(pConn->pCmdBuf);
 
-        pszCmd = (char *)checkReplaceParamMarkerAndODBCEscapeClause(NULL,(char *)szSqlStrIn, cbSqlStrIn,pConn->pCmdBuf, FALSE);
+        pszCmd = (char *)ODBCEscapeClauseProcessor::
+            checkReplaceParamMarkerAndODBCEscapeClause(
+                NULL, (char *)szSqlStrIn, cbSqlStrIn, pConn->pCmdBuf, FALSE);
     }
     else
         pszCmd = pConn->pCmdBuf->pBuf;
@@ -816,15 +830,17 @@ SQLRETURN SQL_API SQLNativeSqlW(SQLHDBC      phdbc,
         }
         szCmd[ansiTextLen] = '\0'; // Ensure null termination for empty string
         int numOfODBCEscapeClauses =
-            countODBCEscapeClauses(NULL, pConn->pCmdBuf->pBuf, SQL_NTS);
+            ODBCEscapeClauseProcessor::countODBCEscapeClauses(
+                NULL, pConn->pCmdBuf->pBuf, SQL_NTS);
 
         if (numOfODBCEscapeClauses > 0) {
             char *pTempCmd = rs_strdup(pConn->pCmdBuf->pBuf, SQL_NTS);
 
             releasePaStrBuf(pConn->pCmdBuf);
-            szCmd = (char *)replaceParamMarkerAndODBCEscapeClause(
-                NULL, pTempCmd, SQL_NTS, pConn->pCmdBuf, 0,
-                numOfODBCEscapeClauses);
+            szCmd = (char *)ODBCEscapeClauseProcessor::
+                replaceParamMarkerAndODBCEscapeClause(NULL, pTempCmd, SQL_NTS,
+                                                      pConn->pCmdBuf, 0,
+                                                      numOfODBCEscapeClauses);
             pTempCmd = (char *)rs_free(pTempCmd);
         }
     }

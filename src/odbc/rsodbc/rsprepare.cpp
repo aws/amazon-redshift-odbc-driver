@@ -8,6 +8,7 @@
 
 #include "rsprepare.h"
 #include "rsmin.h"
+#include "rsescapeclause.h"
 
 
 /*====================================================================================================================================================*/
@@ -140,15 +141,18 @@ SQLRETURN SQL_API SQLPrepareW(SQLHSTMT  phstmt,
 
     // Replace param markers / ODBC escapes if present
     if (szCmd && *szCmd) {
-        int numPM = countParamMarkers(pStmt->pCmdBuf->pBuf, SQL_NTS);
-        int numEsc = countODBCEscapeClauses(pStmt, pStmt->pCmdBuf->pBuf, SQL_NTS);
+        int numPM = ODBCEscapeClauseProcessor::countParamMarkers(
+            pStmt->pCmdBuf->pBuf, SQL_NTS);
+        int numEsc = ODBCEscapeClauseProcessor::countODBCEscapeClauses(
+            pStmt, pStmt->pCmdBuf->pBuf, SQL_NTS);
         setParamMarkerCount(pStmt, numPM);
 
         if (numPM > 0 || numEsc > 0) {
             char *tmp = rs_strdup(pStmt->pCmdBuf->pBuf, SQL_NTS);
             releasePaStrBuf(pStmt->pCmdBuf);
-            szCmd = (char *)replaceParamMarkerAndODBCEscapeClause(pStmt, tmp, SQL_NTS,
-                                                                  pStmt->pCmdBuf, numPM, numEsc);
+            szCmd = (char *)ODBCEscapeClauseProcessor::
+                replaceParamMarkerAndODBCEscapeClause(
+                    pStmt, tmp, SQL_NTS, pStmt->pCmdBuf, numPM, numEsc);
             tmp = (char *)rs_free(tmp);
         }
     }
@@ -697,11 +701,16 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLPrepare(SQLHSTMT phstmt,
 
         if(!pszMultiInsertCmd)
         {
-            pszCmd = (char *)checkReplaceParamMarkerAndODBCEscapeClause(pStmt,(char *)pCmd, cbLen, pStmt->pCmdBuf, TRUE);
+            pszCmd = (char *)ODBCEscapeClauseProcessor::
+                checkReplaceParamMarkerAndODBCEscapeClause(
+                    pStmt, (char *)pCmd, cbLen, pStmt->pCmdBuf, TRUE);
         }
         else
         {
-            pszCmd = (char *)checkReplaceParamMarkerAndODBCEscapeClause(pStmt,(char *)pszMultiInsertCmd, SQL_NTS, pStmt->pCmdBuf, TRUE);
+            pszCmd = (char *)ODBCEscapeClauseProcessor::
+                checkReplaceParamMarkerAndODBCEscapeClause(
+                    pStmt, (char *)pszMultiInsertCmd, SQL_NTS, pStmt->pCmdBuf,
+                    TRUE);
             pszMultiInsertCmd = (char *)rs_free(pszMultiInsertCmd);
 
             if(pLastBatchMultiInsertCmd)
@@ -737,4 +746,3 @@ error:
 
     return rc;
 }
-
