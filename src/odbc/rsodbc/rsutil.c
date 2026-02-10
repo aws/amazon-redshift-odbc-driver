@@ -6120,7 +6120,7 @@ int getOctetLenUsingCType(short hCType, int iSize)
 
         case SQL_C_NUMERIC:
         {
-            iOctetSize = (iSize > 0) ? iSize + 2 : sizeof(SQL_NUMERIC_STRUCT);
+            iOctetSize = sizeof(SQL_NUMERIC_STRUCT);
             break;
         }
 
