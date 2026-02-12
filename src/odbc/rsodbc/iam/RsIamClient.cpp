@@ -6,6 +6,7 @@
 #include "RsIamClient.h"
 #include "IAMUtils.h"
 #include "RsSettings.h"
+#include "plugins/IAMBrowserAzureOAuth2CredentialsProvider.h"
 #include <rslog.h>
 
 #include <ares.h>
@@ -183,18 +184,13 @@ void RsIamClient::Connect()
 	}
     else
     {
-        if (isIdcPlugin(config.GetPluginName())) {
-            rs_string auth_token =
-                static_cast<NativePluginCredentialsProvider &>(*credentialsProvider).GetAuthToken();
-            m_credentials.SetIdpToken(auth_token);
-        } else { // native idp AzureAD plugin
-            /* Validate that all required arguments for plugin are provided */
-            static_cast<IAMJwtPluginCredentialsProvider &>(*credentialsProvider)
-                .ValidateArgumentsMap();
-            rs_string idp_token =
-                static_cast<IAMJwtPluginCredentialsProvider &>(*credentialsProvider).GetJwtAssertion();
-            m_credentials.SetIdpToken(idp_token);
-        }
+        // Native Azure AD OAuth2 plugin
+        /* Validate that all required arguments for plugin are provided */
+        static_cast<IAMBrowserAzureOAuth2CredentialsProvider &>(*credentialsProvider)
+            .ValidateArgumentsMap();
+        rs_string idp_token =
+            static_cast<IAMBrowserAzureOAuth2CredentialsProvider &>(*credentialsProvider).GetJwtAssertion();
+        m_credentials.SetIdpToken(idp_token);
         m_credentials.SetFixExpirationTime();
     }
 }

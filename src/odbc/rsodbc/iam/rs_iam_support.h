@@ -98,6 +98,7 @@ namespace IamSupport
 	#define IAM_KEY_AUTH_PROFILE        "AuthProfile"
 	#define IAM_KEY_STS_CONNECTION_TIMEOUT  "StsConnectionTimeout"
 	#define IAM_KEY_SCOPE					"scope" // "api://" + client_id + "/User.Read"
+	#define IAM_KEY_PROXY_BYPASS_LIST		"proxy_bypass_list" // Browser proxy bypass list for OAuth redirect
 
     #define KEY_IDP_AUTH_TOKEN              "token"
     #define KEY_IDP_AUTH_TOKEN_TYPE         "token_type"

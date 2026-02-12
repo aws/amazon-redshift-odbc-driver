@@ -1,3 +1,29 @@
+# Amazon Redshift ODBC Driver - Azure OAuth Fix
+
+[![Build Status](https://github.com/ORELASH/amazon-redshift-odbc-driver/actions/workflows/build-windows-driver.yml/badge.svg)](https://github.com/ORELASH/amazon-redshift-odbc-driver/actions/workflows/build-windows-driver.yml)
+[![Latest Release](https://img.shields.io/github/v/release/ORELASH/amazon-redshift-odbc-driver?include_prereleases)](https://github.com/ORELASH/amazon-redshift-odbc-driver/releases/tag/v2.1.12.0-azure-oauth-fix)
+
+> **This is a fixed fork of AWS amazon-redshift-odbc-driver with Azure AD OAuth2 authentication support**
+
+## Important Notice
+
+This fork fixes **Azure AD OAuth2 authentication** (Issue [#16](https://github.com/aws/amazon-redshift-odbc-driver/issues/16)) by:
+- Automatically adding `openid` scope (matching JDBC driver behavior)
+- Adding `client_secret` parameter support
+- Fixing Windows build and MSI installer
+
+**Download Ready-to-Use MSI:** [AmazonRedshiftODBC64-2.1.12.0.msi](https://github.com/ORELASH/amazon-redshift-odbc-driver/releases/download/v2.1.12.0-azure-oauth-fix/AmazonRedshiftODBC64-2.1.12.0.msi) (5MB)
+
+**Documentation:**
+- [English README](README.md) (this file)
+- [Hebrew README (עברית)](README_HE.md)
+- [Download & Test Instructions](DOWNLOAD_AND_TEST.md)
+- [Complete Build Status](BUILD_STATUS.md)
+- [Detailed Changes](CHANGES.md)
+- [Known Issues](KNOWN_ISSUES.md)
+
+---
+
 ## Redshift ODBC Driver
 
 The Amazon ODBC Driver for Redshift database connectivity through the standard ODBC application program interfaces (APIs). The Driver provides access to Redshift from any C/C++ application.

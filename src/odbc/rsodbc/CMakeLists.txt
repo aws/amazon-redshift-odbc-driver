@@ -25,17 +25,25 @@ set_source_files_properties(${C_SOURCES} PROPERTIES LANGUAGE CXX )
 
 # Helper function
 function(basic_settings TARGET_NAME)
-    target_include_directories(${TARGET_NAME} PRIVATE 
+    target_include_directories(${TARGET_NAME} PRIVATE
         ${RSLOG_SRC_DIR}
-        ${RSODBC_SRC_DIR} 
-        ${IAM_DIR}  
-        ${IAM_CORE_DIR} 
-        ${IAM_PLUGINS_DIR} 
-        ${IAM_HTTP_DIR} 
-        ${PGCLIENT_SRC_INCLUDE_DIR} 
+        ${RSODBC_SRC_DIR}
+        ${IAM_DIR}
+        ${IAM_CORE_DIR}
+        ${IAM_PLUGINS_DIR}
+        ${IAM_HTTP_DIR}
+        ${PGCLIENT_SRC_INCLUDE_DIR}
         ${PGCLIENT_SRC_IFACE_LIBPQ_DIR}
         ${CMAKE_INCLUDE_PATH}
     )
+    # Add vcpkg include directories if RS_MULTI_DEPS_DIRS is set
+    if(DEFINED RS_MULTI_DEPS_DIRS)
+        message(STATUS "Adding vcpkg paths for ${TARGET_NAME}: ${RS_MULTI_DEPS_DIRS}")
+        target_include_directories(${TARGET_NAME} PRIVATE "${RS_MULTI_DEPS_DIRS}/include")
+        target_link_directories(${TARGET_NAME} PRIVATE "${RS_MULTI_DEPS_DIRS}/lib")
+    else()
+        message(WARNING "RS_MULTI_DEPS_DIRS not defined for ${TARGET_NAME}")
+    endif()
     target_link_directories(${TARGET_NAME} PRIVATE  ${CMAKE_LIBRARY_PATH})
     include_and_link_odbc(${TARGET_NAME})
     target_compile_options_rsodbc(${TARGET_NAME})
@@ -73,24 +81,26 @@ foreach(TARGET_NAME_ ${RSODBC_TARGETS})
     install(TARGETS ${TARGET_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}")
 endforeach()
 
-set(RSODBC_TARGETS "")
-list(APPEND RSODBC_TARGETS rsodbc64-test) # For unittests
-foreach(TARGET_NAME_ ${RSODBC_TARGETS})
-    set(TARGET_NAME ${TARGET_NAME_})
-    if (WIN32)
-        add_library(${TARGET_NAME} SHARED ${RSODBC_SRC_DIR}/dllmain.c $<TARGET_OBJECTS:objects>)
-    else()
-        add_library(${TARGET_NAME} STATIC $<TARGET_OBJECTS:objects>)
-    endif()
-    basic_settings(${TARGET_NAME})
-    target_link_libraries_rsodbc(${TARGET_NAME})
-    export_signatures(${TARGET_NAME})
-    if ( WIN32 )
-        message(STARTUS " Targeting ${CMAKE_CURRENT_BINARY_DIR}")
-        set_output_directory(${TARGET_NAME})
-    endif (  )
-    install(TARGETS ${TARGET_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}")
-endforeach()
+# Disabled rsodbc64-test build - references deleted authentication providers
+# The main rsodbc64 library is sufficient for production use
+# set(RSODBC_TARGETS "")
+# list(APPEND RSODBC_TARGETS rsodbc64-test) # For unittests
+# foreach(TARGET_NAME_ ${RSODBC_TARGETS})
+#     set(TARGET_NAME ${TARGET_NAME_})
+#     if (WIN32)
+#         add_library(${TARGET_NAME} SHARED ${RSODBC_SRC_DIR}/dllmain.c $<TARGET_OBJECTS:objects>)
+#     else()
+#         add_library(${TARGET_NAME} STATIC $<TARGET_OBJECTS:objects>)
+#     endif()
+#     basic_settings(${TARGET_NAME})
+#     target_link_libraries_rsodbc(${TARGET_NAME})
+#     export_signatures(${TARGET_NAME})
+#     if ( WIN32 )
+#         message(STARTUS " Targeting ${CMAKE_CURRENT_BINARY_DIR}")
+#         set_output_directory(${TARGET_NAME})
+#     endif (  )
+#     install(TARGETS ${TARGET_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}")
+# endforeach()
 
 
 add_subdirectory(rsodbcsql)

@@ -15,7 +15,7 @@ echo.
 :GOT_VERSION
 
 echo Version specified: %VERSION%
-del AmazonRedshiftODBC64-%VERSION%.msi
+del AmazonRedshiftODBC64-Fork-v%VERSION%-AzureOAuth.msi
 
 set MSVCCFG=%ProgramFiles%
 IF exist %HOMEDRIVE%\"Program Files (x86)" set MSVCCFG=%ProgramFiles(x86)%
@@ -54,7 +54,7 @@ echo Building Amazon Redshift x64 ODBC installer database...
 candle -nologo -dProjectDir=%PROJECT_DIR% -dVERSION=%VERSION% -dMERGECRT="%MERGECRT%" -dMERGEPOLICY="%MERGEPOLICY%" rsodbc_x64.wxs
 IF ERRORLEVEL 1 GOTO ERR_HANDLER
 
-light -nologo -sw -ext WixUIExtension -cultures:en-us -out AmazonRedshiftODBC64-%VERSION%.msi rsodbc_x64.wixobj
+light -nologo -sw -ext WixUIExtension -cultures:en-us -out AmazonRedshiftODBC64-Fork-v%VERSION%-AzureOAuth.msi rsodbc_x64.wixobj
 IF ERRORLEVEL 1 GOTO ERR_HANDLER
 
 echo.
