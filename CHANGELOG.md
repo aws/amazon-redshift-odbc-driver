@@ -1,6 +1,21 @@
 Changelog
 =========
 
+v2.1.13 (2026-02-12)
+---------------------
+1. Improved error handling and SQL state reporting across SQLGetData, SQLPutData, SQLExtendedFetch, and SQLSetCursorName APIs
+2. Fixed SQLGetTypeInfo to dynamically return column names based on the application's ODBC version
+3. Added SQL_DESC_CONCISE_TYPE synchronization to comply with ODBC specification
+4. Corrected default values for ARD, APD, and IPD descriptors as per ODBC specification
+5. Added proper error messages when accessing non-readable or non-writable descriptor fields
+6. Added length indicators for non-string data types to comply with ODBC specification
+7. Enhanced escape clause handling by addressing gaps in existing implementation and adding support for previously missing functions
+8. Improved logging in IAMJwtPluginCredentialsProvider
+9. Fixed IdC Browser authentication plugin to respect configured HTTPS proxy settings, resolving authentication failures for users behind corporate proxies
+10. Prioritized configured region over DNS lookup for CNAME connections, resolving authentication issues when using custom domains with IAM authentication
+11. Fixed SQLGetData to return correct octet length for numeric types by using sizeof(SQL_NUMERIC_STRUCT)
+12. Fixed macOS build by converting std::string to C-string for snprintf compatibility
+
 v2.1.12 (2025-12-18)
 ---------------------
 1. Added apple macOS support with ARM64 and x86_64 architecture compatibility
