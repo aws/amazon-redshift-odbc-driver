@@ -1,6 +1,15 @@
 Changelog
 =========
 
+v2.1.16 (2026-02-24)
+---------------------
+1. Fixed handling of UNSPECIFIEDOID (OID 0) and unknown data types by mapping them to LONGVARCHAR for better compatibility
+2. Enhanced Azure OAuth2 authentication with immediate error detection when user cancels or closes browser window
+3. Fixed browser disconnection detection to fail fast instead of waiting for timeout
+4. Added GitHub Actions automated CI/CD for MSI building on Windows
+5. Improved build system with vcpkg dependency management for reproducible builds
+6. Updated Azure OAuth2 implementation to use v2.0 endpoints consistently
+
 v2.1.12 (2025-12-18)
 ---------------------
 1. Added apple macOS support with ARM64 and x86_64 architecture compatibility
