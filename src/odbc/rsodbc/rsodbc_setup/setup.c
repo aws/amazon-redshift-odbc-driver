@@ -3237,9 +3237,6 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 	SQLSMALLINT outlen;
 	int dlg_flag = MB_OK;
 	HWND hwndToUse;
-	BOOL fgResult;
-	BOOL topResult;
-	int mbResult;
 
 	if (NULL == rs_dsn_setup_ctxt)
 		return FALSE;
@@ -3283,27 +3280,20 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 		return FALSE;
 	}
 
-	// Set longer timeout for browser-based authentication (120 seconds to match IAM_DEFAULT_BROWSER_PLUGIN_TIMEOUT)
-	// Browser authentication can take significant time for user to complete login
+	/* Set longer timeout for browser-based authentication (120 seconds) */
 	rc = SQLSetConnectAttr(hdbc, SQL_LOGIN_TIMEOUT, (SQLPOINTER)120, 0);
 	if (rc != SQL_SUCCESS) {
-		rs_dsn_log(__LINE__, "test_connect: set login timeout failed [BLD002-DEBUG]");
+		rs_dsn_log(__LINE__, "test_connect: set login timeout failed");
 		return FALSE;
 	}
-	rs_dsn_log(__LINE__, "test_connect: login timeout set to 120 seconds [BLD002-DEBUG]");
 
-	rs_dsn_log(__LINE__, "test_connect: connecting [BLD002-DEBUG]");
+	rs_dsn_log(__LINE__, "test_connect: connecting");
 	rs_dsn_make_connect_str(rs_dsn_setup_ctxt, connectstr, sizeof(connectstr));
-
-	rs_dsn_log(__LINE__, "test_connect: calling SQLDriverConnect, parent_hwnd=%p, tab_hwnd=%p [BLD002-DEBUG]",
-		(void*)rs_dsn_setup_ctxt->hwndParent, (void*)hdlg);
 
 	rc = SQLDriverConnect(hdbc, NULL,
 						connectstr, SQL_NTS,
 						outconnstr, MAX_CONNECTION_STRING_SIZE, &outlen,
-						SQL_DRIVER_NOPROMPT);
-
-	rs_dsn_log(__LINE__, "test_connect: SQLDriverConnect returned rc=%d [BLD002-DEBUG]", rc); 
+						SQL_DRIVER_NOPROMPT); 
 //	rc = SQLConnect(hdbc,"test2012",SQL_NTS,"iggarish",SQL_NTS,"",SQL_NTS);
 	if (rc != SQL_SUCCESS) {
 		char sqlstate[6];
@@ -3324,45 +3314,26 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 	SQLFreeHandle(SQL_HANDLE_DBC, hdbc);
 	SQLFreeHandle(SQL_HANDLE_ENV, henv);
 
-	rs_dsn_log(__LINE__, "test_connect: preparing msgbox [BLD002-DEBUG], result: %s", resultmsg);
-
-	// Bring the parent window to foreground before showing MessageBox
-	// This is necessary because browser authentication may have taken focus
+	/* Restore window focus before showing MessageBox */
+	/* Browser authentication may have taken focus away */
 	hwndToUse = rs_dsn_setup_ctxt->hwndParent;
 
-	rs_dsn_log(__LINE__, "test_connect: parent_hwnd=%p, tab_hwnd=%p [BLD002-DEBUG]",
-		(void*)rs_dsn_setup_ctxt->hwndParent, (void*)hdlg);
-
 	if (hwndToUse != NULL) {
-		rs_dsn_log(__LINE__, "test_connect: attempting SetForegroundWindow [BLD002-DEBUG]");
-
-		// Try to restore if minimized
+		/* Restore if minimized */
 		if (IsIconic(hwndToUse)) {
-			rs_dsn_log(__LINE__, "test_connect: window minimized, restoring [BLD002-DEBUG]");
 			ShowWindow(hwndToUse, SW_RESTORE);
 		}
-
-		fgResult = SetForegroundWindow(hwndToUse);
-		topResult = BringWindowToTop(hwndToUse);
-
-		rs_dsn_log(__LINE__, "test_connect: SetForegroundWindow=%d, BringWindowToTop=%d [BLD002-DEBUG]",
-			(int)fgResult, (int)topResult);
+		SetForegroundWindow(hwndToUse);
+		BringWindowToTop(hwndToUse);
 	} else {
-		// Fallback to tab window if parent is NULL
-		rs_dsn_log(__LINE__, "test_connect: parent NULL, using tab [BLD002-DEBUG]");
+		/* Fallback to tab window if parent is NULL */
 		hwndToUse = hdlg;
 	}
 
-	// Add MB_SETFOREGROUND and MB_TASKMODAL to ensure MessageBox appears on top
+	/* Ensure MessageBox appears on top */
 	dlg_flag |= MB_SETFOREGROUND | MB_TASKMODAL;
 
-	rs_dsn_log(__LINE__, "test_connect: MessageBox flags=0x%X, hwnd=%p [BLD002-DEBUG]",
-		(unsigned int)dlg_flag, (void*)hwndToUse);
-
-	mbResult = MessageBox(hwndToUse, resultmsg, "Connection Test", dlg_flag);
-
-	rs_dsn_log(__LINE__, "test_connect: MessageBox returned %d [BLD002-DEBUG]", mbResult);
-	rs_dsn_log(__LINE__, "test_connect: completed [BLD002-DEBUG]");
+	MessageBox(hwndToUse, resultmsg, "Connection Test", dlg_flag);
 
 	return TRUE;
 }
