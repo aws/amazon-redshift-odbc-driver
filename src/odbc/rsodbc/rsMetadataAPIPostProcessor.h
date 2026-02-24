@@ -45,6 +45,24 @@ class RsMetadataAPIPostProcessor {
     static const RsMetadataAPIHelper metadataAPIHelper;
 
     /* ----------------
+     * sqlGetTypeInfoPostProcessing
+     *
+     * helper function to apply post-processing on intermediate result set for
+     * SQLGetTypeInfo
+     *
+     * Parameters:
+     *   phstmt (SQLHSTMT): statement handler
+     *   typeInfo (const std::vector<RS_TYPE_INFO> &): type info list
+     *
+     * Return:
+     *   SQLRETURN
+     * ----------------
+     */
+    static SQLRETURN
+    sqlGetTypeInfoPostProcessing(SQLHSTMT phstmt,
+                              const std::vector<RS_TYPE_INFO> &typeInfo);
+
+    /* ----------------
      * sqlCatalogsPostProcessing
      *
      * helper function to apply post-processing on intermediate result set for

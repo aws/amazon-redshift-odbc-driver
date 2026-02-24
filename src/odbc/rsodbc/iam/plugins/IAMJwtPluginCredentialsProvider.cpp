@@ -87,8 +87,11 @@ JWTAssertion IAMJwtPluginCredentialsProvider::DecodeJwtToken(const rs_string& jw
 
     while (std::getline(ss, token, '.'))
     {
-        RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::DecodeJwtToken ",
-            + "token: %s", token.c_str());
+        RS_LOG_DEBUG("IAMCRD",
+                 "IAMJwtPluginCredentialsProvider::DecodeJwtToken JWT "
+                 "token length: %zu",
+                 token.length());
+                 
         tokens.push_back(token);
     }
 
@@ -105,12 +108,13 @@ JWTAssertion IAMJwtPluginCredentialsProvider::DecodeJwtToken(const rs_string& jw
         DecodeBase64String(tokens[1]),
         tokens[2]
     };
-
-    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::DecodeJwtToken ",
-          + "Header: %s, Payload: %s, Signature: %s",
-        jwtAssertion.header.c_str(),
-        jwtAssertion.payload.c_str(),
-        jwtAssertion.signature.c_str());
+    
+    
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::DecodeJwtToken "
+            "Header: %s, Payload length: %zu, Signature length: %zu",
+            jwtAssertion.header.c_str(),
+            jwtAssertion.payload.length(),
+            jwtAssertion.signature.length());
 
     return jwtAssertion;
 }

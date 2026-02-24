@@ -15,7 +15,6 @@
 #include "rsunicode.h"
 #include "rstrace.h"
 
-
 class RsPrepare {
   public:
     static SQLRETURN  SQL_API RS_SQLSetCursorName(SQLHSTMT phstmt,
@@ -39,5 +38,3 @@ class RsPrepare {
 };
 
 #endif // __RS_PREPARE_H__
-
-

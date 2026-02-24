@@ -168,7 +168,9 @@ const char* RsMetadataAPIHelper::kOdbc2ColumnNames[] = {
     "FKTABLE_QUALIFIER",// Instead of FKTABLE_CAT
     "FKTABLE_OWNER",    // Instead of FKTABLE_SCHEM
     "PROCEDURE_QUALIFIER",// Instead of PROCEDURE_CAT
-    "PROCEDURE_OWNER"    // Instead of PROCEDURE_SCHEM
+    "PROCEDURE_OWNER",  // Instead of PROCEDURE_SCHEM
+    "MONEY",            // Instead of FIXED_PREC_SCALE
+    "AUTO_INCREMENT"    // Instead of AUTO_UNIQUE_VALUE
 };
 
 // ODBC 3.x column names
@@ -184,12 +186,44 @@ const char* RsMetadataAPIHelper::kOdbc3ColumnNames[] = {
     "FKTABLE_CAT",
     "FKTABLE_SCHEM",
     "PROCEDURE_CAT",
-    "PROCEDURE_SCHEM"
+    "PROCEDURE_SCHEM",
+    "FIXED_PREC_SCALE",
+    "AUTO_UNIQUE_VALUE"
 };
 
 const char* RsMetadataAPIHelper::getOdbc2ColumnName(int columnNum) {
     if(columnNum >= 0 && columnNum < kODBC2DiffColumnNum) {
         return (const char*)RsMetadataAPIHelper::kOdbc2ColumnNames[columnNum];
+    }
+    return nullptr;
+}
+
+// Define column attributes for SQLGetTypeInfo
+const char* RsMetadataAPIHelper::kTypeInfoCol[kTypeInfoColNum] = {
+    "TYPE_NAME",
+    "DATA_TYPE",
+    "COLUMN_SIZE",
+    "LITERAL_PREFIX",
+    "LITERAL_SUFFIX",
+    "CREATE_PARAMS",
+    "NULLABLE",
+    "CASE_SENSITIVE",
+    "SEARCHABLE",
+    "UNSIGNED_ATTRIBUTE",
+    "FIXED_PREC_SCALE",
+    "AUTO_UNIQUE_VALUE",
+    "LOCAL_TYPE_NAME",
+    "MINIMUM_SCALE",
+    "MAXIMUM_SCALE",
+    "SQL_DATA_TYPE",
+    "SQL_DATETIME_SUB",
+    "NUM_PREC_RADIX",
+    "INTERVAL_PRECISION"
+};
+
+const char* RsMetadataAPIHelper::getSqlGetTypeInfoColName(int columnNum) {
+    if(columnNum >= 0 && columnNum < kTypeInfoColNum) {
+        return  (const char*)RsMetadataAPIHelper::kTypeInfoCol[columnNum];
     }
     return nullptr;
 }
@@ -342,6 +376,11 @@ void RsMetadataAPIHelper::initializeColumnNames(RS_STMT_INFO* pStmt) {
     }
 
     bool isODBC2 = (pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion == SQL_OV_ODBC2);
+
+    // Initialize SQLGetTypeInfo columns
+    kTypeInfoCol[kSQLGetTypeInfo_COLUMN_SIZE_COL_NUM] = isODBC2 ? kOdbc2ColumnNames[2] : kOdbc3ColumnNames[2];
+    kTypeInfoCol[kSQLGetTypeInfo_FIXED_PREC_SCALE_COL_NUM] = isODBC2 ? kOdbc2ColumnNames[12] : kOdbc3ColumnNames[12];
+    kTypeInfoCol[kSQLGetTypeInfo_AUTO_UNIQUE_VAL_COL_NUM] = isODBC2 ? kOdbc2ColumnNames[13] : kOdbc3ColumnNames[13];
 
     // Initialize SQLTables columns
     kTablesCol[kSQLTables_TABLE_CATALOG_COL_NUM] = isODBC2 ? kOdbc2ColumnNames[0] : kOdbc3ColumnNames[0];

@@ -162,6 +162,7 @@ EXPORTS
 	getMaxRowsForCsc
 	getResultSetTypeForCsc
 	getResultConcurrencyTypeForCsc
+	releasePaStrBuf
 	?ValidateURL@IAMUtils@IamSupport@Redshift@@SAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?sqlTypeNameMap@@YAPEADF@Z
 	?getColumnSize@RsMetadataAPIHelper@@SAHAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@FF@Z
@@ -185,6 +186,18 @@ EXPORTS
 	??1IAMCredentials@IamSupport@Redshift@@UEAA@XZ
 	??0IAMConfiguration@IamSupport@Redshift@@QEAA@AEBVIAMCredentials@12@@Z
 	??1IAMConfiguration@IamSupport@Redshift@@QEAA@XZ
+	?GetHTTPSProxyHost@IAMConfiguration@IamSupport@Redshift@@QEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@XZ
+	?SetHTTPSProxyHost@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?GetHTTPSProxyPort@IAMConfiguration@IamSupport@Redshift@@QEBAFXZ
+	?SetHTTPSProxyPort@IAMConfiguration@IamSupport@Redshift@@QEAAXF@Z
+	?GetHTTPSProxyUser@IAMConfiguration@IamSupport@Redshift@@QEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@XZ
+	?SetHTTPSProxyUser@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?GetHTTPSProxyPassword@IAMConfiguration@IamSupport@Redshift@@QEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@XZ
+	?SetHTTPSProxyPassword@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?GetUsingHTTPSProxy@IAMConfiguration@IamSupport@Redshift@@QEBA_NXZ
+	?SetUsingHTTPSProxy@IAMConfiguration@IamSupport@Redshift@@QEAAX_N@Z
+	?GetUseProxyIdpAuth@IAMConfiguration@IamSupport@Redshift@@QEBA_NXZ
+	?SetUseProxyIdpAuth@IAMConfiguration@IamSupport@Redshift@@QEAAX_N@Z
 	??0BrowserIdcAuthPlugin@IamSupport@Redshift@@QEAA@AEBVIAMConfiguration@12@AEBV?$map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@U?$less@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@@std@@@2@@std@@@Z
 	??1BrowserIdcAuthPlugin@IamSupport@Redshift@@UEAA@XZ
 	?BuildOidcHostUrl@BrowserIdcAuthPlugin@IamSupport@Redshift@@QEAA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@@Z
@@ -225,3 +238,8 @@ EXPORTS
 	?tracePasswordConnectStringW@RsTrace@@IEAAXPEBDPEA_WF@Z
 	?traceArg@RsTrace@@IEAAXPEBDZZ
 	?isIODBC@@YA_NXZ
+	?checkReplaceParamMarkerAndODBCEscapeClause@ODBCEscapeClauseProcessor@@SAPEAEPEAVRS_STMT_INFO@@PEAD_KPEAU_RS_STR_BUF@@H@Z
+	?parseFunctionArguments@ODBCEscapeClauseProcessor@@SA_NAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEA_KAEAV?$vector@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V?$allocator@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@@3@PEAVRS_STMT_INFO@@HAEAHH@Z
+	?lookupSqlType@ODBCEscapeClauseProcessor@@SAPEBDAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?lookupIntervalToken@ODBCEscapeClauseProcessor@@SAPEBDAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?RS_SQLGetData@RS_STMT_INFO@@SAFPEAV1@GFPEAX_JPEA_JHAEA_J@Z

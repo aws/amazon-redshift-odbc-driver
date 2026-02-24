@@ -212,7 +212,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
     if(!iIsReadableField)
     {
         rc = SQL_ERROR;
-        addError(&pDesc->pErrorList,"HY000", "Field is not used or not readable", 0, NULL);
+        addError(&pDesc->pErrorList,"HY091", "Invalid descriptor field identifier", 0, NULL);
         goto error;
     }
 
@@ -573,9 +573,14 @@ SQLRETURN SQL_API SQLGetDescFieldW(SQLHDESC        phdesc,
             }
 
             converted = (SQLWCHAR *)rs_free(converted);
+        } else {
+            // Propagate length for non-string fields
+            if (pcbLen) {
+                *pcbLen = tempLen;
+            }
         }
     } else {
-        // Propagate length for non-string fields or on failure (bytes)
+        // Propagate length on failure (bytes)
         // Note: pcbLen adjustment on failure for string fields is best effort
         // and can be inaccurate
         if (pcbLen) {
@@ -850,7 +855,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
     if(!iIsWritableField)
     {
         rc = SQL_ERROR;
-        addError(&pDesc->pErrorList,"HY000", "Field is not writable", 0, NULL);
+        addError(&pDesc->pErrorList,"HY016", "Cannot modify an implementation row descriptor", 0, NULL);
         goto error;
     }
 
