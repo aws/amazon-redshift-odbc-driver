@@ -1,210 +1,225 @@
 {\rtf1\ansi\deff0
-{\fonttbl{\f0 Calibri;}{\f1 Courier New;}}
-{\colortbl;\red255\green0\blue0;\red0\green0\blue0;}
-
+{\fonttbl{\f0 Calibri;}{\f1 Courier New;}{\f2 Arial;}}
+{\colortbl;\red0\green102\blue204;\red204\green0\blue0;\red0\green0\blue0;\red0\green128\blue0;\red128\green128\blue128;}
 \f0\fs24
 
-{\b\fs32\cf1 IMPORTANT DISCLAIMER - UNOFFICIAL FORK}\par
-{\b\fs32\cf1 \uc1488\uc1494\uc1492\uc1512\uc1492 \uc1495\uc1513\uc1493\uc1489\uc1492 - Fork \uc1500\uc1488 \uc1512\uc1513\uc1502\uc1497}\par
+{\pard\qc\b\fs36\cf1 REDSHIFT ODBC COMMUNITY EDITION\par}
+{\pard\qc\b\fs28\cf1 Version 2.1.13.1 (Build Level 1)\par}
 \par
 
-{\b\fs28 This is an UNOFFICIAL FORK - NOT an official AWS product}\par
-{\b\fs24 \uc1494\uc1492 Fork \uc1489\uc1500\uc1514\uc1497 \uc1512\uc1513\uc1502\uc1497 - \uc1500\uc1488 \uc1502\uc1493\uc1510\uc1512 \uc1512\uc1513\uc1502\uc1497 \uc1513\uc1500 AWS}\par
+{\b\fs28\cf2 IMPORTANT INFORMATION}\par
+\par
+This is a COMMUNITY-MAINTAINED version of the Amazon Redshift ODBC Driver.\par
+This is NOT an official Amazon Web Services product and is NOT supported by AWS.\par
 \par
 
-{\b WARNING: NOT FOR PRODUCTION USE}\par
-{\b \uc1488\uc1494\uc1492\uc1512\uc1492: \uc1500\uc1488 \uc1500\uc1513\uc1497\uc1502\uc1493\uc1513 \uc1489\uc1497\uc1497\uc1510\uc1493\uc1512 (PRODUCTION)}\par
-\par
+{\pard\qc\b\fs24\cf3 ============================================\par}
+{\pard\qc\b\fs24\cf3 VERSION INFORMATION\par}
+{\pard\qc\b\fs24\cf3 ============================================\par}
+\pard\par
 
-{\cf2
-This driver is a modified version (fork) of the Amazon Redshift ODBC Driver v2.x.\par
-\par
-{\b Modified by:} Orel (ORELASH)\par
+{\b Community Edition:} v2.1.13.1 (Build Level 1)\par
+{\b Based on:} AWS Amazon Redshift ODBC Driver v2.1.13\par
+{\b Release Date:} February 24, 2026\par
+{\b Maintained by:} Redshift ODBC Community\par
 {\b Source Repository:} https://github.com/ORELASH/amazon-redshift-odbc-driver\par
-{\b Based on:} AWS Amazon Redshift ODBC Driver v2.1.12.0\par
-{\b Main Changes:} Azure AD OAuth2 automatic 'openid' scope handling\par
 \par
 
-{\b\ul IMPORTANT NOTES:}\par
-\par
-1. This is NOT an official Amazon Web Services product\par
-2. This is NOT supported by AWS\par
-3. This is for TESTING and DEVELOPMENT purposes only\par
-4. DO NOT use in production environments\par
-5. Use at your own risk\par
+{\pard\qc\b\fs24\cf3 ============================================\par}
+{\pard\qc\b\fs24\cf3 COMMUNITY ENHANCEMENTS (Build Level 1)\par}
+{\pard\qc\b\fs24\cf3 ============================================\par}
+\pard\par
+
+This Community Edition includes the following enhancements beyond the official AWS v2.1.13 release:\par
 \par
 
-The original AWS driver and this fork are licensed under the Apache License 2.0.\par
-\par
-}
-
-{\pard\qc\b\fs28 =====================================\par}
-{\pard\qc\b\fs28 Apache License 2.0\par}
-{\pard\qc\b\fs28 =====================================\par}
+{\b\fs26\cf4 CRITICAL FIXES}\par
 \par
 
+{\b 1. UNSPECIFIEDOID (OID 0) Handling}\par
+   \bullet  Fixed handling of unknown data types by mapping OID 0 to LONGVARCHAR\par
+   \bullet  Resolves "Unknown SQL type" errors with certain Redshift functions\par
+   \bullet  Improves compatibility with functions like pg_get_session_roles()\par
+\par
+
+{\b 2. Azure OAuth2 Cancel Detection}\par
+   \bullet  Immediate error when user cancels Azure AD login\par
+   \bullet  Clear error message when browser is closed during authentication\par
+   \bullet  Validates authorization code before proceeding\par
+   \bullet  No more waiting for timeout when authentication fails\par
+\par
+
+{\b 3. Browser Disconnection Early Detection}\par
+   \bullet  Detects browser disconnection within seconds (not minutes)\par
+   \bullet  Maximum 3 consecutive empty requests before exiting\par
+   \bullet  Comprehensive logging for debugging OAuth issues\par
+   \bullet  Significantly improves user experience\par
+\par
+
+{\b\fs26\cf4 BUILD SYSTEM IMPROVEMENTS}\par
+\par
+
+{\b 4. GitHub Actions CI/CD Automation}\par
+   \bullet  Automated MSI building on Windows Server 2022\par
+   \bullet  Reproducible builds without local Windows machine\par
+   \bullet  SHA256 checksums for all builds\par
+   \bullet  Build artifacts retained for 90 days\par
+\par
+
+{\b 5. vcpkg Dependency Management}\par
+   \bullet  Consistent, reproducible builds\par
+   \bullet  Version-locked dependencies\par
+   \bullet  Automated installation of OpenSSL, AWS SDK, c-ares\par
+\par
+
+{\b 6. Azure OAuth2 v2.0 Endpoints}\par
+   \bullet  Consistent use of Microsoft Identity v2.0 endpoints\par
+   \bullet  Proper PKCE (RFC 7636) support\par
+   \bullet  Support for client_secret (confidential clients)\par
+   \bullet  Fixes authentication freeze issues\par
+\par
+
+{\pard\qc\b\fs24\cf3 ============================================\par}
+{\pard\qc\b\fs24\cf3 AWS OFFICIAL BASE (v2.1.13)\par}
+{\pard\qc\b\fs24\cf3 ============================================\par}
+\pard\par
+
+The Community Edition is based on AWS Amazon Redshift ODBC Driver v2.1.13, which includes:\par
+\par
+
+1. Improved error handling and SQL state reporting\par
+2. SQLGetTypeInfo dynamic column names based on ODBC version\par
+3. SQL_DESC_CONCISE_TYPE synchronization (ODBC spec compliance)\par
+4. Corrected ARD, APD, IPD descriptor default values\par
+5. Proper error messages for non-readable/writable descriptor fields\par
+6. Length indicators for non-string data types\par
+7. Enhanced escape clause handling with additional function support\par
+8. Improved IAM JWT authentication logging\par
+9. IdC Browser authentication proxy support\par
+10. Region priority fixes for CNAME connections\par
+11. SQLGetData numeric type octet length fix\par
+12. macOS build compatibility improvements\par
+\par
+
+{\pard\qc\b\fs24\cf3 ============================================\par}
+{\pard\qc\b\fs24\cf3 USE CASES\par}
+{\pard\qc\b\fs24\cf3 ============================================\par}
+\pard\par
+
+{\b\cf4 This Community Edition is suitable for:}\par
+\par
+\cf4 \uc10003 \cf3 Development and testing environments\par
+\cf4 \uc10003 \cf3 Azure AD OAuth2 authentication scenarios\par
+\cf4 \uc10003 \cf3 Organizations requiring immediate error feedback on auth failures\par
+\cf4 \uc10003 \cf3 Environments where UNSPECIFIEDOID types are encountered\par
+\cf4 \uc10003 \cf3 CI/CD pipelines requiring reproducible builds\par
+\par
+
+{\b\cf2 NOT recommended for:}\par
+\par
+\cf2 \uc10007 \cf3 Production systems without thorough testing\par
+\cf2 \uc10007 \cf3 Environments requiring official AWS support\par
+\cf2 \uc10007 \cf3 Compliance scenarios requiring certified software\par
+\par
+
+{\pard\qc\b\fs24\cf2 ============================================\par}
+{\pard\qc\b\fs24\cf2 IMPORTANT WARNINGS AND DISCLAIMERS\par}
+{\pard\qc\b\fs24\cf2 ============================================\par}
+\pard\par
+
+{\b\fs26\cf2 NO WARRANTY}\par
+This software is provided "AS IS" without warranty of any kind, express or implied.\par
+The community maintainers assume no liability for any damages arising from use.\par
+\par
+
+{\b\fs26\cf2 NO OFFICIAL SUPPORT}\par
+This is NOT supported by Amazon Web Services, Inc.\par
+Community support only via GitHub Issues.\par
+\par
+
+{\b\fs26\cf2 SECURITY}\par
+\bullet  Review all code changes before use in sensitive environments\par
+\bullet  Test thoroughly before deploying to production\par
+\bullet  Keep up to date with security patches\par
+\bullet  Use strong authentication methods\par
+\bullet  Follow your organization's security policies\par
+\par
+
+{\b\fs26\cf2 TESTING REQUIREMENT}\par
+ALWAYS test in a non-production environment first:\par
+\bullet  Verify connection strings work correctly\par
+\bullet  Test authentication flows completely\par
+\bullet  Validate query results match expectations\par
+\bullet  Check for performance regressions\par
+\bullet  Test error handling scenarios\par
+\par
+
+{\b\fs26\cf2 DATA PROTECTION}\par
+\bullet  Do not store credentials in connection strings\par
+\bullet  Use environment variables or secure credential stores\par
+\bullet  Enable encryption in transit (SSL/TLS)\par
+\bullet  Follow data protection regulations (GDPR, CCPA, etc.)\par
+\bullet  Audit access to sensitive data\par
+\par
+
+{\pard\qc\b\fs24\cf3 ============================================\par}
+{\pard\qc\b\fs24\cf3 INSTALLATION AND USAGE\par}
+{\pard\qc\b\fs24\cf3 ============================================\par}
+\pard\par
+
+{\b\fs26\cf4 Basic Installation}\par
+1. Download RedshiftODBC-Community-v2.1.13.1.msi\par
+2. Verify SHA256 checksum\par
+3. Run MSI installer (requires Administrator privileges)\par
+4. Configure ODBC DSN using ODBC Data Source Administrator\par
+\par
+
+{\b\fs26\cf4 Azure OAuth2 Configuration}\par
+Connection string example:\par
+\par
 {\f1\fs20
+Driver=\{Amazon Redshift (x64)\};\par
+Server=your-cluster.region.redshift.amazonaws.com;\par
+Database=dev;\par
+UID=;\par
+PWD=;\par
+Auth_Type=IAM;\par
+Plugin_Name=BrowserAzureADOAuth2;\par
+idp_tenant=your-tenant-id;\par
+client_id=your-client-id;\par
+idp_response_timeout=120;\par
+}
+\par
+
+{\b\fs26\cf4 Common Issues}\par
+\bullet  Authentication timeout: Increase idp_response_timeout\par
+\bullet  Browser not opening: Check firewall and proxy settings\par
+\bullet  OID errors: Fixed in this version with UNSPECIFIEDOID handling\par
+\par
+
+{\pard\qc\b\fs24\cf3 ============================================\par}
+{\pard\qc\b\fs24\cf3 LICENSE\par}
+{\pard\qc\b\fs24\cf3 ============================================\par}
+\pard\par
+
+This software is licensed under the Apache License 2.0.\par
+Both the original AWS driver and this Community Edition follow the same license.\par
+\par
+
+{\f1\fs18\cf5
 Apache License\par
 Version 2.0, January 2004\par
 http://www.apache.org/licenses/\par
 \par
-
-TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\par
+Copyright 2024-2026 Redshift ODBC Community\par
+Copyright 2016-2024 Amazon.com, Inc. or its affiliates\par
 \par
-
-1. Definitions.\par
-\par
-
-"License" shall mean the terms and conditions for use, reproduction,\par
-and distribution as defined by Sections 1 through 9 of this document.\par
-\par
-
-"Licensor" shall mean the copyright owner or entity authorized by\par
-the copyright owner that is granting the License.\par
-\par
-
-"Legal Entity" shall mean the union of the acting entity and all\par
-other entities that control, are controlled by, or are under common\par
-control with that entity. For the purposes of this definition,\par
-"control" means (i) the power, direct or indirect, to cause the\par
-direction or management of such entity, whether by contract or\par
-otherwise, or (ii) ownership of fifty percent (50%) or more of the\par
-outstanding shares, or (iii) beneficial ownership of such entity.\par
-\par
-
-"You" (or "Your") shall mean an individual or Legal Entity\par
-exercising permissions granted by this License.\par
-\par
-
-"Source" form shall mean the preferred form for making modifications,\par
-including but not limited to software source code, documentation\par
-source, and configuration files.\par
-\par
-
-"Object" form shall mean any form resulting from mechanical\par
-transformation or translation of a Source form, including but\par
-not limited to compiled object code, generated documentation,\par
-and conversions to other media types.\par
-\par
-
-"Work" shall mean the work of authorship, whether in Source or\par
-Object form, made available under the License, as indicated by a\par
-copyright notice that is included in or attached to the work.\par
-\par
-
-"Derivative Works" shall mean any work, whether in Source or Object\par
-form, that is based on (or derived from) the Work and for which the\par
-editorial revisions, annotations, elaborations, or other modifications\par
-represent, as a whole, an original work of authorship.\par
-\par
-
-"Contribution" shall mean any work of authorship, including\par
-the original version of the Work and any modifications or additions\par
-to that Work or Derivative Works thereof, that is intentionally\par
-submitted to Licensor for inclusion in the Work by the copyright owner\par
-or by an individual or Legal Entity authorized to submit on behalf of\par
-the copyright owner.\par
-\par
-
-2. Grant of Copyright License. Subject to the terms and conditions of\par
-this License, each Contributor hereby grants to You a perpetual,\par
-worldwide, non-exclusive, no-charge, royalty-free, irrevocable\par
-copyright license to reproduce, prepare Derivative Works of,\par
-publicly display, publicly perform, sublicense, and distribute the\par
-Work and such Derivative Works in Source or Object form.\par
-\par
-
-3. Grant of Patent License. Subject to the terms and conditions of\par
-this License, each Contributor hereby grants to You a perpetual,\par
-worldwide, non-exclusive, no-charge, royalty-free, irrevocable\par
-patent license to make, have made, use, offer to sell, sell, import,\par
-and otherwise transfer the Work.\par
-\par
-
-4. Redistribution. You may reproduce and distribute copies of the\par
-Work or Derivative Works thereof in any medium, with or without\par
-modifications, provided that You meet the following conditions:\par
-\par
-
-(a) You must give any other recipients of the Work or Derivative Works\par
-a copy of this License; and\par
-\par
-
-(b) You must cause any modified files to carry prominent notices\par
-stating that You changed the files; and\par
-\par
-
-(c) You must retain, in the Source form of any Derivative Works that You\par
-distribute, all copyright, patent, trademark, and attribution notices\par
-from the Source form of the Work; and\par
-\par
-
-(d) If the Work includes a "NOTICE" text file as part of its distribution,\par
-then any Derivative Works that You distribute must include a readable copy\par
-of the attribution notices contained within such NOTICE file.\par
-\par
-
-5. Submission of Contributions. Unless You explicitly state otherwise,\par
-any Contribution intentionally submitted for inclusion in the Work\par
-by You to the Licensor shall be under the terms and conditions of\par
-this License, without any additional terms or conditions.\par
-\par
-
-6. Trademarks. This License does not grant permission to use the trade\par
-names, trademarks, service marks, or product names of the Licensor,\par
-except as required for describing the origin of the Work.\par
-\par
-
-7. Disclaimer of Warranty. Unless required by applicable law or\par
-agreed to in writing, Licensor provides the Work (and each\par
-Contributor provides its Contributions) on an "AS IS" BASIS,\par
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or\par
-implied, including, without limitation, any warranties or conditions\par
-of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A\par
-PARTICULAR PURPOSE. You are solely responsible for determining the\par
-appropriateness of using or redistributing the Work and assume any\par
-risks associated with Your exercise of permissions under this License.\par
-\par
-
-8. Limitation of Liability. In no event and under no legal theory,\par
-whether in tort (including negligence), contract, or otherwise,\par
-unless required by applicable law, shall any Contributor be\par
-liable to You for damages, including any direct, indirect, special,\par
-incidental, or consequential damages of any character arising as a\par
-result of this License or out of the use or inability to use the\par
-Work (including but not limited to damages for loss of goodwill,\par
-work stoppage, computer failure or malfunction, or any and all\par
-other commercial damages or losses), even if such Contributor\par
-has been advised of the possibility of such damages.\par
-\par
-
-9. Accepting Warranty or Additional Liability. While redistributing\par
-the Work or Derivative Works thereof, You may choose to offer,\par
-and charge a fee for, acceptance of support, warranty, indemnity,\par
-or other liability obligations and/or rights consistent with this\par
-License. However, in accepting such obligations, You may act only\par
-on Your own behalf and on Your sole responsibility, not on behalf\par
-of any other Contributor, and only if You agree to indemnify,\par
-defend, and hold each Contributor harmless for any liability\par
-incurred by, or claims asserted against, such Contributor by reason\par
-of your accepting any such warranty or additional liability.\par
-\par
-
-END OF TERMS AND CONDITIONS\par
-\par
-
-Copyright 2016-2024 Amazon.com, Inc. or its affiliates.\par
-Modifications Copyright 2025-2026 Orel (ORELASH)\par
-\par
-
 Licensed under the Apache License, Version 2.0 (the "License");\par
 you may not use this file except in compliance with the License.\par
 You may obtain a copy of the License at\par
 \par
-
     http://www.apache.org/licenses/LICENSE-2.0\par
 \par
-
 Unless required by applicable law or agreed to in writing, software\par
 distributed under the License is distributed on an "AS IS" BASIS,\par
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\par
@@ -212,4 +227,5 @@ See the License for the specific language governing permissions and\par
 limitations under the License.\par
 }
 \par
+{\pard\qc\fs18\cf5 === End of License ==\par}
 }

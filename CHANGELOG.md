@@ -1,19 +1,45 @@
 Changelog
 =========
 
-v2.1.17 (2026-02-24)
+v2.1.13.1 - Community Edition BL1 (2026-02-24)
 ---------------------
-**Merged AWS v2.1.13 + Custom Azure OAuth fixes**
+**Redshift ODBC Community Edition**
+**Based on AWS Amazon Redshift ODBC v2.1.13 + Community Enhancements**
 
-Custom fixes (from v2.1.16):
+### Community Enhancements (Build Level 1):
+
+**Critical Fixes:**
 1. Fixed handling of UNSPECIFIEDOID (OID 0) and unknown data types by mapping them to LONGVARCHAR for better compatibility
-2. Enhanced Azure OAuth2 authentication with immediate error detection when user cancels or closes browser window
-3. Fixed browser disconnection detection to fail fast instead of waiting for timeout
-4. Added GitHub Actions automated CI/CD for MSI building on Windows
-5. Improved build system with vcpkg dependency management for reproducible builds
-6. Updated Azure OAuth2 implementation to use v2.0 endpoints consistently
+   - Resolves "Unknown SQL type" errors with certain Redshift functions
+   - Improves compatibility with functions like pg_get_session_roles() that return RECORD type
 
-AWS official improvements (from v2.1.13):
+2. Enhanced Azure OAuth2 authentication with immediate error detection
+   - User canceling Azure AD login now shows immediate, clear error message
+   - Closing browser during authentication shows immediate error instead of timeout
+   - Validates authorization code is received before proceeding
+
+3. Fixed browser disconnection detection to fail fast instead of waiting for timeout
+   - Detects browser disconnection early (max 3 consecutive empty requests)
+   - Significantly reduces wait time when user cancels authentication
+   - Adds comprehensive logging for debugging OAuth flow issues
+
+**Build System Improvements:**
+4. Added GitHub Actions automated CI/CD for MSI building on Windows
+   - Reproducible builds without local Windows machine
+   - Automated MSI creation on every commit
+   - SHA256 checksum generation
+
+5. Improved build system with vcpkg dependency management
+   - Consistent, reproducible builds
+   - Automated dependency installation
+   - Version-locked dependencies for stability
+
+6. Updated Azure OAuth2 implementation to use v2.0 endpoints consistently
+   - Fixes authentication freeze issues
+   - Proper PKCE support
+   - client_secret support for confidential clients
+
+### AWS Official Base (v2.1.13):
 1. Improved error handling and SQL state reporting across SQLGetData, SQLPutData, SQLExtendedFetch, and SQLSetCursorName APIs
 2. Fixed SQLGetTypeInfo to dynamically return column names based on the application's ODBC version
 3. Added SQL_DESC_CONCISE_TYPE synchronization to comply with ODBC specification
@@ -22,9 +48,9 @@ AWS official improvements (from v2.1.13):
 6. Added length indicators for non-string data types to comply with ODBC specification
 7. Enhanced escape clause handling by addressing gaps in existing implementation and adding support for previously missing functions
 8. Improved logging in IAMJwtPluginCredentialsProvider
-9. Fixed IdC Browser authentication plugin to respect configured HTTPS proxy settings, resolving authentication failures for users behind corporate proxies
-10. Prioritized configured region over DNS lookup for CNAME connections, resolving authentication issues when using custom domains with IAM authentication
-11. Fixed SQLGetData to return correct octet length for numeric types by using sizeof(SQL_NUMERIC_STRUCT)
+9. Fixed IdC Browser authentication plugin to respect configured HTTPS proxy settings
+10. Prioritized configured region over DNS lookup for CNAME connections
+11. Fixed SQLGetData to return correct octet length for numeric types
 12. Fixed macOS build by converting std::string to C-string for snprintf compatibility
 
 v2.1.12 (2025-12-18)
