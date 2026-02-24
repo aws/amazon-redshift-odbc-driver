@@ -1,0 +1,8 @@
+# Visual Studio build outputs
+bin/
+obj/
+*.exe
+*.pdb
+*.user
+*.suo
+*.sln.cache
