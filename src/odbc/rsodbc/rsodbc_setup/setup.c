@@ -3236,6 +3236,10 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 	char outconnstr[MAX_CONNECTION_STRING_SIZE];
 	SQLSMALLINT outlen;
 	int dlg_flag = MB_OK;
+	HWND hwndToUse;
+	BOOL fgResult;
+	BOOL topResult;
+	int mbResult;
 
 	if (NULL == rs_dsn_setup_ctxt)
 		return FALSE;
@@ -3324,7 +3328,7 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 
 	// Bring the parent window to foreground before showing MessageBox
 	// This is necessary because browser authentication may have taken focus
-	HWND hwndToUse = rs_dsn_setup_ctxt->hwndParent;
+	hwndToUse = rs_dsn_setup_ctxt->hwndParent;
 
 	rs_dsn_log(__LINE__, "test_connect: parent_hwnd=%p, tab_hwnd=%p [BLD002-DEBUG]",
 		rs_dsn_setup_ctxt->hwndParent, hdlg);
@@ -3338,8 +3342,8 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 			ShowWindow(hwndToUse, SW_RESTORE);
 		}
 
-		BOOL fgResult = SetForegroundWindow(hwndToUse);
-		BOOL topResult = BringWindowToTop(hwndToUse);
+		fgResult = SetForegroundWindow(hwndToUse);
+		topResult = BringWindowToTop(hwndToUse);
 
 		rs_dsn_log(__LINE__, "test_connect: SetForegroundWindow=%d, BringWindowToTop=%d [BLD002-DEBUG]",
 			fgResult, topResult);
@@ -3355,7 +3359,7 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 	rs_dsn_log(__LINE__, "test_connect: MessageBox flags=0x%X, hwnd=%p [BLD002-DEBUG]",
 		dlg_flag, hwndToUse);
 
-	int mbResult = MessageBox(hwndToUse, resultmsg, "Connection Test", dlg_flag);
+	mbResult = MessageBox(hwndToUse, resultmsg, "Connection Test", dlg_flag);
 
 	rs_dsn_log(__LINE__, "test_connect: MessageBox returned %d [BLD002-DEBUG]", mbResult);
 	rs_dsn_log(__LINE__, "test_connect: completed [BLD002-DEBUG]");
