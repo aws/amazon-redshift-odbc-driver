@@ -3296,7 +3296,7 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 	rs_dsn_make_connect_str(rs_dsn_setup_ctxt, connectstr, sizeof(connectstr));
 
 	rs_dsn_log(__LINE__, "test_connect: calling SQLDriverConnect, parent_hwnd=%p, tab_hwnd=%p [BLD002-DEBUG]",
-		rs_dsn_setup_ctxt->hwndParent, hdlg);
+		(void*)rs_dsn_setup_ctxt->hwndParent, (void*)hdlg);
 
 	rc = SQLDriverConnect(hdbc, NULL,
 						connectstr, SQL_NTS,
@@ -3331,7 +3331,7 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 	hwndToUse = rs_dsn_setup_ctxt->hwndParent;
 
 	rs_dsn_log(__LINE__, "test_connect: parent_hwnd=%p, tab_hwnd=%p [BLD002-DEBUG]",
-		rs_dsn_setup_ctxt->hwndParent, hdlg);
+		(void*)rs_dsn_setup_ctxt->hwndParent, (void*)hdlg);
 
 	if (hwndToUse != NULL) {
 		rs_dsn_log(__LINE__, "test_connect: attempting SetForegroundWindow [BLD002-DEBUG]");
@@ -3346,7 +3346,7 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 		topResult = BringWindowToTop(hwndToUse);
 
 		rs_dsn_log(__LINE__, "test_connect: SetForegroundWindow=%d, BringWindowToTop=%d [BLD002-DEBUG]",
-			fgResult, topResult);
+			(int)fgResult, (int)topResult);
 	} else {
 		// Fallback to tab window if parent is NULL
 		rs_dsn_log(__LINE__, "test_connect: parent NULL, using tab [BLD002-DEBUG]");
@@ -3357,7 +3357,7 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 	dlg_flag |= MB_SETFOREGROUND | MB_TASKMODAL;
 
 	rs_dsn_log(__LINE__, "test_connect: MessageBox flags=0x%X, hwnd=%p [BLD002-DEBUG]",
-		dlg_flag, hwndToUse);
+		(unsigned int)dlg_flag, (void*)hwndToUse);
 
 	mbResult = MessageBox(hwndToUse, resultmsg, "Connection Test", dlg_flag);
 
