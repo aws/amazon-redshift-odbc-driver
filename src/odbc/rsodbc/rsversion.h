@@ -1,12 +1,12 @@
 #include <vector>
 #include<string>
 
-#define ODBC_DRIVER_VERSION "2,1,12"
-#define FILEVER             2,1,12
-#define PRODUCTVER          2,1,12
-#define STRFILEVER         "2, 1, 12, \0"
-#define STRPRODUCTVER      "2, 1, 12, "
-#define ODBC_DRIVER_VERSION_FULL "2.1.12.0"
+#define ODBC_DRIVER_VERSION "2,1,14"
+#define FILEVER             2,1,14
+#define PRODUCTVER          2,1,14
+#define STRFILEVER         "2, 1, 14, \0"
+#define STRPRODUCTVER      "2, 1, 14, "
+#define ODBC_DRIVER_VERSION_FULL "2.1.14.0"
 
 // Return ODBC version as string
 std::string rsodbcVersion();

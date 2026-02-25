@@ -3236,6 +3236,7 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 	char outconnstr[MAX_CONNECTION_STRING_SIZE];
 	SQLSMALLINT outlen;
 	int dlg_flag = MB_OK;
+	HWND hwndToUse;
 
 	if (NULL == rs_dsn_setup_ctxt)
 		return FALSE;
@@ -3278,7 +3279,9 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 		rs_dsn_log(__LINE__, "test_connect: alloc dbc handle failed");
 		return FALSE;
 	}
-	rc = SQLSetConnectAttr(hdbc, SQL_LOGIN_TIMEOUT, (SQLPOINTER)10, 0);
+
+	/* Set longer timeout for browser-based authentication (120 seconds) */
+	rc = SQLSetConnectAttr(hdbc, SQL_LOGIN_TIMEOUT, (SQLPOINTER)120, 0);
 	if (rc != SQL_SUCCESS) {
 		rs_dsn_log(__LINE__, "test_connect: set login timeout failed");
 		return FALSE;
@@ -3286,6 +3289,7 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 
 	rs_dsn_log(__LINE__, "test_connect: connecting");
 	rs_dsn_make_connect_str(rs_dsn_setup_ctxt, connectstr, sizeof(connectstr));
+
 	rc = SQLDriverConnect(hdbc, NULL,
 						connectstr, SQL_NTS,
 						outconnstr, MAX_CONNECTION_STRING_SIZE, &outlen,
@@ -3309,8 +3313,28 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 	}
 	SQLFreeHandle(SQL_HANDLE_DBC, hdbc);
 	SQLFreeHandle(SQL_HANDLE_ENV, henv);
-	rs_dsn_log(__LINE__, "test_connect: posting msgbox");
-	MessageBox(rs_dsn_setup_ctxt->hwndParent, resultmsg, "Connection Test", dlg_flag);
+
+	/* Restore window focus before showing MessageBox */
+	/* Browser authentication may have taken focus away */
+	hwndToUse = rs_dsn_setup_ctxt->hwndParent;
+
+	if (hwndToUse != NULL) {
+		/* Restore if minimized */
+		if (IsIconic(hwndToUse)) {
+			ShowWindow(hwndToUse, SW_RESTORE);
+		}
+		SetForegroundWindow(hwndToUse);
+		BringWindowToTop(hwndToUse);
+	} else {
+		/* Fallback to tab window if parent is NULL */
+		hwndToUse = hdlg;
+	}
+
+	/* Ensure MessageBox appears on top */
+	dlg_flag |= MB_SETFOREGROUND | MB_TASKMODAL;
+
+	MessageBox(hwndToUse, resultmsg, "Connection Test", dlg_flag);
+
 	return TRUE;
 }
 

@@ -22,8 +22,8 @@
           <!-- Redshift -->
           <File Id="rsodbc.dll" Name="rsodbc.dll" Source="$(var.ProjectDir)/cmake-build/install/rsodbc64.dll" />
           <File Id="root.crt" Name="root.crt" Source="../root.crt" />
-          <File Id="libcrypto_1_1_x64.dll" Name="libcrypto-1_1-x64.dll" Source="$(var.DependenciesDir)/openssl/$(var.BuildType)/bin/libcrypto-1_1-x64.dll" />
-          <File Id="libssl_1_1_x64.dll" Name="libssl-1_1-x64.dll" Source="$(var.DependenciesDir)/openssl/$(var.BuildType)/bin/libssl-1_1-x64.dll" />
+          <File Id="libcrypto_3_x64.dll" Name="libcrypto-3-x64.dll" Source="$(var.DependenciesDir)/bin/libcrypto-3-x64.dll" />
+          <File Id="libssl_3_x64.dll" Name="libssl-3-x64.dll" Source="$(var.DependenciesDir)/bin/libssl-3-x64.dll" />
           <File Id="rsodbcsetup.dll" Name="rsodbcsetup.dll" Source="$(var.ProjectDir)/cmake-build/install/rsodbcsetup.dll" />
           <File Id="gssapi64.dll" Name="gssapi64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/gssapi64.dll" />
           <File Id="krb5_64.dll" Name="krb5_64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/krb5_64.dll" />
@@ -34,6 +34,39 @@
           <File Id="krbcc64.dll" Name="krbcc64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/krbcc64.dll" />
           <File Id="leashw64.dll" Name="leashw64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/leashw64.dll" />
           <File Id="xpprof64.dll" Name="xpprof64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/xpprof64.dll" />
+
+          <!-- AWS SDK C++ DLLs -->
+          <File Id="aws_cpp_sdk_core.dll" Name="aws-cpp-sdk-core.dll" Source="$(var.DependenciesDir)/bin/aws-cpp-sdk-core.dll" />
+          <File Id="aws_cpp_sdk_redshift.dll" Name="aws-cpp-sdk-redshift.dll" Source="$(var.DependenciesDir)/bin/aws-cpp-sdk-redshift.dll" />
+          <File Id="aws_cpp_sdk_redshift_serverless.dll" Name="aws-cpp-sdk-redshift-serverless.dll" Source="$(var.DependenciesDir)/bin/aws-cpp-sdk-redshift-serverless.dll" />
+          <File Id="aws_cpp_sdk_sts.dll" Name="aws-cpp-sdk-sts.dll" Source="$(var.DependenciesDir)/bin/aws-cpp-sdk-sts.dll" />
+          <File Id="aws_cpp_sdk_sso_oidc.dll" Name="aws-cpp-sdk-sso-oidc.dll" Source="$(var.DependenciesDir)/bin/aws-cpp-sdk-sso-oidc.dll" />
+          <File Id="aws_cpp_sdk_identity_management.dll" Name="aws-cpp-sdk-identity-management.dll" Source="$(var.DependenciesDir)/bin/aws-cpp-sdk-identity-management.dll" />
+          <File Id="aws_crt_cpp.dll" Name="aws-crt-cpp.dll" Source="$(var.DependenciesDir)/bin/aws-crt-cpp.dll" />
+
+          <!-- AWS C Runtime DLLs -->
+          <File Id="aws_c_auth.dll" Name="aws-c-auth.dll" Source="$(var.DependenciesDir)/bin/aws-c-auth.dll" />
+          <File Id="aws_c_cal.dll" Name="aws-c-cal.dll" Source="$(var.DependenciesDir)/bin/aws-c-cal.dll" />
+          <File Id="aws_c_common.dll" Name="aws-c-common.dll" Source="$(var.DependenciesDir)/bin/aws-c-common.dll" />
+          <File Id="aws_c_compression.dll" Name="aws-c-compression.dll" Source="$(var.DependenciesDir)/bin/aws-c-compression.dll" />
+          <File Id="aws_c_event_stream.dll" Name="aws-c-event-stream.dll" Source="$(var.DependenciesDir)/bin/aws-c-event-stream.dll" />
+          <File Id="aws_c_http.dll" Name="aws-c-http.dll" Source="$(var.DependenciesDir)/bin/aws-c-http.dll" />
+          <File Id="aws_c_io.dll" Name="aws-c-io.dll" Source="$(var.DependenciesDir)/bin/aws-c-io.dll" />
+          <File Id="aws_c_mqtt.dll" Name="aws-c-mqtt.dll" Source="$(var.DependenciesDir)/bin/aws-c-mqtt.dll" />
+          <File Id="aws_c_s3.dll" Name="aws-c-s3.dll" Source="$(var.DependenciesDir)/bin/aws-c-s3.dll" />
+          <File Id="aws_c_sdkutils.dll" Name="aws-c-sdkutils.dll" Source="$(var.DependenciesDir)/bin/aws-c-sdkutils.dll" />
+          <File Id="aws_checksums.dll" Name="aws-checksums.dll" Source="$(var.DependenciesDir)/bin/aws-checksums.dll" />
+
+          <!-- c-ares DLL (DNS resolver) -->
+          <File Id="cares.dll" Name="cares.dll" Source="$(var.DependenciesDir)/bin/cares.dll" />
+
+          <!-- Compression libraries -->
+          <File Id="zlib1.dll" Name="zlib1.dll" Source="$(var.DependenciesDir)/bin/zlib1.dll" />
+
+          <!-- Visual C++ 2022 Runtime DLLs -->
+          <!-- Note: vcruntime DLLs are from VC Redist, not vcpkg -->
+          <!-- User must have VC++ Redistributable installed or install from: -->
+          <!-- https://aka.ms/vs/17/release/vc_redist.x64.exe -->
 
           <!-- Note, installing the driver properly (IE, using ODBCDriver) has proven unreliable -->
           <!--       so we install the registry keys manually ourselves.                         -->

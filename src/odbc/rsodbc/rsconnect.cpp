@@ -3561,6 +3561,9 @@ static SQLRETURN handleFederatedNonIamConnection(RS_CONN_INFO* pConn) {
             return SQL_ERROR;
         }
     }
+
+    // If no federated auth plugin matched, return success (no special handling needed)
+    return SQL_SUCCESS;
 }
 
 /*====================================================================================================================================================*/

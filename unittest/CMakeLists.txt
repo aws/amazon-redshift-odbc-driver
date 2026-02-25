@@ -11,14 +11,11 @@ configure_file(${CMAKE_SOURCE_DIR}/version.txt ${CMAKE_CURRENT_BINARY_DIR}/versi
 add_executable(${EXECUTABLE_NAME} ${TEST_SOURCES})
 
 if (WIN32)
-    target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} ${CMAKE_FIND_LIBRARY_PREFIXES}rsodbc64-test pq)
-    add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-            $<TARGET_FILE:rsodbc64-test>  # Adjust this if necessary
-            ${CMAKE_CURRENT_BINARY_DIR}
-    )
+    target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} ${CMAKE_FIND_LIBRARY_PREFIXES}objects_static
+        libcrypto libssl wldap32 secur32 pqport pq ws2_32 wsock32)
+    # No need to copy DLL since we're linking statically
     else()
-    target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} rsodbc64-test pq)
+    target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} objects_static pq)
     target_link_libraries(${EXECUTABLE_NAME} pthread)
 endif()
 
@@ -40,4 +37,4 @@ add_test(NAME ${TEST_NAME} COMMAND "${EXECUTABLE_NAME}")
 post_build_copy_dependency_files(${EXECUTABLE_NAME} ${CMAKE_CURRENT_BINARY_DIR})
 
 install(TARGETS ${EXECUTABLE_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/unittest")
-install(TARGETS rsodbc64-test DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/unittest")
+# No need to install rsodbc64 - unit tests link statically to objects_static

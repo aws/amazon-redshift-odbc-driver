@@ -29,46 +29,48 @@ set "RS_ARTIFACTS_DIR=!LINK_PKG_PATH!\public"
 mkdir !RS_ARTIFACTS_DIR!
 rmdir /s/q !RS_ARTIFACTS_DIR!\*
 
-rem Initialize variables
+rem Initialize variables (preserve pre-set environment variables)
 set WIN_ODBC_BUILD_MSI=""
 set "CMAKE_ARGS_ODBC_VERSION="
-set RS_BUILD_DIR=
-set INSTALL_DIR=
+if not defined RS_BUILD_DIR set RS_BUILD_DIR=
+if not defined INSTALL_DIR set INSTALL_DIR=
 set RS_ROOT_DIR=!LINK_PKG_PATH!
-set ENABLE_TESTING=
-set RS_OPENSSL_DIR=
-set RS_MULTI_DEPS_DIRS=
-set RS_DEPS_DIRS=
-set RS_ODBC_DIR=
+if not defined ENABLE_TESTING set ENABLE_TESTING=
+if not defined RS_OPENSSL_DIR set RS_OPENSSL_DIR=
+if not defined RS_MULTI_DEPS_DIRS set RS_MULTI_DEPS_DIRS=
+if not defined RS_DEPS_DIRS set RS_DEPS_DIRS=
+if not defined RS_ODBC_DIR set RS_ODBC_DIR=
 set "RS_VERSION="
 set "RS_BUILD_TYPE=Release"
-set PYTHON_CMD=
-set PERL_CMD=
+if not defined PYTHON_CMD set PYTHON_CMD=
+if not defined PERL_CMD set PERL_CMD=
 
 echo "LINK_PKG_PATH====== dir !LINK_PKG_PATH! ========"
 @REM dir !LINK_PKG_PATH!
 
 rem Parse command line arguments
-rem https://stackoverflow.com/questions/28103532/how-to-parse-command-line-arguments-with-switch-in-batch-file
 :parse_args
 if "%~1"=="" goto :end_parse_args
-set "temp_option="
-for %%a in (%*) do (
-   if not defined temp_option (
-      set arg=%%a
-      if "!arg:~0,1!" equ "-" (
-        set "temp_option=!arg!"
-      )
-   ) else (
-      echo arg=!arg!
-      echo value=%%a
-      if "!arg!"=="--version" set "RS_VERSION=%%a"
-      if "!arg!"=="--build-type" set "RS_BUILD_TYPE=%%a"
-      if "!arg!"=="--dependencies-install-dir" set "DEPENDENCIES_INSTALL_DIR=%%a"
-      set "temp_option!temp_option!=%%a"
-      set "temp_option="
-   )
+if "%~1"=="--version" (
+    set "RS_VERSION=%~2"
+    shift
+    shift
+    goto :parse_args
 )
+if "%~1"=="--build-type" (
+    set "RS_BUILD_TYPE=%~2"
+    shift
+    shift
+    goto :parse_args
+)
+if "%~1"=="--dependencies-install-dir" (
+    set "DEPENDENCIES_INSTALL_DIR=%~2"
+    shift
+    shift
+    goto :parse_args
+)
+shift
+goto :parse_args
 :end_parse_args
 
 if not defined DEPENDENCIES_INSTALL_DIR (
@@ -90,6 +92,22 @@ echo Version: !RS_VERSION!
 echo Build Type: !RS_BUILD_TYPE!
 echo Dependencies Install: !DEPENDENCIES_INSTALL_DIR!
 
+rem Set OpenSSL and dependencies directories based on DEPENDENCIES_INSTALL_DIR
+if defined DEPENDENCIES_INSTALL_DIR (
+    if not defined RS_OPENSSL_DIR (
+        if exist "!DEPENDENCIES_INSTALL_DIR!\openssl\Release" (
+            set "RS_OPENSSL_DIR=!DEPENDENCIES_INSTALL_DIR!\openssl\Release"
+            echo Using OpenSSL from: !RS_OPENSSL_DIR!
+        )
+    ) else (
+        echo RS_OPENSSL_DIR already set to: !RS_OPENSSL_DIR!
+    )
+    if not defined RS_MULTI_DEPS_DIRS (
+        set "RS_MULTI_DEPS_DIRS=!DEPENDENCIES_INSTALL_DIR!"
+    )
+    echo Using dependencies from: !RS_MULTI_DEPS_DIRS!
+)
+
 rem Visual Studio environment settings
 set "VS_PATH="
 set "cmake_generator=Visual Studio 17 2022"
@@ -97,6 +115,7 @@ if "!VS_PATH!"=="" (
     echo checking vs candidates
     set "vs_path_candidates="
     rem List of paths to check
+    set "vs_path_candidates=!vs_path_candidates!C:\Program Files\Microsoft Visual Studio\2022\Enterprise;"
     set "vs_path_candidates=!vs_path_candidates!C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools;"
     set "vs_path_candidates=!vs_path_candidates!C:\Program Files (x86)\Microsoft Visual Studio\2022\Community;"
     set "vs_path_candidates=!vs_path_candidates!C:\Program Files\Microsoft Visual Studio\2022\BuildTools;"
@@ -218,13 +237,13 @@ if not exist "%RS_BUILD_DIR%" mkdir "%RS_BUILD_DIR%" || exit /b %ERRORLEVEL%
 set "cmake_command=cmake -G "%cmake_generator%" -B "%RS_BUILD_DIR%" -S "%RS_ROOT_DIR%" -DRS_BUILD_TYPE=%RS_BUILD_TYPE% -DCMAKE_INSTALL_PREFIX=%INSTALL_DIR% %CMAKE_ARGS_ODBC_VERSION%"
 
 if "%RS_BUILD_TYPE%"=="Debug" (
-    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebug"
+    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebugDLL"
 ) else (
-    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"
+    set "cmake_command=!cmake_command! -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL"
 )
 
 if defined RS_OPENSSL_DIR (
-    set "cmake_command=!cmake_command! -DRS_OPENSSL_DIR=%RS_OPENSSL_DIR%"
+    set "cmake_command=!cmake_command! -DRS_OPENSSL_DIR=!RS_OPENSSL_DIR!"
 ) else (
     echo "RS_OPENSSL_DIR not set"
 )
@@ -238,7 +257,8 @@ if defined RS_DEPS_DIRS (
 set "cmake_command=!cmake_command! %RS_DEPS_DIRS%"
 
 if defined RS_MULTI_DEPS_DIRS (
-    set "cmake_command=!cmake_command! -DRS_MULTI_DEPS_DIRS=%RS_MULTI_DEPS_DIRS%"
+    set "cmake_command=!cmake_command! -DRS_MULTI_DEPS_DIRS=!RS_MULTI_DEPS_DIRS!"
+    set "cmake_command=!cmake_command! -DCMAKE_PREFIX_PATH=!RS_MULTI_DEPS_DIRS!"
 )
 
 if defined RS_ODBC_DIR (

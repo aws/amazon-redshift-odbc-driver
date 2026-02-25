@@ -1,0 +1,396 @@
+================================================================================
+  🔧 Redshift ODBC v2.1.15.0 - Build on Windows
+  הוראות בנייה על Windows
+================================================================================
+
+⚠️  חשוב: הבנייה חייבת להיעשות על Windows!
+   IMPORTANT: Build MUST be done on Windows!
+
+   למה?
+   Why?
+   • הדרייבר הוא Windows ODBC driver
+     The driver is a Windows ODBC driver
+   • MSI נוצר עם WiX Toolset (Windows בלבד)
+     MSI is created with WiX Toolset (Windows only)
+   • צריך Visual Studio עם C++ workload
+     Requires Visual Studio with C++ workload
+
+================================================================================
+📋 STEP 1: Prerequisites (Install These First)
+שלב 1: דרישות מוקדמות
+================================================================================
+
+✅ 1. Visual Studio 2019 or later
+   Download: https://visualstudio.microsoft.com/downloads/
+
+   During installation:
+   בזמן ההתקנה:
+     ☑ Workload: "Desktop development with C++"
+     ☑ Component: Windows 10 SDK
+
+✅ 2. CMake 3.15 or later
+   Download: https://cmake.org/download/
+
+   Installation:
+   התקנה:
+     ☑ Add CMake to system PATH (important!)
+
+✅ 3. WiX Toolset 3.11 or later
+   Download: https://wixtoolset.org/releases/
+
+   Purpose:
+   מטרה:
+     Creates the MSI installer
+     יוצר את ה-MSI installer
+
+
+================================================================================
+📦 STEP 2: Get the Source Code
+שלב 2: קבל את קוד המקור
+================================================================================
+
+Option A - Download from Linux machine:
+אפשרות א' - הורד ממכונת Linux:
+
+  On Linux:
+  ב-Linux:
+    cd ~/Downloads
+    # Source is already there:
+    # RedshiftODBC-v2.1.15.0-FullSource.tar.gz
+
+  Copy to Windows:
+  העתק ל-Windows:
+    Via network share / USB / etc.
+
+Option B - Extract on Windows:
+אפשרות ב' - חלץ על Windows:
+
+  1. Copy RedshiftODBC-v2.1.15.0-FullSource.tar.gz to Windows
+
+  2. Extract using 7-Zip or:
+     חלץ עם 7-Zip או:
+
+     PowerShell:
+     tar -xzf RedshiftODBC-v2.1.15.0-FullSource.tar.gz
+
+  3. Move to build location:
+     העבר למיקום בנייה:
+
+     mkdir C:\RedshiftODBC
+     move amazon-redshift-odbc-driver C:\RedshiftODBC\
+
+
+================================================================================
+🚀 STEP 3: Quick Build (Automated)
+שלב 3: בנייה מהירה (אוטומטית)
+================================================================================
+
+🎯 Easiest way - Use the build script:
+הדרך הקלה ביותר - השתמש בסקריפט:
+
+  1. Open Command Prompt (not PowerShell)
+     פתח Command Prompt (לא PowerShell)
+
+  2. Navigate to source:
+     נווט לקוד המקור:
+
+     cd C:\RedshiftODBC\amazon-redshift-odbc-driver
+
+  3. Copy the build script:
+     העתק את סקריפט הבנייה:
+
+     (Copy WINDOWS-BUILD-READY.bat to this directory)
+     (העתק WINDOWS-BUILD-READY.bat לתיקייה זו)
+
+  4. Run the script:
+     הרץ את הסקריפט:
+
+     WINDOWS-BUILD-READY.bat
+
+  5. Wait for build to complete
+     חכה שהבנייה תסתיים
+
+  6. MSI will be at:
+     MSI יהיה ב:
+
+     C:\RedshiftBuilds\AmazonRedshiftODBC64-2.1.15.0.msi
+
+Done! זהו!
+
+
+================================================================================
+🔧 STEP 3 (Alternative): Manual Build
+שלב 3 (חלופה): בנייה ידנית
+================================================================================
+
+If automated script doesn't work:
+אם הסקריפט האוטומטי לא עובד:
+
+  1. Open "Developer Command Prompt for VS 2019"
+     פתח "Developer Command Prompt for VS 2019"
+     (NOT regular Command Prompt!)
+     (לא Command Prompt רגיל!)
+
+  2. Navigate to source:
+     נווט לקוד:
+
+     cd C:\RedshiftODBC\amazon-redshift-odbc-driver
+
+  3. Run build script:
+     הרץ סקריפט בנייה:
+
+     build64.bat
+
+  4. Wait (10-20 minutes)
+     חכה (10-20 דקות)
+
+  5. Check for MSI:
+     בדוק MSI:
+
+     dir cmake-build\install\src\odbc\rsodbc\install\*.msi
+
+
+================================================================================
+✅ STEP 4: Verify Build Success
+שלב 4: ודא הצלחת הבנייה
+================================================================================
+
+Check for these files:
+בדוק את הקבצים האלה:
+
+  ✓ cmake-build\install\src\odbc\rsodbc\install\AmazonRedshiftODBC64-2.1.15.0.msi
+    Expected size: ~7-8 MB
+    גודל צפוי: ~7-8 מגה
+
+  ✓ cmake-build\install\bin\rsodbc.dll
+    The actual driver DLL
+    קובץ ה-DLL של הדרייבר
+
+Get version info:
+קבל מידע גרסה:
+
+  PowerShell:
+  (Get-Item "cmake-build\install\src\odbc\rsodbc\install\AmazonRedshiftODBC64-2.1.15.0.msi").VersionInfo
+
+Calculate checksum:
+חשב checksum:
+
+  certutil -hashfile "cmake-build\install\src\odbc\rsodbc\install\AmazonRedshiftODBC64-2.1.15.0.msi" SHA256
+
+
+================================================================================
+🧪 STEP 5: Test the Driver
+שלב 5: בדוק את הדרייבר
+================================================================================
+
+1. Install MSI:
+   התקן MSI:
+
+   Right-click → Install
+   או:
+   or:
+   msiexec /i AmazonRedshiftODBC64-2.1.15.0.msi
+
+2. Configure ODBC DSN:
+   הגדר ODBC DSN:
+
+   • Open: "ODBC Data Source Administrator (64-bit)"
+     פתח: "ODBC Data Source Administrator (64-bit)"
+   • Add → Amazon Redshift (x64)
+   • plugin_name: BrowserAzureADOAuth2
+   • idp_tenant: your-tenant
+   • client_id: your-client-id
+
+3. Test authentication cancellation:
+   בדוק ביטול authentication:
+
+   ✓ Click "Test" button
+   ✓ Browser opens to Azure AD
+   ✓ Click "Cancel" button
+   ✅ Should show error immediately:
+      "Authentication failed. The authorization code was not received..."
+
+4. Test browser close:
+   בדוק סגירת דפדפן:
+
+   ✓ Click "Test" button
+   ✓ Browser opens
+   ✓ Close browser window (X)
+   ✅ Should show same error immediately
+
+5. Test successful login:
+   בדוק כניסה מוצלחת:
+
+   ✓ Click "Test"
+   ✓ Complete Azure AD login
+   ✅ Should show: "Connection Successful"
+
+
+================================================================================
+📤 STEP 6: Distribute
+שלב 6: הפץ
+================================================================================
+
+Copy MSI back to Linux:
+העתק MSI חזרה ל-Linux:
+
+  From Windows:
+  מ-Windows:
+    Copy: C:\RedshiftBuilds\AmazonRedshiftODBC64-2.1.15.0.msi
+    To network share / USB
+    למיקום משותף / USB
+
+  On Linux:
+  ב-Linux:
+    cp /mnt/windows/AmazonRedshiftODBC64-2.1.15.0.msi ~/Downloads/
+
+Generate final checksum:
+צור checksum סופי:
+
+  sha256sum AmazonRedshiftODBC64-2.1.15.0.msi > AmazonRedshiftODBC64-2.1.15.0.msi.sha256
+
+
+================================================================================
+🐛 TROUBLESHOOTING
+פתרון בעיות
+================================================================================
+
+❌ Error: "cmake not found"
+   Solution:
+   פתרון:
+     • Reinstall CMake
+     • Check "Add to PATH" during installation
+     • Or add manually: C:\Program Files\CMake\bin
+
+❌ Error: "MSBuild not found"
+   Solution:
+   פתרון:
+     • Use "Developer Command Prompt for VS" (not regular CMD!)
+     • Reinstall Visual Studio C++ workload
+
+❌ Error: "WiX toolset not found"
+   Solution:
+   פתרון:
+     • Install from: https://wixtoolset.org/releases/
+     • Restart command prompt after installation
+
+❌ Error: Build fails with C++ errors
+   Solution:
+   פתרון:
+     • Clean build: rmdir /S /Q cmake-build
+     • Rebuild: build64.bat
+
+❌ MSI not created but build succeeded
+   Solution:
+   פתרון:
+     • Install WiX Toolset
+     • Rebuild
+     • Driver DLL is at: cmake-build\install\bin\rsodbc.dll
+
+
+================================================================================
+📊 Expected Build Output
+פלט צפוי מהבנייה
+================================================================================
+
+Successful build output:
+פלט הצלחה:
+
+  Building 64 bit Windows x64 Redshift ODBC Driver
+  cmake version 3.xx.x
+  ...
+  [100%] Built target rsodbc
+  ...
+  Creating MSI installer...
+  ...
+  Build succeeded.
+      0 Warning(s)
+      0 Error(s)
+
+  Time Elapsed 00:15:32.45
+
+Files created:
+קבצים שנוצרו:
+
+  cmake-build/
+  ├── install/
+  │   ├── bin/
+  │   │   └── rsodbc.dll                        ← Driver DLL
+  │   └── src/
+  │       └── odbc/
+  │           └── rsodbc/
+  │               └── install/
+  │                   └── AmazonRedshiftODBC64-2.1.15.0.msi  ← MSI Installer
+
+
+================================================================================
+⏱️  Expected Build Time
+זמן בנייה צפוי
+================================================================================
+
+• First build: 15-25 minutes
+  בנייה ראשונה: 15-25 דקות
+
+• Rebuild: 5-10 minutes
+  בנייה מחדש: 5-10 דקות
+
+Depends on:
+תלוי ב:
+  • CPU speed
+  • Disk speed (SSD recommended)
+  • RAM (8GB+ recommended)
+
+
+================================================================================
+💡 TIPS
+טיפים
+================================================================================
+
+✅ Use SSD for faster builds
+   השתמש ב-SSD לבנייה מהירה יותר
+
+✅ Close unnecessary programs during build
+   סגור תוכניות מיותרות בזמן בנייה
+
+✅ Build in Release mode (not Debug)
+   בנה במצב Release (לא Debug)
+
+✅ Keep build log for troubleshooting
+   שמור log של הבנייה לפתרון בעיות
+
+✅ Test on clean Windows VM first
+   בדוק על VM נקי של Windows קודם
+
+
+================================================================================
+📞 SUPPORT
+תמיכה
+================================================================================
+
+Build Issues:
+בעיות בנייה:
+  • Check all prerequisites installed
+    ודא שכל הדרישות מותקנות
+  • Use Developer Command Prompt (not regular CMD)
+    השתמש ב-Developer Command Prompt (לא CMD רגיל)
+  • Check build.log for errors
+    בדוק build.log לשגיאות
+
+Runtime Issues:
+בעיות הרצה:
+  • Enable debug logging in ODBC configuration
+    הפעל debug logging בהגדרות ODBC
+  • Check ODBC logs
+    בדוק לוגים של ODBC
+
+
+================================================================================
+
+Version: 2.1.15.0
+Date: 2026-02-09
+Platform: Windows 64-bit
+Build Tool: Visual Studio 2019+
+
+🤖 Generated with Claude Code (https://claude.com/claude-code)
+
+================================================================================

@@ -1530,15 +1530,16 @@ short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType)
 		}
 
 		case UNKNOWNOID: // This happens when SELECT as parameter. e.g SELECT $1
+		case UNSPECIFIEDOID: // OID 0 - happens with functions like pg_get_session_roles() that return RECORD type
 		{
-			sqlType = SQL_VARCHAR;
+			sqlType = SQL_LONGVARCHAR; // Treat unknown types as LONGVARCHAR to avoid "Unknown SQL type" errors
 			break;
 		}
 
 
         default:    // Some pg data type in catalog table as such not supported by PADB (e.g. aclitem[]), so map not supported as SQL_VARCHAR.
         {
-            sqlType = SQL_UNKNOWN_TYPE; // SQL_UNKNOWN_TYPE SQL_VARCHAR
+            sqlType = SQL_LONGVARCHAR; // Changed from SQL_UNKNOWN_TYPE to SQL_LONGVARCHAR for better compatibility
             break;
         }
     } // Switch
