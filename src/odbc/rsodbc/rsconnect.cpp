@@ -372,6 +372,11 @@ SQLRETURN  SQL_API RS_CONN_INFO::RS_SQLConnect(SQLHDBC phdbc,
     // Clear error list
     pConn->pErrorList = clearErrorList(pConn->pErrorList);
 
+    RS_LOG_TRACE("RSCNN", "SQLConnect: DSN=%s, UID=%s, Password=%s",
+                 szDsnName ? szDsnName : "(null)",
+                 szUserName ? szUserName : "(null)",
+                 szPassword ? "****" : "(null)");
+
     if(szDsnName != NULL  && *szDsnName != '\0')
     {
         RS_CONNECT_PROPS_INFO *pConnectProps = pConn->pConnectProps;
@@ -601,6 +606,8 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
 
         // Clear error list
         pConn->pErrorList = clearErrorList(pConn->pErrorList);
+
+        RS_LOG_TRACE("RSCNN", "RS_SQLDriverConnect: processing connection string");
 
         if ((hDriverCompletion        != SQL_DRIVER_COMPLETE) 
             &&(hDriverCompletion    != SQL_DRIVER_PROMPT) 
@@ -1074,6 +1081,9 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLBrowseConnect(SQLHDBC          phdbc,
 
     // Clear error list
     pConn->pErrorList = clearErrorList(pConn->pErrorList);
+
+    RS_LOG_TRACE("RSCNN", "RS_SQLBrowseConnect: processing connection string (iteration %d)",
+                 pConn->iBrowseIteration + 1);
 
     if ((cbConnStrIn != SQL_NTS) && (cbConnStrIn < 0))
     {
@@ -2218,6 +2228,12 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
 
     // Internal lambda function applied to each extracted key-value
     auto processKeyVal = [&](const char *pname, const char *pval) {
+      if (pname && pval) {
+        RS_LOG_TRACE("RSCNN", "Connection option: %s=%s",
+                     pname,
+                     isSensitiveConnectionKey(pname) ? "****" : pval);
+      }
+
       if (onlyDSN) {
         // We are looking for only DSN first.
         if (_stricmp(pname, RS_DSN) == 0) {
@@ -3301,6 +3317,65 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
 		  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_TCP_PROXY_PASSWORD, "", pTcpProxyProps->szPassword, MAX_IDEN_LEN, ODBC_INI);
 	  }
 
+      RS_LOG_TRACE("RSCNN",
+          "readMoreConnectPropsFromRegistry [connection]: DSN=%s, Host=%s, Port=%s, "
+          "Database=%s, User=%s, Password=%s, "
+          "SSLMode=%s, EncryptionMethod=%d, ValidateServerCertificate=%d, "
+          "TrustStore=%s, CaFile=%s, CaPath=%s, MinTLS=%s, "
+          "IAM=%s, NativeAuth=%s, PluginName=%s",
+          pConnectProps->szDSN,
+          pConnectProps->szHost[0] ? pConnectProps->szHost : "(empty)",
+          pConnectProps->szPort[0] ? pConnectProps->szPort : "(empty)",
+          pConnectProps->szDatabase[0] ? pConnectProps->szDatabase : "(empty)",
+          pConnectProps->szUser[0] ? pConnectProps->szUser : "(empty)",
+          pConnectProps->szPassword[0] ? "****" : "(empty)",
+          pConnectProps->szSslMode[0] ? pConnectProps->szSslMode : "(empty)",
+          pConnectProps->iEncryptionMethod,
+          pConnectProps->iValidateServerCertificate,
+          pConnectProps->szTrustStore[0] ? pConnectProps->szTrustStore : "(empty)",
+          pConnectProps->szCaFile[0] ? pConnectProps->szCaFile : "(empty)",
+          pConnectProps->szCaPath[0] ? pConnectProps->szCaPath : "(empty)",
+          pConnectProps->szMinTLS[0] ? pConnectProps->szMinTLS : "(empty)",
+          pConnectProps->isIAMAuth ? "true" : "false",
+          pConnectProps->isNativeAuth ? "true" : "false",
+          pluginName[0] ? pluginName : "(empty)");
+
+      RS_LOG_TRACE("RSCNN",
+          "readMoreConnectPropsFromRegistry [behavior]: "
+          "LoginTimeout=%d, QueryTimeout=%d, "
+          "ApplicationUsingThreads=%d, FetchRefCursor=%d, "
+          "TransactionErrorBehavior=%d, ConnectionRetryCount=%d, "
+          "ConnectionRetryDelay=%d, ClientProtocolVersion=%d, "
+          "StreamingCursorRows=%d, CscEnable=%d, "
+          "DatabaseMetadataCurrentDbOnly=%d, ReadOnly=%d, "
+          "MultiInsertCmdConvertEnable=%d, StringType=%s, "
+          "KerberosServiceName=%s, Compression=%s, "
+          "KeepAlive=%s, KeepAliveCount=%s, KeepAliveIdle=%s, "
+          "KeepAliveInterval=%s, ApplicationName=%s, "
+          "TraceLevel=%d, InitializationString=%s",
+          pConnAttr->iLoginTimeout,
+          pConnectProps->iQueryTimeout,
+          pConnectProps->iApplicationUsingThreads,
+          pConnectProps->iFetchRefCursor,
+          pConnectProps->iTransactionErrorBehavior,
+          pConnectProps->iConnectionRetryCount,
+          pConnectProps->iConnectionRetryDelay,
+          pConnectProps->iClientProtocolVersion,
+          pConnectProps->iStreamingCursorRows,
+          pConnectProps->iCscEnable,
+          pConnectProps->iDatabaseMetadataCurrentDbOnly,
+          pConnectProps->iReadOnly,
+          pConnectProps->iMultiInsertCmdConvertEnable,
+          pConnectProps->szStringType[0] ? pConnectProps->szStringType : "(empty)",
+          pConnectProps->szKerberosServiceName[0] ? pConnectProps->szKerberosServiceName : "(empty)",
+          pConnAttr->szCompression[0] ? pConnAttr->szCompression : "(empty)",
+          pConnectProps->szKeepAlive[0] ? pConnectProps->szKeepAlive : "(empty)",
+          pConnectProps->szKeepAliveCount[0] ? pConnectProps->szKeepAliveCount : "(empty)",
+          pConnectProps->szKeepAliveIdle[0] ? pConnectProps->szKeepAliveIdle : "(empty)",
+          pConnectProps->szKeepAliveInterval[0] ? pConnectProps->szKeepAliveInterval : "(empty)",
+          pConnAttr->szApplicationName[0] ? pConnAttr->szApplicationName : "(empty)",
+          pConnectProps->iTraceLevel,
+          pConnectProps->pInitializationString ? pConnectProps->pInitializationString : "(empty)");
 
     } // DSN is not empty
 }
@@ -3408,6 +3483,80 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
 			free(driverPath);
 #endif
 
+        RS_LOG_TRACE("RSCNN",
+            "readIamConnectPropsFromRegistry [credentials]: AuthType=%s, PluginName=%s, "
+            "AccessKeyID=%s, SecretAccessKey=%s, SessionToken=%s, "
+            "Profile=%s, InstanceProfile=%s, "
+            "BasicAuthToken=%s, TokenType=%s, WebIdentityToken=%s, "
+            "ClientId=%s, ClientSecret=%s, Scope=%s, "
+            "IdentityNamespace=%s, IssuerUrl=%s, "
+            "AuthProfile=%s, ProviderName=%s",
+            pIamProps->szAuthType[0] ? pIamProps->szAuthType : "(empty)",
+            pIamProps->szPluginName[0] ? pIamProps->szPluginName : "(empty)",
+            pIamProps->szAccessKeyID[0] ? "****" : "(empty)",
+            pIamProps->szSecretAccessKey[0] ? "****" : "(empty)",
+            pIamProps->szSessionToken[0] ? "****" : "(empty)",
+            pIamProps->szProfile[0] ? pIamProps->szProfile : "(empty)",
+            pIamProps->isInstanceProfile ? "true" : "false",
+            pIamProps->szBasicAuthToken[0] ? "****" : "(empty)",
+            pIamProps->szTokenType[0] ? pIamProps->szTokenType : "(empty)",
+            (pIamProps->pszJwt && pIamProps->pszJwt[0]) ? "****" : "(empty)",
+            pIamProps->szClientId[0] ? pIamProps->szClientId : "(empty)",
+            pIamProps->szClientSecret[0] ? "****" : "(empty)",
+            pIamProps->szScope[0] ? pIamProps->szScope : "(empty)",
+            pIamProps->szIdentityNamespace[0] ? pIamProps->szIdentityNamespace : "(empty)",
+            pIamProps->szIssuerUrl[0] ? pIamProps->szIssuerUrl : "(empty)",
+            pIamProps->szAuthProfile[0] ? pIamProps->szAuthProfile : "(empty)",
+            pConnectProps->szProviderName[0] ? pConnectProps->szProviderName : "(empty)");
+
+        RS_LOG_TRACE("RSCNN",
+            "readIamConnectPropsFromRegistry [cluster/idp]: "
+            "ClusterId=%s, Region=%s, Workgroup=%s, Serverless=%s, "
+            "EndpointUrl=%s, StsEndpointUrl=%s, VpcEndpointUrl=%s, "
+            "DbUser=%s, DbGroups=%s, DbGroupsFilter=%s, "
+            "AutoCreate=%s, ForceLowercase=%s, "
+            "IdpHost=%s, IdpPort=%d, IdpTenant=%s, IdpPartition=%s, "
+            "IdpResponseTimeout=%ld, IAMDuration=%ld, "
+            "LoginUrl=%s, ListenPort=%ld, Duration=%ld, "
+            "SslInsecure=%s, GroupFederation=%s, DisableCache=%s, "
+            "PreferredRole=%s, RoleArn=%s, RoleSessionName=%s, "
+            "LoginToRp=%s, PartnerSpid=%s, AppId=%s, AppName=%s, "
+            "StsConnectionTimeout=%d, IdcRegion=%s, IdcClientDisplayName=%s",
+            pIamProps->szClusterId[0] ? pIamProps->szClusterId : "(empty)",
+            pIamProps->szRegion[0] ? pIamProps->szRegion : "(empty)",
+            pIamProps->szWorkGroup[0] ? pIamProps->szWorkGroup : "(empty)",
+            pIamProps->isServerless ? "true" : "false",
+            pIamProps->szEndpointUrl[0] ? pIamProps->szEndpointUrl : "(empty)",
+            pIamProps->szStsEndpointUrl[0] ? pIamProps->szStsEndpointUrl : "(empty)",
+            pIamProps->szManagedVpcUrl[0] ? pIamProps->szManagedVpcUrl : "(empty)",
+            pIamProps->szDbUser[0] ? pIamProps->szDbUser : "(empty)",
+            pIamProps->szDbGroups[0] ? pIamProps->szDbGroups : "(empty)",
+            pIamProps->szDbGroupsFilter[0] ? pIamProps->szDbGroupsFilter : "(empty)",
+            pIamProps->isAutoCreate ? "true" : "false",
+            pIamProps->isForceLowercase ? "true" : "false",
+            pIamProps->szIdpHost[0] ? pIamProps->szIdpHost : "(empty)",
+            pIamProps->iIdpPort,
+            pIamProps->szIdpTenant[0] ? pIamProps->szIdpTenant : "(empty)",
+            pIamProps->szIdpPartition[0] ? pIamProps->szIdpPartition : "(empty)",
+            pIamProps->lIdpResponseTimeout,
+            pIamProps->lIAMDuration,
+            pIamProps->szLoginUrl[0] ? pIamProps->szLoginUrl : "(empty)",
+            pIamProps->lListenPort,
+            pIamProps->lDuration,
+            pIamProps->isSslInsecure ? "true" : "false",
+            pIamProps->isGroupFederation ? "true" : "false",
+            pIamProps->isDisableCache ? "true" : "false",
+            pIamProps->szPreferredRole[0] ? pIamProps->szPreferredRole : "(empty)",
+            pIamProps->szRoleArn[0] ? pIamProps->szRoleArn : "(empty)",
+            pIamProps->szRoleSessionName[0] ? pIamProps->szRoleSessionName : "(empty)",
+            pIamProps->szLoginToRp[0] ? pIamProps->szLoginToRp : "(empty)",
+            pIamProps->szPartnerSpid[0] ? pIamProps->szPartnerSpid : "(empty)",
+            pIamProps->szAppId[0] ? pIamProps->szAppId : "(empty)",
+            pIamProps->szAppName[0] ? pIamProps->szAppName : "(empty)",
+            pIamProps->iStsConnectionTimeout,
+            pIamProps->szIdcRegion[0] ? pIamProps->szIdcRegion : "(empty)",
+            pIamProps->szIdcClientDisplayName[0] ? pIamProps->szIdcClientDisplayName : "(empty)");
+
       }
     }
 }
@@ -3423,10 +3572,10 @@ void RS_CONN_INFO::readIntValFromDsn(char *szDSN, char *pKey, int *piVal)
 
     snprintf(szTempNumBuf,sizeof(szTempNumBuf), "%d",*piVal);
 #ifdef WIN32
-    SQLGetPrivateProfileString(szDSN, pKey, szTempNumBuf, szTempNumBuf, MAX_NUMBER_BUF_LEN, ODBC_INI);
+    SQLGetPrivateProfileString(szDSN, pKey, szTempNumBuf, szTempNumBuf, MAX_NUMBER_BUF_LEN, ODBC_INI); // Windows DM API
 #endif
 #if defined LINUX 
-    RsIni::getPrivateProfileString(szDSN, pKey, szTempNumBuf, szTempNumBuf, MAX_NUMBER_BUF_LEN, ODBC_INI);
+    RsIni::getPrivateProfileString(szDSN, pKey, szTempNumBuf, szTempNumBuf, MAX_NUMBER_BUF_LEN, ODBC_INI); // Driver's own INI parser
 #endif
     sscanf(szTempNumBuf,"%d",piVal);
 }
@@ -3658,6 +3807,29 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
         return rc;
     }
   }
+
+  RS_LOG_DEBUG("RSCNN",
+      "doConnection: DSN=%s, Host=%s, Port=%s, Database=%s, User=%s, "
+      "SSLMode=%s, IAM=%s, NativeAuth=%s, AuthType=%s, PluginName=%s, "
+      "ClusterId=%s, Region=%s, Workgroup=%s",
+      pConnectProps->szDSN[0] ? pConnectProps->szDSN : "(empty)",
+      pConnectProps->szHost[0] ? pConnectProps->szHost : "(empty)",
+      pConnectProps->szPort[0] ? pConnectProps->szPort : "(empty)",
+      pConnectProps->szDatabase[0] ? pConnectProps->szDatabase : "(empty)",
+      pConnectProps->szUser[0] ? pConnectProps->szUser : "(empty)",
+      pConnectProps->szSslMode[0] ? pConnectProps->szSslMode : "(empty)",
+      pConnectProps->isIAMAuth ? "true" : "false",
+      pConnectProps->isNativeAuth ? "true" : "false",
+      pConnectProps->pIamProps && pConnectProps->pIamProps->szAuthType[0]
+          ? pConnectProps->pIamProps->szAuthType : "(empty)",
+      pConnectProps->pIamProps && pConnectProps->pIamProps->szPluginName[0]
+          ? pConnectProps->pIamProps->szPluginName : "(empty)",
+      pConnectProps->pIamProps && pConnectProps->pIamProps->szClusterId[0]
+          ? pConnectProps->pIamProps->szClusterId : "(empty)",
+      pConnectProps->pIamProps && pConnectProps->pIamProps->szRegion[0]
+          ? pConnectProps->pIamProps->szRegion : "(empty)",
+      pConnectProps->pIamProps && pConnectProps->pIamProps->szWorkGroup[0]
+          ? pConnectProps->pIamProps->szWorkGroup : "(empty)");
 
   rc = libpqConnect(pConn);
 

@@ -1295,6 +1295,28 @@ struct SHOWPROCEDURESFUNCTIONSResult {
 #define RS_LOG_LEVEL_OPTION_NAME "LogLevel"
 #define RS_LOG_PATH_OPTION_NAME  "LogPath"
 
+// Sensitive connection option keys whose values must be masked in logs.
+// Used by logConnectionProperty() and tracePasswordConnectString().
+// Case-insensitive comparison should be used when checking against these.
+#define RS_SENSITIVE_CONN_KEYS_LIST \
+    RS_PASSWORD, RS_PWD, RS_SECRET_ACCESS_KEY, RS_SESSION_TOKEN, \
+    RS_ACCESS_KEY_ID, RS_WEB_IDENTITY_TOKEN, RS_BASIC_AUTH_TOKEN, \
+    RS_CLIENT_SECRET, RS_TCP_PROXY_PASSWORD, RS_HTTPS_PROXY_PASSWORD
+
+#ifdef __cplusplus
+// Returns true if the given connection option key is sensitive and its value
+// should be masked in log output. Comparison is case-insensitive.
+inline bool isSensitiveConnectionKey(const char *key) {
+    static const char *sensitiveKeys[] = { RS_SENSITIVE_CONN_KEYS_LIST };
+    for (const char *sk : sensitiveKeys) {
+        if (_stricmp(key, sk) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
+
 
 struct RS_TCP_PROXY_CONN_PROPS_INFO {
     char szHost[MAX_IAM_BUF_VAL] = {0}; // proxy host
