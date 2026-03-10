@@ -289,6 +289,15 @@ void RsIamHelper::UpdateConnectionSettingsWithCredentials(
     else
     {
         settings.m_web_identity_token = in_credentials.GetIdpToken();
+        
+        // Propagate token type from RsCredentials to RsSettings for identity-enhanced credentials flow
+        // Token type will be copied from RsSettings to connection properties so it can be propagated
+        // to server
+        const rs_string& tokenType = in_credentials.GetIdpTokenType();
+        if (!tokenType.empty()) {
+            RS_LOG_DEBUG("IAMHLP", "RsIamHelper::IamAuthentication token type: %s", tokenType.c_str());
+            settings.m_idpAuthTokenType = tokenType;
+        }
     }
 }
 
@@ -495,6 +504,21 @@ void RsIamHelper::SetIamSettings(
 
     settings.m_caPath = pIamProps->szCaPath;
     settings.m_caFile = pIamProps->szCaFile;
+
+    // Set AWS credentials for identity-enhanced credentials flow (IdpTokenAuthPlugin)
+    // These need to be set regardless of isIAMAuth for native plugin authentication    
+    if (pIamProps->szAccessKeyID[0] != '\0') {
+        settings.m_accessKeyID = pIamProps->szAccessKeyID;
+        RS_LOG_DEBUG("IAMHLP", "SetIamSettings: set m_accessKeyID");
+    }
+    if (pIamProps->szSecretAccessKey[0] != '\0') {
+        settings.m_secretAccessKey = pIamProps->szSecretAccessKey;
+        RS_LOG_DEBUG("IAMHLP", "SetIamSettings: set m_secretAccessKey");
+    }
+    if (pIamProps->szSessionToken[0] != '\0') {
+        settings.m_sessionToken = pIamProps->szSessionToken;
+        RS_LOG_DEBUG("IAMHLP", "SetIamSettings: set m_sessionToken");
+    }
     
     if (pHttpsProps) {
         settings.m_httpsProxyHost = pHttpsProps->szHttpsHost;

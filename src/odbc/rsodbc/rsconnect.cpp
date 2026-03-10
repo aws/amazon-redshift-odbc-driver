@@ -3683,6 +3683,13 @@ static void copyIdpToken(RS_IAM_CONN_PROPS_INFO* pIamProps, const std::string& w
     rs_strncpy(pIamProps->pszJwt, pval, len);
 }
 
+// Copies IdP token type back to connection properties
+static void copyIdpTokenType(RS_IAM_CONN_PROPS_INFO* pIamProps, const std::string& idp_token_type) {
+    if (!idp_token_type.empty()) {
+        rs_strncpy(pIamProps->szTokenType, idp_token_type.c_str(), sizeof(pIamProps->szTokenType));
+    }
+}
+
 static SQLRETURN handleFederatedNonIamConnection(RS_CONN_INFO* pConn) {
     
     RS_CONNECT_PROPS_INFO* pConnectProps = pConn->pConnectProps;
@@ -3699,6 +3706,7 @@ static SQLRETURN handleFederatedNonIamConnection(RS_CONN_INFO* pConn) {
             rs_strncpy(pConnectProps->szIdpType, RS_IDP_TYPE_AWS_IDC, MAX_IDEN_LEN);
 
             copyIdpToken(pIamProps, pConn->iamSettings.m_web_identity_token);
+            copyIdpTokenType(pIamProps, pConn->iamSettings.m_idpAuthTokenType);
             return SQL_SUCCESS;
         }
         catch (RsErrorException& ex) {

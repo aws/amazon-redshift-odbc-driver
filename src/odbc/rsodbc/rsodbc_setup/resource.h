@@ -253,6 +253,24 @@
 #define IDC_MANAGED_VPC_STATIC          1233
 #define IDC_MANAGED_VPC                 1234
 
+// IdpToken-specific duplicate control IDs (1240–1255)
+#define IDC_IDP_CID_STATIC              1240
+#define IDC_IDP_CID                     1241
+#define IDC_IDP_REGION_STATIC           1242
+#define IDC_IDP_REGION                  1243
+#define IDC_IDP_EPU_STATIC              1244
+#define IDC_IDP_EPU                     1245
+#define IDC_IDP_WORKGROUP_STATIC        1246
+#define IDC_IDP_WORKGROUP               1247
+#define IDC_IDP_AKI_STATIC              1248
+#define IDC_IDP_AKI                     1249
+#define IDC_IDP_SAK_STATIC              1250
+#define IDC_IDP_SAK                     1251
+#define IDC_IDP_ST_STATIC               1252
+#define IDC_IDP_ST                      1253
+#define IDC_IDP_MANAGED_VPC_STATIC      1254
+#define IDC_IDP_MANAGED_VPC             1255
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
