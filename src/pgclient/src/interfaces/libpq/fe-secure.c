@@ -60,6 +60,7 @@
 #ifdef USE_SSL
 
 #include <openssl/ssl.h>
+#include <openssl/x509v3.h>
 #if (SSLEAY_VERSION_NUMBER >= 0x00907000L)
 #include <openssl/conf.h>
 #endif
@@ -761,21 +762,32 @@ verify_peer_name_matches_certificate(PGconn *conn)
 	else
 	{
 		/*
-		 * Compare CN to originally given hostname.
-		 *
-		 * XXX: Should support alternate names here
+		 * Use X509_check_host() to properly validate hostname against both
+		 * Common Name (CN) and Subject Alternative Names (SAN).
+		 * This is the RFC 6125 compliant way to verify certificates.
 		 */
-		if (pg_strcasecmp(conn->peer_cn, conn->pghost) == 0)
-			/* Exact name match */
+		int result = X509_check_host(conn->peer, conn->pghost, strlen(conn->pghost),
+									 X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS, NULL);
+		
+		if (result == 1)
+		{
+			/* Hostname matches certificate */
 			return true;
-		else if (wildcard_certificate_match(conn->peer_cn, conn->pghost))
-			/* Matched wildcard certificate */
-			return true;
+		}
+		else if (result == 0)
+		{
+			/* Hostname does not match */
+			printfPQExpBuffer(&conn->errorMessage,
+							  libpq_gettext("server certificate does not match host name \"%s\"\n"),
+							  conn->pghost);
+			return false;
+		}
 		else
 		{
+			/* Error occurred during validation */
 			printfPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("server common name \"%s\" does not match host name \"%s\"\n"),
-							  conn->peer_cn, conn->pghost);
+							  libpq_gettext("certificate hostname validation failed for host \"%s\" (certificate CN: \"%s\")\n"),
+							  conn->pghost, conn->peer_cn);
 			return false;
 		}
 	}
