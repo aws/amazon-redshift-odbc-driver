@@ -575,6 +575,7 @@ const std::unordered_map<std::string, DATA_TYPE_INFO>
          {SQL_VARCHAR, SQL_VARCHAR, kNotApplicable, "varchar"}},
         {"character", {SQL_CHAR, SQL_CHAR, kNotApplicable, "char"}},
         {"\"char\"", {SQL_CHAR, SQL_CHAR, kNotApplicable, "char"}},
+        {"bpchar", {SQL_CHAR, SQL_CHAR, kNotApplicable, "char"}},
         {"varchar", {SQL_VARCHAR, SQL_VARCHAR, kNotApplicable, "varchar"}},
         {"smallint", {SQL_SMALLINT, SQL_SMALLINT, kNotApplicable, "int2"}},
         {"integer", {SQL_INTEGER, SQL_INTEGER, kNotApplicable, "int4"}},
@@ -765,9 +766,9 @@ int RsMetadataAPIHelper::getColumnSize(const std::string &rsType,
         return it->second;
     } else {
         if (rsType == "numeric") {
-            return numeric_precision;
+            return numeric_precision > 0 ? numeric_precision : 0;
         } else if (rsType == "char" || rsType == "varchar" || rsType == "string") {
-            return character_maximum_length;
+            return character_maximum_length > 0 ? character_maximum_length : 0;
         } else if (rsType == "super" || rsType == "geometry" ||
                    rsType == "geography" || rsType == "varbyte" || rsType == "binary") {
             return kNotApplicable;
@@ -796,7 +797,7 @@ int RsMetadataAPIHelper::getBufferLen(const std::string &rsType,
             // integer
             return numeric_precision <= 19 ? 8 : 16;
         } else if (rsType == "char" || rsType == "varchar" || rsType == "string") {
-            return character_maximum_length;
+            return character_maximum_length > 0 ? character_maximum_length : 0;
         } else if (rsType == "super" || rsType == "geometry" ||
                    rsType == "geography" || rsType == "varbyte" ||
                    rsType == "hllsketch" || rsType == "binary") {
@@ -826,7 +827,7 @@ short RsMetadataAPIHelper::getDecimalDigit(const std::string &rsType,
         return dateTimeCustomizePrecision ? precisions
                                           : kDefaultSecondPrecision;
     } else if (rsType == "numeric") {
-        return numeric_scale;
+        return numeric_scale > 0 ? numeric_scale : 0;
     } else {
         return kNotApplicable;
     }
@@ -866,7 +867,7 @@ int RsMetadataAPIHelper::getCharOctetLen(const std::string &rsType,
     auto it = RsMetadataAPIHelper::charOctetLenSet.find(rsType);
     if (it != RsMetadataAPIHelper::charOctetLenSet.end()) {
         if (rsType == "char" || rsType == "varchar") {
-            return character_maximum_length;
+            return character_maximum_length > 0 ? character_maximum_length : 0;
         } else if (rsType == "varbyte") {
             return kUnknownColumnSize;
         } else if (rsType == "geography") {

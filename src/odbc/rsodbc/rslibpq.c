@@ -3317,7 +3317,7 @@ SQLRETURN libpqCreateSQLCatalogsCustomizedResultSet(
 
     // Result handler validation
     if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
-        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+        RS_LOG_ERROR("libpqCreateSQLCatalogsCustomizedResultSet",
             "Invalid statement handler or Result head");
         return SQL_INVALID_HANDLE;
     }
@@ -3364,7 +3364,7 @@ SQLRETURN libpqCreateSQLSchemasCustomizedResultSet(
 
     // Result handler validation
     if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
-        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+        RS_LOG_ERROR("libpqCreateSQLSchemasCustomizedResultSet",
             "Invalid statement handler or Result head");
         return SQL_INVALID_HANDLE;
     }
@@ -3414,7 +3414,7 @@ SQLRETURN libpqCreateSQLTableTypesCustomizedResultSet(
 
     // Result handler validation
     if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
-        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+        RS_LOG_ERROR("libpqCreateSQLTableTypesCustomizedResultSet",
             "Invalid statement handler or Result head");
         return SQL_INVALID_HANDLE;
     }
@@ -3461,7 +3461,7 @@ SQLRETURN libpqCreateSQLTablesCustomizedResultSet(
 
     // Result handler validation
     if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
-        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+        RS_LOG_ERROR("libpqCreateSQLTablesCustomizedResultSet",
             "Invalid statement handler or Result head");
         return SQL_INVALID_HANDLE;
     }
@@ -3548,7 +3548,7 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
 
     // Result handler validation
     if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
-        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+        RS_LOG_ERROR("libpqCreateSQLColumnsCustomizedResultSet",
             "Invalid statement handler or Result head");
         return SQL_INVALID_HANDLE;
     }
@@ -3967,7 +3967,7 @@ SQLRETURN libpqCreateSQLSpecialColumnsCustomizedResultSet(
 
     // Result handler validation
     if (pStmt == NULL || pStmt->pResultHead == NULL || pStmt->pResultHead->pgResult == NULL) {
-        RS_LOG_ERROR("libpqCreateSQLProcedureColumnsCustomizedResultSet",
+        RS_LOG_ERROR("libpqCreateSQLSpecialColumnsCustomizedResultSet",
             "Invalid statement handler or Result head");
         return SQL_INVALID_HANDLE;
     }
