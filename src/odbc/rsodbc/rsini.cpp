@@ -209,10 +209,14 @@ int RsIni::getPrivateProfileStringWithFullPath(const char *pSectionName, const c
          }
          strncpy(pReturn, pDflt, iSize);
       } else {
-         RS_LOG_ERROR("RSIni::getPrivateProfileString",
-                     "Failed to copy value to its own for section:%s",
+         // pReturn == pDflt: caller passed the same buffer as both output
+         // and default. Key was not found in INI, so the buffer already
+         // contains the default value. This is normal for readIntValFromDsn,
+         // readBoolValFromDsn etc. — not an error.
+         RS_LOG_TRACE("RSIni::getPrivateProfileString",
+                     "Key '%s' not found in section '%s', using existing default",
+                     (pKey ? pKey : "NULL"),
                      (pSectionName ? pSectionName : "UNKNOWN_SECTION"));
-         return 0;
       }
    int pDfltLen = pDflt ? strlen(pDflt) : 0;
 

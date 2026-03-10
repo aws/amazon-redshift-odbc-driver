@@ -1699,27 +1699,31 @@ reportErrorPosition(PQExpBuffer msg, const char *query, int loc, int encoding)
  * Exit: returns 0 if successfully consumed message.
  *		 returns EOF if not enough data.
  */
-static int
-getParameterStatus(PGconn *conn)
-{
-	PQExpBufferData valueBuf;
+static int getParameterStatus(PGconn *conn) {
+    PQExpBufferData valueBuf;
 
-	/* Get the parameter name */
-	if (pqGets(&conn->workBuffer, conn))
-		return EOF;
-	/* Get the parameter value (could be large) */
-	initPQExpBuffer(&valueBuf);
-	if (pqGets(&valueBuf, conn))
-	{
-		termPQExpBuffer(&valueBuf);
-		return EOF;
-	}
-	/* And save it */
-	pqSaveParameterStatus(conn, conn->workBuffer.data, valueBuf.data);
-	termPQExpBuffer(&valueBuf);
-	return 0;
+    /* Get the parameter name */
+    if (pqGets(&conn->workBuffer, conn)) {
+        return EOF;
+    }
+
+    /* Get the parameter value (could be large) */
+    initPQExpBuffer(&valueBuf);
+    if (pqGets(&valueBuf, conn)) {
+        termPQExpBuffer(&valueBuf);
+        return EOF;
+    }
+
+    /* And save it */
+    RS_LOG_DEBUG("getParameterStatus",
+             "<=BE parameter_name='%s' parameter_value='%s' value_length=%zu",
+             conn->workBuffer.data,
+             valueBuf.data,
+             valueBuf.len);
+    pqSaveParameterStatus(conn, conn->workBuffer.data, valueBuf.data);
+    termPQExpBuffer(&valueBuf);
+    return 0;
 }
-
 
 /*
  * Attempt to read a Notify response message.

@@ -7111,19 +7111,24 @@ void RsTrace::TraceSQLTablesW(int iCallOrRet,
 //
 void RsTrace::tracePasswordConnectString(const char *var,const char *szConnStr, SQLSMALLINT  cbConnStr)
 {
-    if (!szConnStr || cbConnStr < 0) {
+    if (!szConnStr) {
+        return;
+    }
+    // Handle SQL_NTS: compute actual length from the null-terminated string
+    if (cbConnStr == SQL_NTS) {
+        size_t len = strlen(szConnStr);
+        cbConnStr = (len > SHRT_MAX) ? SHRT_MAX : (SQLSMALLINT)len;
+    }
+    if (cbConnStr < 0) {
         return;
     }
     std::string pStr;
-    std::string szKeywords[] = { "Password", "PWD"};
     for (auto& kv : parseConnectionString(std::string(szConnStr, cbConnStr)))
     {
         const auto key = kv.first;
         auto& value = kv.second;
-        for (auto& pwd : szKeywords) {
-            if (isStrNoCaseEequal(key, pwd)) {
-                value = std::string(value.size(), '*');
-            }
+        if (isSensitiveConnectionKey(key.c_str())) {
+            value = std::string(value.size(), '*');
         }
         pStr += key + "=" + value + ";";
     }
