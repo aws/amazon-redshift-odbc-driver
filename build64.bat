@@ -56,9 +56,7 @@ set "temp_option="
 for %%a in (%*) do (
    if not defined temp_option (
       set arg=%%a
-      if "!arg:~0,1!" equ "-" (
-        set "temp_option=!arg!"
-      )
+      if "!arg:~0,1!" equ "-" set "temp_option=!arg!"
    ) else (
       echo arg=!arg!
       echo value=%%a
@@ -133,34 +131,25 @@ set "CMAKE_BIN_DIR=!VS_PATH!\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\
 set "MSBUILD_BIN_DIR=!VS_PATH!\MSBuild\Current\Bin\amd64"
 set "VS170COMNTOOLS=!VS_PATH!\Common7\Tools"
 
-rem Find the latest Wix, used for creating MSI
-set "WIX_HIGHEST_VERSION=0"
-set "WIX_HIGHEST_PATH="
-
-rem Search both Program Files (x86) and Program Files
-for %%R in ("C:\Program Files (x86)","C:\Program Files") do (
-    for /d %%D in ("%%~R\WiX Toolset*") do (
-        rem Extract the version number from the folder name
-        for /f "tokens=1-2 delims=. " %%A in ("%%~nD") do (
-            if /i "%%A"=="WiX" (
-                set "WIX_CURRENT_VERSION=%%B"
-                rem Compare versions numerically
-                if !WIX_CURRENT_VERSION! GTR !WIX_HIGHEST_VERSION! (
-                    set "WIX_HIGHEST_VERSION=!WIX_CURRENT_VERSION!"
-                    set "WIX_HIGHEST_PATH=%%D"
-                )
-            )
+rem Find WiX 6 toolset
+where wix >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    if exist "detect-wix.bat" (
+        call detect-wix.bat
+        if !ERRORLEVEL! neq 0 (
+            echo Error: WiX detection failed
+            exit /b 1
         )
+    ) else (
+        echo Error: wix.exe not found in PATH
+        exit /b 1
     )
 )
 
-if defined WIX_HIGHEST_PATH (
-    echo Highest WiX version path: !WIX_HIGHEST_PATH!
-    set "WIX_BIN_DIR=!WIX_HIGHEST_PATH!\bin"
-) else (
-    echo Error: No WiX Toolset installation found under Program Files.
-    exit /b 1
-)
+echo WiX 6 detected
+where wix
+echo WiX version:
+wix --version
 
 rem Ensure that the directories and executables exist
 if not exist "!CMAKE_BIN_DIR!\cmake.exe" (
@@ -171,13 +160,9 @@ if not exist "!MSBUILD_BIN_DIR!\msbuild.exe" (
     echo Error: msbuild.exe not found in "!MSBUILD_BIN_DIR!"
     exit /b 1
 )
-if not exist "!WIX_BIN_DIR!\candle.exe" (
-    echo Error: WiX tools not found in "!WIX_BIN_DIR!"
-    exit /b 1
-)
 
 rem Add build tool directories to the PATH for this script
-set "PATH=!CMAKE_BIN_DIR!;!MSBUILD_BIN_DIR!;!WIX_BIN_DIR!;!VS170COMNTOOLS!;!PATH!"
+set "PATH=!CMAKE_BIN_DIR!;!MSBUILD_BIN_DIR!;!VS170COMNTOOLS!;!PATH!"
 
 rem Setting few environment variables required for build
 SET "SystemDrive=C:"
@@ -275,15 +260,36 @@ if %ERRORLEVEL% neq 0 (
     echo Install completed successfully.
 )
 
-:GOT_INSTALLER
 call package64.bat
+if %ERRORLEVEL% neq 0 (
+    echo Error: package64.bat failed with exit code %ERRORLEVEL%
+    exit /b %ERRORLEVEL%
+)
+
+for /f "delims=" %%i in (odbcmsi.tmp) do set WIN_ODBC_BUILD_MSI=%%i
 
 echo "RS_ARTIFACTS_DIR is !RS_ARTIFACTS_DIR!"
 echo "RS_BUILD_DIR is !RS_BUILD_DIR!"
 REM Copy artifacts
 copy version.txt !RS_ARTIFACTS_DIR!
+if %ERRORLEVEL% neq 0 (
+    echo Warning: Failed to copy version.txt
+)
+
 echo "========== running: copy !WIN_ODBC_BUILD_MSI! !RS_ARTIFACTS_DIR!"
+if not defined WIN_ODBC_BUILD_MSI (
+    echo Error: WIN_ODBC_BUILD_MSI is not set
+    exit /b 1
+)
+if not exist "!WIN_ODBC_BUILD_MSI!" (
+    echo Error: MSI file not found at !WIN_ODBC_BUILD_MSI!
+    exit /b 1
+)
 copy !WIN_ODBC_BUILD_MSI! !RS_ARTIFACTS_DIR!
+if %ERRORLEVEL% neq 0 (
+    echo Error: Failed to copy MSI to artifacts directory
+    exit /b %ERRORLEVEL%
+)
 REM Compress and Copy the test artifacts to a public folder
 echo "========== running dir !RS_BUILD_DIR!(RS_BUILD_DIR)"
 if exist "!RS_BUILD_DIR!" (
@@ -341,9 +347,9 @@ echo.
 echo Options:
 echo   --version=X.X.X.X               Set the version number (optional)
 echo   --build-type=TYPE               Set the build type (default: Release)
-echo   --dependencies-install-dir=PATH Path to store and/or use dependency libraries 
+echo   --dependencies-install-dir=PATH Path to store and/or use dependency libraries
 echo.
-echo   /?, -h, --help            Show this help message
+echo   /?, -h, --help                  Show this help message
 echo.
 echo Examples:
 echo   %~nx0 --version=1.1.1.1 --build-type=Debug
