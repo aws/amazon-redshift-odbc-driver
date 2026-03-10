@@ -1,25 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Module
     Id="RSODBC"
+    Guid="5757C18B-A2EA-4593-B468-74DA3D7231D4"
     Version="$(var.VERSION)"
     Language="1033">
 
-    <Package
-    
-      Id="5757C18B-A2EA-4593-B468-74DA3D7231D4"
-      Description="Amazon Redshift ODBC Driver x64"
-      Keywords="Redshift, ODBC"
+    <SummaryInformation 
+      Keywords="Redshift, ODBC" 
       Manufacturer="Amazon Web Services, Inc."
-      InstallerVersion="200"
-      Platform="x64"
-      Languages="1033"
-      SummaryCodepage="1252" />
+      Description="Amazon Redshift ODBC Driver x64" />
 
-    <Directory Id="TARGETDIR" Name="SourceDir">
+    <StandardDirectory Id="TARGETDIR">
       <Directory Id="BINDIR" Name=".">
-        <Component Id="rsodbc.files" Guid="486400C3-BD3B-424d-8B1F-C9DA38BDAA88" Win64="yes">
-          <!-- Redshift -->
+        <Component Id="rsodbc.files" Guid="486400C3-BD3B-424d-8B1F-C9DA38BDAA88" Bitness="always64">
           <File Id="rsodbc.dll" Name="rsodbc.dll" Source="$(var.ProjectDir)/cmake-build/install/rsodbc64.dll" />
           <File Id="root.crt" Name="root.crt" Source="../root.crt" />
           <File Id="libcrypto_1_1_x64.dll" Name="libcrypto-1_1-x64.dll" Source="$(var.DependenciesDir)/openssl/$(var.BuildType)/bin/libcrypto-1_1-x64.dll" />
@@ -35,8 +29,6 @@
           <File Id="leashw64.dll" Name="leashw64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/leashw64.dll" />
           <File Id="xpprof64.dll" Name="xpprof64.dll" Source="$(var.ProjectDir)/src/pgclient/kfw-3-2-2-final/bin/Win64/xpprof64.dll" />
 
-          <!-- Note, installing the driver properly (IE, using ODBCDriver) has proven unreliable -->
-          <!--       so we install the registry keys manually ourselves.                         -->
           <RegistryValue Id="rsodbc.reg.1" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\ODBC Drivers" Name="Amazon Redshift ODBC Driver (x64)" Type="string" Value="Installed" />
           <RegistryValue Id="rsodbc.reg.2" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\Amazon Redshift ODBC Driver (x64)" Name="APILevel" Type="string" Value="1" />
           <RegistryValue Id="rsodbc.reg.3" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\Amazon Redshift ODBC Driver (x64)" Name="ConnectFunctions" Type="string" Value="YYY" />
@@ -49,7 +41,6 @@
           <RegistryValue Id="rsodbc.reg.10" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\Amazon Redshift ODBC Driver (x64)" Name="UsageCount" Type="integer" Value="1" />
         </Component>
       </Directory>
-    </Directory>
-
+    </StandardDirectory>
   </Module>
 </Wix>
