@@ -34,6 +34,13 @@ namespace Redshift
              */  
             virtual rs_string GetAuthToken() = 0;
 
+            /**
+             * @brief  Get auth token type from the plugin
+             * 
+             * @return auth token type (e.g., "ACCESS_TOKEN", "SUBJECT_TOKEN")
+             */  
+            virtual rs_string GetAuthTokenType();
+
             /// @brief Destructor
             virtual ~NativePluginCredentialsProvider();
 

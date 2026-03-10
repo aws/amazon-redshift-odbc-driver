@@ -504,6 +504,46 @@ namespace IamSupport
         /// @param in_idcClientDisplayName     Client display name
         void SetIdcClientDisplayName(const rs_string& in_idcClientDisplayName);
 
+        /// @brief Returns the Host of the IAMConfiguration
+        ///
+        /// @return Host of the IAMConfiguration
+        rs_string GetHost() const;
+
+        /// @brief Sets the Host of the IAMConfiguration
+        ///
+        /// @param in_host     Host of the IAMConfiguration
+        void SetHost(const rs_string& in_host);
+
+        /// @brief Returns the ClusterId of the IAMConfiguration
+        ///
+        /// @return ClusterId of the IAMConfiguration
+        rs_string GetClusterId() const;
+
+        /// @brief Sets the ClusterId of the IAMConfiguration
+        ///
+        /// @param in_clusterId     ClusterId of the IAMConfiguration
+        void SetClusterId(const rs_string& in_clusterId);
+
+        /// @brief Returns the Workgroup of the IAMConfiguration
+        ///
+        /// @return Workgroup of the IAMConfiguration
+        rs_string GetWorkgroup() const;
+
+        /// @brief Sets the Workgroup of the IAMConfiguration
+        ///
+        /// @param in_workgroup     Workgroup of the IAMConfiguration
+        void SetWorkgroup(const rs_string& in_workgroup);
+
+        /// @brief Returns the IsServerless flag of the IAMConfiguration
+        ///
+        /// @return IsServerless flag of the IAMConfiguration
+        bool GetIsServerless() const;
+
+        /// @brief Sets the IsServerless flag of the IAMConfiguration
+        ///
+        /// @param in_isServerless     IsServerless flag of the IAMConfiguration
+        void SetIsServerless(bool in_isServerless);
+
         /// @brief Destructor.
         ~IAMConfiguration();
 
@@ -518,6 +558,18 @@ namespace IamSupport
 
         /* Flag to determine whether an HTTPS proxy is used */
         bool m_usingProxy = false;
+
+        /* Host for cluster/workgroup resolution */
+        rs_string m_host;
+
+        /* Cluster identifier for provisioned clusters */
+        rs_string m_clusterId;
+
+        /* Workgroup name for serverless */
+        rs_string m_workgroup;
+
+        /* Flag to indicate serverless mode */
+        bool m_isServerless = false;
     };
 }
 }

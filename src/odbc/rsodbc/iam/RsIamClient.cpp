@@ -187,6 +187,12 @@ void RsIamClient::Connect()
             rs_string auth_token =
                 static_cast<NativePluginCredentialsProvider &>(*credentialsProvider).GetAuthToken();
             m_credentials.SetIdpToken(auth_token);
+            
+            // Get and store the token type for identity-enhanced credentials flow
+            rs_string auth_token_type =
+                static_cast<NativePluginCredentialsProvider &>(*credentialsProvider).GetAuthTokenType();
+            m_credentials.SetIdpTokenType(auth_token_type);
+            RS_LOG_DEBUG("token_type=%s", auth_token_type.c_str());
         } else { // native idp AzureAD plugin
             /* Validate that all required arguments for plugin are provided */
             static_cast<IAMJwtPluginCredentialsProvider &>(*credentialsProvider)
@@ -1048,6 +1054,17 @@ IAMConfiguration RsIamClient::CreateIAMConfiguration(const rs_string& in_authTyp
         config.SetIssuerUrl(m_settings.m_issuerUrl);
         config.SetIdcRegion(m_settings.m_idcRegion);
         config.SetIdcClientDisplayName(m_settings.m_idcClientDisplayName);
+
+        /* Set cluster/workgroup resolution settings for IdpTokenAuthPlugin identity enhanced flow*/
+        config.SetHost(m_settings.m_host);
+        config.SetClusterId(m_settings.m_clusterIdentifer);
+        config.SetWorkgroup(m_settings.m_workGroup);
+        config.SetIsServerless(m_settings.m_isServerless);
+
+        /* Set AWS credentials for identity-enhanced credentials flow */
+        config.SetAccessId(m_settings.m_accessKeyID);
+        config.SetSecretKey(m_settings.m_secretAccessKey);
+        config.SetSessionToken(m_settings.m_sessionToken);
     }
     else if (in_authType == IAM_AUTH_TYPE_PROFILE)
     {

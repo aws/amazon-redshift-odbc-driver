@@ -243,3 +243,40 @@ EXPORTS
 	?lookupSqlType@ODBCEscapeClauseProcessor@@SAPEBDAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?lookupIntervalToken@ODBCEscapeClauseProcessor@@SAPEBDAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?RS_SQLGetData@RS_STMT_INFO@@SAFPEAV1@GFPEAX_JPEA_JHAEA_J@Z
+	?IsTimeToRefresh@AWSCredentialsProvider@Auth@Aws@@MEAA_NJ@Z
+	?Reload@AWSCredentialsProvider@Auth@Aws@@MEAAXXZ
+	?SetAccessId@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?SetSecretKey@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?SetSessionToken@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?SetRegion@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?SetIdpAuthToken@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?SetIdpAuthTokenType@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?SetHost@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?SetClusterId@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?SetWorkgroup@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?SetIsServerless@IAMConfiguration@IamSupport@Redshift@@QEAAX_N@Z
+	?GetIAMCredentials@IAMCredentialsProvider@IamSupport@Redshift@@UEAA?AVIAMCredentials@23@XZ
+	?CanUseCachedAwsCredentials@IAMCredentialsProvider@IamSupport@Redshift@@UEAA_NXZ
+	?GetConnectionSettings@IAMCredentialsProvider@IamSupport@Redshift@@UEAAXAEAVIAMCredentials@23@@Z
+	?SetArgumentKeyValuePair@IAMPluginCredentialsProvider@IamSupport@Redshift@@UEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@00_N@Z
+	?GetXmlAttributeValues@IAMPluginCredentialsProvider@IamSupport@Redshift@@UEAAXAEBVXmlNode@Xml@Utils@Aws@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@11AEAV?$vector@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V?$allocator@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@@9@_N@Z
+	?GetInputTagsFromHtml@IAMPluginCredentialsProvider@IamSupport@Redshift@@UEAA?AV?$vector@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V?$allocator@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@@std@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@5@@Z
+	?GetNameValuePairFromInputTag@IAMPluginCredentialsProvider@IamSupport@Redshift@@UEAA?AV?$map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@U?$less@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@@std@@@2@@std@@AEBV?$vector@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V?$allocator@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@@5@@Z
+	?GetFormActionFromHtml@IAMPluginCredentialsProvider@IamSupport@Redshift@@UEAA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@@Z
+	?EscapeHtmlEntity@IAMPluginCredentialsProvider@IamSupport@Redshift@@UEAA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@@Z
+	?GetValueByKeyFromInput@IAMPluginCredentialsProvider@IamSupport@Redshift@@UEAA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@0@Z
+	?GetValueByKeyFromJson@IAMPluginCredentialsProvider@IamSupport@Redshift@@UEAA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBVJsonValue@Json@Utils@Aws@@AEBV45@@Z
+	?SaveSettings@IAMPluginCredentialsProvider@IamSupport@Redshift@@UEAAXAEBVAWSCredentials@Auth@Aws@@@Z
+	?GetHttpClient@IAMPluginCredentialsProvider@IamSupport@Redshift@@UEAA?AV?$shared_ptr@VIAMHttpClient@IamSupport@Redshift@@@std@@AEBUHttpClientConfig@23@@Z
+	?GetAWSCredentials@NativePluginCredentialsProvider@IamSupport@Redshift@@UEAA?AVAWSCredentials@Auth@Aws@@XZ
+	?GetAuthTokenType@NativePluginCredentialsProvider@IamSupport@Redshift@@UEAA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@XZ
+	??0IdpTokenAuthPlugin@IamSupport@Redshift@@QEAA@AEBVIAMConfiguration@12@AEBV?$map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@U?$less@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@@std@@@2@@std@@@Z
+	?GetAuthToken@IdpTokenAuthPlugin@IamSupport@Redshift@@UEAA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@XZ
+	??1IdpTokenAuthPlugin@IamSupport@Redshift@@UEAA@XZ
+	?InitArgumentsMap@IdpTokenAuthPlugin@IamSupport@Redshift@@EEAAXXZ
+	?ValidateArgumentsMap@IdpTokenAuthPlugin@IamSupport@Redshift@@EEAAXXZ
+	?IsServerlessHost@IdpTokenAuthPlugin@IamSupport@Redshift@@IEBA_NAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?ExtractClusterIdFromHost@IdpTokenAuthPlugin@IamSupport@Redshift@@IEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@@Z
+	?ExtractWorkgroupFromHost@IdpTokenAuthPlugin@IamSupport@Redshift@@IEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@@Z
+	?ExtractRegionFromHost@IdpTokenAuthPlugin@IamSupport@Redshift@@IEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@@Z
+	?ResolveClusterInfo@IdpTokenAuthPlugin@IamSupport@Redshift@@IEAAXXZ

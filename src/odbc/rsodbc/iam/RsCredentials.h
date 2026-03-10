@@ -110,6 +110,16 @@ namespace RedshiftODBC
 		/// @return the idp token of the credentials holder.
 		rs_string GetIdpToken() const;
 
+		/// @brief Sets the idp token type of the credentials holder
+		///
+		/// @param in_idpTokenType         The token type (e.g., "ACCESS_TOKEN", "SUBJECT_TOKEN")
+		void SetIdpTokenType(const rs_string& in_idpTokenType);
+
+		/// @brief Returns the idp token type of the native credentials holder
+		///
+		/// @return the idp token type of the credentials holder.
+		rs_string GetIdpTokenType() const;
+
 
 		/// @brief Sets fix 15 min timeout for native auth
 		///
@@ -135,6 +145,9 @@ namespace RedshiftODBC
 
 		/* native IDP token */
 		rs_string m_idpToken;
+
+		/* native IDP token type (e.g., "ACCESS_TOKEN", "SUBJECT_TOKEN") */
+		rs_string m_idpTokenType;
     };
 }
 
