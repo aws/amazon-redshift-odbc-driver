@@ -1,6 +1,14 @@
 Changelog
 =========
 
+v2.1.14 (2026-03-09)
+---------------------
+1. Added logging of connection options and parameter status messages from the server to help diagnose connection issues and provide visibility into server-side configuration
+2. Updated root.crt with the latest CA certificate bundle from curl.se 
+3. Fixed metadata retrieval to sanitize invalid negative and null values
+4. Added Subject Alternative Name (SAN) validation for SSL verify-full mode with Serverless
+5. Added support for Identity Enhanced Credentials authentication 
+
 v2.1.13 (2026-02-12)
 ---------------------
 1. Improved error handling and SQL state reporting across SQLGetData, SQLPutData, SQLExtendedFetch, and SQLSetCursorName APIs
