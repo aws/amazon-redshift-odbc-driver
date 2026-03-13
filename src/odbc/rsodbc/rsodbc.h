@@ -1147,6 +1147,7 @@ struct SHOWPROCEDURESFUNCTIONSResult {
 #define RS_HOST_NAME          "HostName"
 #define RS_HOST               "Host"
 #define RS_SERVER             "Server"
+#define RS_SERVER_NAME        "Servername"
 #define RS_PORT_NUMBER        "PortNumber"
 #define RS_PORT               "Port"
 #define RS_DATABASE           "Database"
