@@ -603,7 +603,7 @@ class RsMetadataAPIHelper {
      *
      * Parameters:
      *   rsType (const std::string &): redshift type name
-     *   character_maximum_length (short): char max length received from SHOW
+     *   character_maximum_length (int): char max length received from SHOW
      *      COLUMNS
      *   numeric_precision (short): numeric precision received from SHOW
      *      COLUMNS
@@ -613,7 +613,7 @@ class RsMetadataAPIHelper {
      * ----------------
      */
     static int getColumnSize(const std::string &rsType,
-                             short character_maximum_length,
+                             int character_maximum_length,
                              short numeric_precision);
 
     /* ----------------
@@ -623,7 +623,7 @@ class RsMetadataAPIHelper {
      *
      * Parameters:
      *   rsType (const std::string &): redshift type name
-     *   character_maximum_length (short): char max length received from SHOW
+     *   character_maximum_length (int): char max length received from SHOW
      *      COLUMNS
      *   numeric_precision (short): numeric precision received from SHOW
      *      COLUMNS
@@ -633,7 +633,7 @@ class RsMetadataAPIHelper {
      * ----------------
      */
     static int getBufferLen(const std::string &rsType,
-                            short character_maximum_length,
+                            int character_maximum_length,
                             short numeric_precision);
 
     /* ----------------
@@ -697,7 +697,7 @@ class RsMetadataAPIHelper {
      *
      * Parameters:
      *   rsType (const std::string &): redshift type name
-     *   character_maximum_length (short): char max length received from SHOW
+     *   character_maximum_length (int): char max length received from SHOW
      *      COLUMNS
      *
      * Return:
@@ -705,7 +705,7 @@ class RsMetadataAPIHelper {
      * ----------------
      */
     static int getCharOctetLen(const std::string &rsType,
-                               short character_maximum_length);
+                               int character_maximum_length);
 
     /**
      * Checks if a given data type is a valid Redshift data type.

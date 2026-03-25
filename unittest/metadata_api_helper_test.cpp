@@ -94,7 +94,7 @@ int expectedSQLProcedureColumnsColDataType[expectedSQLProcedureColumnsColNum] =
      INT2OID,    INT2OID,    VARCHAROID, VARCHAROID, INT4OID,
      INT4OID,    INT4OID,    INT4OID,    VARCHAROID};
 
-#define character_maximum_length 512
+#define character_maximum_length 65535
 #define numeric_precision 5
 #define numeric_scale 5
 
@@ -110,7 +110,7 @@ struct DATA_TYPE_RES{
   short sqlTypeODBC2;
   short sqlDataType;
   short sqlDateSub;
-  short colSize;
+  int colSize;
   short decimalDigit;
   int bufferLen;
 };
@@ -820,6 +820,25 @@ TEST_P(TestGetRsType, test_columnSize) {
     }
     int columnSize = RsMetadataAPIHelper::getColumnSize(rsType, character_maximum_length, numeric_precision);
     ASSERT_EQ(columnSize, dataTypeMap[dataType].colSize);
+}
+
+TEST_P(TestGetRsType, test_charOctetLen) {
+    std::string rsType;
+    int notApplicable = -1;
+    TypeInfoResult typeInfoResult = RsMetadataAPIHelper::getTypeInfo(dataType, isODBC_SpecV2);
+    if(typeInfoResult.found){
+        DATA_TYPE_INFO typeInfo = typeInfoResult.typeInfo;
+        rsType = typeInfo.typeName;
+    }
+    else{
+        rsType = dataType;
+    }
+    int charOctetLen = RsMetadataAPIHelper::getCharOctetLen(rsType, character_maximum_length);
+    if (rsType == "char" || rsType == "varchar") {
+        ASSERT_EQ(charOctetLen, dataTypeMap[dataType].colSize);
+    } else {
+        ASSERT_EQ(charOctetLen, notApplicable);
+    }
 }
 
 TEST_P(TestGetRsType, test_decimalDigit) {

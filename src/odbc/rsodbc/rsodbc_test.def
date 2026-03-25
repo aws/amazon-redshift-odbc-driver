@@ -174,8 +174,9 @@ EXPORTS
 	releasePaStrBuf
 	?ValidateURL@IAMUtils@IamSupport@Redshift@@SAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?sqlTypeNameMap@@YAPEADF@Z
-	?getColumnSize@RsMetadataAPIHelper@@SAHAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@FF@Z
-	?getBufferLen@RsMetadataAPIHelper@@SAHAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@FF@Z
+	?getColumnSize@RsMetadataAPIHelper@@SAHAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@HF@Z
+	?getBufferLen@RsMetadataAPIHelper@@SAHAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@HF@Z
+	?getCharOctetLen@RsMetadataAPIHelper@@SAHAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@H@Z
 	?getDecimalDigit@RsMetadataAPIHelper@@SAFAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@FF_N@Z
 	?typeInfoMap@RsMetadataAPIHelper@@2V?$unordered_map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@UDATA_TYPE_INFO@@U?$hash@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@U?$equal_to@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@UDATA_TYPE_INFO@@@std@@@2@@std@@B
 	?isEmptyString@@YA_NPEAE@Z

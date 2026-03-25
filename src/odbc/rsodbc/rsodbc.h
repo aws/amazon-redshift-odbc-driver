@@ -1003,7 +1003,7 @@ struct SHOWCOLUMNSResult {
     SQLLEN is_nullable_Len = 0;
     SQLCHAR data_type[NAMEDATALEN] = {0};
     SQLLEN data_type_Len = 0;
-    SQLSMALLINT character_maximum_length = 0;
+    SQLINTEGER character_maximum_length = 0;
     SQLLEN character_maximum_length_Len = 0;
     SQLSMALLINT numeric_precision = 0;
     SQLLEN numeric_precision_Len = 0;

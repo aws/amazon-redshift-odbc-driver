@@ -772,7 +772,7 @@ const std::unordered_set<std::string> RsMetadataAPIHelper::charOctetLenSet = {
 // Helper function to get column size by Redshift type name
 //
 int RsMetadataAPIHelper::getColumnSize(const std::string &rsType,
-                                       short character_maximum_length,
+                                       int character_maximum_length,
                                        short numeric_precision) {
     auto it = RsMetadataAPIHelper::columnSizeMap.find(rsType);
     if (it != RsMetadataAPIHelper::columnSizeMap.end()) {
@@ -797,7 +797,7 @@ int RsMetadataAPIHelper::getColumnSize(const std::string &rsType,
 // Helper function to get column size by Redshift type name
 //
 int RsMetadataAPIHelper::getBufferLen(const std::string &rsType,
-                                      short character_maximum_length,
+                                      int character_maximum_length,
                                       short numeric_precision) {
     auto it = RsMetadataAPIHelper::bufferLenMap.find(rsType);
     if (it != RsMetadataAPIHelper::bufferLenMap.end()) {
@@ -876,7 +876,7 @@ short RsMetadataAPIHelper::getNumPrecRadix(const std::string &rsType) {
 // Helper function to get char octet length
 //
 int RsMetadataAPIHelper::getCharOctetLen(const std::string &rsType,
-                                         short character_maximum_length) {
+                                         int character_maximum_length) {
     auto it = RsMetadataAPIHelper::charOctetLenSet.find(rsType);
     if (it != RsMetadataAPIHelper::charOctetLenSet.end()) {
         if (rsType == "char" || rsType == "varchar") {
