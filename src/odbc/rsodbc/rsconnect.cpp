@@ -1392,6 +1392,11 @@ SQLRETURN  SQL_API SQLDisconnect(SQLHDBC phdbc)
 
             pConn->iStatus = RS_CLOSE_CONNECTION;
         }
+
+        // Reset browse connect state so a subsequent SQLBrowseConnect
+        // starts a fresh iteration (per ODBC spec, SQLDisconnect
+        // returns the connection to an unconnected state).
+        pConn->iBrowseIteration = 0;
     }
 
 error:
