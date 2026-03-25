@@ -271,6 +271,8 @@
 #define IDC_IDP_MANAGED_VPC_STATIC      1254
 #define IDC_IDP_MANAGED_VPC             1255
 
+#define IDC_USE_UNICODE                 1256
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

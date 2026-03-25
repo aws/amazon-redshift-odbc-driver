@@ -575,7 +575,7 @@ class RsMetadataAPIHelper {
     static const std::string ksqlSemicolon;
     static const std::string ksqlLike;
 
-    static ProcessedTypeInfo processDataTypeInfo(std::string& dataType, int ODBCVer);
+    static ProcessedTypeInfo processDataTypeInfo(std::string& dataType, int ODBCVer, int useUnicode);
 
     /* ----------------
      * initializeColumnField

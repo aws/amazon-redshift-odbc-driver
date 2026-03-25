@@ -128,6 +128,7 @@
 
 #define RS_DATABASE_METADATA_CURRENT_DB_ONLY    "DatabaseMetadataCurrentDbOnly"
 #define RS_READ_ONLY							"ReadOnly"
+#define RS_USE_UNICODE							"UseUnicode"
 
 #define RS_TCP_PROXY_HOST       "ProxyHost"
 #define RS_TCP_PROXY_PORT       "ProxyPort"
@@ -257,6 +258,7 @@
 
 #define DFLT_DATABASE_METADATA_CURRENT_DB_ONLY "1"
 #define DFLT_READ_ONLY "0"
+#define DFLT_USE_UNICODE "0"
 
 #define DFLT_PROXY_HOST ""
 #define DFLT_PROXY_PORT ""
@@ -287,7 +289,7 @@
 /* 1 Workgroup*/
 /* 1 Compression */
 
-#define DD_DSN_ATTR_COUNT 106
+#define DD_DSN_ATTR_COUNT 107
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -468,6 +470,7 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_ROLE_SESSION_NAME,DFLT_ROLE_SESSION_NAME},
 { RS_DATABASE_METADATA_CURRENT_DB_ONLY, DFLT_DATABASE_METADATA_CURRENT_DB_ONLY },
 { RS_READ_ONLY, DFLT_READ_ONLY },
+{ RS_USE_UNICODE, DFLT_USE_UNICODE },
 { RS_TCP_PROXY_HOST, DFLT_PROXY_HOST },
 { RS_TCP_PROXY_PORT, DFLT_PROXY_PORT },
 { RS_TCP_PROXY_USER_NAME, DFLT_PROXY_UID },
@@ -598,6 +601,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { RS_ROLE_SESSION_NAME,RS_ROLE_SESSION_NAME },
 { RS_DATABASE_METADATA_CURRENT_DB_ONLY, RS_DATABASE_METADATA_CURRENT_DB_ONLY},
 { RS_READ_ONLY, RS_READ_ONLY },
+{ RS_USE_UNICODE, RS_USE_UNICODE },
 { RS_TCP_PROXY_HOST, RS_TCP_PROXY_HOST },
 { RS_TCP_PROXY_PORT, RS_TCP_PROXY_PORT },
 { RS_TCP_PROXY_USER_NAME, RS_TCP_PROXY_USER_NAME },
@@ -2211,6 +2215,7 @@ static LRESULT CALLBACK rs_dsn_advanced_sheet(HWND hwndDlg, UINT message, WPARAM
 			SetDlgItemText(hwndDlg, IDC_INI_SQL_EDIT, rs_dsn_get_attr(rs_dsn_setup_ctxt, "InitializationString"));
 			CheckDlgButton(hwndDlg, IDC_CURRENT_DB_ONLY, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_DATABASE_METADATA_CURRENT_DB_ONLY, TRUE));
 			CheckDlgButton(hwndDlg, IDC_READ_ONLY, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_READ_ONLY, FALSE));
+			CheckDlgButton(hwndDlg, IDC_USE_UNICODE, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_USE_UNICODE, FALSE));
  			// Already read from reg into local cache(rs_dsn_setup_ctxt); and now update the page
  			// Log Level
 			for (i = 0;; i++)
@@ -3445,6 +3450,7 @@ rs_dsn_read_advanced_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_ROLLBACK_ERR, "TransactionErrorBehavior");
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_CURRENT_DB_ONLY, RS_DATABASE_METADATA_CURRENT_DB_ONLY);
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_READ_ONLY, RS_READ_ONLY);
+		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_USE_UNICODE, RS_USE_UNICODE);
 		// read from page into local cache
 		lb = GetDlgItem(hdlg, IDC_LOG_LEVEL_COMBO);
 		n = ComboBox_GetCurSel(lb);

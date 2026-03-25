@@ -1184,6 +1184,7 @@ struct SHOWPROCEDURESFUNCTIONSResult {
 #define RS_STREAMING_CURSOR_ROWS            "StreamingCursorRows"
 #define RS_DATABASE_METADATA_CURRENT_DB_ONLY     "DatabaseMetadataCurrentDbOnly"
 #define RS_READ_ONLY							"ReadOnly"
+#define RS_USE_UNICODE                          "UseUnicode"
 #define RS_CLIENT_PROTOCOL_VERSION              "client_protocol_version"
 #define RS_STRING_TYPE							"StringType"
 #define RS_APPLICATION_NAME						"ApplicationName"
@@ -1383,6 +1384,7 @@ public:
       iStreamingCursorRows = 0;
 	  iDatabaseMetadataCurrentDbOnly = 1;
 	  iReadOnly = 0;
+	  iUseUnicode = 0;
 
 	  szKeepAlive[0] = '\0';
 	  szKeepAliveIdle[0] = '\0';
@@ -1551,6 +1553,7 @@ public:
     int iStreamingCursorRows; // Default is 0
 	int iDatabaseMetadataCurrentDbOnly; // Default is 1. 0 means datashare i.e. across multiple databases.
 	int iReadOnly; // Default is 0. 1 means READ ONLY session.
+	int iUseUnicode; // Default is 0. 1 means report wide SQL types for character columns.
 
     char *pConnectStr;                // Rest of connection option store in this one.
     size_t cbConnectStr;
@@ -1860,7 +1863,7 @@ void *
 libpqExecuteDirectOrPreparedThreadProc(void *pArg);
 
 void libpqCloseResult(RS_RESULT_INFO *pResult);
-short mapPgTypeToSqlType(Oid pgType,short *phPaSpecialType);
+short mapPgTypeToSqlType(Oid pgType,short *phPaSpecialType, int useUnicode);
 char *libpqGetData(RS_RESULT_INFO *pResult, short hCol, int *piLenInd, int *piFormat);
 
 bool allocateIRDRecords(RS_STMT_INFO *pStmt);

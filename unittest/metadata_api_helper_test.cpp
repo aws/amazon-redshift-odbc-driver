@@ -184,11 +184,21 @@ protected:
             << odbcVersion;
 
         // Verify data type
+        int useUnicode = 1;
         short RsSpecialType;
-        short sqlType = mapPgTypeToSqlType(colDataTypes[column_index], &RsSpecialType);
-        short expectedSqlType = mapPgTypeToSqlType(expectedDataTypes[column_index], &RsSpecialType);
+        short sqlType = mapPgTypeToSqlType(colDataTypes[column_index], &RsSpecialType, useUnicode);
+        short expectedSqlType = mapPgTypeToSqlType(expectedDataTypes[column_index], &RsSpecialType, useUnicode);
 
-        EXPECT_EQ(colDataTypes[column_index], expectedDataTypes[column_index])
+        EXPECT_EQ(sqlType, expectedSqlType)
+            << "metadata API " << apiName << " Column index: " << column_index
+            << ", has wrong column data type: " << sqlTypeNameMap(sqlType)
+            << " (Expect: " << sqlTypeNameMap(expectedSqlType) << ")";
+
+        useUnicode = 0;
+        sqlType = mapPgTypeToSqlType(colDataTypes[column_index], &RsSpecialType, useUnicode);
+        expectedSqlType = mapPgTypeToSqlType(expectedDataTypes[column_index], &RsSpecialType, useUnicode);
+
+        EXPECT_EQ(sqlType, expectedSqlType)
             << "metadata API " << apiName << " Column index: " << column_index
             << ", has wrong column data type: " << sqlTypeNameMap(sqlType)
             << " (Expect: " << sqlTypeNameMap(expectedSqlType) << ")";

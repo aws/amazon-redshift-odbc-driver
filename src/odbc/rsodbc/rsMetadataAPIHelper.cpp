@@ -618,7 +618,7 @@ const std::unordered_map<std::string, DATA_TYPE_INFO>
         {"string", {SQL_VARCHAR, SQL_VARCHAR, kNotApplicable, "string"}},
     };
 
-ProcessedTypeInfo RsMetadataAPIHelper::processDataTypeInfo(std::string& dataType, int ODBCVer) {
+ProcessedTypeInfo RsMetadataAPIHelper::processDataTypeInfo(std::string& dataType, int ODBCVer, int useUnicode) {
     ProcessedTypeInfo result;
     result.typeInfoResult = TypeInfoResult::notFound();
     result.cleanedTypeName = "";
@@ -652,6 +652,19 @@ ProcessedTypeInfo RsMetadataAPIHelper::processDataTypeInfo(std::string& dataType
             RsMetadataAPIHelper::returnODBC2DateTime(ODBCVer));
     }
 
+    if (useUnicode && result.typeInfoResult.found) {
+        auto& info = result.typeInfoResult.typeInfo;
+        if (info.sqlType == SQL_VARCHAR) {
+            info.sqlType = SQL_WVARCHAR;
+            info.sqlDataType = SQL_WVARCHAR;
+        } else if (info.sqlType == SQL_CHAR) {
+            info.sqlType = SQL_WCHAR;
+            info.sqlDataType = SQL_WCHAR;
+        } else if (info.sqlType == SQL_LONGVARCHAR) {
+            info.sqlType = SQL_WLONGVARCHAR;
+            info.sqlDataType = SQL_WLONGVARCHAR;
+        }
+    }
     return result;
 }
 

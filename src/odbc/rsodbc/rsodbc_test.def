@@ -142,6 +142,15 @@ EXPORTS
 	rsodbcDependencyVersion
 	getVersionedDependencyNames
 	getDefaultCTypeFromSQLType
+	getParamSize
+	getUnsigned
+	getNumPrecRadix
+	getLiteralSuffix
+	getLiteralPrefix
+	getSearchable
+	getPrecision
+	getTypeName
+	getDisplaySize
 	mapPgTypeToSqlType
 	strcasestr
 	strcasestrwhole

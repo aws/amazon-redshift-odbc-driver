@@ -3024,3 +3024,305 @@ TEST_P(CopyWBinaryDataBigLenTest, OddCbLen) {
         EXPECT_EQ(bytes[charSz + i], 0) << "NUL not written at index 1, byte " << i;
     }
 }
+
+// --- getDisplaySize ---
+
+struct DisplaySizeParam {
+    short hType;
+    int iSize;
+    short hRsSpecialType;
+    int expected;
+    const char *name;
+};
+
+class GetDisplaySizeTest : public ::testing::TestWithParam<DisplaySizeParam> {};
+
+TEST_P(GetDisplaySizeTest, ReturnsExpectedSize) {
+    const auto &p = GetParam();
+    EXPECT_EQ(getDisplaySize(p.hType, p.iSize, p.hRsSpecialType), p.expected)
+        << p.name;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    WideTypes, GetDisplaySizeTest,
+    ::testing::Values(
+        DisplaySizeParam{SQL_WVARCHAR,     256, 0, 256, "SQL_WVARCHAR"},
+        DisplaySizeParam{SQL_WCHAR,        20,  0, 20,  "SQL_WCHAR"},
+        DisplaySizeParam{SQL_WLONGVARCHAR, 1000, 0, 1000, "SQL_WLONGVARCHAR"},
+        // Narrow types should still work
+        DisplaySizeParam{SQL_VARCHAR,      256, 0, 256, "SQL_VARCHAR"},
+        DisplaySizeParam{SQL_CHAR,         20,  0, 20,  "SQL_CHAR"},
+        DisplaySizeParam{SQL_LONGVARCHAR,  1000, 0, 1000, "SQL_LONGVARCHAR"}
+    ),
+    [](const ::testing::TestParamInfo<DisplaySizeParam> &info) {
+        return std::string(info.param.name);
+    });
+
+// --- getTypeName ---
+
+struct TypeNameParam {
+    short hType;
+    short hRsSpecialType;
+    const char *expected;
+    const char *name;
+};
+
+class GetTypeNameTest : public ::testing::TestWithParam<TypeNameParam> {};
+
+TEST_P(GetTypeNameTest, ReturnsExpectedName) {
+    const auto &p = GetParam();
+    char buf[128] = {0};
+    getTypeName(p.hType, buf, sizeof(buf), p.hRsSpecialType);
+    EXPECT_STREQ(buf, p.expected) << p.name;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    WideTypes, GetTypeNameTest,
+    ::testing::Values(
+        TypeNameParam{SQL_WVARCHAR,     0,     "CHARACTER VARYING", "SQL_WVARCHAR"},
+        TypeNameParam{SQL_WCHAR,        0,     "CHARACTER",         "SQL_WCHAR"},
+        TypeNameParam{SQL_WLONGVARCHAR, SUPER, "SUPER",             "SQL_WLONGVARCHAR_SUPER"},
+        // Narrow types should still work
+        TypeNameParam{SQL_VARCHAR,      0,     "CHARACTER VARYING", "SQL_VARCHAR"},
+        TypeNameParam{SQL_CHAR,         0,     "CHARACTER",         "SQL_CHAR"},
+        TypeNameParam{SQL_LONGVARCHAR,  SUPER, "SUPER",             "SQL_LONGVARCHAR_SUPER"}
+    ),
+    [](const ::testing::TestParamInfo<TypeNameParam> &info) {
+        return std::string(info.param.name);
+    });
+
+// --- getPrecision ---
+
+struct PrecisionParam {
+    short hType;
+    int iSize;
+    short hRsSpecialType;
+    int expected;
+    const char *name;
+};
+
+class GetPrecisionTest : public ::testing::TestWithParam<PrecisionParam> {};
+
+TEST_P(GetPrecisionTest, ReturnsExpectedPrecision) {
+    const auto &p = GetParam();
+    EXPECT_EQ(getPrecision(p.hType, p.iSize, p.hRsSpecialType), p.expected)
+        << p.name;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    WideTypes, GetPrecisionTest,
+    ::testing::Values(
+        PrecisionParam{SQL_WVARCHAR,     256, 0, 0,  "SQL_WVARCHAR"},
+        PrecisionParam{SQL_WCHAR,        20,  0, 0,  "SQL_WCHAR"},
+        PrecisionParam{SQL_WLONGVARCHAR, 1000, 0, 0, "SQL_WLONGVARCHAR"},
+        PrecisionParam{SQL_VARCHAR,      256, 0, 0,  "SQL_VARCHAR"},
+        PrecisionParam{SQL_CHAR,         20,  0, 0,  "SQL_CHAR"},
+        PrecisionParam{SQL_LONGVARCHAR,  1000, 0, 0, "SQL_LONGVARCHAR"}
+    ),
+    [](const ::testing::TestParamInfo<PrecisionParam> &info) {
+        return std::string(info.param.name);
+    });
+
+// --- getSearchable ---
+
+struct SearchableParam {
+    short hType;
+    short hRsSpecialType;
+    int expected;
+    const char *name;
+};
+
+class GetSearchableTest : public ::testing::TestWithParam<SearchableParam> {};
+
+TEST_P(GetSearchableTest, ReturnsExpectedSearchable) {
+    const auto &p = GetParam();
+    EXPECT_EQ(getSearchable(p.hType, p.hRsSpecialType), p.expected)
+        << p.name;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    WideTypes, GetSearchableTest,
+    ::testing::Values(
+        SearchableParam{SQL_WVARCHAR,     0, SQL_PRED_SEARCHABLE, "SQL_WVARCHAR"},
+        SearchableParam{SQL_WCHAR,        0, SQL_PRED_SEARCHABLE, "SQL_WCHAR"},
+        SearchableParam{SQL_WLONGVARCHAR, 0, SQL_PRED_SEARCHABLE, "SQL_WLONGVARCHAR"},
+        SearchableParam{SQL_VARCHAR,      0, SQL_PRED_SEARCHABLE, "SQL_VARCHAR"},
+        SearchableParam{SQL_CHAR,         0, SQL_PRED_SEARCHABLE, "SQL_CHAR"},
+        SearchableParam{SQL_LONGVARCHAR,  0, SQL_PRED_SEARCHABLE, "SQL_LONGVARCHAR"}
+    ),
+    [](const ::testing::TestParamInfo<SearchableParam> &info) {
+        return std::string(info.param.name);
+    });
+
+// --- getLiteralPrefix / getLiteralSuffix ---
+
+struct LiteralParam {
+    short hType;
+    short hRsSpecialType;
+    const char *expected;
+    const char *name;
+};
+
+class GetLiteralPrefixTest : public ::testing::TestWithParam<LiteralParam> {};
+
+TEST_P(GetLiteralPrefixTest, ReturnsExpectedPrefix) {
+    const auto &p = GetParam();
+    char buf[8] = {0};
+    getLiteralPrefix(p.hType, buf, p.hRsSpecialType);
+    EXPECT_STREQ(buf, p.expected) << p.name;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    WideTypes, GetLiteralPrefixTest,
+    ::testing::Values(
+        LiteralParam{SQL_WVARCHAR,     0, "'", "SQL_WVARCHAR"},
+        LiteralParam{SQL_WCHAR,        0, "'", "SQL_WCHAR"},
+        LiteralParam{SQL_WLONGVARCHAR, 0, "'", "SQL_WLONGVARCHAR"},
+        LiteralParam{SQL_VARCHAR,      0, "'", "SQL_VARCHAR"},
+        LiteralParam{SQL_CHAR,         0, "'", "SQL_CHAR"},
+        LiteralParam{SQL_LONGVARCHAR,  0, "'", "SQL_LONGVARCHAR"}
+    ),
+    [](const ::testing::TestParamInfo<LiteralParam> &info) {
+        return std::string(info.param.name);
+    });
+
+class GetLiteralSuffixTest : public ::testing::TestWithParam<LiteralParam> {};
+
+TEST_P(GetLiteralSuffixTest, ReturnsExpectedSuffix) {
+    const auto &p = GetParam();
+    char buf[8] = {0};
+    getLiteralSuffix(p.hType, buf, p.hRsSpecialType);
+    EXPECT_STREQ(buf, p.expected) << p.name;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    WideTypes, GetLiteralSuffixTest,
+    ::testing::Values(
+        LiteralParam{SQL_WVARCHAR,     0, "'", "SQL_WVARCHAR"},
+        LiteralParam{SQL_WCHAR,        0, "'", "SQL_WCHAR"},
+        LiteralParam{SQL_WLONGVARCHAR, 0, "'", "SQL_WLONGVARCHAR"},
+        LiteralParam{SQL_VARCHAR,      0, "'", "SQL_VARCHAR"},
+        LiteralParam{SQL_CHAR,         0, "'", "SQL_CHAR"},
+        LiteralParam{SQL_LONGVARCHAR,  0, "'", "SQL_LONGVARCHAR"}
+    ),
+    [](const ::testing::TestParamInfo<LiteralParam> &info) {
+        return std::string(info.param.name);
+    });
+
+// --- getNumPrecRadix ---
+
+struct NumPrecRadixParam {
+    short hType;
+    int expected;
+    const char *name;
+};
+
+class GetNumPrecRadixTest : public ::testing::TestWithParam<NumPrecRadixParam> {};
+
+TEST_P(GetNumPrecRadixTest, ReturnsExpectedRadix) {
+    const auto &p = GetParam();
+    EXPECT_EQ(getNumPrecRadix(p.hType), p.expected) << p.name;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    WideTypes, GetNumPrecRadixTest,
+    ::testing::Values(
+        NumPrecRadixParam{SQL_WVARCHAR,     0, "SQL_WVARCHAR"},
+        NumPrecRadixParam{SQL_WCHAR,        0, "SQL_WCHAR"},
+        NumPrecRadixParam{SQL_WLONGVARCHAR, 0, "SQL_WLONGVARCHAR"},
+        NumPrecRadixParam{SQL_VARCHAR,      0, "SQL_VARCHAR"},
+        NumPrecRadixParam{SQL_CHAR,         0, "SQL_CHAR"},
+        NumPrecRadixParam{SQL_LONGVARCHAR,  0, "SQL_LONGVARCHAR"}
+    ),
+    [](const ::testing::TestParamInfo<NumPrecRadixParam> &info) {
+        return std::string(info.param.name);
+    });
+
+// --- getUnsigned ---
+
+struct UnsignedParam {
+    short hType;
+    int expected;
+    const char *name;
+};
+
+class GetUnsignedTest : public ::testing::TestWithParam<UnsignedParam> {};
+
+TEST_P(GetUnsignedTest, ReturnsExpectedUnsigned) {
+    const auto &p = GetParam();
+    EXPECT_EQ(getUnsigned(p.hType), p.expected) << p.name;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    WideTypes, GetUnsignedTest,
+    ::testing::Values(
+        UnsignedParam{SQL_WVARCHAR,     SQL_TRUE, "SQL_WVARCHAR"},
+        UnsignedParam{SQL_WCHAR,        SQL_TRUE, "SQL_WCHAR"},
+        UnsignedParam{SQL_WLONGVARCHAR, SQL_TRUE, "SQL_WLONGVARCHAR"},
+        UnsignedParam{SQL_VARCHAR,      SQL_TRUE, "SQL_VARCHAR"},
+        UnsignedParam{SQL_CHAR,         SQL_TRUE, "SQL_CHAR"},
+        UnsignedParam{SQL_LONGVARCHAR, SQL_TRUE, "SQL_LONGVARCHAR"}
+    ),
+    [](const ::testing::TestParamInfo<UnsignedParam> &info) {
+        return std::string(info.param.name);
+    });
+
+// --- getParamSize ---
+
+struct ParamSizeParam {
+    short hType;
+    int expected;
+    const char *name;
+};
+
+class GetParamSizeTest : public ::testing::TestWithParam<ParamSizeParam> {};
+
+TEST_P(GetParamSizeTest, ReturnsExpectedSize) {
+    const auto &p = GetParam();
+    EXPECT_EQ(getParamSize(p.hType), p.expected) << p.name;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    WideTypes, GetParamSizeTest,
+    ::testing::Values(
+        ParamSizeParam{SQL_WVARCHAR, 65535, "SQL_WVARCHAR"},
+        ParamSizeParam{SQL_WCHAR,    65535, "SQL_WCHAR"},
+        ParamSizeParam{SQL_VARCHAR,  65535, "SQL_VARCHAR"},
+        ParamSizeParam{SQL_CHAR,     65535, "SQL_CHAR"}
+    ),
+    [](const ::testing::TestParamInfo<ParamSizeParam> &info) {
+        return std::string(info.param.name);
+    });
+
+// --- getDefaultCTypeFromSQLType ---
+
+struct DefaultCTypeParam {
+    short hSQLType;
+    short expectedCType;
+    const char *name;
+};
+
+class GetDefaultCTypeTest : public ::testing::TestWithParam<DefaultCTypeParam> {};
+
+TEST_P(GetDefaultCTypeTest, ReturnsExpectedCType) {
+    const auto &p = GetParam();
+    int convError = 0;
+    EXPECT_EQ(getDefaultCTypeFromSQLType(p.hSQLType, &convError), p.expectedCType)
+        << p.name;
+    EXPECT_EQ(convError, 0) << p.name << " should not set conversion error";
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    WideTypes, GetDefaultCTypeTest,
+    ::testing::Values(
+        DefaultCTypeParam{SQL_WVARCHAR,     SQL_C_WCHAR, "SQL_WVARCHAR"},
+        DefaultCTypeParam{SQL_WCHAR,        SQL_C_WCHAR, "SQL_WCHAR"},
+        DefaultCTypeParam{SQL_WLONGVARCHAR, SQL_C_WCHAR, "SQL_WLONGVARCHAR"},
+        // Narrow types map to SQL_C_CHAR
+        DefaultCTypeParam{SQL_VARCHAR,      SQL_C_CHAR,  "SQL_VARCHAR"},
+        DefaultCTypeParam{SQL_CHAR,         SQL_C_CHAR,  "SQL_CHAR"},
+        DefaultCTypeParam{SQL_LONGVARCHAR,  SQL_C_CHAR,  "SQL_LONGVARCHAR"}
+    ),
+    [](const ::testing::TestParamInfo<DefaultCTypeParam> &info) {
+        return std::string(info.param.name);
+    });

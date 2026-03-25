@@ -1347,7 +1347,7 @@ void libpqCloseResult(RS_RESULT_INFO *pResult)
 //---------------------------------------------------------------------------------------------------------igarish
 // Map Pg type to SQL type.
 //
-short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType)
+short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType, int useUnicode)
 {
     short sqlType;
 
@@ -1365,7 +1365,7 @@ short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType)
         case CHAROID:
         case BPCHAROID:
         {
-            sqlType = SQL_CHAR;
+            sqlType = useUnicode ? SQL_WCHAR : SQL_CHAR;
             break;
         }
 
@@ -1420,7 +1420,7 @@ short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType)
         case INTERVALOID:
         case TEXTOID:
         {
-            sqlType = SQL_VARCHAR;
+            sqlType = useUnicode ? SQL_WVARCHAR : SQL_VARCHAR;
             break;
         }
 
@@ -1444,7 +1444,7 @@ short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType)
 
         case REFCURSOROID:
         {
-            sqlType = SQL_VARCHAR;
+            sqlType = useUnicode ? SQL_WVARCHAR : SQL_VARCHAR;
             break;
         }
 
@@ -1489,7 +1489,7 @@ short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType)
 			if (phRsSpecialType)
 				*phRsSpecialType = SUPER;
 
-			sqlType = SQL_LONGVARCHAR;
+			sqlType = useUnicode ? SQL_WLONGVARCHAR : SQL_LONGVARCHAR;
 			break;
 		}
 
@@ -1531,7 +1531,7 @@ short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType)
 
 		case UNKNOWNOID: // This happens when SELECT as parameter. e.g SELECT $1
 		{
-			sqlType = SQL_VARCHAR;
+			sqlType = useUnicode ? SQL_WVARCHAR : SQL_VARCHAR;
 			break;
 		}
 
@@ -1958,7 +1958,8 @@ SQLRETURN libpqDescribeParams(RS_STMT_INFO *pStmt, RS_PREPARE_INFO *pPrepare, PG
 
                     pgType = PQparamtype(pgResult, iParam);
 
-                    pDescRec->hType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType));
+                    int useUnicode = pConn->pConnectProps ? pConn->pConnectProps->iUseUnicode : 0;
+                    pDescRec->hType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode);
                     pDescRec->iSize = getParamSize(pDescRec->hType);
                     pDescRec->hScale = getParamScale(pDescRec->hType);
                     pDescRec->hNullable = SQL_NULLABLE_UNKNOWN;
@@ -2027,7 +2028,9 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
         pResult->columnNameIndexMap[pName] = col + 1;
 
         pgType = PQftype(pgResult, col);
-        pDescRec->hType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType));
+        int useUnicode = (pResult->phstmt && pResult->phstmt->phdbc && pResult->phstmt->phdbc->pConnectProps)
+            ? pResult->phstmt->phdbc->pConnectProps->iUseUnicode : 0;
+        pDescRec->hType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode);
 
         if(iFetchRefCursor && (pgType == REFCURSOROID))
         {
@@ -3016,7 +3019,10 @@ bool initializeIRDRecord(RS_STMT_INFO *pStmt, RS_RESULT_INFO *pResult,
     copyStrDataSmallLen(pName, SQL_NTS, pDescRec->szName, MAX_IDEN_LEN, NULL);
 
     // Map Data type OID to SQL type
-    pDescRec->hType = mapPgTypeToSqlType(pgType, &(pDescRec->hRsSpecialType));
+    int useUnicode = (pStmt->phdbc && pStmt->phdbc->pConnectProps)
+        ? pStmt->phdbc->pConnectProps->iUseUnicode : 0;
+    pDescRec->hType = mapPgTypeToSqlType(pgType, &(pDescRec->hRsSpecialType), useUnicode);
+
     if (pDescRec->hType == SQL_UNKNOWN_TYPE) {
         handleIRDInitializationError(pStmt,
                                      "Fail to convert pg type oid to sql type");
@@ -3573,6 +3579,9 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
     SQLINTEGER ODBCVer = pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion;
     RS_LOG_DEBUG("RSLIBPQ", "ODBC spec version: %d", ODBCVer);
 
+    int useUnicode = (pStmt->phdbc && pStmt->phdbc->pConnectProps)
+                         ? pStmt->phdbc->pConnectProps->iUseUnicode : 0;
+
     int columnSize = 0, bufferLen = 0, charOctetLen = 0;
     short sqlType = 0, sqlDataType = 0, sqlDateSub = 0, precisions = 0,
           decimalDigit = 0, num_pre_radix = 0;
@@ -3598,7 +3607,8 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
 
         ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
             dataType,
-            ODBCVer
+            ODBCVer,
+            useUnicode
         );
 
         if (processedType.typeInfoResult.found) {
@@ -3992,6 +4002,9 @@ SQLRETURN libpqCreateSQLSpecialColumnsCustomizedResultSet(
     SQLINTEGER ODBCVer = pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion;
     RS_LOG_DEBUG("RSLIBPQ", "ODBC spec version: %d", ODBCVer);
 
+    int useUnicode = (pStmt->phdbc && pStmt->phdbc->pConnectProps)
+                         ? pStmt->phdbc->pConnectProps->iUseUnicode : 0;
+
     int columnSize = 0, bufferLen = 0, charOctetLen = 0;
     short sqlType = 0, sqlDataType = 0, sqlDateSub = 0, precisions = 0,
           decimalDigit = 0, num_pre_radix = 0;
@@ -4013,7 +4026,8 @@ SQLRETURN libpqCreateSQLSpecialColumnsCustomizedResultSet(
 
         ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
             dataType,
-            ODBCVer
+            ODBCVer,
+            useUnicode
         );
 
         if (processedType.typeInfoResult.found) {
@@ -4372,6 +4386,9 @@ SQLRETURN libpqCreateSQLProcedureColumnsCustomizedResultSet(
     SQLINTEGER ODBCVer = pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion;
     RS_LOG_DEBUG("RSLIBPQ", "ODBC spec version: %d", ODBCVer);
 
+    int useUnicode = (pStmt->phdbc && pStmt->phdbc->pConnectProps)
+                         ? pStmt->phdbc->pConnectProps->iUseUnicode : 0;
+
     int columnSize = 0, bufferLen = 0, charOctetLen = 0;
     short sqlType = 0, sqlDataType = 0, sqlDateSub = 0, precisions = 0,
           decimalDigit = 0, num_pre_radix = 0;
@@ -4397,7 +4414,8 @@ SQLRETURN libpqCreateSQLProcedureColumnsCustomizedResultSet(
 
         ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
             dataType,
-            ODBCVer
+            ODBCVer,
+            useUnicode
         );
 
         if (processedType.typeInfoResult.found) {

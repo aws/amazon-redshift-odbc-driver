@@ -2416,6 +2416,9 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
         } else if (_stricmp(pname, RS_READ_ONLY) == 0) {
 						bool bVal = convertToBoolVal(pval);
 						pConnectProps->iReadOnly = (bVal) ? 1 : 0;
+        } else if (_stricmp(pname, RS_USE_UNICODE) == 0) {
+						bool bVal = convertToBoolVal(pval);
+						pConnectProps->iUseUnicode = (bVal) ? 1 : 0;
         } else if (_stricmp(pname, RS_KEEP_ALIVE) == 0) {
           if (pval) {
 							strncpy(pConnectProps->szKeepAlive, pval, MAX_NUMBER_BUF_LEN - 1);
@@ -3269,6 +3272,17 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
 	  bVal = (pConnectProps->iReadOnly == 1);
 	  RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN, RS_READ_ONLY, &bVal);
 	  pConnectProps->iReadOnly = (bVal) ? 1 : 0;
+
+        // Read UseUnicode
+        // If user didn't include UseUnicode flag in dsn, use default value
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_USE_UNICODE,
+                                    "", temp, MAX_IAM_BUF_VAL, ODBC_INI);
+        if (temp[0] != '\0') {
+            bVal = (pConnectProps->iUseUnicode == 1);
+            RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN,
+                                            RS_USE_UNICODE, &bVal);
+            pConnectProps->iUseUnicode = (bVal) ? 1 : 0;
+        }
 
 	  // Read Application name
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_APPLICATION_NAME, "", pConnAttr->szApplicationName, sizeof(pConnAttr->szApplicationName), ODBC_INI);
