@@ -1,6 +1,12 @@
 Changelog
 =========
 
+v2.1.15 (2026-03-25)
+---------------------
+1. Added new UseUnicode connection parameter to control SQL character data type behavior, enabling applications to receive wide character types (SQL_WCHAR, SQL_WVARCHAR, SQL_WLONGVARCHAR) instead of narrow types (SQL_CHAR, SQL_VARCHAR, SQL_LONGVARCHAR)
+2. Fixed SQLBrowseConnect to reset connection state on SQLDisconnect
+3. Fixed numeric overflow in SQLColumns and SQLProcedureColumns APIs for varchar columns exceeding smallint range
+
 v2.1.14 (2026-03-09)
 ---------------------
 1. Added logging of connection options and parameter status messages from the server to help diagnose connection issues and provide visibility into server-side configuration
