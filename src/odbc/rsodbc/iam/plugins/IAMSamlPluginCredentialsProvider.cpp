@@ -291,6 +291,8 @@ rs_string IAMSamlPluginCredentialsProvider::ExtractSamlAssertion(
     
     if (!std::regex_search(in_content, match, expression))
     {
+        RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::ExtractSamlAssertion "
+	   		"SAML assertion not found in content: %s", in_content.c_str());
         IAMUtils::ThrowConnectionExceptionWithInfo(
             "SAML assertion not found.");
     }

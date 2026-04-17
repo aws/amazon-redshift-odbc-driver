@@ -620,6 +620,8 @@ rs_string IAMWinHttpClient::SendHttpRequestWithWIA(
             httpContentBody = GetContent(requestHandle);
 
             HttpResponseCode responseCode = static_cast<HttpResponseCode>(statusCode);
+            RS_LOG_DEBUG("IAMCRD", "IAMWinHttpClient::SendHttpRequestWithWIA: WinHTTP response status code: %d, body length: %d",
+	   		 	(int)statusCode, (int)httpContentBody.size());
             if (HttpResponseCode::UNAUTHORIZED == responseCode)
             {
                 isUnauthorized = true;
