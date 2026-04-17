@@ -114,13 +114,15 @@ std::shared_ptr<AWSCredentialsProvider> IAMFactory::CreateStaticCredentialsProvi
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<AWSCredentialsProvider> IAMFactory::CreateDefaultCredentialsProvider()
 {
-    return std::shared_ptr<DefaultAWSCredentialsProviderChain>();
+    RS_LOG_DEBUG("IAMFactory", "CreateDefaultCredentialsProvider");
+    return std::make_shared<DefaultAWSCredentialsProviderChain>();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 std::shared_ptr<Aws::Auth::AWSCredentialsProvider> IAMFactory::CreateInstanceProfileCredentialsProvider()
 {
-    return std::shared_ptr<InstanceProfileCredentialsProvider>();
+    RS_LOG_DEBUG("IAMFactory", "CreateInstanceProfileCredentialsProvider");
+    return std::make_shared<InstanceProfileCredentialsProvider>();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

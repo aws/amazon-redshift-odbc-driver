@@ -7,6 +7,7 @@
 #include <aws/sts/STSClient.h>
 #include <aws/sts/model/AssumeRoleRequest.h>
 #include <aws/core/platform/Environment.h>
+#include <aws/core/auth/GeneralHTTPCredentialsProvider.h>
 
 using namespace Redshift::IamSupport;
 using namespace Aws::Auth;
@@ -24,6 +25,12 @@ namespace {
 
     /* Allocation log tag for Profile Credentials Provider */
     static const char* PROFILE_LOG_TAG = "IAMProfileCredentialsProvider";
+
+    /* credential_source constants */
+    static const char* const CREDENTIAL_SOURCE_KEY = "credential_source";
+    static const char* const CREDENTIAL_SOURCE_EC2 = "Ec2InstanceMetadata";
+    static const char* const CREDENTIAL_SOURCE_ENV = "Environment";
+    static const char* const CREDENTIAL_SOURCE_ECS = "EcsContainer";
 }
 
 
@@ -85,11 +92,18 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
 {
     RS_LOG_DEBUG("IAM", 
                  "IAMProfileCredentialsProvider::GetAWSCredentials");
-    /* check for profile type:
-    1. Default profile
-    2. Role-based profile
-    3. Plugin-based profile 
-    */
+    /*
+     * Profile credential resolution order:
+     * 1. Plugin-based profile (plugin_name set)
+     * 2. Role-based profile (role_arn set):
+     *    a. credential_source + source_profile  -> error (per AWS spec, cannot both be specified)
+     *    b. credential_source + credential_process -> log warning, use credential_source (credential_process ignored)
+     *    c. credential_source -> AssumeRole using credential source provider
+     *    d. source_profile (or current profile) -> AssumeRole using profile credentials
+     * 3. credential_source without role_arn -> error (invalid config per AWS spec)
+     * 4. credential_process profile
+     * 5. Default profile (static credentials from profile file)
+     */
 
     IAMProfile profile = LoadProfile(in_profile);
     const rs_string& roleArn = profile.GetRoleArn();
@@ -97,6 +111,8 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
     rs_string temp = profile.GetProfileAttribute(IAM_KEY_PLUGIN_NAME);
 	rs_wstring pluginName = IAMUtils::convertStringToWstring(temp);
 	rs_wstring credential_process = IAMUtils::convertStringToWstring(profile.GetProfileAttribute("credential_process"));
+    rs_string credentialSource = profile.GetProfileAttribute(CREDENTIAL_SOURCE_KEY);
+    rs_string sourceProfile = profile.GetSourceProfile();
 
     if (!IAMUtils::isEmpty(pluginName))
     {
@@ -120,15 +136,50 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
     }
     else if (!roleArn.empty())
     {
+        /* credential_source and source_profile cannot both be specified in the same profile */
+        if (!credentialSource.empty() && !sourceProfile.empty())
+        {
+            IAMUtils::ThrowConnectionExceptionWithInfo(
+                "Profile has both credential_source and source_profile. "
+                "Only one can be specified. credential_source provides base "
+                "credentials directly (e.g., from EC2 instance metadata), while "
+                "source_profile references another named profile.");
+        }
+
+        if (!credentialSource.empty() && !IAMUtils::isEmpty(credential_process))
+        {
+            RS_LOG_WARN("IAM",
+                "IAMProfileCredentialsProvider.GetAWSCredentials "
+                "Profile has both credential_source and credential_process. "
+                "Using credential_source with role_arn, credential_process will be ignored.");
+        }
+
+        if (!credentialSource.empty())
+        {
+            /* credential_source based role assumption (e.g., Ec2InstanceMetadata, Environment, EcsContainer) */
+            RS_LOG_DEBUG("IAM",
+                "IAMProfileCredentialsProvider.GetAWSCredentials "
+                "Using credential_source based profile: %s, role_arn: %s",
+                credentialSource.c_str(), roleArn.c_str());
+
+            auto baseProvider = CreateCredentialSourceProvider(credentialSource);
+            return AssumeRole(roleArn, roleSessionName, baseProvider);
+        }
+
+        /* source_profile based role assumption (defaults to current profile if source_profile is empty) */
         RS_LOG_DEBUG("IAM",
                      "IAMProfileCredentialsProvider.GetAWSCredentials Using role based profile: %s",
                      roleArn.c_str());
 
-        /* role-based profile */
-        const rs_string sourceProfile = profile.GetSourceProfile();
         AWSCredentials credentials = GetAWSCredentials(sourceProfile);
         auto simpleProvider = Aws::MakeShared<SimpleAWSCredentialsProvider>(PROFILE_LOG_TAG, credentials);
         return AssumeRole(roleArn, roleSessionName, simpleProvider);
+    }
+    else if (!credentialSource.empty())
+    {
+        /* credential_source without role_arn is invalid per AWS spec */
+        IAMUtils::ThrowConnectionExceptionWithInfo(
+            "credential_source requires role_arn to be specified in the profile.");
     }
 	else if (!IAMUtils::isEmpty(credential_process))
 	{
@@ -340,6 +391,44 @@ bool IAMProfileCredentialsProvider::CanUseCachedAwsCredentials()
             && (!m_credentials.GetAWSCredentials().GetAWSSecretKey().empty()));
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+std::shared_ptr<AWSCredentialsProvider>
+IAMProfileCredentialsProvider::CreateCredentialSourceProvider(
+    const rs_string& in_credentialSource)
+{
+    if (in_credentialSource == CREDENTIAL_SOURCE_EC2)
+    {
+        RS_LOG_DEBUG("IAM",
+            "CreateCredentialSourceProvider: Using Ec2InstanceMetadata");
+        return std::make_shared<InstanceProfileCredentialsProvider>();
+    }
+    else if (in_credentialSource == CREDENTIAL_SOURCE_ENV)
+    {
+        RS_LOG_DEBUG("IAM",
+            "CreateCredentialSourceProvider: Using Environment variables as credential source");
+        return std::make_shared<EnvironmentAWSCredentialsProvider>();
+    }
+    else if (in_credentialSource == CREDENTIAL_SOURCE_ECS)
+    {
+        RS_LOG_DEBUG("IAM",
+            "CreateCredentialSourceProvider: Using EcsContainer");
+        Aws::String relativeUri = Aws::Environment::GetEnv(
+            GeneralHTTPCredentialsProvider::AWS_CONTAINER_CREDENTIALS_RELATIVE_URI);
+        Aws::String absoluteUri = Aws::Environment::GetEnv(
+            GeneralHTTPCredentialsProvider::AWS_CONTAINER_CREDENTIALS_FULL_URI);
+        Aws::String authToken = Aws::Environment::GetEnv(
+            GeneralHTTPCredentialsProvider::AWS_CONTAINER_AUTHORIZATION_TOKEN);
+        Aws::String authTokenFilePath = Aws::Environment::GetEnv(
+            GeneralHTTPCredentialsProvider::AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE);
+        return std::make_shared<GeneralHTTPCredentialsProvider>(
+            relativeUri, absoluteUri, authToken, authTokenFilePath);
+    }
+    IAMUtils::ThrowConnectionExceptionWithInfo(
+        "Unsupported credential_source value: " + in_credentialSource +
+        ". Supported values are: Ec2InstanceMetadata, Environment, EcsContainer.");
+    return nullptr; // unreachable, suppresses compiler warning
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 IAMProfileCredentialsProvider::~IAMProfileCredentialsProvider()

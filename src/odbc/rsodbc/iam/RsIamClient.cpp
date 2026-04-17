@@ -951,52 +951,93 @@ void RsIamClient::ThrowExceptionWithError(const Aws::Client::AWSError<RedshiftEr
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string RsIamClient::InferCredentialsProvider()
 {
+    /*
+     * Determines the IAM authentication type based on connection settings.
+     *
+     * Resolution order:
+     * 1. Explicit AuthType — if set, honor it directly (with special handling for "Profile"):
+     *    a. Profile + useInstanceProfile → InstanceProfile (EC2 metadata credentials)
+     *    b. Profile + empty awsProfile  → default credentials chain (return empty)
+     *    c. Otherwise                   → use the AuthType as-is (Static, Plugin, etc.)
+     * 2. No AuthType — infer from other connection attributes:
+     *    a. pluginName set              → Plugin
+     *    b. useInstanceProfile flag     → InstanceProfile
+     *    c. awsProfile set              → Profile (AWS config/credentials file)
+     *    d. accessKeyId + secretKey set → Static
+     *    e. Nothing matched             → default credentials chain (return empty)
+     */
     const rs_string& authType = m_settings.m_authType;
     const rs_string& accessKeyId = m_settings.m_accessKeyID;
     const rs_string& secretAccessKey = m_settings.m_secretAccessKey;
     const rs_string& awsProfile = m_settings.m_awsProfile;
     const rs_wstring& pluginName = m_settings.m_pluginName;
 
+    /* 1. Explicit AuthType takes priority */
     if (!authType.empty())
-    {   
+    {
         if (authType == IAM_AUTH_TYPE_PROFILE)
         {
-            /* If Instance profile is enabled, use instance profile */
+            /* Profile + useInstanceProfile → promote to InstanceProfile */
             if (m_settings.m_useInstanceProfile)
             {
+                RS_LOG_DEBUG("IAMCLNT",
+                    "InferCredentialsProvider: AuthType=Profile with "
+                    "useInstanceProfile=true, promoting to InstanceProfile");
                 return IAM_AUTH_TYPE_INSTANCE_PROFILE;
             }
 
-            /* If AuthType is Profile and connection attribute profile is empty,
-            use default credentials provider */
+            /* Profile + no awsProfile name → fall back to default credentials chain */
             if (awsProfile.empty())
             {
+                RS_LOG_DEBUG("IAMCLNT",
+                    "InferCredentialsProvider: AuthType=Profile but "
+                    "awsProfile is empty, falling back to default credentials chain");
                 return rs_string();
             }
         }
+        RS_LOG_DEBUG("IAMCLNT",
+            "InferCredentialsProvider: Using AuthType=%s",
+            authType.c_str());
         return authType;
     }
 
+    /* 2. No explicit AuthType — infer from connection attributes */
     if (!IAMUtils::isEmpty(pluginName))
     {
+        RS_LOG_DEBUG("IAMCLNT",
+            "InferCredentialsProvider: No AuthType set, inferred Plugin "
+            "from pluginName");
         return IAM_AUTH_TYPE_PLUGIN;
     }
 
     if (m_settings.m_useInstanceProfile)
     {
+        RS_LOG_DEBUG("IAMCLNT",
+            "InferCredentialsProvider: No AuthType set, inferred "
+            "InstanceProfile from useInstanceProfile flag");
         return IAM_AUTH_TYPE_INSTANCE_PROFILE;
     }
 
     if (!awsProfile.empty())
     {
+        RS_LOG_DEBUG("IAMCLNT",
+            "InferCredentialsProvider: No AuthType set, inferred Profile "
+            "from awsProfile=%s", awsProfile.c_str());
         return IAM_AUTH_TYPE_PROFILE;
     }
 
     if (!accessKeyId.empty() && !secretAccessKey.empty())
     {
+        RS_LOG_DEBUG("IAMCLNT",
+            "InferCredentialsProvider: No AuthType set, inferred Static "
+            "from accessKeyId/secretAccessKey");
         return IAM_AUTH_TYPE_STATIC;
     }
 
+    /* No credentials attributes found — use default AWS credentials chain */
+    RS_LOG_DEBUG("IAMCLNT",
+        "InferCredentialsProvider: No credentials attributes found, "
+        "falling back to default AWS credentials chain");
     return rs_string();
 }
 

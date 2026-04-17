@@ -291,3 +291,32 @@ EXPORTS
 	?ExtractWorkgroupFromHost@IdpTokenAuthPlugin@IamSupport@Redshift@@IEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@@Z
 	?ExtractRegionFromHost@IdpTokenAuthPlugin@IamSupport@Redshift@@IEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@@Z
 	?ResolveClusterInfo@IdpTokenAuthPlugin@IamSupport@Redshift@@IEAAXXZ
+
+	; === Instance profile / credential_source test exports ===
+	; IAMFactory::CreateInstanceProfileCredentialsProvider() - static, no params, returns shared_ptr
+	?CreateInstanceProfileCredentialsProvider@IAMFactory@IamSupport@Redshift@@SA?AV?$shared_ptr@VAWSCredentialsProvider@Auth@Aws@@@std@@XZ
+	; IAMFactory::CreateDefaultCredentialsProvider() - static, no params, returns shared_ptr
+	?CreateDefaultCredentialsProvider@IAMFactory@IamSupport@Redshift@@SA?AV?$shared_ptr@VAWSCredentialsProvider@Auth@Aws@@@std@@XZ
+	; IAMFactory::CreateStaticCredentialsProvider(const IAMConfiguration&) - static
+	?CreateStaticCredentialsProvider@IAMFactory@IamSupport@Redshift@@SA?AV?$shared_ptr@VAWSCredentialsProvider@Auth@Aws@@@std@@AEBVIAMConfiguration@23@@Z
+	; IAMProfileCredentialsProvider::IAMProfileCredentialsProvider(const IAMConfiguration&) - constructor
+	??0IAMProfileCredentialsProvider@IamSupport@Redshift@@QEAA@AEBVIAMConfiguration@12@@Z
+	; IAMProfileCredentialsProvider::~IAMProfileCredentialsProvider() - virtual destructor
+	??1IAMProfileCredentialsProvider@IamSupport@Redshift@@UEAA@XZ
+	; IAMProfileCredentialsProvider::GetAWSCredentials() - virtual override, no params
+	?GetAWSCredentials@IAMProfileCredentialsProvider@IamSupport@Redshift@@UEAA?AVAWSCredentials@Auth@Aws@@XZ
+	; IAMProfileCredentialsProvider::CreateCredentialSourceProvider(const rs_string&)
+	?CreateCredentialSourceProvider@IAMProfileCredentialsProvider@IamSupport@Redshift@@QEAA?AV?$shared_ptr@VAWSCredentialsProvider@Auth@Aws@@@std@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@5@@Z
+	; IAMConfiguration::SetProfileName(const rs_string&)
+	?SetProfileName@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	; RsIamClient::RsIamClient(const RsSettings&) - constructor in RedshiftODBC namespace
+	??0RsIamClient@RedshiftODBC@@QEAA@AEBURsSettings@@@Z
+	; RsIamClient::~RsIamClient() - destructor
+	??1RsIamClient@RedshiftODBC@@QEAA@XZ
+	; RsIamClient::InferCredentialsProvider() - protected, returns rs_string
+	?InferCredentialsProvider@RsIamClient@RedshiftODBC@@IEAA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@XZ
+	; RsIamHelper::IsValidIamCachedSettings(const RsSettings&, bool) - public static
+	?IsValidIamCachedSettings@RsIamHelper@@SA_NAEBURsSettings@@_N@Z
+	; RsIamClient static members
+	?s_iamClientCount@RsIamClient@RedshiftODBC@@2HA
+	?s_criticalSection@RsIamClient@RedshiftODBC@@2PEAXEA

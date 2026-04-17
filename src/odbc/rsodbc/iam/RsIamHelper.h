@@ -81,13 +81,14 @@ public:
 		RS_IAM_CONN_PROPS_INFO *pIamProps,
 		RS_PROXY_CONN_PROPS_INFO *pHttpsProps);
 
-private:
     /// @brief Check whether if the cached IAM credentials are still valid
     ///
     /// @param in_settings   Connection Settings
     ///
     /// @return  true if the cached IAM credentials are valid, else false
     static bool IsValidIamCachedSettings(const RsSettings& in_settings, bool isNativeAuth);
+
+private:
 
     /// @brief Get cached IAM credentials (if valid) and store it.
     ///

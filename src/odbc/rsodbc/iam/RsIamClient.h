@@ -50,8 +50,11 @@ namespace RedshiftODBC
         static MUTEX_HANDLE s_criticalSection;
         ~RsIamClient();
 
-    private:
+    protected:
+        /// @brief Infer the credentials provider to used given the connection attribute
+        rs_string InferCredentialsProvider();
 
+    private:
         /// @brief Send Describe cluster request to retrieve host and port
         ///
         /// @param in_client          The Redshift client
@@ -160,9 +163,6 @@ namespace RedshiftODBC
         /// 
         /// @exception ErrorException when any attribute in PGOSettings is not valid.
         void ValidateConnectionAttributes(const rs_string& in_authType);
-
-        /// @brief Infer the credentials provider to used given the connection attribute
-        rs_string InferCredentialsProvider();
 
         /// @brief Create IAM Configuration based on the AuthType given
         ///

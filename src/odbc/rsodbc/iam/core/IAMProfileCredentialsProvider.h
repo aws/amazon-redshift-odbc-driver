@@ -77,6 +77,17 @@ namespace IamSupport
         /// @param  out_credentials       The output credentials holder
         void GetConnectionSettings(IAMCredentials& out_credentials);
 
+        /// @brief Create a credential source provider based on the credential_source value.
+        ///        Supported values: "Ec2InstanceMetadata", "Environment", "EcsContainer".
+        ///
+        /// @param in_credentialSource    The credential_source value from the AWS profile
+        ///
+        /// @return A shared pointer to the appropriate AWSCredentialsProvider
+        ///
+        /// @exception ErrorException if the credential_source value is not recognized
+        std::shared_ptr<Aws::Auth::AWSCredentialsProvider> CreateCredentialSourceProvider(
+            const rs_string& in_credentialSource);
+
         /// @brief Check the cached m_credentials can be used
         /// 
         /// @return True if we can use the cached AWSCredentials, else false
