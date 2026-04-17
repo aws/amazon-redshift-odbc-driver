@@ -2637,6 +2637,29 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
           if (pval)
             strncpy(pConnectProps->szStringType, pval,
                     sizeof(pConnectProps->szStringType));
+        } else if (_stricmp(pname, RS_MAX_VARCHAR_SIZE) == 0) {
+          if (pval) {
+            sscanf(pval, "%d", &pConnectProps->iMaxVarcharSize);
+            if (pConnectProps->iMaxVarcharSize < 0) {
+              RS_LOG_WARN("RSCNN", "MaxVarcharSize=%d is negative, resetting to default %d",
+                  pConnectProps->iMaxVarcharSize, RS_DEFAULT_MAX_VARCHAR_SIZE);
+              pConnectProps->iMaxVarcharSize = RS_DEFAULT_MAX_VARCHAR_SIZE;
+            }
+          }
+        } else if (_stricmp(pname, RS_MAX_LONGVARCHAR_SIZE) == 0) {
+          if (pval) {
+            sscanf(pval, "%d", &pConnectProps->iMaxLongVarcharSize);
+            if (pConnectProps->iMaxLongVarcharSize < 0) {
+              RS_LOG_WARN("RSCNN", "MaxLongVarcharSize=%d is negative, resetting to default %d",
+                  pConnectProps->iMaxLongVarcharSize, RS_DEFAULT_MAX_LONGVARCHAR_SIZE);
+              pConnectProps->iMaxLongVarcharSize = RS_DEFAULT_MAX_LONGVARCHAR_SIZE;
+            }
+            else if (pConnectProps->iMaxLongVarcharSize > RS_MAX_VARCHAR_COLUMN_SIZE) {
+              RS_LOG_WARN("RSCNN", "MaxLongVarcharSize=%d exceeds max %d, clamping",
+                  pConnectProps->iMaxLongVarcharSize, RS_MAX_VARCHAR_COLUMN_SIZE);
+              pConnectProps->iMaxLongVarcharSize = RS_MAX_VARCHAR_COLUMN_SIZE;
+            }
+          }
         } else if (_stricmp(pname, RS_LOG_LEVEL_OPTION_NAME) == 0) {
           if (pval) {
             sscanf(pval, "%d", &pConnectProps->iLogLevel);
@@ -3124,6 +3147,8 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
               RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_HOST, "", pConnectProps->szHost, MAX_IDEN_LEN, ODBC_INI);
               if(pConnectProps->szHost[0] == '\0')
                 RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_SERVER, "", pConnectProps->szHost, MAX_IDEN_LEN, ODBC_INI);
+              if(pConnectProps->szHost[0] == '\0')
+                RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_SERVER_NAME, "", pConnectProps->szHost, MAX_IDEN_LEN, ODBC_INI);
             }
         }
 
@@ -3252,6 +3277,28 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
 
       // Read Streaming Cursor Rows
       RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_STREAMING_CURSOR_ROWS, &(pConnectProps->iStreamingCursorRows));
+
+      // Read MaxVarcharSize threshold
+      RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_MAX_VARCHAR_SIZE, &(pConnectProps->iMaxVarcharSize));
+      if(pConnectProps->iMaxVarcharSize < 0) {
+        RS_LOG_WARN("RSCNN", "DSN MaxVarcharSize=%d is negative, resetting to default %d",
+            pConnectProps->iMaxVarcharSize, RS_DEFAULT_MAX_VARCHAR_SIZE);
+        pConnectProps->iMaxVarcharSize = RS_DEFAULT_MAX_VARCHAR_SIZE;
+      }
+
+      // Read MaxLongVarcharSize cap
+      RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_MAX_LONGVARCHAR_SIZE, &(pConnectProps->iMaxLongVarcharSize));
+      if(pConnectProps->iMaxLongVarcharSize < 0) {
+        RS_LOG_WARN("RSCNN", "DSN MaxLongVarcharSize=%d is negative, resetting to default %d",
+            pConnectProps->iMaxLongVarcharSize, RS_DEFAULT_MAX_LONGVARCHAR_SIZE);
+        pConnectProps->iMaxLongVarcharSize = RS_DEFAULT_MAX_LONGVARCHAR_SIZE;
+      }
+      else if(pConnectProps->iMaxLongVarcharSize > RS_MAX_VARCHAR_COLUMN_SIZE) {
+        RS_LOG_WARN("RSCNN", "DSN MaxLongVarcharSize=%d exceeds max %d, clamping",
+            pConnectProps->iMaxLongVarcharSize, RS_MAX_VARCHAR_COLUMN_SIZE);
+        pConnectProps->iMaxLongVarcharSize = RS_MAX_VARCHAR_COLUMN_SIZE;
+      }
+
       if(pConnectProps->iCscEnable)
         pConnectProps->iStreamingCursorRows = 0;
       else
@@ -3367,7 +3414,7 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
           "ConnectionRetryDelay=%d, ClientProtocolVersion=%d, "
           "StreamingCursorRows=%d, CscEnable=%d, "
           "DatabaseMetadataCurrentDbOnly=%d, ReadOnly=%d, "
-          "MultiInsertCmdConvertEnable=%d, StringType=%s, "
+          "MultiInsertCmdConvertEnable=%d, MaxVarcharSize=%d, MaxLongVarcharSize=%d, StringType=%s, "
           "KerberosServiceName=%s, Compression=%s, "
           "KeepAlive=%s, KeepAliveCount=%s, KeepAliveIdle=%s, "
           "KeepAliveInterval=%s, ApplicationName=%s, "
@@ -3385,6 +3432,8 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
           pConnectProps->iDatabaseMetadataCurrentDbOnly,
           pConnectProps->iReadOnly,
           pConnectProps->iMultiInsertCmdConvertEnable,
+          pConnectProps->iMaxVarcharSize,
+          pConnectProps->iMaxLongVarcharSize,
           pConnectProps->szStringType[0] ? pConnectProps->szStringType : "(empty)",
           pConnectProps->szKerberosServiceName[0] ? pConnectProps->szKerberosServiceName : "(empty)",
           pConnAttr->szCompression[0] ? pConnAttr->szCompression : "(empty)",
@@ -3893,5 +3942,3 @@ int RS_GetPrivateProfileString(const char *pSectionName, const char *pKey, const
 	return RsIni::getPrivateProfileStringWithFullPath(pSectionName, pKey, pDflt, pReturn, iSize, pFile);
 #endif
 }
-
-

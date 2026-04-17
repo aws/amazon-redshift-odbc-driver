@@ -1939,6 +1939,12 @@ void RsTrace::traceSQLType(const char *pArgName,SQLSMALLINT hSQLType)
         case SQL_WVARCHAR:
             traceArg("\t%s=SQL_WVARCHAR",pArgName);
             break;
+        case SQL_LONGVARCHAR:
+            traceArg("\t%s=SQL_LONGVARCHAR",pArgName);
+            break;
+        case SQL_WLONGVARCHAR:
+            traceArg("\t%s=SQL_WLONGVARCHAR",pArgName);
+            break;
         case SQL_DECIMAL:
             traceArg("\t%s=SQL_DECIMAL",pArgName);
             break;

@@ -1986,6 +1986,83 @@ SQLRETURN libpqDescribeParams(RS_STMT_INFO *pStmt, RS_PREPARE_INFO *pPrepare, PG
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
+// Promote large VARCHAR/CHAR columns to LONGVARCHAR for MSDASQL/OLE DB compatibility.
+// Matches ODBC-1.x CreateCharacterMetaData() behavior.
+//
+void applyVarcharPromotion(
+    RS_DESC_REC *pDescRec,
+    RS_CONNECT_PROPS_INFO *pConnectProps)
+{
+    if (pDescRec->hType != SQL_VARCHAR
+        && pDescRec->hType != SQL_CHAR
+        && pDescRec->hType != SQL_WVARCHAR
+        && pDescRec->hType != SQL_WCHAR)
+    {
+        return;
+    }
+
+    int iMaxVarcharSize = pConnectProps->iMaxVarcharSize;
+    if (iMaxVarcharSize <= 0
+        || pDescRec->iSize <= iMaxVarcharSize)
+    {
+        if (!pConnectProps->iLoggedVarcharSkip) {
+            RS_LOG_TRACE("RSLIBPQ",
+                "[per-connection, logged once] "
+                "Column '%s' not promoted: "
+                "type %d, size %d, "
+                "MaxVarcharSize=%d",
+                pDescRec->szName,
+                pDescRec->hType,
+                pDescRec->iSize,
+                iMaxVarcharSize);
+            pConnectProps->iLoggedVarcharSkip = 1;
+        }
+        return;
+    }
+
+    short origType = pDescRec->hType;
+    int origSize = pDescRec->iSize;
+
+    if (pDescRec->hType == SQL_WVARCHAR
+        || pDescRec->hType == SQL_WCHAR)
+    {
+        pDescRec->hType = SQL_WLONGVARCHAR;
+    }
+    else
+    {
+        pDescRec->hType = SQL_LONGVARCHAR;
+    }
+    pDescRec->hConciseType = pDescRec->hType;
+
+    // Set reported column size to MaxLongVarcharSize
+    // after promotion. MSDASQL has a dead zone for
+    // SQL_LONGVARCHAR with sizes 8001-32768 where it
+    // rejects the conversion. By setting the size to
+    // a fixed value (default 65535), we ensure promoted
+    // columns always land above the dead zone.
+    int iMaxLongVarcharSize =
+        pConnectProps->iMaxLongVarcharSize;
+    if (iMaxLongVarcharSize > 0) {
+        pDescRec->iSize = iMaxLongVarcharSize;
+    }
+
+    if (!pConnectProps->iLoggedVarcharPromotion) {
+        RS_LOG_DEBUG("RSLIBPQ",
+            "[per-connection, logged once] "
+            "Column '%s' promoted: "
+            "type %d -> %d, size %d -> %d "
+            "(MaxVarcharSize=%d, "
+            "MaxLongVarcharSize=%d)",
+            pDescRec->szName,
+            origType, pDescRec->hType,
+            origSize, pDescRec->iSize,
+            iMaxVarcharSize,
+            iMaxLongVarcharSize);
+        pConnectProps->iLoggedVarcharPromotion = 1;
+    }
+}
+
+//---------------------------------------------------------------------------------------------------------igarish
 // Get result description of a query.
 //
 static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, int iFetchRefCursor)
@@ -2104,6 +2181,15 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
         }
         else
             pDescRec->hScale = 0; 
+
+        // Promote large VARCHAR/CHAR to LONGVARCHAR
+        // for MSDASQL compatibility
+        if (pResult->phstmt)
+        {
+            applyVarcharPromotion(
+                pDescRec,
+                pResult->phstmt->phdbc->pConnectProps);
+        }
 
         pDescRec->hNullable = PQfnullable(pgResult, col);
 

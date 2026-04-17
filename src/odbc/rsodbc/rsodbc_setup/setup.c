@@ -142,6 +142,8 @@
 #define RS_HTTPS_PROXY_PASSWORD   "https_proxy_password"
 #define RS_IDP_USE_HTTPS_PROXY    "idp_use_https_proxy"
 
+#define RS_MAX_VARCHAR_SIZE "MaxVarcharSize"
+#define RS_MAX_LONGVARCHAR_SIZE "MaxLongVarcharSize"
 #define RS_COMPRESSION_TYPE "Compression"
 #define RS_LOG_LEVEL_OPTION_NAME "LogLevel"
 #define RS_LOG_PATH_OPTION_NAME  "LogPath"
@@ -270,6 +272,8 @@
 #define DFLT_HTTPS_PROXY_PWD ""
 #define DFLT_IDP_USE_HTTPS_PROXY "0"
 
+#define DFLT_MAX_VARCHAR_SIZE "255"
+#define DFLT_MAX_LONGVARCHAR_SIZE "65535"
 #define DFLT_COMPRESSION "OFF"
 #define DFLT_LOG_LEVEL "0"
 #define DFLT_LOG_PATH  ""
@@ -289,7 +293,7 @@
 /* 1 Workgroup*/
 /* 1 Compression */
 
-#define DD_DSN_ATTR_COUNT 107
+#define DD_DSN_ATTR_COUNT 109
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -494,6 +498,8 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_WORKGROUP, DFLT_WORKGROUP},
 { RS_COMPRESSION_TYPE , DFLT_COMPRESSION },
 { RS_VPC_ENDPOINT_URL , DFLT_VPC_ENDPOINT_URL },
+{ RS_MAX_VARCHAR_SIZE , DFLT_MAX_VARCHAR_SIZE },
+{ RS_MAX_LONGVARCHAR_SIZE , DFLT_MAX_LONGVARCHAR_SIZE },
 { "", "" }
 };
 
@@ -625,6 +631,8 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { RS_WORKGROUP, RS_WORKGROUP},
 { RS_COMPRESSION_TYPE , RS_COMPRESSION_TYPE },
 { RS_VPC_ENDPOINT_URL , RS_VPC_ENDPOINT_URL },
+{ RS_MAX_VARCHAR_SIZE , RS_MAX_VARCHAR_SIZE },
+{ RS_MAX_LONGVARCHAR_SIZE , RS_MAX_LONGVARCHAR_SIZE },
 { "", "" }
 };
 
@@ -2216,6 +2224,8 @@ static LRESULT CALLBACK rs_dsn_advanced_sheet(HWND hwndDlg, UINT message, WPARAM
 			CheckDlgButton(hwndDlg, IDC_CURRENT_DB_ONLY, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_DATABASE_METADATA_CURRENT_DB_ONLY, TRUE));
 			CheckDlgButton(hwndDlg, IDC_READ_ONLY, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_READ_ONLY, FALSE));
 			CheckDlgButton(hwndDlg, IDC_USE_UNICODE, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_USE_UNICODE, FALSE));
+			SetDlgItemText(hwndDlg, IDC_MAX_VARCHAR_SIZE, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_MAX_VARCHAR_SIZE));
+			SetDlgItemText(hwndDlg, IDC_MAX_LONGVARCHAR_SIZE, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_MAX_LONGVARCHAR_SIZE));
  			// Already read from reg into local cache(rs_dsn_setup_ctxt); and now update the page
  			// Log Level
 			for (i = 0;; i++)
@@ -3451,6 +3461,8 @@ rs_dsn_read_advanced_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_CURRENT_DB_ONLY, RS_DATABASE_METADATA_CURRENT_DB_ONLY);
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_READ_ONLY, RS_READ_ONLY);
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_USE_UNICODE, RS_USE_UNICODE);
+		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_MAX_VARCHAR_SIZE, RS_MAX_VARCHAR_SIZE);
+		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_MAX_LONGVARCHAR_SIZE, RS_MAX_LONGVARCHAR_SIZE);
 		// read from page into local cache
 		lb = GetDlgItem(hdlg, IDC_LOG_LEVEL_COMBO);
 		n = ComboBox_GetCurSel(lb);

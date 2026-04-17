@@ -2137,7 +2137,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 }
 
 				case SQL_VARCHAR:
+				case SQL_LONGVARCHAR:
 				case SQL_WVARCHAR:
+				case SQL_WLONGVARCHAR:
 				{
 					if ((IS_TEXT_FORMAT(format)) || (hRsSpecialType != TIMETZOID
 														&& hRsSpecialType != TIMESTAMPTZOID))
@@ -2170,13 +2172,6 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 							*pcbLenInd = len;
 					}
 
-					break;
-				}
-
-				case SQL_LONGVARCHAR:
-				case SQL_WLONGVARCHAR:
-				{
-					rc = copyStrDataBigLen(pStmt, rsVal.pcVal, iColDataLen, (char *)pBuf, cbLen, cbLenOffset, pcbLenInd);
 					break;
 				}
 
@@ -2458,7 +2453,10 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 }
 
                 case SQL_VARCHAR:
-                case SQL_WVARCHAR: {
+                case SQL_LONGVARCHAR:
+                case SQL_WVARCHAR:
+                case SQL_WLONGVARCHAR:
+                {
                     if ((IS_TEXT_FORMAT(format)) || (hRsSpecialType != TIMETZOID &&
                                                     hRsSpecialType != TIMESTAMPTZOID)) {
                         rc = copyWStrDataBigLen(pStmt, 
@@ -2517,13 +2515,6 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 
 				}
 
-
-				case SQL_LONGVARCHAR:
-				case SQL_WLONGVARCHAR:
-				{
-					rc = copyWStrDataBigLen(pStmt, rsVal.pcVal, iColDataLen, (SQLWCHAR *)pBuf, cbLen, cbLenOffset, pcbLenInd);
-					break;
-				}
 
 				case SQL_BINARY:
 				case SQL_LONGVARBINARY:
@@ -2964,7 +2955,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_CHAR:
                 case SQL_WCHAR:
                 case SQL_VARCHAR:
+                case SQL_LONGVARCHAR:
                 case SQL_WVARCHAR:
+                case SQL_WLONGVARCHAR:
 				{
 					// Convert char to short
 					getRsVal(pColData, iColDataLen, SQL_SMALLINT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
@@ -3082,7 +3075,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_CHAR:
                 case SQL_WCHAR:
                 case SQL_VARCHAR:
+                case SQL_LONGVARCHAR:
                 case SQL_WVARCHAR:
+                case SQL_WLONGVARCHAR:
 				{
 					// Convert char to int
 					getRsVal(pColData, iColDataLen, SQL_INTEGER, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
@@ -3217,7 +3212,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_CHAR:
                 case SQL_WCHAR:
                 case SQL_VARCHAR:
+                case SQL_LONGVARCHAR:
                 case SQL_WVARCHAR:
+                case SQL_WLONGVARCHAR:
 				{
 					// Convert char to long long
 					getRsVal(pColData, iColDataLen, SQL_BIGINT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
@@ -3333,7 +3330,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_CHAR:
                 case SQL_WCHAR:
                 case SQL_VARCHAR:
+                case SQL_LONGVARCHAR:
                 case SQL_WVARCHAR:
+                case SQL_WLONGVARCHAR:
 				{
 					// Convert char to float
 					getRsVal(pColData, iColDataLen, SQL_REAL, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
@@ -3449,7 +3448,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_CHAR:
                 case SQL_WCHAR:
                 case SQL_VARCHAR:
+                case SQL_LONGVARCHAR:
                 case SQL_WVARCHAR:
+                case SQL_WLONGVARCHAR:
 				{
 					// Convert char to double
 					getRsVal(pColData, iColDataLen, SQL_DOUBLE, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
@@ -3567,7 +3568,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_CHAR:
                 case SQL_WCHAR:
                 case SQL_VARCHAR:
+                case SQL_LONGVARCHAR:
                 case SQL_WVARCHAR:
+                case SQL_WLONGVARCHAR:
 				{
 					// Convert char to bit
 					getRsVal(pColData, iColDataLen, SQL_BIT, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
@@ -3696,7 +3699,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 case SQL_CHAR:
                 case SQL_WCHAR:
                 case SQL_VARCHAR:
+                case SQL_LONGVARCHAR:
                 case SQL_WVARCHAR:
+                case SQL_WLONGVARCHAR:
                 case SQL_NUMERIC:
                 case SQL_DECIMAL:
                 case SQL_SMALLINT:
@@ -3772,7 +3777,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 }
 
 				case SQL_VARCHAR:
+				case SQL_LONGVARCHAR:
 				case SQL_WVARCHAR:
+				case SQL_WLONGVARCHAR:
 				{
 					if (hRsSpecialType == TIMESTAMPTZOID)
 					{
@@ -3896,7 +3903,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
                 }
 
 				case SQL_VARCHAR:
+				case SQL_LONGVARCHAR:
 				case SQL_WVARCHAR:
+				case SQL_WLONGVARCHAR:
 				{
 					if (hRsSpecialType == TIMETZOID)
 					{
@@ -4010,7 +4019,9 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 				case SQL_CHAR:
 				case SQL_WCHAR:
 				case SQL_VARCHAR:
+				case SQL_LONGVARCHAR:
 				case SQL_WVARCHAR:
+				case SQL_WLONGVARCHAR:
 				{
 					// Convert char to Numeric
 					getRsVal(pColData, iColDataLen, SQL_NUMERIC, &rsVal, hType, format, pDescRec, hRsSpecialType, TRUE);
@@ -4482,7 +4493,9 @@ int getRsVal(char *pColData, int iColDataLen, short hSQLType, RS_VALUE  *pRsVal,
 			}
 
             case SQL_VARCHAR:
+            case SQL_LONGVARCHAR:
             case SQL_WVARCHAR:
+            case SQL_WLONGVARCHAR:
             {
 				if ((hRsSpecialType == TIMETZOID
 						|| hRsSpecialType == TIMESTAMPTZOID)
@@ -4516,13 +4529,6 @@ int getRsVal(char *pColData, int iColDataLen, short hSQLType, RS_VALUE  *pRsVal,
 
                 break;
             }
-
-			case SQL_LONGVARCHAR:
-			case SQL_WLONGVARCHAR:
-			{
-				pRsVal->pcVal = pColData;
-				break;
-			}
 
 			case SQL_LONGVARBINARY:
 			{
@@ -5428,6 +5434,10 @@ short getScale(short hType, short hDecimalDigits)
 
         case SQL_CHAR:
         case SQL_VARCHAR:
+        case SQL_LONGVARCHAR:
+        case SQL_WCHAR:
+        case SQL_WVARCHAR:
+        case SQL_WLONGVARCHAR:
         case SQL_SMALLINT:
         case SQL_INTEGER:
         case SQL_BIGINT:
@@ -5547,18 +5557,14 @@ int getDisplaySize(short hType, int iSize, short hRsSpecialType)
     switch(hType)
     {
         case SQL_VARCHAR:
+        case SQL_LONGVARCHAR:
         case SQL_WVARCHAR:
+        case SQL_WLONGVARCHAR:
         {
-            iDisplaySize = (hRsSpecialType == TIMETZOID) ? MAX_TIMETZOID_SIZE : iSize;
+            iDisplaySize = (hRsSpecialType == TIMETZOID)
+                ? MAX_TIMETZOID_SIZE : iSize;
             break;
         }
-
-		case SQL_LONGVARCHAR:
-		case SQL_WLONGVARCHAR:
-		{
-			iDisplaySize =  iSize;
-			break;
-		}
 
 		case SQL_LONGVARBINARY:
 		{
@@ -5913,21 +5919,17 @@ void getTypeName(short hType, char *pBuf, int bufLen, short hRsSpecialType)
         }
 
         case SQL_VARCHAR:
+        case SQL_LONGVARCHAR:
         case SQL_WVARCHAR:
+        case SQL_WLONGVARCHAR:
         {
-			rs_strncpy(pBuf,"CHARACTER VARYING", bufLen);
+            if (hRsSpecialType == SUPER)
+                rs_strncpy(pBuf, "SUPER", bufLen);
+            else
+                rs_strncpy(pBuf, "CHARACTER VARYING",
+                    bufLen);
             break;
         }
-
-		case SQL_LONGVARCHAR:
-		case SQL_WLONGVARCHAR:
-		{
-			if (hRsSpecialType == SUPER)
-				rs_strncpy(pBuf, "SUPER", bufLen);
-			else
-				rs_strncpy(pBuf, "CHARACTER VARYING", bufLen);
-			break;
-		}
 
 		case SQL_LONGVARBINARY:
 		{
@@ -6034,6 +6036,7 @@ int getOctetLen(short hSQLType, int iSize, short hRsSpecialType)
     switch(hSQLType)
     {
         case SQL_VARCHAR:
+        case SQL_LONGVARCHAR:
         {
             if(hRsSpecialType == TIMETZOID && iSize == 0)
                 iOctetSize = MAX_TIMETZOID_SIZE; // 8 + . + 6 (microsecs) + 5 (+/- hh:mm)
@@ -6045,7 +6048,6 @@ int getOctetLen(short hSQLType, int iSize, short hRsSpecialType)
         case SQL_CHAR:
         case SQL_WCHAR: /* bytes */
         case SQL_WVARCHAR: /* bytes */
-		case SQL_LONGVARCHAR:
 		case SQL_WLONGVARCHAR:
 		{
             iOctetSize = iSize;
@@ -6792,6 +6794,8 @@ int getParamSize(short hType)
         case SQL_WCHAR:
         case SQL_VARCHAR:
         case SQL_WVARCHAR:
+        case SQL_LONGVARCHAR:
+        case SQL_WLONGVARCHAR:
         {
             iSize = 65535;
             break;
@@ -6906,7 +6910,9 @@ short getParamScale(short hType)
         case SQL_CHAR:
         case SQL_WCHAR:
         case SQL_VARCHAR:
+        case SQL_LONGVARCHAR:
         case SQL_WVARCHAR:
+        case SQL_WLONGVARCHAR:
         case SQL_SMALLINT:
         case SQL_INTEGER:
         case SQL_BIGINT:
@@ -7009,8 +7015,10 @@ char *convertCParamDataToSQLData(RS_STMT_INFO *pStmt, char *pParamData, SQLLEN i
     {
         case SQL_CHAR:
         case SQL_VARCHAR:
+        case SQL_LONGVARCHAR:
         case SQL_WCHAR:
         case SQL_WVARCHAR:
+        case SQL_WLONGVARCHAR:
         {
             switch(hType)
             {
@@ -7054,29 +7062,6 @@ char *convertCParamDataToSQLData(RS_STMT_INFO *pStmt, char *pParamData, SQLLEN i
 
             break;
         } // SQL_CHAR
-
-		case SQL_LONGVARCHAR: // SUPER
-		case SQL_WLONGVARCHAR:
-		{
-			switch (hType)
-			{
-			case SQL_C_CHAR:
-			case SQL_C_WCHAR:
-			{
-				// We already convert these types to string
-				break;
-			}
-
-			default:
-			{
-				iConversionError = TRUE;
-				break;
-			}
-
-			} // C Type
-
-			break;
-		} // SQL_LONGVARCHAR (SUPER)
 
 		case SQL_LONGVARBINARY: // GEOMETRY, VARBYTE, GEOGRAPHY
 		{

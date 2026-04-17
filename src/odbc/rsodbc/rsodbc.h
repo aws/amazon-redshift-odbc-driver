@@ -34,6 +34,7 @@
 
 #include "libpq-fe.h"
 
+#define RS_MAX_VARCHAR_COLUMN_SIZE 65535
 
 #ifdef WIN32
 #include "win_port.h"
@@ -1187,6 +1188,10 @@ struct SHOWPROCEDURESFUNCTIONSResult {
 #define RS_USE_UNICODE                          "UseUnicode"
 #define RS_CLIENT_PROTOCOL_VERSION              "client_protocol_version"
 #define RS_STRING_TYPE							"StringType"
+#define RS_MAX_VARCHAR_SIZE						"MaxVarcharSize"
+#define RS_DEFAULT_MAX_VARCHAR_SIZE				255
+#define RS_MAX_LONGVARCHAR_SIZE					"MaxLongVarcharSize"
+#define RS_DEFAULT_MAX_LONGVARCHAR_SIZE         RS_MAX_VARCHAR_COLUMN_SIZE
 #define RS_APPLICATION_NAME						"ApplicationName"
 #define RS_COMPRESSION						"Compression"
 
@@ -1586,6 +1591,23 @@ public:
 	char szStringType[MAX_SMALL_TEMP_BUF_LEN] = {0};
 
 	int iClientProtocolVersion; // If user sets, the driver uses it otherwise there will be default value hardcoded.
+
+	// MaxVarcharSize: varchar columns with size exceeding this threshold are
+	// reported as SQL_LONGVARCHAR instead of SQL_VARCHAR. This is needed for
+	// compatibility with SQL Server linked servers via MSDASQL/OLE DB, which
+	// cannot handle SQL_VARCHAR columns larger than ~8000 bytes.
+	// Default is 255 (matching ODBC 1.x behavior). 0 disables promotion.
+	int iMaxVarcharSize = RS_DEFAULT_MAX_VARCHAR_SIZE;
+
+	// MaxLongVarcharSize: after promotion to SQL_LONGVARCHAR/SQL_WLONGVARCHAR,
+	// the reported column size is set to this value. This avoids the MSDASQL
+	// dead zone (8001–32768) where SQL_LONGVARCHAR columns are rejected.
+	// Default is 65535 (Redshift max varchar). 0 disables (report actual size).
+	int iMaxLongVarcharSize = RS_DEFAULT_MAX_LONGVARCHAR_SIZE;
+
+	// Per-connection flags for one-time promotion logging
+	int iLoggedVarcharPromotion = 0;
+	int iLoggedVarcharSkip = 0;
 };
 
 
@@ -1864,6 +1886,7 @@ libpqExecuteDirectOrPreparedThreadProc(void *pArg);
 
 void libpqCloseResult(RS_RESULT_INFO *pResult);
 short mapPgTypeToSqlType(Oid pgType,short *phPaSpecialType, int useUnicode);
+void applyVarcharPromotion(RS_DESC_REC *pDescRec, RS_CONNECT_PROPS_INFO *pConnectProps);
 char *libpqGetData(RS_RESULT_INFO *pResult, short hCol, int *piLenInd, int *piFormat);
 
 bool allocateIRDRecords(RS_STMT_INFO *pStmt);
@@ -1935,6 +1958,3 @@ int RS_GetPrivateProfileString(const char *pSectionName, const char *pKey, const
 #ifdef __cplusplus
 }
 #endif /* C++ */
-
-
-

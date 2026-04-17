@@ -3153,6 +3153,11 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
          SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE,
          SQL_NULL_DATA, "super", SQL_NULL_DATA, SQL_NULL_DATA, SQL_LONGVARCHAR,
          SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA},
+        // NOTE FOR FUTURE EXTENSION: Wide type entries (SQL_WVARCHAR,
+        //  SQL_WCHAR, SQL_WLONGVARCHAR) are missing from typesInfo.
+        // Per ODBC spec, SQLGetTypeInfo should return rows
+        // for these types when UseUnicode=1. This is a
+        // pre-existing gap, not introduced by MaxVarcharSize.
         {"char", SQL_CHAR, 256, "\'", "\'", "length", SQL_NULLABLE, SQL_TRUE,
          SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "char",
          SQL_NULL_DATA, SQL_NULL_DATA, SQL_CHAR, SQL_NULL_DATA, SQL_NULL_DATA,

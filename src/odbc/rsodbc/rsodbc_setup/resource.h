@@ -270,8 +270,12 @@
 #define IDC_IDP_ST                      1253
 #define IDC_IDP_MANAGED_VPC_STATIC      1254
 #define IDC_IDP_MANAGED_VPC             1255
+#define IDC_MAX_VARCHAR_SIZE_STATIC     1256
+#define IDC_MAX_VARCHAR_SIZE            1257
 
-#define IDC_USE_UNICODE                 1256
+#define IDC_USE_UNICODE                 1258
+#define IDC_MAX_LONGVARCHAR_SIZE_STATIC 1259
+#define IDC_MAX_LONGVARCHAR_SIZE        1260
 
 // Next default values for new objects
 // 

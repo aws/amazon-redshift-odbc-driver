@@ -152,6 +152,7 @@ EXPORTS
 	getTypeName
 	getDisplaySize
 	mapPgTypeToSqlType
+	applyVarcharPromotion
 	strcasestr
 	strcasestrwhole
 	stristr
