@@ -7,6 +7,7 @@
 */
 
 #include "ClientSideCursorThread.h"
+#include <rslog.h>
 
 void readResultsOnThreadCsc(void *_pCscStatementContext);
 void resetFromCscThread(void *_pCscExecutor);
@@ -63,9 +64,15 @@ runCscThread(void *pArg)
 {
     ClientSideCursorThread *pCscThread = (ClientSideCursorThread *)pArg;
 
+    RS_LOG_DEBUG("CSCINF", "CSC background thread: STARTED (tid=%lu)",
+                (unsigned long)rsGetCurrentThreadId());
+
     // Process result
     readResultsOnThreadCsc(pCscThread->m_cscStatementContext);
     checkForIOExceptionCsc(pCscThread->m_cscStatementContext);
+
+    RS_LOG_DEBUG("CSCINF", "CSC background thread: FINISHED (tid=%lu)",
+                (unsigned long)rsGetCurrentThreadId());
 
     resetFromCscThread(pCscThread->m_cscExecutor);
     resetCscStatementConext(pCscThread->m_cscStatementContext);

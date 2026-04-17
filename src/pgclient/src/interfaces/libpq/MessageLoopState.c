@@ -7,6 +7,7 @@
 */
 
 #include "MessageLoopState.h"
+#include <rslog.h>
 
 ClientSideCursorResult *createCSCResultObj(void *_pCscExecutor, int maxRows, int resultsettype, int executeIndex, int resultsetconcurrency);
 ClientSideCursorMultiResultLock *createOrResetCscMultiResultLock(void *_pCscExecutor, int multiThreads, 
@@ -439,6 +440,12 @@ void setStreamingCursorRows(void *_pCscStatementContext, int iStreamingCursorRow
 void setEndOfStreamingCursor(void *_pCscStatementContext, int flag)
 {
     struct _CscStatementContext *pCscStatementContext = (struct _CscStatementContext *)_pCscStatementContext;
+
+    /* Only log when the value actually changes — avoids noise from redundant resets. */
+    if (flag != pCscStatementContext->m_StreamingCursorInfo.m_endOfStreamingCursor) {
+        RS_LOG_DEBUG("SCURS", "setEndOfStreamingCursor: %d -> %d",
+                    pCscStatementContext->m_StreamingCursorInfo.m_endOfStreamingCursor, flag);
+    }
 
     pCscStatementContext->m_StreamingCursorInfo.m_endOfStreamingCursor = flag;
 }

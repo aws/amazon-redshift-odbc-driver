@@ -1839,6 +1839,9 @@ void _pqGetResultLoopOnThread(void *_pCscStatementContext)
 			 * conn->errorMessage has been set by pqWait or pqReadData. We
 			 * want to append it to any already-received error message.
 			 */
+			RS_LOG_ERROR("STRIO", "Socket error in streaming cursor read loop: sock=%d status=%d errno=%d errMsg=[%s]",
+				conn->sock, (int)conn->status, SOCK_ERRNO,
+				conn->errorMessage.data ? conn->errorMessage.data : "(null)");
 			pqSaveErrorResult(conn);
 			conn->asyncStatus = PGASYNC_IDLE;
             pCscStatementContext->iSocketError = TRUE;
@@ -3626,6 +3629,9 @@ void pqReadNextBatchOfStreamingRows(void *_pCscStatementContext, PGresult *pgRes
         ((struct _CscStatementContext *)_pCscStatementContext)->iSocketError = FALSE;
 		if(piError)
 			*piError = TRUE;
+		RS_LOG_ERROR("STRIO", "Streaming cursor batch read failed: connStatus=%d sock=%d errMsg=[%s]",
+			(int)conn->status, conn->sock,
+			conn->errorMessage.data ? conn->errorMessage.data : "(null)");
     }
 }
 
@@ -3693,6 +3699,9 @@ int pqSkipCurrentResultOfStreamingCursor(void *_pCscStatementContext, PGresult *
 			{
 				((struct _CscStatementContext *)_pCscStatementContext)->iSocketError = FALSE;
 				iSocketError = 1; // So caller should set pgResult as NULL
+				RS_LOG_ERROR("STRIO", "Socket error while skipping streaming cursor result: connStatus=%d sock=%d errMsg=[%s]",
+					(int)conn->status, conn->sock,
+					conn->errorMessage.data ? conn->errorMessage.data : "(null)");
 			}
 
 			// Reset Skip result
@@ -3734,6 +3743,9 @@ void pqSkipAllResultsOfStreamingCursor(void *_pCscStatementContext, PGconn *conn
 			{
 				((struct _CscStatementContext *)_pCscStatementContext)->iSocketError = FALSE;
 				setEndOfStreamingCursorQuery(_pCscStatementContext, TRUE);
+				RS_LOG_ERROR("STRIO", "Socket error while draining streaming cursor result: connStatus=%d sock=%d errMsg=[%s]",
+					(int)conn->status, conn->sock,
+					conn->errorMessage.data ? conn->errorMessage.data : "(null)");
 			}
 
 			// Reset Skip result

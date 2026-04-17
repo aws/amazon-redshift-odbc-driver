@@ -539,8 +539,10 @@ SQLRETURN SQL_API SQLMoreResults(SQLHSTMT    phstmt)
 		{
 			// Read Next Result from socket
 			rc = libpqReadNextResultOfStreamingCursor(pStmt, pStmt->pCscStatementContext, pStmt->phdbc->pgConn, TRUE);
-			if(rc == SQL_ERROR)
-				goto error;
+            if(rc == SQL_ERROR) {
+                RS_LOG_ERROR("STRIO", "Streaming cursor: failed to read next result set");
+                goto error;
+            }
 
 			iStreamingCursor = TRUE;
 
@@ -1469,6 +1471,41 @@ SQLRETURN  SQL_API SQLFetchScroll(SQLHSTMT phstmt,
 
 /*====================================================================================================================================================*/
 
+// Helper: format and report a cursor I/O error with optional libpq detail.
+//
+static void addCursorIOError(RS_STMT_INFO *pStmt, RS_RESULT_INFO *pResult,
+                             const char *cursorKind, const char *logPrefix)
+{
+    char *connErr = (pStmt->phdbc) ? libpqErrorMsg(pStmt->phdbc) : NULL;
+    char errBuf[1024];
+
+    if (connErr && connErr[0])
+    {
+        // Copy immediately — libpqErrorMsg returns a pointer into conn->errorMessage.data
+        // which is a shared buffer that could be overwritten by a subsequent libpq call.
+        char connErrCopy[512];
+        rs_strncpy(connErrCopy, connErr, sizeof(connErrCopy));
+
+        snprintf(errBuf, sizeof(errBuf),
+            "An I/O error occurred while reading %s. Detail: %.900s",
+            cursorKind, connErrCopy);
+
+        // Strip trailing newlines from libpq error message.
+        size_t len = strlen(errBuf);
+        while (len > 0 && (errBuf[len - 1] == '\n' || errBuf[len - 1] == '\r'))
+            errBuf[--len] = '\0';
+    }
+    else
+    {
+        snprintf(errBuf, sizeof(errBuf),
+            "An I/O error occurred while reading %s.", cursorKind);
+    }
+
+    RS_LOG_ERROR("STRIO", "%s at rowOffset=%lld curRow=%d rowsInMem=%d: %s",
+        logPrefix, (long long)pResult->iRowOffset, pResult->iCurRow, pResult->iNumberOfRowsInMem, errBuf);
+    addError(&pStmt->pErrorList, "24000", errBuf, 0, NULL);
+}
+
 //---------------------------------------------------------------------------------------------------------igarish
 // Common function for SQLFetchScroll, SQLFetch and SQLExtendedFetch.
 //
@@ -1548,7 +1585,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                                 if(iCscError)
                                 {
                                     rc = SQL_ERROR;
-                                    addError(&pStmt->pErrorList,"24000", "An I/O error occurred while reading client side cursor.", 0, NULL);
+                                    addCursorIOError(pStmt, pResult, "client side cursor", "CSC read error");
                                     goto error; 
                                 }
                             }
@@ -1564,10 +1601,14 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
 								// Read more rows from socket
 								libpqReadNextBatchOfStreamingRows(pStmt, pStmt->pCscStatementContext, pResult->pgResult, pStmt->phdbc->pgConn,&iError, FALSE);
 
-
 								// Set pResult parameters
                                 // New #of rows in memory
                                 pResult->iNumberOfRowsInMem = PQntuples(pResult->pgResult);
+
+                                if(pResult->iNumberOfRowsInMem == 0 && !iError) {
+                                    RS_LOG_WARN("STRIO", "Streaming cursor: batch read returned 0 rows, rowOffset=%lld",
+                                        (long long)pResult->iRowOffset);
+                                }
 
 								if(pResult->iNumberOfRowsInMem > 0)
 								{
@@ -1578,7 +1619,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                                 if(iError)
                                 {
                                     rc = SQL_ERROR;
-                                    addError(&pStmt->pErrorList,"24000", "An I/O error occurred while reading streaming cursor.", 0, NULL);
+                                    addCursorIOError(pStmt, pResult, "streaming cursor", "Streaming cursor read error");
                                     goto error; 
                                 }
 							}

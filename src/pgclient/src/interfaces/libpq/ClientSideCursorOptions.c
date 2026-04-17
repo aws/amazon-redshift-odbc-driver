@@ -43,6 +43,9 @@ ClientSideCursorOptions *createCscOptions(int enable, long long threshold, long 
         setMaxFileSizeCscOption(pCscOptions, maxfilesize);
         setPathCscOption(pCscOptions, path);
 
+        RS_LOG_INFO("CSCINF", "CSC options: enable=%d, threshold=%lld bytes, maxfilesize=%lld bytes, path=%s",
+                    pCscOptions->m_enable, pCscOptions->m_threshold, pCscOptions->m_maxfilesize, pCscOptions->m_path);
+
         if(IS_TRACE_ON_CSC())
         {
             traceInfoCsc("csc options: cscenable=%d, cscthreshold=%lld, cscmaxfilesize=%lld, cscpath = %s",

@@ -8,6 +8,7 @@
 
 #include "ClientSideCursorExecutor.h"
 #include "ClientSideCursorThread.h"
+#include <rslog.h>
 
 void _pqGetResultLoopOnThread(void *_pCscStatementContext);
 void setCalledFromCscThread(void *_pCscStatementContext,int flag);
@@ -32,6 +33,15 @@ ClientSideCursorExecutor *createCscExecutor(PGconn *pConn)
         }
 
         pCscExecutor->m_conn = pConn;
+
+        /* pConn->llCscThreshold and llCscMaxFileSize are in MB (user-configured input).
+         * setThresholdCscOption/setMaxFileSizeCscOption convert them to bytes internally.
+         * ClientSideCursorOptions.c logs the post-conversion byte values. Both labels are correct. */
+        RS_LOG_DEBUG("CSCINF", "CSC executor created: CscEnable=%d, CscThreshold=%lld MB, CscMaxFileSize=%lld MB, "
+                    "CscPath=%s, StreamingCursorRows=%d",
+                    pConn->iCscEnable, pConn->llCscThreshold, pConn->llCscMaxFileSize,
+                    pConn->szCscPath[0] ? pConn->szCscPath : "(default)",
+                    pConn->iStreamingCursorRows);
     }
 
     return pCscExecutor;
@@ -46,6 +56,7 @@ ClientSideCursorExecutor *releaseCscExecutor(ClientSideCursorExecutor *pCscExecu
 {
     if(pCscExecutor)
     {
+        RS_LOG_DEBUG("CSCINF", "CSC executor released");
         pCscExecutor->m_cscOptions = releaseCscOptions(pCscExecutor->m_cscOptions);
 
         pCscExecutor = rs_free(pCscExecutor);
@@ -107,6 +118,8 @@ void waitForCscThreadToFinish(ClientSideCursorExecutor *pCscExecutor, int called
     // Wait for full read of any executing command
     if(pCscExecutor->m_cscThread != NULL)
     {
+        RS_LOG_DEBUG("CSCINF", "CSC waiting for background thread to finish: calledFromConnectionClose=%d",
+                    calledFromConnectionClose);
         if (calledFromConnectionClose)
         {
             pCscExecutor->m_cscStopThread = TRUE;
@@ -272,6 +285,10 @@ int createProcessingThreadCsc(ClientSideCursorExecutor *pCscExecutor, MessageLoo
     {
         pMessageLoopState->threadCreated = TRUE;
 
+        RS_LOG_DEBUG("CSCINF", "CSC background thread: CREATING for connPid=%d, fileCreated=%d",
+                    pCscResult ? pCscResult->m_connectionPid : 0,
+                    pCscResult ? pCscResult->m_fileCreated : 0);
+
         // Create new thread and start it to read rest of rows from socket
         pCscExecutor->m_cscThread = createCscThread(pMessageLoopState, pCscExecutor, pCscStatementContext);
 
@@ -308,6 +325,9 @@ int createProcessingThreadCsc(ClientSideCursorExecutor *pCscExecutor, MessageLoo
 void endOfQueryResponseCsc(ClientSideCursorExecutor *pCscExecutor, MessageLoopState *pMessageLoopState)
 {
     ClientSideCursorResult *pCscResult = pMessageLoopState->m_cscResult;
+
+    RS_LOG_DEBUG("CSCINF", "CSC end of query response: threadCreated=%d",
+                pMessageLoopState->threadCreated);
 
     pMessageLoopState->endQuery = TRUE;
 

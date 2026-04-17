@@ -289,6 +289,12 @@ int createFileCsc(ClientSideCursorResult *pCsc, PGresult *pgResult)
 {
     PGresAttValue **tuples = pqGetTuples(pgResult);
 
+    RS_LOG_DEBUG("CSCINF", "CSC threshold crossed: creating data file=%s, rowsInMem=%d, connPid=%d, resultsettype=%d",
+                pCsc->m_fileName,
+                ((pgResult != NULL) ? PQntuples(pgResult) : 0),
+                pCsc->m_connectionPid,
+                pCsc->m_resultsettype);
+
     if(IS_TRACE_ON_CSC())
     {
         traceInfoCsc("createFile: Start creating data file: %s records count in mem:%d", pCsc->m_fileName, ((pgResult != NULL) ? PQntuples(pgResult) : 0)); 
@@ -626,7 +632,8 @@ int closeCsc(ClientSideCursorResult *pCsc,int iCalledFromShutdownHook)
             // If thread is running when close() called, wait until we read/skip all data from socket.
             waitForFullResultReadFromServerCsc(pCsc);
         }
-        
+        RS_LOG_DEBUG("CSCINF", "CSC closing: file=%s, calledFromShutdownHook=%d",
+                    pCsc->m_fileName ? pCsc->m_fileName : "(null)", iCalledFromShutdownHook);
         pCsc->m_fileCreated = FALSE;
         
         // Close output file
