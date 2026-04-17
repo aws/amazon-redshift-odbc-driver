@@ -613,7 +613,11 @@ const std::unordered_map<std::string, DATA_TYPE_INFO>
         {"hllsketch",
          {SQL_UNKNOWN_TYPE, SQL_UNKNOWN_TYPE, kNotApplicable, "hllsketch"}},
         
-         // Additional Glue data type
+        // Additional Glue data types
+        // Glue catalogs may return these type names instead of native Redshift
+        // types. The map keys are lowercase; mixed-case variants from Glue
+        // (e.g. "String", "Binary") are normalized to lowercase in
+        // processDataTypeInfo() before lookup.
         {"binary", {SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, "binary"}},
         {"string", {SQL_VARCHAR, SQL_VARCHAR, kNotApplicable, "string"}},
     };
@@ -645,10 +649,23 @@ ProcessedTypeInfo RsMetadataAPIHelper::processDataTypeInfo(std::string& dataType
             result.dateTimeInfo.hasCustomPrecision = true;
         }
     } else {
-        // For non-datetime types, just get the type information directly
+        // For non-datetime types, get the type information directly.
+        //
+        // cleanedTypeName preserves the original case from the server response.
+        // This is intentional: when the type is not found in typeInfoMap (i.e.
+        // an unknown type), cleanedTypeName is used as-is for the TYPE_NAME
+        // column in the ODBC result set, keeping the server's original value.
         result.cleanedTypeName = dataType;
+
+        // Normalize to lowercase for the typeInfoMap lookup. Glue catalogs may
+        // return data type names in mixed case (e.g. "String", "STRING",
+        // "Binary") whereas the typeInfoMap keys are all lowercase. Without
+        // this normalization, mixed-case Glue types would fail the lookup and
+        // be reported as SQL_UNKNOWN_TYPE (0) to the application.
+        std::string normalizedDataTypeName = dataType;
+        std::transform(normalizedDataTypeName.begin(), normalizedDataTypeName.end(), normalizedDataTypeName.begin(), ::tolower);
         result.typeInfoResult = RsMetadataAPIHelper::getTypeInfo(
-            dataType,
+            normalizedDataTypeName,
             RsMetadataAPIHelper::returnODBC2DateTime(ODBCVer));
     }
 
@@ -709,6 +726,13 @@ const std::set<std::string> RsMetadataAPIHelper::VALID_TYPES = {
     "geometry",
     "geography",
 
+    // Additional Glue data types
+    // Glue catalogs may return these type names which differ from native
+    // Redshift types. They must be recognized as valid so that
+    // validateTypes() does not reject them during procedure/function
+    // parameter parsing.
+    "string", "binary",
+
     // Legacy data types
     "oid",
     "smallint[]",
@@ -763,10 +787,13 @@ const std::unordered_map<std::string, int>
     RsMetadataAPIHelper::numPrecRadixMap = {
         {"varbyte", 10}, {"geography", 2}, {"int2", 10},   {"int4", 10},
         {"int8", 10},   {"float4", 10},   {"float8", 10}, {"numeric", 10},
-        {"char", 0}, {"varchar", 0},};
+        {"char", 0}, {"varchar", 0}, {"string", 0},
+        {"binary", 10}};  // "binary" is a Glue type equivalent to native "varbyte"
 
 const std::unordered_set<std::string> RsMetadataAPIHelper::charOctetLenSet = {
-    "char", "varchar", "varbyte", "geography", "hllsketch"};
+    "char", "varchar", "string",   // "string" is a Glue character type alias
+    "varbyte", "binary",           // "binary" is a Glue type equivalent to native "varbyte"
+    "geography", "hllsketch"};
 
 //
 // Helper function to get column size by Redshift type name
@@ -879,9 +906,12 @@ int RsMetadataAPIHelper::getCharOctetLen(const std::string &rsType,
                                          int character_maximum_length) {
     auto it = RsMetadataAPIHelper::charOctetLenSet.find(rsType);
     if (it != RsMetadataAPIHelper::charOctetLenSet.end()) {
-        if (rsType == "char" || rsType == "varchar") {
+        // "string" is a Glue character type that behaves like varchar for
+        // CHAR_OCTET_LENGTH: return character_maximum_length when positive.
+        if (rsType == "char" || rsType == "varchar" || rsType == "string") {
             return character_maximum_length > 0 ? character_maximum_length : 0;
-        } else if (rsType == "varbyte") {
+        } else if (rsType == "varbyte" || rsType == "binary") {
+            // "binary" is a Glue type equivalent to native "varbyte"
             return kUnknownColumnSize;
         } else if (rsType == "geography") {
             return kNotApplicable;
@@ -894,7 +924,9 @@ int RsMetadataAPIHelper::getCharOctetLen(const std::string &rsType,
 }
 
 bool RsMetadataAPIHelper::isValidType(const std::string& dataType) {
-    return VALID_TYPES.find(dataType) != VALID_TYPES.end();
+    std::string lower = dataType;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    return VALID_TYPES.find(lower) != VALID_TYPES.end();
 }
 
 std::tuple<bool, std::vector<std::string>> RsMetadataAPIHelper::validateTypes(

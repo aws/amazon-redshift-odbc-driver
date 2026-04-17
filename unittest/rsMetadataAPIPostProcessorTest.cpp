@@ -72,6 +72,33 @@ template<typename T>
 class MetadataResultSetTest : public RsMetadataAPIPostProcessorTest {
 protected:
     /**
+     * @brief Mixed case variants of Glue data types for testing case-insensitive
+     * type resolution. Glue catalogs may return data type names in arbitrary
+     * casing; the driver must normalize them to lowercase before looking up
+     * type information. Includes both "string" (SQL_VARCHAR) and "binary"
+     * (SQL_LONGVARBINARY) Glue types.
+     */
+    std::vector<std::string> mixedCaseDataType = {
+        "String", "sTring", "STRING", "string",
+        "Binary", "bInary", "BINARY", "binary"};
+
+    /**
+     * @brief Helper to normalize a data type name to lowercase for comparison
+     */
+    static std::string toLower(const std::string& s) {
+        std::string result = s;
+        std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+        return result;
+    }
+
+    /**
+     * @brief Check if a data type (case-insensitive) is a binary Glue type
+     */
+    static bool isBinaryType(const std::string& dataType) {
+        return toLower(dataType) == "binary";
+    }
+
+    /**
      * @brief Process the result set through the metadata API
      * @return SQLRETURN status code
      */
@@ -114,11 +141,25 @@ protected:
     }
 
     /**
+     * @brief Create test records for the Glue data type result set
+     * @return Vector of test records
+     */
+    virtual std::vector<T> createMixedCaseGlueDataTypeTestRecords() {
+        return {};
+    }
+
+    /**
      * @brief Validate the processed results
      * @param records The test records to validate against
      * @param maxLength whether to use name with max length
      */
     virtual void validateResults(const std::vector<T>& records, bool maxLength) {};
+
+    /**
+     * @brief Validate the processed results for mixed case Glue data type
+     * @param records The test records to validate against
+     */
+    virtual void validateMixedCaseGlueDataTypeResults(const std::vector<T>& records) {};
 
     static const std::string& getMaxStr() {
         static const std::string maxStr(NAMEDATALEN - 1, 'X');
@@ -174,6 +215,17 @@ protected:
 
         SQLRETURN rc = processResult(nullStmt, testRS);
         EXPECT_EQ(rc, SQL_INVALID_HANDLE);
+    }
+
+    void TestMixedCaseGlueDatatype() {
+        std::vector<T> testRS = createMixedCaseGlueDataTypeTestRecords();
+
+        SQLRETURN rc = processResult(stmt, testRS);
+        EXPECT_EQ(rc, SQL_SUCCESS);
+
+        ValidateResultSetProperties(mixedCaseDataType.size());
+        ValidateColumnMetadata();
+        validateMixedCaseGlueDataTypeResults(testRS);
     }
 
 private:
@@ -364,6 +416,32 @@ protected:
         return results;
     }
 
+    std::vector<SHOWCOLUMNSResult> createMixedCaseGlueDataTypeTestRecords() override {
+        std::vector<SHOWCOLUMNSResult> results;
+
+        for (size_t i = 0; i < mixedCaseDataType.size(); i++) {
+            SHOWCOLUMNSResult result{};  // Zero-initialize
+            std::string suffix = std::to_string(i+1);
+
+            result.database_name_Len = safeCopyString(result.database_name, ("catalog" + suffix).c_str(), NAMEDATALEN);
+            result.schema_name_Len = safeCopyString(result.schema_name, ("schema" + suffix).c_str(), NAMEDATALEN);
+            result.table_name_Len = safeCopyString(result.table_name, ("table" + suffix).c_str(), NAMEDATALEN);
+            result.column_name_Len = safeCopyString(result.column_name, ("column" + suffix).c_str(), NAMEDATALEN);
+            result.ordinal_position = 1;
+            result.column_default_Len = safeCopyString(result.column_default, "", NAMEDATALEN);
+            result.is_nullable_Len = safeCopyString(result.is_nullable, "NO", NAMEDATALEN);
+            result.data_type_Len = safeCopyString(result.data_type, mixedCaseDataType[i].c_str(), NAMEDATALEN);
+            // "string" types use character_maximum_length; "binary" types do not
+            result.character_maximum_length = isBinaryType(mixedCaseDataType[i]) ? 0 : 256;
+            result.numeric_precision = 0;
+            result.numeric_scale = 0;
+            result.remarks_Len = safeCopyString(result.remarks, "", NAMEDATALEN);
+
+            results.push_back(result);
+        }
+        return results;
+    }
+
     void validateResults(const std::vector<SHOWCOLUMNSResult>& records, bool maxLength) override {
         RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
         PGresult *res = pStmt->pResultHead->pgResult;
@@ -400,6 +478,52 @@ protected:
             EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_IS_NULLABLE_COL_NUM), "NO");
         }
     }
+
+    void validateMixedCaseGlueDataTypeResults(const std::vector<SHOWCOLUMNSResult>& records) override {
+        RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+        PGresult *res = pStmt->pResultHead->pgResult;
+
+        ASSERT_EQ(records.size(), static_cast<size_t>(PQntuples(res)))
+            << "Result set row count mismatch";
+
+        ASSERT_EQ(records.size(), mixedCaseDataType.size());
+        for (size_t i = 0; i < records.size(); i++) {
+            std::string suffix = std::to_string(i + 1);
+            bool isBinary = isBinaryType(mixedCaseDataType[i]);
+
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_TABLE_CAT_COL_NUM), ("catalog" + suffix).c_str());
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_TABLE_SCHEM_COL_NUM), ("schema" + suffix).c_str());
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_TABLE_NAME_COL_NUM), ("table" + suffix).c_str());
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_COLUMN_NAME_COL_NUM), ("column" + suffix).c_str());
+
+            // Type-specific assertions: "string" maps to SQL_VARCHAR, "binary" maps to SQL_LONGVARBINARY
+            if (isBinary) {
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_DATA_TYPE_COL_NUM), std::to_string(SQL_LONGVARBINARY).c_str());
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_TYPE_NAME_COL_NUM), "binary");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_COLUMN_SIZE_COL_NUM), "");  // NULL (kNotApplicable)
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_BUFFER_LENGTH_COL_NUM), "");  // NULL (kNotApplicable)
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_SQL_DATA_TYPE_COL_NUM), std::to_string(SQL_LONGVARBINARY).c_str());
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_NUM_PREC_RADIX_COL_NUM), "10");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_CHAR_OCTET_LENGTH_COL_NUM), std::to_string(kUnknownColumnSize).c_str());
+            } else {
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_DATA_TYPE_COL_NUM), std::to_string(SQL_VARCHAR).c_str());
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_TYPE_NAME_COL_NUM), "string");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_COLUMN_SIZE_COL_NUM), "256");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_BUFFER_LENGTH_COL_NUM), "256");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_SQL_DATA_TYPE_COL_NUM), std::to_string(SQL_VARCHAR).c_str());
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_NUM_PREC_RADIX_COL_NUM), "0");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_CHAR_OCTET_LENGTH_COL_NUM), "256");
+            }
+
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_DECIMAL_DIGITS_COL_NUM), "");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_NULLABLE_COL_NUM), "0");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_REMARKS_COL_NUM), "");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_COLUMN_DEF_COL_NUM), "");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_SQL_DATETIME_SUB_COL_NUM), "");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_ORDINAL_POSITION_COL_NUM), "1");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLColumns_IS_NULLABLE_COL_NUM), "NO");
+        }
+    }
 };
 
 TEST_F(SQLColumnsTest, EmptyResultSet) { TestEmptyResult(); }
@@ -411,6 +535,8 @@ TEST_F(SQLColumnsTest, MultipleRowResultSet) { TestMultipleResults(3); }
 TEST_F(SQLColumnsTest, MaxLength) { TestMaxLength(); }
 
 TEST_F(SQLColumnsTest, NullStmt) { TestNullStmt(); }
+
+TEST_F(SQLColumnsTest, MixedCaseGlueDataType) { TestMixedCaseGlueDatatype(); }
 
 
 /**
@@ -1111,6 +1237,32 @@ protected:
         return results;
     }
 
+    std::vector<SHOWCOLUMNSResult> createMixedCaseGlueDataTypeTestRecords() override {
+        std::vector<SHOWCOLUMNSResult> results;
+
+        for (size_t i = 0; i < mixedCaseDataType.size(); i++) {
+            SHOWCOLUMNSResult result{};  // Zero-initialize
+            std::string suffix = std::to_string(i+1);
+
+            result.database_name_Len = safeCopyString(result.database_name, ("catalog" + suffix).c_str(), NAMEDATALEN);
+            result.schema_name_Len = safeCopyString(result.schema_name, ("schema" + suffix).c_str(), NAMEDATALEN);
+            result.procedure_function_name_Len = safeCopyString(result.procedure_function_name, ("procedure_function" + suffix).c_str(), NAMEDATALEN);
+            result.column_name_Len = safeCopyString(result.column_name, ("column" + suffix).c_str(), NAMEDATALEN);
+            result.parameter_type_Len = safeCopyString(result.parameter_type, "IN", NAMEDATALEN);
+            result.ordinal_position = 1;
+            result.column_default_Len = safeCopyString(result.column_default, "", NAMEDATALEN);
+            result.is_nullable_Len = safeCopyString(result.is_nullable, "NO", NAMEDATALEN);
+            result.data_type_Len = safeCopyString(result.data_type, mixedCaseDataType[i].c_str(), NAMEDATALEN);
+            // "string" types use character_maximum_length; "binary" types do not
+            result.character_maximum_length = isBinaryType(mixedCaseDataType[i]) ? 0 : 256;
+            result.numeric_precision = 0;
+            result.numeric_scale = 0;
+            result.remarks_Len = safeCopyString(result.remarks, "", NAMEDATALEN);
+            results.push_back(result);
+        }
+        return results;
+    }
+
     void validateResults(const std::vector<SHOWCOLUMNSResult>& records, bool maxLength) override {
         RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
         PGresult *res = pStmt->pResultHead->pgResult;
@@ -1147,6 +1299,52 @@ protected:
             EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_IS_NULLABLE_COL_NUM), "");
         }
     }
+
+    void validateMixedCaseGlueDataTypeResults(const std::vector<SHOWCOLUMNSResult>& records) override {
+        RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+        PGresult *res = pStmt->pResultHead->pgResult;
+
+        ASSERT_EQ(records.size(), static_cast<size_t>(PQntuples(res)))
+            << "Result set row count mismatch";
+
+        ASSERT_EQ(records.size(), mixedCaseDataType.size());
+        for (size_t i = 0; i < records.size(); i++) {
+            std::string suffix = std::to_string(i + 1);
+            bool isBinary = isBinaryType(mixedCaseDataType[i]);
+
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_PROCEDURE_CAT_COL_NUM), ("catalog" + suffix).c_str());
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_PROCEDURE_SCHEM_COL_NUM), ("schema" + suffix).c_str());
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_PROCEDURE_NAME_COL_NUM), ("procedure_function" + suffix).c_str());
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_COLUMN_NAME_COL_NUM), ("column" + suffix).c_str());
+
+            // Type-specific assertions: "string" maps to SQL_VARCHAR, "binary" maps to SQL_LONGVARBINARY
+            if (isBinary) {
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_DATA_TYPE_COL_NUM), std::to_string(SQL_LONGVARBINARY).c_str());
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_TYPE_NAME_COL_NUM), "binary");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_COLUMN_SIZE_COL_NUM), "");  // NULL (kNotApplicable)
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_BUFFER_LENGTH_COL_NUM), "");  // NULL (kNotApplicable)
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_SQL_DATA_TYPE_COL_NUM), std::to_string(SQL_LONGVARBINARY).c_str());
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_NUM_PREC_RADIX_COL_NUM), "10");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_CHAR_OCTET_LENGTH_COL_NUM), std::to_string(kUnknownColumnSize).c_str());
+            } else {
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_DATA_TYPE_COL_NUM), std::to_string(SQL_VARCHAR).c_str());
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_TYPE_NAME_COL_NUM), "string");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_COLUMN_SIZE_COL_NUM), "256");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_BUFFER_LENGTH_COL_NUM), "256");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_SQL_DATA_TYPE_COL_NUM), std::to_string(SQL_VARCHAR).c_str());
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_NUM_PREC_RADIX_COL_NUM), "0");
+                EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_CHAR_OCTET_LENGTH_COL_NUM), "256");
+            }
+
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_DECIMAL_DIGITS_COL_NUM), "");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_NULLABLE_COL_NUM), "2");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_REMARKS_COL_NUM), "");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_COLUMN_DEF_COL_NUM), "");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_SQL_DATETIME_SUB_COL_NUM), "");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_ORDINAL_POSITION_COL_NUM), "1");
+            EXPECT_STREQ(PQgetvalue(res, i, kSQLProcedureColumns_IS_NULLABLE_COL_NUM), "");
+        }
+    }
 };
 
 TEST_F(SQLProcedureColumnsTest, EmptyResultSet) { TestEmptyResult(); }
@@ -1158,6 +1356,8 @@ TEST_F(SQLProcedureColumnsTest, MultipleRowResultSet) { TestMultipleResults(3); 
 TEST_F(SQLProcedureColumnsTest, MaxLength) { TestMaxLength(); }
 
 TEST_F(SQLProcedureColumnsTest, NullStmt) { TestNullStmt(); }
+
+TEST_F(SQLProcedureColumnsTest, MixedCaseGlueDataType) { TestMixedCaseGlueDatatype(); }
 
 
 struct ColumnsTestInput {

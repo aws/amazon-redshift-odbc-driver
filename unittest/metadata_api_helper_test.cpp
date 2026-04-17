@@ -98,7 +98,6 @@ int expectedSQLProcedureColumnsColDataType[expectedSQLProcedureColumnsColNum] =
 #define numeric_precision 5
 #define numeric_scale 5
 
-
 #define SQLTYPE 0
 #define SQLDATATYPE 1
 #define SQLDATESUB 2
@@ -834,8 +833,10 @@ TEST_P(TestGetRsType, test_charOctetLen) {
         rsType = dataType;
     }
     int charOctetLen = RsMetadataAPIHelper::getCharOctetLen(rsType, character_maximum_length);
-    if (rsType == "char" || rsType == "varchar") {
+    if (rsType == "char" || rsType == "varchar" || rsType == "string") {
         ASSERT_EQ(charOctetLen, dataTypeMap[dataType].colSize);
+    } else if (rsType == "binary" || rsType == "varbyte") {
+        ASSERT_EQ(charOctetLen, kUnknownColumnSize);
     } else {
         ASSERT_EQ(charOctetLen, notApplicable);
     }

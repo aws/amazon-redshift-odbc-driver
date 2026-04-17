@@ -345,6 +345,7 @@ namespace RsMetadataServerProxyHelpers {
             while (SQL_SUCCEEDED(
                 rc = RS_STMT_INFO::RS_SQLFetchScroll(m_pStmt, SQL_FETCH_NEXT, 0))) {
                 m_intermediateRS.emplace_back(cur);
+                cur = SHOWSCHEMASResult{}; // Reset for next row to avoid stale NULL values
             }
         }
         RS_LOG_TRACE(m_operationName, "number of schemas: %d", m_intermediateRS.size());
@@ -437,6 +438,7 @@ namespace RsMetadataServerProxyHelpers {
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
                 m_intermediateRS.emplace_back(cur);
+                cur = SHOWTABLESResult{}; // Reset for next row to avoid stale NULL values
             }
         }
         RS_LOG_TRACE(m_operationName, "number of tables: %d", m_intermediateRS.size());
@@ -554,6 +556,7 @@ namespace RsMetadataServerProxyHelpers {
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
                 m_intermediateRS.emplace_back(cur);
+                cur = SHOWCOLUMNSResult{}; // Reset for next row to avoid stale NULL values
             }
         }
         RS_LOG_TRACE(m_operationName, "number of columns: %d", m_intermediateRS.size());
@@ -630,6 +633,7 @@ namespace RsMetadataServerProxyHelpers {
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
                 m_intermediateRS.emplace_back(cur);
+                cur = SHOWCONSTRAINTSPRIMARYKEYSResult{}; // Reset for next row to avoid stale NULL values
             }
         }
         RS_LOG_TRACE(m_operationName, "number of primary keys: %d", m_intermediateRS.size());
@@ -733,6 +737,7 @@ namespace RsMetadataServerProxyHelpers {
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
                 m_intermediateRS.emplace_back(cur);
+                cur = SHOWCONSTRAINTSFOREIGNKEYSResult{}; // Reset for next row to avoid stale NULL values
             }
         }
         RS_LOG_TRACE(m_operationName, "number of foreign keys: %d",
@@ -823,6 +828,7 @@ namespace RsMetadataServerProxyHelpers {
                 if(RsMetadataAPIHelper::patternMatch(char2String(cur.column_name), m_column)) {
                     tempResults.emplace_back(cur);
                 }
+                cur = SHOWGRANTSCOLUMNResult{}; // Reset for next row to avoid stale NULL values
             }
 
             // Sort the results based on privilege
@@ -914,6 +920,7 @@ namespace RsMetadataServerProxyHelpers {
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
                 tempResults.emplace_back(cur);
+                cur = SHOWGRANTSTABLEResult{}; // Reset for next row to avoid stale NULL values
             }
 
             // Sort the results based on privilege
@@ -1023,6 +1030,9 @@ namespace RsMetadataServerProxyHelpers {
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
                 m_intermediateRS.emplace_back(cur);
+                cur = SHOWPROCEDURESFUNCTIONSResult{}; // Reset for next row to avoid stale NULL values
+                cur.object_type = isProcedures ? SQL_PT_PROCEDURE : SQL_PT_FUNCTION;
+                cur.object_type_Len = sizeof(SQLSMALLINT);
             }
         }
         RS_LOG_TRACE(m_operationName, "number of procedures/functions: %d", m_intermediateRS.size());
@@ -1125,6 +1135,7 @@ namespace RsMetadataServerProxyHelpers {
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
                 m_intermediateRS.emplace_back(cur);
+                cur = SHOWCOLUMNSResult{}; // Reset for next row to avoid stale NULL values
             }
         }
         RS_LOG_TRACE(m_operationName, "number of procedure/function columns: %d", m_intermediateRS.size());
