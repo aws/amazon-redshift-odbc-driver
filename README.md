@@ -27,7 +27,7 @@ Amazon Redshift recommends downloading and using the prebuilt driver installer f
 If you choose to build from source, please note that the Redshift ODBC driver does not include pre-built binaries or complementary build script for building driver dependencies.
 Building Redshift ODBC driver from source requires pre-built binaries for following dependencies (last tested versions shown):
 * OpenSSL 1.1.1x latest version (requires OpenSSL Premium support)
-* AWS SDK for CPP (1.11.763)
+* AWS SDK for CPP (1.11.791)
 * C-ares (1.34.5)
 * GoogleTest (1.17.0)
 * Curl (Linux only)
@@ -59,7 +59,7 @@ Optionally you can also provide the desired driver version number in the build c
 3. Cd to cloned `amazon-redshift-odbc-driver` package home and build the driver using following command:
 > build64.sh --version=major.minor.patch.svn 
 
-e.g. build64.sh --version=2.1.12.0 --create-package=yes --public-dir=/path/to/where/package/will/be/stored --build-type=Release
+e.g. build64.sh --version=2.1.16.0 --create-package=yes --public-dir=/path/to/where/package/will/be/stored --build-type=Release
 
 It builds `librsodbc64.so` and `librsodbc64.dylib` file under `cmake-build/install/` directory. The installers (rpm or pkg) will be stored in the specified `public-dir`.
 

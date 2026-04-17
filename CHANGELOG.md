@@ -1,6 +1,17 @@
 Changelog
 =========
 
+v2.1.16 (2026-04-21)
+---------------------
+1. Added Servername as an alias for the HostName connection option.
+2. Added MaxVarcharSize and MaxLongVarcharSize connection parameters for MSDASQL/OLE DB compatibility. VARCHAR and CHAR columns exceeding MaxVarcharSize (default 255) are promoted to SQL_LONGVARCHAR or SQL_WLONGVARCHAR, and MaxLongVarcharSize (default 65535) caps the reported column size.
+3. Added credential_source support in IAM profile authentication.
+4. Fixed an issue where EC2 Instance Profile authentication failed because credential provider factories were returning null instances.
+5. Improved logging and diagnostics for streaming cursor and client-side cursor operations.
+6. Fixed an issue where SQLColumns metadata API did not correctly handle mixed-case AWS Glue data types.
+7. Improved logging of HTTP response codes and SAML content validation in the WinHttp client implementation.
+
+
 v2.1.15 (2026-03-25)
 ---------------------
 1. Added new UseUnicode connection parameter to control SQL character data type behavior, enabling applications to receive wide character types (SQL_WCHAR, SQL_WVARCHAR, SQL_WLONGVARCHAR) instead of narrow types (SQL_CHAR, SQL_VARCHAR, SQL_LONGVARCHAR)
