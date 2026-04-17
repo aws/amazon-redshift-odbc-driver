@@ -2252,7 +2252,8 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
         * Store the value, if same param is not repeated.
         */
         if (_stricmp(pname, RS_HOST_NAME) == 0 ||
-            _stricmp(pname, RS_HOST) == 0 || _stricmp(pname, RS_SERVER) == 0) {
+            _stricmp(pname, RS_HOST) == 0 || _stricmp(pname, RS_SERVER) == 0 ||
+            _stricmp(pname, RS_SERVER_NAME) == 0) {
           pConnectProps->iHostNameKeyWordType =
               (_stricmp(pname, RS_HOST_NAME) == 0) ? LONG_NAME_KEYWORD
                                                    : SHORT_NAME_KEYWORD;
