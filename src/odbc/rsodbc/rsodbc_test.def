@@ -151,6 +151,8 @@ EXPORTS
 	getPrecision
 	getTypeName
 	getDisplaySize
+	isValidType
+	createParameterizedQueryString
 	mapPgTypeToSqlType
 	applyVarcharPromotion
 	strcasestr

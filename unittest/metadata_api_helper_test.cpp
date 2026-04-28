@@ -1223,3 +1223,132 @@ TEST_F(RsMetadataAPIHelperPatternMatchTest, ConsecutiveWildcards) {
     EXPECT_TRUE(helper.patternMatch("hello", "h_%_%o"));
     EXPECT_TRUE(helper.patternMatch("hello", "h%_%_%o"));
 }
+
+// -------------------------------------------------------------------------
+// pg_catalog internal data type tests
+// Validates that VALID_TYPES includes all pg_catalog internal types and
+// that createParameterizedQueryString accepts them without throwing.
+// -------------------------------------------------------------------------
+
+static const std::vector<std::string> PG_CATALOG_TYPES = {
+    // Pseudo-types (quoted reserved words)
+    "\"any\"", "\"trigger\"", "\"unknown\"", "anyelement", "anyarray",
+    "record", "void", "opaque", "language_handler",
+    // Network/address types
+    "inet", "cidr", "macaddr",
+    // Legacy time types
+    "abstime", "reltime", "tinterval",
+    // ACL and system catalog types
+    "aclitem", "aclitem[]", "oid[]", "oidvector", "int2vector",
+    // Registration types
+    "regproc", "regprocedure", "regoper", "regoperator", "regclass", "regtype",
+    // System/internal types
+    "smgr", "tid", "xid", "cid", "cstring",
+    // Geometric types
+    "box", "circle", "line", "lseg", "\"path\"", "point", "polygon",
+    // Monetary/binary/misc types
+    "money", "bit", "bit varying", "bytea", "name",
+    // Redshift-specific internal types
+    "pyobject", "roleitem", "useritem",
+    // Array types
+    "bigint[]", "double precision[]", "numeric[]",
+    "interval[]", "intervaly2m[]", "intervald2s[]"
+};
+
+TEST(PgCatalogTypesTest, test_all_pg_catalog_types_valid) {
+    for (const auto& type : PG_CATALOG_TYPES) {
+        EXPECT_TRUE(RsMetadataAPIHelper::isValidType(type))
+            << "Type should be valid: " << type;
+    }
+}
+
+TEST(PgCatalogTypesTest, test_single_pg_catalog_type_parameterized_query) {
+    const std::string sqlBase = "SHOW PARAMETERS OF FUNCTION ?.?.?";
+    for (const auto& type : PG_CATALOG_TYPES) {
+        try {
+            auto [query, args] = RsMetadataAPIHelper::createParameterizedQueryString(
+                type, sqlBase, "");
+            EXPECT_FALSE(query.empty()) << "Query should not be empty for type: " << type;
+            EXPECT_EQ(args.size(), 1u) << "Should have 1 arg for type: " << type;
+        } catch (const std::exception& e) {
+            FAIL() << "Should not throw for type: " << type << ", got: " << e.what();
+        }
+    }
+}
+
+TEST(PgCatalogTypesTest, test_mixed_pg_catalog_types_parameterized_query) {
+    const std::string sqlBase = "SHOW PARAMETERS OF FUNCTION ?.?.?";
+    const std::string argList = "inet, cstring, aclitem[], regproc, \"any\"";
+    auto [query, args] = RsMetadataAPIHelper::createParameterizedQueryString(
+        argList, sqlBase, "");
+    EXPECT_EQ(args.size(), 5u);
+    EXPECT_NE(query.find("(?, ?, ?, ?, ?)"), std::string::npos);
+}
+
+TEST(PgCatalogTypesTest, test_pg_catalog_mixed_with_standard_types) {
+    const std::string sqlBase = "SHOW PARAMETERS OF FUNCTION ?.?.?";
+    const std::string argList = "integer, inet, varchar, cstring";
+    auto [query, args] = RsMetadataAPIHelper::createParameterizedQueryString(
+        argList, sqlBase, "");
+    EXPECT_EQ(args.size(), 4u);
+}
+
+TEST(PgCatalogTypesTest, test_standard_types_still_valid) {
+    const std::vector<std::string> standardTypes = {
+        "integer", "varchar", "boolean", "double precision",
+        "timestamp", "date", "numeric", "real", "smallint"
+    };
+    for (const auto& type : standardTypes) {
+        EXPECT_TRUE(RsMetadataAPIHelper::isValidType(type))
+            << "Standard type should still be valid: " << type;
+    }
+}
+
+TEST(PgCatalogTypesTest, test_legacy_types_still_valid) {
+    const std::vector<std::string> legacyTypes = {
+        "oid", "smallint[]", "pg_attribute", "pg_type", "refcursor"
+    };
+    for (const auto& type : legacyTypes) {
+        EXPECT_TRUE(RsMetadataAPIHelper::isValidType(type))
+            << "Legacy type should still be valid: " << type;
+    }
+}
+
+TEST(PgCatalogTypesTest, test_invalid_types_still_rejected) {
+    const std::vector<std::string> invalidTypes = {
+        "not_a_real_type", "integer; DROP TABLE", "' OR 1=1 --",
+        "faketype", "123invalid"
+    };
+    for (const auto& type : invalidTypes) {
+        EXPECT_FALSE(RsMetadataAPIHelper::isValidType(type))
+            << "Invalid type should be rejected: " << type;
+    }
+}
+
+TEST(PgCatalogTypesTest, test_invalid_type_throws) {
+    const std::string sqlBase = "SHOW PARAMETERS OF FUNCTION ?.?.?";
+    const std::string argList = "integer, not_a_real_type";
+    bool threw = false;
+    try {
+        RsMetadataAPIHelper::createParameterizedQueryString(argList, sqlBase, "");
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    EXPECT_TRUE(threw) << "Should throw std::invalid_argument for invalid type";
+}
+
+TEST(PgCatalogTypesTest, test_case_insensitive_validation) {
+    EXPECT_TRUE(RsMetadataAPIHelper::isValidType("INET"));
+    EXPECT_TRUE(RsMetadataAPIHelper::isValidType("Cstring"));
+    EXPECT_TRUE(RsMetadataAPIHelper::isValidType("MACADDR"));
+    EXPECT_TRUE(RsMetadataAPIHelper::isValidType("Regproc"));
+}
+
+TEST(PgCatalogTypesTest, test_quoted_char_type_valid) {
+    EXPECT_TRUE(RsMetadataAPIHelper::isValidType("\"char\""));
+    EXPECT_TRUE(RsMetadataAPIHelper::isValidType("char"));
+}
+
+TEST(PgCatalogTypesTest, test_standalone_interval_valid) {
+    EXPECT_TRUE(RsMetadataAPIHelper::isValidType("interval"));
+}
