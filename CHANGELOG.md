@@ -1,6 +1,12 @@
 Changelog
 =========
 
+v2.1.17 (2026-04-28)
+---------------------
+1. Added support for pg_catalog internal data types in the SQLProcedureColumns and SQLProcedureColumnsW metadata APIs
+2. Fixed a buffer over-read in metadata result set functions that could occur when data is truncated.
+3. Fixed an issue where the driver did not attempt to connect to alternate addresses when the first resolved address was unreachable. The connection timeout now applies to each address individually, allowing the driver to fail over to the next available address.
+
 v2.1.16 (2026-04-21)
 ---------------------
 1. Added Servername as an alias for the HostName connection option.
