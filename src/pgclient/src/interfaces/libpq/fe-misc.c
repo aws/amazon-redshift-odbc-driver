@@ -945,11 +945,18 @@ pqWait(int forRead, int forWrite, PGconn *conn)
 /*
  * pqWaitTimed: wait, but not past finish_time.
  *
- * If finish_time is exceeded then we return failure (EOF).  This is like
- * the response for a kernel exception because we don't want the caller
- * to try to read/write in that case.
+ * Returns:
+ *    0 if the socket is ready for I/O within the time limit,
+ *    1 if finish_time was reached before the socket became ready (timeout);
+ *      "timeout expired" is appended to conn->errorMessage,
+ *   -1 on an error from the underlying poll/select or on socket error;
+ *      the error message is already set by pqSocketCheck.
  *
  * finish_time = ((time_t) -1) disables the wait limit.
+ *
+ * Distinguishing the timeout case (1) from the error case (-1) lets
+ * connectDBComplete decide whether to advance to the next address on a
+ * per-address timeout, matching upstream libpq 10+ behavior.
  */
 int
 pqWaitTimed(int forRead, int forWrite, PGconn *conn, time_t finish_time)
@@ -959,13 +966,15 @@ pqWaitTimed(int forRead, int forWrite, PGconn *conn, time_t finish_time)
 	result = pqSocketCheck(conn, forRead, forWrite, finish_time);
 
 	if (result < 0)
-		return EOF;				/* errorMessage is already set */
+	{
+		return -1;				/* errorMessage is already set */
+	}
 
 	if (result == 0)
 	{
-		printfPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("timeout expired\n"));
-		return EOF;
+		appendPQExpBufferStr(&conn->errorMessage,
+							 libpq_gettext("timeout expired\n"));
+		return 1;
 	}
 
 	return 0;

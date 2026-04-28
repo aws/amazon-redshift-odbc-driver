@@ -1837,16 +1837,29 @@ connectDBComplete(PGconn *conn)
 {
 	PostgresPollingStatusType flag = PGRES_POLLING_WRITING;
 	time_t		finish_time = ((time_t) -1);
+	int timeout = 0;
+	struct addrinfo *last_addr_cur = NULL;
 
 	if (conn == NULL || conn->status == CONNECTION_BAD)
+	{
 		return 0;
+	}
 
 	/*
-	 * Set up a time limit, if connect_timeout isn't zero.
+	 * Parse connect_timeout once. The actual deadline (finish_time) is
+	 * (re)computed inside the loop so that each address gets its own
+	 * timeout budget.
+	 *
+	 * Ported from upstream postgres commit 1e6e98f7 (Tom Lane, 2018,
+	 * "Fix libpq's implementation of per-host connection timeouts",
+	 * backpatched to v10). Without this, a silently-dropped first address
+	 * in a multi-address DNS response (for example a DNS64-synthesized AAAA)
+	 * consumes the entire timeout budget and the driver never tries the
+	 * subsequent addresses.
 	 */
 	if (conn->connect_timeout != NULL)
 	{
-		int			timeout = atoi(conn->connect_timeout);
+		timeout = atoi(conn->connect_timeout);
 
 		if (timeout > 0)
 		{
@@ -1854,14 +1867,37 @@ connectDBComplete(PGconn *conn)
 			 * Rounding could cause connection to fail; need at least 2 secs
 			 */
 			if (timeout < 2)
+			{
 				timeout = 2;
-			/* calculate the finish time based on start + timeout */
-			finish_time = time(NULL) + timeout;
+			}
+		}
+		else	/* negative or parse failure means 0 (infinite) */
+		{
+			timeout = 0;
 		}
 	}
 
 	for (;;)
 	{
+		int ret = 0;
+
+		/*
+		 * (Re)start the connect_timeout timer if it's active and we are
+		 * considering a different address than we were last time through.
+		 * If we've already succeeded, skip -- no need to recalculate.
+		 */
+		if (flag != PGRES_POLLING_OK &&
+			timeout > 0 &&
+			conn->addr_cur != last_addr_cur)
+		{
+			finish_time = time(NULL) + timeout;
+			last_addr_cur = conn->addr_cur;
+			RS_LOG_TRACE("FECNN",
+				"per-address connect_timeout=%ds started (family=%d)",
+				timeout,
+				conn->addr_cur ? conn->addr_cur->ai_family : -1);
+		}
+
 		/*
 		 * Wait, if necessary.	Note that the initial state (just after
 		 * PQconnectStart) is to wait for the socket to select for writing.
@@ -1878,16 +1914,24 @@ connectDBComplete(PGconn *conn)
 				return 1;		/* success! */
 
 			case PGRES_POLLING_READING:
-				if (pqWaitTimed(1, 0, conn, finish_time))
+				ret = pqWaitTimed(1, 0, conn, finish_time);
+				if (ret == -1)
 				{
+					/* hard failure (select/poll error); abort everything */
+					RS_LOG_ERROR("FECNN",
+						"pqWaitTimed hard error during POLLING_READING");
 					conn->status = CONNECTION_BAD;
 					return 0;
 				}
 				break;
 
 			case PGRES_POLLING_WRITING:
-				if (pqWaitTimed(0, 1, conn, finish_time))
+				ret = pqWaitTimed(0, 1, conn, finish_time);
+				if (ret == -1)
 				{
+					/* hard failure (select/poll error); abort everything */
+					RS_LOG_ERROR("FECNN",
+						"pqWaitTimed hard error during POLLING_WRITING");
 					conn->status = CONNECTION_BAD;
 					return 0;
 				}
@@ -1897,6 +1941,63 @@ connectDBComplete(PGconn *conn)
 				/* Just in case we failed to set it in PQconnectPoll */
 				conn->status = CONNECTION_BAD;
 				return 0;
+		}
+
+		if (ret == 1)			/* connect_timeout elapsed */
+		{
+			/*
+			 * Give up on the current address, advance to the next one.
+			 *
+			 * Upstream libpq 14.x does this via a conn->try_next_addr flag
+			 * interpreted by PQconnectPoll's CONNECTION_NEEDED handler. Our
+			 * 9.1.2 fork does not have that flag, so we advance addr_cur
+			 * directly. We also drop the current socket here because our
+			 * fork's CONNECTION_NEEDED handler opens a new socket without
+			 * first closing the previous one (upstream closes it first).
+			 *
+			 * pqsecure_close is called before closesocket so any SSL state
+			 * that may have been partially established on this address
+			 * (e.g. timeout fired during the TLS ServerHello wait) is torn
+			 * down rather than leaked. Same pattern as the protocol-fallback
+			 * path elsewhere in PQconnectPoll.
+			 *
+			 * Buffers are reset so any partial inbound/outbound data from
+			 * the aborted attempt is discarded.
+			 *
+			 * If no more addresses remain, PQconnectPoll's CONNECTION_NEEDED
+			 * loop exits immediately and goes to error_return, surfacing the
+			 * "timeout expired" message that pqWaitTimed already appended.
+			 */
+			if (conn->sock >= 0)
+			{
+				pqsecure_close(conn);
+				closesocket(conn->sock);
+				conn->sock = -1;
+			}
+			conn->inStart = conn->inCursor = conn->inEnd = 0;
+			conn->outCount = 0;
+			if (conn->addr_cur != NULL)
+			{
+				conn->addr_cur = conn->addr_cur->ai_next;
+				if (conn->addr_cur != NULL)
+				{
+					RS_LOG_WARN("FECNN",
+						"connect_timeout expired, advancing to next address"
+						" (next family=%d)",
+						conn->addr_cur->ai_family);
+				}
+				else
+				{
+					RS_LOG_WARN("FECNN",
+						"connect_timeout expired, no more addresses to try");
+				}
+			}
+			else
+			{
+				RS_LOG_WARN("FECNN",
+					"connect_timeout expired, addr_cur already NULL");
+			}
+			conn->status = CONNECTION_NEEDED;
 		}
 
 		/*
