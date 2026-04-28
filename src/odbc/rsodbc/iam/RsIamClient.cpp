@@ -192,7 +192,7 @@ void RsIamClient::Connect()
             rs_string auth_token_type =
                 static_cast<NativePluginCredentialsProvider &>(*credentialsProvider).GetAuthTokenType();
             m_credentials.SetIdpTokenType(auth_token_type);
-            RS_LOG_DEBUG("token_type=%s", auth_token_type.c_str());
+            RS_LOG_DEBUG("IAMCLNT", "token_type=%s", auth_token_type.c_str());
         } else { // native idp AzureAD plugin
             /* Validate that all required arguments for plugin are provided */
             static_cast<IAMJwtPluginCredentialsProvider &>(*credentialsProvider)
@@ -793,9 +793,9 @@ void RsIamClient::ProcessClusterCredentialsOutcome(
         m_credentials.SetDbPassword(result.GetDbPassword());
         m_credentials.SetExpirationTime(result.GetExpiration().Millis());
 
-        long currentTime = Aws::Utils::DateTime::Now().Millis();
+        long long currentTime = Aws::Utils::DateTime::Now().Millis();
 
-        RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ProcessClusterCredentialsOutcome Expiration time (in milli):%d", (result.GetExpiration().Millis() - currentTime));
+        RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ProcessClusterCredentialsOutcome Expiration time (in milli):%lld", static_cast<long long>(result.GetExpiration().Millis() - currentTime));
     }
     else
     {
@@ -817,9 +817,9 @@ void RsIamClient::ProcessClusterCredentialsWithIAMOutcome(
 		m_credentials.SetDbPassword(result.GetDbPassword());
 		m_credentials.SetExpirationTime(result.GetExpiration().Millis());
 
-		long currentTime = Aws::Utils::DateTime::Now().Millis();
+		long long currentTime = Aws::Utils::DateTime::Now().Millis();
 
-		RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ProcessClusterCredentialsWithIAMOutcome Expiration time (in milli):%d", (result.GetExpiration().Millis() - currentTime));
+		RS_LOG_DEBUG("IAMCLNT", "RsIamClient::ProcessClusterCredentialsWithIAMOutcome Expiration time (in milli):%lld", static_cast<long long>(result.GetExpiration().Millis() - currentTime));
 	}
 	else
 	{

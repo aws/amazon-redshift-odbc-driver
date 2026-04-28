@@ -93,7 +93,7 @@ class RsTrace {
     RsTrace() {}
     ~RsTrace() {}
     void process() {
-        RS_LOG_DEBUG(TAG, buffer.c_str());
+        RS_LOG_DEBUG(TAG, "%s", buffer.c_str());
     }
 
 protected:

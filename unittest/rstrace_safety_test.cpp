@@ -11,6 +11,8 @@
 #include <limits>
 #include <iomanip>
 #include <array>
+#include <fstream>
+#include <cstdio>
 
 // ---------- Helpers: build safe SQLWCHAR buffers (portable across 2/4-byte SQLWCHAR) ----------
 
@@ -695,5 +697,38 @@ TEST_F(RSTRACE_SAFETY_SUITE, performance_analysis_traceWStrVal) {
     if (failed) {
         std::cerr << "All logs:\n" << logss.str() << std::endl;
     }
+}
+
+TEST_F(RSTRACE_SAFETY_SUITE, process_writes_percent_specifiers_literally) {
+    // RsTrace::process() previously passed its internal buffer as the
+    // fmt argument to RS_LOG_DEBUG. The fix wraps the buffer in "%s",
+    // so % specifiers in captured API parameters reach the log as
+    // literal bytes. Confirm a %n-laden buffer round-trips verbatim.
+    const std::string filename = "rstrace_fmt_" + std::to_string(getpid()) + ".log";
+    std::remove(filename.c_str());
+
+    RS_LOG_VARS rsLogVars;
+    rsLogVars.iTraceLevel = 6;
+    sprintf(rsLogVars.szTraceFile, "%s", filename.c_str());
+    rsLogVars.isInitialized = 1;
+    initializeLoggingWithGlobalLogVars(&rsLogVars);
+
+    // Populate the tracer buffer with a payload that would have
+    // crashed vsnprintf pre-fix.
+    tracer.clearBuffer();
+    tracer.traceArg("\t%s=%s", "sql", "SELECT * FROM \"%n%n%n%n\"");
+    tracer.process();
+
+    shutdownLogging();
+
+    std::ifstream in(filename);
+    std::string content((std::istreambuf_iterator<char>(in)),
+                        std::istreambuf_iterator<char>());
+    in.close();
+
+    EXPECT_NE(content.find("SELECT * FROM \"%n%n%n%n\""), std::string::npos)
+        << "payload not written literally; content: " << content;
+
+    std::remove(filename.c_str());
 }
 

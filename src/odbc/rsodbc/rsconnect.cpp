@@ -3728,7 +3728,7 @@ copyCommonConnectionProperties(RS_IAM_CONN_PROPS_INFO *pIamProps,
     if (strlen(pConnectProps->szCaFile) > 0) { // overwrite
         RS_LOG_DEBUG(
             "RSCNN",
-            "Setting pIamProps->szCaFile from  '%s' to '%s' of size:%d",
+            "Setting pIamProps->szCaFile from  '%s' to '%s' of size:%zu",
             pIamProps->szCaFile, pConnectProps->szCaFile,
             strlen(pConnectProps->szCaFile));
         rs_strncpy(pIamProps->szCaFile, pConnectProps->szCaFile,

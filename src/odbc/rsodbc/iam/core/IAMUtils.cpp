@@ -655,11 +655,11 @@ void IAMUtils::GetMicrosoftIdpHost(const rs_string& partition, rs_string& output
     } else if (trimmedPartition == MICROSOFT_IDP_CHINA_PARTITION) {
         output = MICROSOFT_IDP_CHINA_HOST;
     } else {
-        RS_LOG_ERROR("IAM", ("Invalid IdP partition specified: " + partition).c_str());
+        RS_LOG_ERROR("IAM", "Invalid IdP partition specified: %s", partition.c_str());
         IAMUtils::ThrowConnectionExceptionWithInfo("Invalid IdP partition specified: '" + partition + "'. Valid values are: '" + MICROSOFT_IDP_COMMERCIAL_PARTITION + "', '" + MICROSOFT_IDP_GOV_PARTITION + "', or '" + MICROSOFT_IDP_CHINA_PARTITION + "'");
     }
     
-    RS_LOG_DEBUG("IAM", ("Selected Microsoft IdP host: " + output + " for partition: '" + partition + "' (processed as '" + trimmedPartition + "')").c_str());
+    RS_LOG_DEBUG("IAM", "Selected Microsoft IdP host: %s for partition: '%s' (processed as '%s')", output.c_str(), partition.c_str(), trimmedPartition.c_str());
 }
 
 std::string IAMUtils::getRegexForJsonKey(const std::string& keyName) {

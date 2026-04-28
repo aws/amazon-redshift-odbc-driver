@@ -620,7 +620,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 				std::string errorMsg = RsMetadataErrors::formatError(
 					RsMetadataErrors::PROXY_CALL_FAILED,
 					RsMetadataErrors::TYPE_CATALOG);
-				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				RS_LOG_ERROR("RS_SQLTables", "%s", errorMsg.c_str());
 				addError(&pStmt->pErrorList,
 					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
 					const_cast<char*>(errorMsg.c_str()),
@@ -634,7 +634,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 					RsMetadataErrors::POST_PROCESSING_FAILED,
 					RsMetadataErrors::TYPE_CATALOG
 				);
-				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				RS_LOG_ERROR("RS_SQLTables", "%s", errorMsg.c_str());
 				addError(&pStmt->pErrorList,
 					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
 					const_cast<char*>(errorMsg.c_str()),
@@ -655,7 +655,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 				std::string errorMsg = RsMetadataErrors::formatError(
 					RsMetadataErrors::PROXY_CALL_FAILED,
 					RsMetadataErrors::TYPE_SCHEMA);
-				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				RS_LOG_ERROR("RS_SQLTables", "%s", errorMsg.c_str());
 				addError(&pStmt->pErrorList,
 					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
 					const_cast<char*>(errorMsg.c_str()),
@@ -668,7 +668,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 				std::string errorMsg = RsMetadataErrors::formatError(
 					RsMetadataErrors::POST_PROCESSING_FAILED,
 					RsMetadataErrors::TYPE_SCHEMA);
-				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				RS_LOG_ERROR("RS_SQLTables", "%s", errorMsg.c_str());
 				addError(&pStmt->pErrorList,
 					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
 					const_cast<char*>(errorMsg.c_str()),
@@ -683,7 +683,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 				std::string errorMsg = RsMetadataErrors::formatError(
 					RsMetadataErrors::POST_PROCESSING_FAILED,
 					RsMetadataErrors::TYPE_TABLE_TYPE_INFO);
-				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				RS_LOG_ERROR("RS_SQLTables", "%s", errorMsg.c_str());
 				addError(&pStmt->pErrorList,
 					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
 					const_cast<char*>(errorMsg.c_str()),
@@ -714,7 +714,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 					std::string errorMsg = RsMetadataErrors::formatError(
 						RsMetadataErrors::PROXY_CALL_FAILED,
 						RsMetadataErrors::TYPE_TABLE);
-					RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+					RS_LOG_ERROR("RS_SQLTables", "%s", errorMsg.c_str());
 					addError(&pStmt->pErrorList,
 						const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
 						const_cast<char*>(errorMsg.c_str()),
@@ -731,7 +731,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 					RsMetadataErrors::POST_PROCESSING_FAILED,
 					RsMetadataErrors::TYPE_TABLE
 				);
-				RS_LOG_ERROR("RS_SQLTables", errorMsg.c_str());
+				RS_LOG_ERROR("RS_SQLTables", "%s", errorMsg.c_str());
 				addError(&pStmt->pErrorList,
 					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
 					const_cast<char*>(errorMsg.c_str()),
@@ -1022,7 +1022,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
                 std::string errorMsg = RsMetadataErrors::formatError(
                     RsMetadataErrors::PROXY_CALL_FAILED,
                     RsMetadataErrors::TYPE_COLUMN);
-                RS_LOG_ERROR("RS_SQLColumns", errorMsg.c_str());
+                RS_LOG_ERROR("RS_SQLColumns", "%s", errorMsg.c_str());
                 addError(&pStmt->pErrorList,
                     const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                     const_cast<char*>(errorMsg.c_str()),
@@ -1036,7 +1036,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
             std::string errorMsg = RsMetadataErrors::formatError(
                 RsMetadataErrors::POST_PROCESSING_FAILED,
                 RsMetadataErrors::TYPE_COLUMN);
-            RS_LOG_ERROR("RS_SQLColumns", errorMsg.c_str());
+            RS_LOG_ERROR("RS_SQLColumns", "%s", errorMsg.c_str());
             addError(&pStmt->pErrorList,
                 const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                 const_cast<char*>(errorMsg.c_str()),
@@ -1514,7 +1514,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLSpecialColumns(SQLHSTMT phstmt,
                 std::string errorMsg = RsMetadataErrors::formatError(
                     RsMetadataErrors::PROXY_CALL_FAILED,
                     RsMetadataErrors::TYPE_COLUMN);
-                RS_LOG_ERROR("RS_SQLSpecialColumns", errorMsg.c_str());
+                RS_LOG_ERROR("RS_SQLSpecialColumns", "%s", errorMsg.c_str());
                 addError(&pStmt->pErrorList,
                     const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                     const_cast<char*>(errorMsg.c_str()),
@@ -1527,7 +1527,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLSpecialColumns(SQLHSTMT phstmt,
             std::string errorMsg = RsMetadataErrors::formatError(
                 RsMetadataErrors::POST_PROCESSING_FAILED,
                 RsMetadataErrors::TYPE_COLUMN);
-            RS_LOG_ERROR("RS_SQLSpecialColumns", errorMsg.c_str());
+            RS_LOG_ERROR("RS_SQLSpecialColumns", "%s", errorMsg.c_str());
             addError(&pStmt->pErrorList,
                 const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                 const_cast<char*>(errorMsg.c_str()),
@@ -1738,7 +1738,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
                 std::string errorMsg = RsMetadataErrors::formatError(
                     RsMetadataErrors::PROXY_CALL_FAILED,
                     RsMetadataErrors::TYPE_COLUMN);
-                RS_LOG_ERROR("RS_SQLProcedureColumns", errorMsg.c_str());
+                RS_LOG_ERROR("RS_SQLProcedureColumns", "%s", errorMsg.c_str());
                 addError(&pStmt->pErrorList,
                     const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                     const_cast<char*>(errorMsg.c_str()),
@@ -1752,7 +1752,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
             std::string errorMsg = RsMetadataErrors::formatError(
                 RsMetadataErrors::POST_PROCESSING_FAILED,
                 RsMetadataErrors::TYPE_COLUMN);
-            RS_LOG_ERROR("RS_SQLProcedureColumns", errorMsg.c_str());
+            RS_LOG_ERROR("RS_SQLProcedureColumns", "%s", errorMsg.c_str());
             addError(&pStmt->pErrorList,
                 const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                 const_cast<char*>(errorMsg.c_str()),
@@ -2478,7 +2478,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedures(SQLHSTMT           phstmt,
                 std::string errorMsg = RsMetadataErrors::formatError(
                     RsMetadataErrors::PROXY_CALL_FAILED,
                     RsMetadataErrors::TYPE_PROCEDURE);
-                RS_LOG_ERROR("RS_SQLProcedures", errorMsg.c_str());
+                RS_LOG_ERROR("RS_SQLProcedures", "%s", errorMsg.c_str());
                 addError(&pStmt->pErrorList,
                     const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                     const_cast<char*>(errorMsg.c_str()),
@@ -2492,7 +2492,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedures(SQLHSTMT           phstmt,
             std::string errorMsg = RsMetadataErrors::formatError(
                 RsMetadataErrors::POST_PROCESSING_FAILED,
                 RsMetadataErrors::TYPE_PROCEDURE);
-            RS_LOG_ERROR("RS_SQLProcedures", errorMsg.c_str());
+            RS_LOG_ERROR("RS_SQLProcedures", "%s", errorMsg.c_str());
             addError(&pStmt->pErrorList,
                 const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                 const_cast<char*>(errorMsg.c_str()),
@@ -2716,7 +2716,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLForeignKeys(SQLHSTMT               phstmt,
                 std::string errorMsg = RsMetadataErrors::formatError(
                     RsMetadataErrors::PROXY_CALL_FAILED,
                     RsMetadataErrors::TYPE_FOREIGN_KEY);
-                RS_LOG_ERROR("RS_SQLForeignKeys", errorMsg.c_str());
+                RS_LOG_ERROR("RS_SQLForeignKeys", "%s", errorMsg.c_str());
                 addError(&pStmt->pErrorList,
                     const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                     const_cast<char*>(errorMsg.c_str()),
@@ -2730,7 +2730,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLForeignKeys(SQLHSTMT               phstmt,
             std::string errorMsg = RsMetadataErrors::formatError(
                 RsMetadataErrors::POST_PROCESSING_FAILED,
                 RsMetadataErrors::TYPE_FOREIGN_KEY);
-            RS_LOG_ERROR("RS_SQLForeignKeys", errorMsg.c_str());
+            RS_LOG_ERROR("RS_SQLForeignKeys", "%s", errorMsg.c_str());
             addError(&pStmt->pErrorList,
                 const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                 const_cast<char*>(errorMsg.c_str()),
@@ -2958,7 +2958,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLPrimaryKeys(SQLHSTMT           phstmt,
                 std::string errorMsg = RsMetadataErrors::formatError(
                     RsMetadataErrors::PROXY_CALL_FAILED,
                     RsMetadataErrors::TYPE_PRIMARY_KEY);
-                RS_LOG_ERROR("RS_SQLPrimaryKeys", errorMsg.c_str());
+                RS_LOG_ERROR("RS_SQLPrimaryKeys", "%s", errorMsg.c_str());
                 addError(&pStmt->pErrorList,
                     const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                     const_cast<char*>(errorMsg.c_str()),
@@ -2972,7 +2972,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLPrimaryKeys(SQLHSTMT           phstmt,
             std::string errorMsg = RsMetadataErrors::formatError(
                 RsMetadataErrors::POST_PROCESSING_FAILED,
                 RsMetadataErrors::TYPE_PRIMARY_KEY);
-            RS_LOG_ERROR("RS_SQLPrimaryKeys", errorMsg.c_str());
+            RS_LOG_ERROR("RS_SQLPrimaryKeys", "%s", errorMsg.c_str());
             addError(&pStmt->pErrorList,
                 const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                 const_cast<char*>(errorMsg.c_str()),
@@ -3259,7 +3259,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
         std::string errorMsg = RsMetadataErrors::formatError(
             RsMetadataErrors::POST_PROCESSING_FAILED,
             RsMetadataErrors::TYPE_GET_TYPE_INFO);
-        RS_LOG_ERROR("RS_SQLGetTypeInfo", errorMsg.c_str());
+        RS_LOG_ERROR("RS_SQLGetTypeInfo", "%s", errorMsg.c_str());
         addError(&pStmt->pErrorList,
             const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
             const_cast<char*>(errorMsg.c_str()),
@@ -3389,7 +3389,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLColumnPrivileges(SQLHSTMT           phstmt,
                 std::string errorMsg = RsMetadataErrors::formatError(
                     RsMetadataErrors::PROXY_CALL_FAILED,
                     RsMetadataErrors::TYPE_COLUMN_PRIVILEGES);
-                RS_LOG_ERROR("RS_SQLColumnPrivileges", errorMsg.c_str());
+                RS_LOG_ERROR("RS_SQLColumnPrivileges", "%s", errorMsg.c_str());
                 addError(&pStmt->pErrorList,
                     const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                     const_cast<char*>(errorMsg.c_str()),
@@ -3403,7 +3403,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLColumnPrivileges(SQLHSTMT           phstmt,
             std::string errorMsg = RsMetadataErrors::formatError(
                 RsMetadataErrors::POST_PROCESSING_FAILED,
                 RsMetadataErrors::TYPE_COLUMN_PRIVILEGES);
-            RS_LOG_ERROR("RS_SQLColumnPrivileges", errorMsg.c_str());
+            RS_LOG_ERROR("RS_SQLColumnPrivileges", "%s", errorMsg.c_str());
             addError(&pStmt->pErrorList,
                 const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                 const_cast<char*>(errorMsg.c_str()),
@@ -3605,7 +3605,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLTablePrivileges(SQLHSTMT           phstmt,
                 std::string errorMsg = RsMetadataErrors::formatError(
                     RsMetadataErrors::PROXY_CALL_FAILED,
                     RsMetadataErrors::TYPE_TABLE_PRIVILEGES);
-                RS_LOG_ERROR("RS_SQLTablePrivileges", errorMsg.c_str());
+                RS_LOG_ERROR("RS_SQLTablePrivileges", "%s", errorMsg.c_str());
                 addError(&pStmt->pErrorList,
                     const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                     const_cast<char*>(errorMsg.c_str()),
@@ -3619,7 +3619,7 @@ SQLRETURN SQL_API RsCatalog::RS_SQLTablePrivileges(SQLHSTMT           phstmt,
             std::string errorMsg = RsMetadataErrors::formatError(
                 RsMetadataErrors::POST_PROCESSING_FAILED,
                 RsMetadataErrors::TYPE_TABLE_PRIVILEGES);
-            RS_LOG_ERROR("RS_SQLTablePrivileges", errorMsg.c_str());
+            RS_LOG_ERROR("RS_SQLTablePrivileges", "%s", errorMsg.c_str());
             addError(&pStmt->pErrorList,
                 const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
                 const_cast<char*>(errorMsg.c_str()),

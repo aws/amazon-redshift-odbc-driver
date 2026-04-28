@@ -210,7 +210,7 @@ rs_string IAMAzureCredentialsProvider::AzureOauthBasedAuthentication()
     Base64::Base64 base64;
     rs_string samlAssertion = IAMUtils::convertToUTF8(in_samlAssertion);
 
-    RS_LOG_DEBUG("IAMCRD", "saml assertion length %d\n", samlAssertion.length());
+    RS_LOG_DEBUG("IAMCRD", "saml assertion length %zu\n", samlAssertion.length());
 
     /* The Base64 Decode method takes in an AWS::String so we convert from rs_string. */
     Aws::String aws_samlAssertion(samlAssertion.c_str(), samlAssertion.size());

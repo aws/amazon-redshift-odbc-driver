@@ -101,5 +101,76 @@ TEST(RSLOG_TEST_SUITE, ProcessLogLine) {
         << "Log format does not match expected pattern. Actual content: " << logContent;
 
     // Clean up the test log file
-    std::remove(filename.c_str()); 
+    std::remove(filename.c_str());
+}
+
+// Regression tests for the format-string fix in the trace logging
+// subsystem. Confirms that when user-controlled data is passed as a
+// %s argument (not as the fmt), format specifiers like %n, %s, %p,
+// %x embedded in the data are written to the log as literal bytes
+// and are not interpreted by vsnprintf.
+
+static void setup_log(const std::string& filename) {
+    std::remove(filename.c_str());
+    RS_LOG_VARS rsLogVars;
+    rsLogVars.iTraceLevel = 6;
+    sprintf(rsLogVars.szTraceFile, "%s", filename.c_str());
+    rsLogVars.isInitialized = 1;
+    initializeLoggingWithGlobalLogVars(&rsLogVars);
+}
+
+TEST(RSLOG_FORMAT_STRING_SUITE, debug_pct_n_payload_written_literally) {
+    const std::string filename = "rslog_fmt_n_" + std::to_string(getpid()) + ".log";
+    setup_log(filename);
+    const char* payload = "malicious_%n%n%n%n_end";
+    RS_LOG_DEBUG("FMTTEST", "%s", payload);
+    shutdownLogging();
+    ASSERT_GE(findInFile(filename, "malicious_%n%n%n%n_end"), 1);
+    std::remove(filename.c_str());
+}
+
+TEST(RSLOG_FORMAT_STRING_SUITE, error_pct_s_payload_written_literally) {
+    const std::string filename = "rslog_fmt_s_" + std::to_string(getpid()) + ".log";
+    setup_log(filename);
+    const char* payload = "boom_%s%s%s%s_end";
+    RS_LOG_ERROR("FMTTEST", "%s", payload);
+    shutdownLogging();
+    ASSERT_GE(findInFile(filename, "boom_%s%s%s%s_end"), 1);
+    std::remove(filename.c_str());
+}
+
+TEST(RSLOG_FORMAT_STRING_SUITE, info_pct_p_payload_written_literally) {
+    const std::string filename = "rslog_fmt_p_" + std::to_string(getpid()) + ".log";
+    setup_log(filename);
+    const char* payload = "leak_%p.%p.%p.%p_end";
+    RS_LOG_INFO("FMTTEST", "%s", payload);
+    shutdownLogging();
+    ASSERT_GE(findInFile(filename, "leak_%p.%p.%p.%p_end"), 1);
+    std::remove(filename.c_str());
+}
+
+TEST(RSLOG_FORMAT_STRING_SUITE, warn_pct_x_payload_written_literally) {
+    const std::string filename = "rslog_fmt_x_" + std::to_string(getpid()) + ".log";
+    setup_log(filename);
+    const char* payload = "leak_%08x.%08x.%08x_end";
+    RS_LOG_WARN("FMTTEST", "%s", payload);
+    shutdownLogging();
+    ASSERT_GE(findInFile(filename, "leak_%08x.%08x.%08x_end"), 1);
+    std::remove(filename.c_str());
+}
+
+TEST(RSLOG_FORMAT_STRING_SUITE, user_controlled_string_via_c_str) {
+    // Verify that when a runtime std::string containing format
+    // specifiers is passed as a %s data argument (rather than as the
+    // fmt), the specifiers reach the log file as literal bytes.
+    // This mirrors the server-error-echo path, where an error
+    // message from the server may contain % characters and is then
+    // logged by the driver.
+    const std::string filename = "rslog_fmt_cstr_" + std::to_string(getpid()) + ".log";
+    setup_log(filename);
+    std::string msg = "server error: relation \"%n%n\" does not exist";
+    RS_LOG_ERROR("FMTTEST", "%s", msg.c_str());
+    shutdownLogging();
+    ASSERT_GE(findInFile(filename, "server error: relation \"%n%n\" does not exist"), 1);
+    std::remove(filename.c_str());
 }

@@ -118,7 +118,7 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
     {
         RS_LOG_DEBUG("IAM",
                      "IAMProfileCredentialsProvider.GetAWSCredentials() Using plugin based profile: %s",
-                     pluginName.c_str());
+                     IAMUtils::convertToUTF8(pluginName).c_str());
 
         std::unique_ptr<IAMPluginCredentialsProvider> plugin = IAMPluginFactory::CreatePlugin(
             IAMUtils::trim(pluginName),
@@ -185,7 +185,7 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
 	{
         RS_LOG_DEBUG("IAM",
                      "IAMProfileCredentialsProvider.GetAWSCredentials Using credential process based profile: %s",
-                     credential_process.c_str());
+                     IAMUtils::convertToUTF8(credential_process).c_str());
 
         /* credential process profile */
         ProcessCredentialsProvider processCredentialsProvider(

@@ -227,8 +227,8 @@ AWSCredentials IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest(
 	config.connectTimeoutMs = m_config.GetStsConnectionTimeout();
 	config.requestTimeoutMs = m_config.GetStsConnectionTimeout();
 
-	RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest",
-		"httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
+	RS_LOG_DEBUG("IAMCRD",
+		"IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
 		config.httpRequestTimeoutMs, config.connectTimeoutMs, config.requestTimeoutMs);
 
     STSClient client(Aws::MakeShared<AnonymousAWSCredentialsProvider>(LOG_TAG), config);

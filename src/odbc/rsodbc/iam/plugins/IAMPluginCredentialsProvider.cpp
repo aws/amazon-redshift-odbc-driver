@@ -396,7 +396,7 @@ rs_string IAMPluginCredentialsProvider::GetFormActionFromHtml(const rs_string& i
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMPluginCredentialsProvider::EscapeHtmlEntity(const rs_string& in_str)
 {
-    RS_LOG_DEBUG("IAM", "IAMPluginCredentialsProvider", "EscapeHtmlEntity");
+    RS_LOG_DEBUG("IAM", "%s::%s", "IAMPluginCredentialsProvider", "EscapeHtmlEntity");
 
     rs_string res = "";
     size_t length = in_str.size();

@@ -30,7 +30,7 @@ IAMJwtPluginCredentialsProvider::IAMJwtPluginCredentialsProvider(
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 AWSCredentials IAMJwtPluginCredentialsProvider::GetAWSCredentials()
 {
-    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider", "GetAWSCredentials");
+    RS_LOG_DEBUG("IAMCRD", "%s::%s", "IAMJwtPluginCredentialsProvider", "GetAWSCredentials");
     /* return cached AWSCredentials from the IAMCredentialsHolder */
     if (CanUseCachedAwsCredentials())
     {
@@ -141,8 +141,8 @@ void IAMJwtPluginCredentialsProvider::RetrieveDbUserField(const JWTAssertion& jw
     {
         dbuser = GetValueByKeyFromJson(json, f);
 
-        RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::RetrieveDbUserField ",
-            + "%s: %s", f.c_str(), dbuser.c_str());
+        RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::RetrieveDbUserField %s: %s",
+            f.c_str(), dbuser.c_str());
 
         if (!dbuser.empty())
         {

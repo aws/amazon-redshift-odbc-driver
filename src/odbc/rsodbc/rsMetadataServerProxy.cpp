@@ -29,7 +29,7 @@ SQLRETURN RsMetadataServerProxy::sqlCatalogs(
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
     if (isSingleDatabaseMetaData) {
         catalogs.push_back(getDatabase(pStmt));
-        RS_LOG_TRACE("sqlCatalogs", "Total number of return rows: %d", catalogs.size());
+        RS_LOG_TRACE("sqlCatalogs", "Total number of return rows: %zu", catalogs.size());
         return SQL_SUCCESS;
     }
 
@@ -43,7 +43,7 @@ SQLRETURN RsMetadataServerProxy::sqlCatalogs(
         return rc;
     }
 
-    RS_LOG_TRACE("sqlCatalogs", "Total number of return rows: %d", catalogs.size());
+    RS_LOG_TRACE("sqlCatalogs", "Total number of return rows: %zu", catalogs.size());
     return rc;
 }
 
@@ -87,7 +87,7 @@ SQLRETURN RsMetadataServerProxy::sqlSchemas(
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlSchemas", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlSchemas", "Total number of return rows: %zu", intermediateRS.size());
     return rc;
 }
 
@@ -158,7 +158,7 @@ SQLRETURN RsMetadataServerProxy::sqlTables(
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlTables", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlTables", "Total number of return rows: %zu", intermediateRS.size());
     return rc;
 }
 
@@ -246,7 +246,7 @@ SQLRETURN RsMetadataServerProxy::sqlColumns(
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlColumns", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlColumns", "Total number of return rows: %zu", intermediateRS.size());
     return rc;
 }
 
@@ -347,7 +347,7 @@ SQLRETURN RsMetadataServerProxy::sqlPrimaryKeys(
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlPrimaryKeys", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlPrimaryKeys", "Total number of return rows: %zu", intermediateRS.size());
     return rc;
 }
 
@@ -430,7 +430,7 @@ SQLRETURN RsMetadataServerProxy::sqlForeignKeys(
         return SQL_ERROR;
     }
 
-    RS_LOG_TRACE("sqlForeignKeys", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlForeignKeys", "Total number of return rows: %zu", intermediateRS.size());
     return rc;
 }
 
@@ -658,7 +658,7 @@ SQLRETURN RsMetadataServerProxy::sqlSpecialColumns(
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlSpecialColumns", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlSpecialColumns", "Total number of return rows: %zu", intermediateRS.size());
     return rc;
 }
 
@@ -759,7 +759,7 @@ SQLRETURN RsMetadataServerProxy::sqlColumnPrivileges(
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlColumnPrivileges", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlColumnPrivileges", "Total number of return rows: %zu", intermediateRS.size());
     return rc;
 }
 
@@ -843,7 +843,7 @@ SQLRETURN RsMetadataServerProxy::sqlTablePrivileges(
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlTablePrivileges", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlTablePrivileges", "Total number of return rows: %zu", intermediateRS.size());
     return rc;
 }
 
@@ -940,7 +940,7 @@ SQLRETURN RsMetadataServerProxy::sqlProcedures(
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlProcedures", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlProcedures", "Total number of return rows: %zu", intermediateRS.size());
     return rc;
 }
 
@@ -1071,7 +1071,7 @@ SQLRETURN RsMetadataServerProxy::sqlProcedureColumns(
     }
     catalogs.clear();
 
-    RS_LOG_TRACE("sqlProcedureColumns", "Total number of return rows: %d", intermediateRS.size());
+    RS_LOG_TRACE("sqlProcedureColumns", "Total number of return rows: %zu", intermediateRS.size());
     return rc;
 }
 

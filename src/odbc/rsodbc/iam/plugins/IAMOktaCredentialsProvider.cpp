@@ -68,7 +68,7 @@ void IAMOktaCredentialsProvider::ValidateArgumentsMap()
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
 {
-    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider", "GetSamlAssertion");
+    RS_LOG_DEBUG("IAMCRD", "%s::%s", "IAMOktaCredentialsProvider", "GetSamlAssertion");
     /* By default we enable verifying server certificate, use argument ssl_insecure = true to disable
     verifying the server certificate (e.g., self-signed IDP server) */
     bool shouldVerifySSL = !IAMUtils::ConvertStringToBool(m_argsMap[IAM_KEY_SSL_INSECURE]);
@@ -124,7 +124,7 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
     IAMUtils::ReplaceAll(samlAssertion,L"&#x3d;", L'=');
 
     rs_string finalSamlAssertion = IAMUtils::convertToUTF8(samlAssertion);
-    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetSamlAssertion: saml assertion length %d\n", finalSamlAssertion.length());
+    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider::GetSamlAssertion: saml assertion length %zu\n", finalSamlAssertion.length());
 
     return finalSamlAssertion;
 }
@@ -133,7 +133,7 @@ rs_string IAMOktaCredentialsProvider::GetSamlAssertion()
 rs_string IAMOktaCredentialsProvider::GetAuthSessionToken(
     const std::shared_ptr<IAMHttpClient>& in_httpClient)
 {
-    RS_LOG_DEBUG("IAMCRD", "IAMOktaCredentialsProvider", "GetAuthSessionToken");
+    RS_LOG_DEBUG("IAMCRD", "%s::%s", "IAMOktaCredentialsProvider", "GetAuthSessionToken");
 
     if (!in_httpClient)
     {

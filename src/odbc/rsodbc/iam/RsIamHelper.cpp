@@ -591,7 +591,7 @@ char * RsIamHelper::ReadAuthProfile(
          || pIamProps->szSecretAccessKey[0] == '\0')
     {
         rs_string errorMsg = "Missing AccessKeyID or SecretAccessKey for AuthProfile.";
-        RS_LOG_ERROR("IAMH", errorMsg.c_str());
+        RS_LOG_ERROR("IAMH", "%s", errorMsg.c_str());
         IAMUtils::ThrowConnectionExceptionWithInfo(errorMsg);
     }
 

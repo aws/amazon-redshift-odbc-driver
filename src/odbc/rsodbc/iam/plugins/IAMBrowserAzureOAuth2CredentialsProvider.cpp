@@ -285,8 +285,8 @@ rs_string IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken(const rs_
 	config.m_caFile = m_config.GetCaFile();
 	config.m_timeout = m_config.GetStsConnectionTimeout();
 
-	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken ",
-		"HttpClientConfig.m_timeout: %ld",
+	RS_LOG_DEBUG("IAMCRD",
+		"IAMBrowserAzureOAuth2CredentialsProvider::RequestAccessToken HttpClientConfig.m_timeout: %ld",
 		config.m_timeout);
 
 	if (m_config.GetUsingHTTPSProxy() && m_config.GetUseProxyIdpAuth())

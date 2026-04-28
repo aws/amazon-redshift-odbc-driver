@@ -207,7 +207,7 @@ SQLRETURN SQL_API SQLSetCursorNameW(SQLHSTMT  phstmt,
                                             copiedChars);
     } else {
         RS_LOG_ERROR("SQLSetCursorNameW",
-                     "Invalid cursor name. Conversion to UTF-8 failed. copiedChars:%d/%d",
+                     "Invalid cursor name. Conversion to UTF-8 failed. copiedChars:%zu/%d",
                      copiedChars, MAX_IDEN_LEN);
         addError(&pStmt->pErrorList, "HY090",
                  "Invalid string or buffer length", 0, NULL);

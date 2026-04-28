@@ -12477,7 +12477,7 @@ bool getLibpqParameterStatus(RS_STMT_INFO *pStmt, const std::string &param,
 
 ExceptionInvalidParameter::ExceptionInvalidParameter(const std::string &message)
     : std::invalid_argument(message) {
-    RS_LOG_ERROR("%s", message.c_str());
+    RS_LOG_ERROR("RSUTIL", "%s", message.c_str());
 }
 
 bool isEmptyString(SQLCHAR *str) { return str && *str == '\0'; }

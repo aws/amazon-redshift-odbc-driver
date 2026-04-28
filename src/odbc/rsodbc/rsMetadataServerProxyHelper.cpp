@@ -191,7 +191,7 @@ namespace RsMetadataServerProxyHelpers {
                 binding.bufferLength,
                 binding.strLengthPtr);
             if (!SQL_SUCCEEDED(rc)) {
-                RS_LOG_ERROR("columnBindingHelper", binding.errorMsg);
+                RS_LOG_ERROR("columnBindingHelper", "%s", binding.errorMsg);
                 return rc;
             }
         }
@@ -265,7 +265,7 @@ namespace RsMetadataServerProxyHelpers {
         // Handle the case when isSingleDatabaseMetaData is true
         if (m_isSingleDatabaseMetaData && m_catalog.empty()) {
             m_catalogs.push_back(curCatalog);
-            RS_LOG_TRACE(m_operationName, "number of catalogs: %d", m_catalogs.size());
+            RS_LOG_TRACE(m_operationName, "number of catalogs: %zu", m_catalogs.size());
             return SQL_SUCCESS;
         }
 
@@ -319,7 +319,7 @@ namespace RsMetadataServerProxyHelpers {
                 m_catalogs.emplace_back(cur);
             }
         }
-        RS_LOG_TRACE(m_operationName, "number of catalogs: %d", m_catalogs.size());
+        RS_LOG_TRACE(m_operationName, "number of catalogs: %zu", m_catalogs.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
     }
 
@@ -395,7 +395,7 @@ namespace RsMetadataServerProxyHelpers {
                 m_intermediateRS.emplace_back(std::move(cur));
             }
         }
-        RS_LOG_TRACE(m_operationName, "number of schemas: %d", m_intermediateRS.size());
+        RS_LOG_TRACE(m_operationName, "number of schemas: %zu", m_intermediateRS.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
     }
 
@@ -509,7 +509,7 @@ namespace RsMetadataServerProxyHelpers {
                 m_intermediateRS.emplace_back(std::move(cur));
             }
         }
-        RS_LOG_TRACE(m_operationName, "number of tables: %d", m_intermediateRS.size());
+        RS_LOG_TRACE(m_operationName, "number of tables: %zu", m_intermediateRS.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
     }
 
@@ -668,7 +668,7 @@ namespace RsMetadataServerProxyHelpers {
                 m_intermediateRS.emplace_back(std::move(cur));
             }
         }
-        RS_LOG_TRACE(m_operationName, "number of columns: %d", m_intermediateRS.size());
+        RS_LOG_TRACE(m_operationName, "number of columns: %zu", m_intermediateRS.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
     }
 
@@ -759,7 +759,7 @@ namespace RsMetadataServerProxyHelpers {
                 m_intermediateRS.emplace_back(std::move(cur));
             }
         }
-        RS_LOG_TRACE(m_operationName, "number of primary keys: %d", m_intermediateRS.size());
+        RS_LOG_TRACE(m_operationName, "number of primary keys: %zu", m_intermediateRS.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
     }
 
@@ -896,7 +896,7 @@ namespace RsMetadataServerProxyHelpers {
                 m_intermediateRS.emplace_back(std::move(cur));
             }
         }
-        RS_LOG_TRACE(m_operationName, "number of foreign keys: %d",
+        RS_LOG_TRACE(m_operationName, "number of foreign keys: %zu",
                     m_intermediateRS.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
     }
@@ -1017,7 +1017,7 @@ namespace RsMetadataServerProxyHelpers {
                           std::make_move_iterator(tempResults.begin()),
                           std::make_move_iterator(tempResults.end()));
         }
-        RS_LOG_TRACE(m_operationName, "number of column privileges: %d", m_intermediateRS.size());
+        RS_LOG_TRACE(m_operationName, "number of column privileges: %zu", m_intermediateRS.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
     }
 
@@ -1125,7 +1125,7 @@ namespace RsMetadataServerProxyHelpers {
                           std::make_move_iterator(tempResults.begin()),
                           std::make_move_iterator(tempResults.end()));
         }
-        RS_LOG_TRACE(m_operationName, "number of table privileges: %d", m_intermediateRS.size());
+        RS_LOG_TRACE(m_operationName, "number of table privileges: %zu", m_intermediateRS.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
     }
 
@@ -1235,7 +1235,7 @@ namespace RsMetadataServerProxyHelpers {
                 m_intermediateRS.emplace_back(std::move(cur));
             }
         }
-        RS_LOG_TRACE(m_operationName, "number of procedures/functions: %d", m_intermediateRS.size());
+        RS_LOG_TRACE(m_operationName, "number of procedures/functions: %zu", m_intermediateRS.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
     }
 
@@ -1363,7 +1363,7 @@ namespace RsMetadataServerProxyHelpers {
                 m_intermediateRS.emplace_back(std::move(cur));
             }
         }
-        RS_LOG_TRACE(m_operationName, "number of procedure/function columns: %d", m_intermediateRS.size());
+        RS_LOG_TRACE(m_operationName, "number of procedure/function columns: %zu", m_intermediateRS.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
     }
 }

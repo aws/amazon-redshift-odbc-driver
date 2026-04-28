@@ -41,12 +41,18 @@ void setRsLogLevel(int level);
 struct RS_LOG_VARS *getGlobalLogVars();
 
 
-void RS_LOG_FATAL_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...);
-void RS_LOG_ERROR_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...);
-void RS_LOG_WARN_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...);
-void RS_LOG_INFO_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...);
-void RS_LOG_DEBUG_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...);
-void RS_LOG_TRACE_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...);
+#if defined(__GNUC__) || defined(__clang__)
+#define RS_LOG_PRINTF_ATTR __attribute__((format(printf, 5, 6)))
+#else
+#define RS_LOG_PRINTF_ATTR
+#endif
+
+void RS_LOG_FATAL_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...) RS_LOG_PRINTF_ATTR;
+void RS_LOG_ERROR_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...) RS_LOG_PRINTF_ATTR;
+void RS_LOG_WARN_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...) RS_LOG_PRINTF_ATTR;
+void RS_LOG_INFO_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...) RS_LOG_PRINTF_ATTR;
+void RS_LOG_DEBUG_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...) RS_LOG_PRINTF_ATTR;
+void RS_LOG_TRACE_(const char* file, const int line, const char* func, const char *tag, const char *fmt, ...) RS_LOG_PRINTF_ATTR;
 void RS_STREAM_LOG_TRACE_(const char* file, const int line, const char* func, const char *tag, const char *s, long long len);
 
 #define RS_LOG_FATAL(...) RS_LOG_FATAL_(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__) 

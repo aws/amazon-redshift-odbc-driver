@@ -22,9 +22,9 @@ RsMetadataAPIPostProcessor::RsMetadataAPIPostProcessor(RS_STMT_INFO* stmt) {
 SQLRETURN RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
     SQLHSTMT phstmt, const std::vector<RS_TYPE_INFO> &typeInfo) {
 
-    RS_LOG_TRACE("sqlGetTypeInfoPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlGetTypeInfoPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlGetTypeInfoPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlGetTypeInfoPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -40,7 +40,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
         kTypeInfoColNum,
         (int *)metadataAPIHelper.kTypeInfoColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlGetTypeInfoPostProcessing",
+        RS_LOG_ERROR("sqlGetTypeInfoPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -49,12 +49,12 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
     rc = libpqCreateSQLGetTypeInfoCustomizedResultSet(pStmt, kTypeInfoColNum,
                                                    typeInfo);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlGetTypeInfoPostProcessing",
+        RS_LOG_ERROR("sqlGetTypeInfoPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlGetTypeInfoPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlGetTypeInfoPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }
 
@@ -65,9 +65,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
 SQLRETURN RsMetadataAPIPostProcessor::sqlCatalogsPostProcessing(
     SQLHSTMT phstmt, const std::vector<std::string> &intermediateRS) {
 
-    RS_LOG_TRACE("sqlCatalogsPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlCatalogsPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlCatalogsPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlCatalogsPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -83,7 +83,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlCatalogsPostProcessing(
         kTablesColNum,
         (int *)metadataAPIHelper.kTablesColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlCatalogsPostProcessing",
+        RS_LOG_ERROR("sqlCatalogsPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -92,12 +92,12 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlCatalogsPostProcessing(
     rc = libpqCreateSQLCatalogsCustomizedResultSet(pStmt, kTablesColNum,
                                                    intermediateRS);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlCatalogsPostProcessing",
+        RS_LOG_ERROR("sqlCatalogsPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlCatalogsPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlCatalogsPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }
 
@@ -108,9 +108,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlCatalogsPostProcessing(
 SQLRETURN RsMetadataAPIPostProcessor::sqlSchemasPostProcessing(
     SQLHSTMT phstmt, const std::vector<SHOWSCHEMASResult> &intermediateRS) {
 
-    RS_LOG_TRACE("sqlSchemasPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlSchemasPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlSchemasPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlSchemasPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -126,7 +126,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlSchemasPostProcessing(
         kTablesColNum,
         (int *)metadataAPIHelper.kTablesColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlSchemasPostProcessing",
+        RS_LOG_ERROR("sqlSchemasPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -135,12 +135,12 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlSchemasPostProcessing(
     rc = libpqCreateSQLSchemasCustomizedResultSet(pStmt, kTablesColNum,
                                                   intermediateRS);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlSchemasPostProcessing",
+        RS_LOG_ERROR("sqlSchemasPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlSchemasPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlSchemasPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }
 
@@ -150,9 +150,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlSchemasPostProcessing(
 SQLRETURN
 RsMetadataAPIPostProcessor::sqlTableTypesPostProcessing(SQLHSTMT phstmt) {
 
-    RS_LOG_TRACE("sqlTableTypesPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlTableTypesPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlTableTypesPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlTableTypesPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -168,7 +168,7 @@ RsMetadataAPIPostProcessor::sqlTableTypesPostProcessing(SQLHSTMT phstmt) {
         kTablesColNum,
         (int *)metadataAPIHelper.kTablesColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlTableTypesPostProcessing",
+        RS_LOG_ERROR("sqlTableTypesPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -177,13 +177,13 @@ RsMetadataAPIPostProcessor::sqlTableTypesPostProcessing(SQLHSTMT phstmt) {
     rc = libpqCreateSQLTableTypesCustomizedResultSet(
         pStmt, kTablesColNum, RsMetadataAPIHelper::tableTypeList);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlTableTypesPostProcessing",
+        RS_LOG_ERROR("sqlTableTypesPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
 
-    RS_LOG_TRACE("sqlTableTypesPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlTableTypesPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }
 
@@ -195,9 +195,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
     SQLHSTMT phstmt, std::string pTableType,
     const std::vector<SHOWTABLESResult> &intermediateRS) {
 
-    RS_LOG_TRACE("sqlTablesPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlTablesPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlTablesPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlTablesPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -213,7 +213,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
         kTablesColNum,
         (int *)metadataAPIHelper.kTablesColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlTablesPostProcessing",
+        RS_LOG_ERROR("sqlTablesPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -222,12 +222,12 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
     rc = libpqCreateSQLTablesCustomizedResultSet(pStmt, kTablesColNum,
                                                  pTableType, intermediateRS);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlTablesPostProcessing",
+        RS_LOG_ERROR("sqlTablesPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlTablesPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlTablesPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }
 
@@ -238,9 +238,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
 SQLRETURN RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(
     SQLHSTMT phstmt, const std::vector<SHOWCOLUMNSResult> &intermediateRS) {
 
-    RS_LOG_TRACE("sqlColumnsPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlColumnsPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlColumnsPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlColumnsPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -256,7 +256,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(
         kColumnsColNum,
         (int *)metadataAPIHelper.kColumnsColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlColumnsPostProcessing",
+        RS_LOG_ERROR("sqlColumnsPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -265,12 +265,12 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(
     rc = libpqCreateSQLColumnsCustomizedResultSet(pStmt, kColumnsColNum,
                                                   intermediateRS);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlColumnsPostProcessing",
+        RS_LOG_ERROR("sqlColumnsPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlColumnsPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlColumnsPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
 
     return rc;
 }
@@ -283,9 +283,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlPrimaryKeysPostProcessing(
     SQLHSTMT phstmt, const std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult> &intermediateRS) {
     SQLRETURN rc = SQL_SUCCESS;
 
-    RS_LOG_TRACE("sqlPrimaryKeysPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlPrimaryKeysPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlPrimaryKeysPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlPrimaryKeysPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -300,7 +300,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlPrimaryKeysPostProcessing(
         kPrimaryKeysColNum,
         (int *)metadataAPIHelper.kPrimaryKeysColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlPrimaryKeysPostProcessing",
+        RS_LOG_ERROR("sqlPrimaryKeysPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -309,12 +309,12 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlPrimaryKeysPostProcessing(
     rc = libpqCreateSQLPrimaryKeysCustomizedResultSet(pStmt, kPrimaryKeysColNum,
                                                  intermediateRS);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlPrimaryKeysPostProcessing",
+        RS_LOG_ERROR("sqlPrimaryKeysPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlPrimaryKeysPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlPrimaryKeysPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }
 
@@ -326,9 +326,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlForeignKeysPostProcessing(
     SQLHSTMT phstmt,
     const std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult> &intermediateRS) {
 
-    RS_LOG_TRACE("sqlForeignKeysPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlForeignKeysPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlForeignKeysPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlForeignKeysPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -341,7 +341,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlForeignKeysPostProcessing(
         pStmt, (char **)metadataAPIHelper.kForeignKeysCol, kForeignKeysColNum,
         (int *)metadataAPIHelper.kForeignKeysColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlForeignKeysPostProcessing",
+        RS_LOG_ERROR("sqlForeignKeysPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -350,12 +350,12 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlForeignKeysPostProcessing(
     rc = libpqCreateSQLForeignKeysCustomizedResultSet(pStmt, kForeignKeysColNum,
                                                       intermediateRS);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlForeignKeysPostProcessing",
+        RS_LOG_ERROR("sqlForeignKeysPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlForeignKeysPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlForeignKeysPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }
 
@@ -368,9 +368,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlSpecialColumnsPostProcessing(
     const std::vector<SHOWCOLUMNSResult> &intermediateRS,
     SQLUSMALLINT identifierType) {
     
-    RS_LOG_TRACE("sqlSpecialColumnsPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlSpecialColumnsPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlSpecialColumnsPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlSpecialColumnsPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -391,7 +391,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlSpecialColumnsPostProcessing(
         kSpecialColumnsColNum,
         (int *)metadataAPIHelper.kSpecialColumnsColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlSpecialColumnsPostProcessing",
+        RS_LOG_ERROR("sqlSpecialColumnsPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -403,12 +403,12 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlSpecialColumnsPostProcessing(
         intermediateRS,
         identifierType);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlSpecialColumnsPostProcessing",
+        RS_LOG_ERROR("sqlSpecialColumnsPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlSpecialColumnsPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlSpecialColumnsPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }
 
@@ -420,9 +420,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlTablePrivilegesPostProcessing(
     SQLHSTMT phstmt,
     const std::vector<SHOWGRANTSTABLEResult> &intermediateRS) {
     
-    RS_LOG_TRACE("sqlTablePrivilegesPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlTablePrivilegesPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlTablePrivilegesPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlTablePrivilegesPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -438,7 +438,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlTablePrivilegesPostProcessing(
         kTablePrivilegesColNum,
         (int *)metadataAPIHelper.kTablePrivilegesColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlTablePrivilegesPostProcessing",
+        RS_LOG_ERROR("sqlTablePrivilegesPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -449,12 +449,12 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlTablePrivilegesPostProcessing(
         kTablePrivilegesColNum,
         intermediateRS);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlTablePrivilegesPostProcessing",
+        RS_LOG_ERROR("sqlTablePrivilegesPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlTablePrivilegesPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlTablePrivilegesPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }
 
@@ -466,9 +466,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlColumnPrivilegesPostProcessing(
     SQLHSTMT phstmt,
     const std::vector<SHOWGRANTSCOLUMNResult> &intermediateRS) {
     
-    RS_LOG_TRACE("sqlColumnPrivilegesPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlColumnPrivilegesPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlColumnPrivilegesPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlColumnPrivilegesPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -484,7 +484,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlColumnPrivilegesPostProcessing(
         kColumnPrivilegesColNum,
         (int *)metadataAPIHelper.kColumnPrivilegesColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlColumnPrivilegesPostProcessing",
+        RS_LOG_ERROR("sqlColumnPrivilegesPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -495,12 +495,12 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlColumnPrivilegesPostProcessing(
         kColumnPrivilegesColNum,
         intermediateRS);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlColumnPrivilegesPostProcessing",
+        RS_LOG_ERROR("sqlColumnPrivilegesPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlColumnPrivilegesPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlColumnPrivilegesPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }
 
@@ -512,9 +512,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlProceduresPostProcessing(
     SQLHSTMT phstmt,
     const std::vector<SHOWPROCEDURESFUNCTIONSResult> &intermediateRS) {
     
-    RS_LOG_TRACE("sqlProceduresPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlProceduresPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlProceduresPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlProceduresPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -530,7 +530,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlProceduresPostProcessing(
         kProceduresColNum,
         (int *)metadataAPIHelper.kProceduresColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlProceduresPostProcessing",
+        RS_LOG_ERROR("sqlProceduresPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -541,12 +541,12 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlProceduresPostProcessing(
         kProceduresColNum,
         intermediateRS);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlProceduresPostProcessing",
+        RS_LOG_ERROR("sqlProceduresPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlProceduresPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlProceduresPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }
 
@@ -557,9 +557,9 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlProceduresPostProcessing(
 SQLRETURN RsMetadataAPIPostProcessor::sqlProcedureColumnsPostProcessing(
     SQLHSTMT phstmt, const std::vector<SHOWCOLUMNSResult> &intermediateRS) {
 
-    RS_LOG_TRACE("sqlProcedureColumnsPostProcessing", PostProcessorLoggings::START_TRACE_MSG);
+    RS_LOG_TRACE("sqlProcedureColumnsPostProcessing", "%s", PostProcessorLoggings::START_TRACE_MSG);
     if (!VALID_HSTMT(phstmt)) {
-        RS_LOG_ERROR("sqlProcedureColumnsPostProcessing", PostProcessorLoggings::INVALID_HANDLER);
+        RS_LOG_ERROR("sqlProcedureColumnsPostProcessing", "%s", PostProcessorLoggings::INVALID_HANDLER);
         return SQL_INVALID_HANDLE;
     }
 
@@ -573,7 +573,7 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlProcedureColumnsPostProcessing(
         kProcedureColumnsColNum,
         (int *)metadataAPIHelper.kProcedureColumnsColDatatype);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlProcedureColumnsPostProcessing",
+        RS_LOG_ERROR("sqlProcedureColumnsPostProcessing", "%s",
             PostProcessorLoggings::COLUMN_FIELD_INITIALIZE_FAILED);
         return rc;
     }
@@ -582,11 +582,11 @@ SQLRETURN RsMetadataAPIPostProcessor::sqlProcedureColumnsPostProcessing(
     rc = libpqCreateSQLProcedureColumnsCustomizedResultSet(
         pStmt, kProcedureColumnsColNum, intermediateRS);
     if (!SQL_SUCCEEDED(rc)) {
-        RS_LOG_ERROR("sqlProcedureColumnsPostProcessing",
+        RS_LOG_ERROR("sqlProcedureColumnsPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);
         return rc;
     }
 
-    RS_LOG_TRACE("sqlProcedureColumnsPostProcessing", PostProcessorLoggings::END_TRACE_MSG);
+    RS_LOG_TRACE("sqlProcedureColumnsPostProcessing", "%s", PostProcessorLoggings::END_TRACE_MSG);
     return rc;
 }

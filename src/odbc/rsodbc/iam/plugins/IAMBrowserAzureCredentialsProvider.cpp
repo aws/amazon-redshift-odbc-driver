@@ -360,7 +360,7 @@ rs_string IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken(const 
     samlByteBuffer.GetUnderlyingData()),
     samlByteBuffer.GetLength());
     
-	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken: samlContent length %d\n", samlContent.length());
+	RS_LOG_DEBUG("IAMCRD", "IAMBrowserAzureCredentialsProvider::RetrieveSamlFromAccessToken: samlContent length %zu\n", samlContent.length());
 
     /* What we get back from Browser is only the SAML Assertion. THe base class requires we pass in the full SAML
     Response. So we append the extra tags to the SAML Assertion to turn it into a SAML Response.*/

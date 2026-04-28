@@ -104,6 +104,8 @@ function(target_compile_options_rsodbc TARGET_NAME)
             -c
             -fmessage-length=0
             -fPIC
+            -Wformat-security
+            -Werror=format-security
             )
 endfunction()
 

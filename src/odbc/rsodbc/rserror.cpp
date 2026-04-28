@@ -912,7 +912,7 @@ SQLRETURN SQL_API SQLGetDiagFieldW(SQLSMALLINT     hHandleType,
             // In Length inquiry where pwDiagInfo is NULL, rc is SQL_SUCCESS
             if (pwDiagInfo && copiedChars < totalCharsNeeded) {
                 rc = SQL_SUCCESS_WITH_INFO;
-                RS_LOG_INFO("RSDIAG", "Diag field truncated: %d/%d", copiedChars, totalCharsNeeded);
+                RS_LOG_INFO("RSDIAG", "Diag field truncated: %zu/%zu", copiedChars, totalCharsNeeded);
             }
         }
     }

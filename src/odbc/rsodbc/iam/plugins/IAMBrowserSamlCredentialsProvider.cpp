@@ -243,7 +243,7 @@ rs_string IAMBrowserSamlCredentialsProvider::RequestSamlAssertion()
 
     EraseLineFeeds(SAMLResponse);
 
-    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::RequestSamlAssertion %d\n",
+    RS_LOG_DEBUG("IAMCRD", "IAMBrowserSamlCredentialsProvider::RequestSamlAssertion %zu\n",
         SAMLResponse.length());
     
     return SAMLResponse;
