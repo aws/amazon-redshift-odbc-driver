@@ -10,7 +10,6 @@
 #include <gmock/gmock.h>
 #include <string>
 #include <vector>
-#include <cstring>
 
 #include "rsodbc.h"
 #include <sql.h>
@@ -47,12 +46,6 @@ protected:
         if (stmt != SQL_NULL_HANDLE) SQLFreeHandle(SQL_HANDLE_STMT, stmt);
         if (dbc != SQL_NULL_HANDLE) SQLFreeHandle(SQL_HANDLE_DBC, dbc);
         if (env != SQL_NULL_HANDLE) SQLFreeHandle(SQL_HANDLE_ENV, env);
-    }
-
-    // Helper method for safe string copying
-    static size_t safeCopyString(unsigned char* dest, const char* src, size_t maxLen) {
-        size_t result = snprintf(reinterpret_cast<char*>(dest), maxLen, "%s", src);
-        return (result < maxLen) ? result : maxLen - 1;
     }
 
     SQLHENV env = SQL_NULL_HANDLE;
@@ -291,16 +284,16 @@ protected:
             std::string suffix = std::to_string(i);
 
             if (maxLength) {
-                result.database_name_Len = safeCopyString(result.database_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.schema_name_Len = safeCopyString(result.schema_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, getMaxStr().c_str(), NAMEDATALEN);
+                result.database_name = getMaxStr();
+                result.schema_name = getMaxStr();
+                result.table_name = getMaxStr();
             } else {
-                result.database_name_Len = safeCopyString(result.database_name, ("catalog" + suffix).c_str(), NAMEDATALEN);
-                result.schema_name_Len = safeCopyString(result.schema_name, ("schema" + suffix).c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, ("table" + suffix).c_str(), NAMEDATALEN);
+                result.database_name = "catalog" + suffix;
+                result.schema_name = "schema" + suffix;
+                result.table_name = "table" + suffix;
             }
-            result.table_type_Len = safeCopyString(result.table_type, "TABLE", NAMEDATALEN);
-            result.remarks_Len = safeCopyString(result.remarks, ("remark" + suffix).c_str(), NAMEDATALEN);
+            result.table_type = "TABLE";
+            result.remarks = "remark" + suffix;
             results.push_back(result);
         }
         return results;
@@ -392,24 +385,24 @@ protected:
             std::string suffix = std::to_string(i);
 
             if (maxLength) {
-                result.database_name_Len = safeCopyString(result.database_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.schema_name_Len = safeCopyString(result.schema_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.column_name_Len = safeCopyString(result.column_name, getMaxStr().c_str(), NAMEDATALEN);
+                result.database_name = getMaxStr();
+                result.schema_name = getMaxStr();
+                result.table_name = getMaxStr();
+                result.column_name = getMaxStr();
             } else {
-                result.database_name_Len = safeCopyString(result.database_name, ("catalog" + suffix).c_str(), NAMEDATALEN);
-                result.schema_name_Len = safeCopyString(result.schema_name, ("schema" + suffix).c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, ("table" + suffix).c_str(), NAMEDATALEN);
-                result.column_name_Len = safeCopyString(result.column_name, ("column" + suffix).c_str(), NAMEDATALEN);
+                result.database_name = "catalog" + suffix;
+                result.schema_name = "schema" + suffix;
+                result.table_name = "table" + suffix;
+                result.column_name = "column" + suffix;
             }
             result.ordinal_position = 1;
-            result.column_default_Len = safeCopyString(result.column_default, "", NAMEDATALEN);
-            result.is_nullable_Len = safeCopyString(result.is_nullable, "NO", NAMEDATALEN);
-            result.data_type_Len = safeCopyString(result.data_type, "character varying", NAMEDATALEN);
+            result.column_default = "";
+            result.is_nullable = "NO";
+            result.data_type = "character varying";
             result.character_maximum_length = 256;
             result.numeric_precision = 0;
             result.numeric_scale = 0;
-            result.remarks_Len = safeCopyString(result.remarks, "", NAMEDATALEN);
+            result.remarks = "";
 
             results.push_back(result);
         }
@@ -420,22 +413,22 @@ protected:
         std::vector<SHOWCOLUMNSResult> results;
 
         for (size_t i = 0; i < mixedCaseDataType.size(); i++) {
-            SHOWCOLUMNSResult result{};  // Zero-initialize
-            std::string suffix = std::to_string(i+1);
+            SHOWCOLUMNSResult result{};
+            std::string suffix = std::to_string(i + 1);
 
-            result.database_name_Len = safeCopyString(result.database_name, ("catalog" + suffix).c_str(), NAMEDATALEN);
-            result.schema_name_Len = safeCopyString(result.schema_name, ("schema" + suffix).c_str(), NAMEDATALEN);
-            result.table_name_Len = safeCopyString(result.table_name, ("table" + suffix).c_str(), NAMEDATALEN);
-            result.column_name_Len = safeCopyString(result.column_name, ("column" + suffix).c_str(), NAMEDATALEN);
+            result.database_name = "catalog" + suffix;
+            result.schema_name = "schema" + suffix;
+            result.table_name = "table" + suffix;
+            result.column_name = "column" + suffix;
             result.ordinal_position = 1;
-            result.column_default_Len = safeCopyString(result.column_default, "", NAMEDATALEN);
-            result.is_nullable_Len = safeCopyString(result.is_nullable, "NO", NAMEDATALEN);
-            result.data_type_Len = safeCopyString(result.data_type, mixedCaseDataType[i].c_str(), NAMEDATALEN);
+            result.column_default = "";
+            result.is_nullable = "NO";
+            result.data_type = mixedCaseDataType[i];
             // "string" types use character_maximum_length; "binary" types do not
             result.character_maximum_length = isBinaryType(mixedCaseDataType[i]) ? 0 : 256;
             result.numeric_precision = 0;
             result.numeric_scale = 0;
-            result.remarks_Len = safeCopyString(result.remarks, "", NAMEDATALEN);
+            result.remarks = "";
 
             results.push_back(result);
         }
@@ -572,18 +565,18 @@ protected:
             std::string suffix = std::to_string(i);
 
             if (maxLength) {
-                result.database_name_Len = safeCopyString(result.database_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.schema_name_Len = safeCopyString(result.schema_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.column_name_Len = safeCopyString(result.column_name, getMaxStr().c_str(), NAMEDATALEN);
+                result.database_name = getMaxStr();
+                result.schema_name = getMaxStr();
+                result.table_name = getMaxStr();
+                result.column_name = getMaxStr();
             } else {
-                result.database_name_Len = safeCopyString(result.database_name, ("catalog" + suffix).c_str(), NAMEDATALEN);
-                result.schema_name_Len = safeCopyString(result.schema_name, ("schema" + suffix).c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, ("table" + suffix).c_str(), NAMEDATALEN);
-                result.column_name_Len = safeCopyString(result.column_name, ("col" + suffix).c_str(), NAMEDATALEN);
+                result.database_name = "catalog" + suffix;
+                result.schema_name = "schema" + suffix;
+                result.table_name = "table" + suffix;
+                result.column_name = "col" + suffix;
             }
             result.key_seq = i;
-            result.pk_name_Len = safeCopyString(result.pk_name, ("pk" + suffix).c_str(), NAMEDATALEN);
+            result.pk_name = "pk" + suffix;
             results.push_back(result);
         }
         return results;
@@ -668,29 +661,29 @@ protected:
             std::string suffix = std::to_string(i);
 
             if (maxLength) {
-                result.pk_table_cat_Len = safeCopyString(result.pk_table_cat, getMaxStr().c_str(), NAMEDATALEN);
-                result.pk_table_schem_Len = safeCopyString(result.pk_table_schem, getMaxStr().c_str(), NAMEDATALEN);
-                result.pk_table_name_Len = safeCopyString(result.pk_table_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.pk_column_name_Len = safeCopyString(result.pk_column_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.fk_table_cat_Len = safeCopyString(result.fk_table_cat, getMaxStr().c_str(), NAMEDATALEN);
-                result.fk_table_schem_Len = safeCopyString(result.fk_table_schem, getMaxStr().c_str(), NAMEDATALEN);
-                result.fk_table_name_Len = safeCopyString(result.fk_table_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.fk_column_name_Len = safeCopyString(result.fk_column_name, getMaxStr().c_str(), NAMEDATALEN);
+                result.pk_table_cat = getMaxStr();
+                result.pk_table_schem = getMaxStr();
+                result.pk_table_name = getMaxStr();
+                result.pk_column_name = getMaxStr();
+                result.fk_table_cat = getMaxStr();
+                result.fk_table_schem = getMaxStr();
+                result.fk_table_name = getMaxStr();
+                result.fk_column_name = getMaxStr();
             } else {
-                result.pk_table_cat_Len = safeCopyString(result.pk_table_cat, ("test_catalog_pk"+ suffix).c_str(), NAMEDATALEN);
-                result.pk_table_schem_Len = safeCopyString(result.pk_table_schem, ("test_schema_pk"+ suffix).c_str(), NAMEDATALEN);
-                result.pk_table_name_Len = safeCopyString(result.pk_table_name, ("test_table_pk"+ suffix).c_str(), NAMEDATALEN);
-                result.pk_column_name_Len = safeCopyString(result.pk_column_name, ("test_column_pk"+ suffix).c_str(), NAMEDATALEN);
-                result.fk_table_cat_Len = safeCopyString(result.fk_table_cat, ("test_catalog_fk"+ suffix).c_str(), NAMEDATALEN);
-                result.fk_table_schem_Len = safeCopyString(result.fk_table_schem, ("test_schema_fk"+ suffix).c_str(), NAMEDATALEN);
-                result.fk_table_name_Len = safeCopyString(result.fk_table_name, ("test_table_fk"+ suffix).c_str(), NAMEDATALEN);
-                result.fk_column_name_Len = safeCopyString(result.fk_column_name, ("test_column_fk"+ suffix).c_str(), NAMEDATALEN);
+                result.pk_table_cat = "test_catalog_pk"+ suffix;
+                result.pk_table_schem = "test_schema_pk"+ suffix;
+                result.pk_table_name = "test_table_pk"+ suffix;
+                result.pk_column_name = "test_column_pk"+ suffix;
+                result.fk_table_cat = "test_catalog_fk"+ suffix;
+                result.fk_table_schem = "test_schema_fk"+ suffix;
+                result.fk_table_name = "test_table_fk"+ suffix;
+                result.fk_column_name = "test_column_fk"+ suffix;
             }
             result.key_seq = 1;
             result.update_rule = 1;
             result.delete_rule = 1;
-            result.pk_name_Len = safeCopyString(result.pk_name, ("test_pk"+ suffix).c_str(), NAMEDATALEN);
-            result.fk_name_Len = safeCopyString(result.fk_name, ("test_fk"+ suffix).c_str(), NAMEDATALEN);
+            result.pk_name = "test_pk"+ suffix;
+            result.fk_name = "test_fk"+ suffix;
             result.deferrability = 1;
 
             results.push_back(result);
@@ -783,24 +776,24 @@ protected:
             std::string suffix = std::to_string(i);
 
             if (maxLength) {
-                result.database_name_Len = safeCopyString(result.database_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.schema_name_Len = safeCopyString(result.schema_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.column_name_Len = safeCopyString(result.column_name, getMaxStr().c_str(), NAMEDATALEN);
+                result.database_name = getMaxStr();
+                result.schema_name = getMaxStr();
+                result.table_name = getMaxStr();
+                result.column_name = getMaxStr();
             } else {
-                result.database_name_Len = safeCopyString(result.database_name, ("catalog" + suffix).c_str(), NAMEDATALEN);
-                result.schema_name_Len = safeCopyString(result.schema_name, ("schema" + suffix).c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, ("table" + suffix).c_str(), NAMEDATALEN);
-                result.column_name_Len = safeCopyString(result.column_name, ("column" + suffix).c_str(), NAMEDATALEN);
+                result.database_name = "catalog" + suffix;
+                result.schema_name = "schema" + suffix;
+                result.table_name = "table" + suffix;
+                result.column_name = "column" + suffix;
             }
             result.ordinal_position = 1;
-            result.column_default_Len = safeCopyString(result.column_default, "", NAMEDATALEN);
-            result.is_nullable_Len = safeCopyString(result.is_nullable, "NO", NAMEDATALEN);
-            result.data_type_Len = safeCopyString(result.data_type, "character varying", NAMEDATALEN);
+            result.column_default = "";
+            result.is_nullable = "NO";
+            result.data_type = "character varying";
             result.character_maximum_length = 256;
             result.numeric_precision = 0;
             result.numeric_scale = 0;
-            result.remarks_Len = safeCopyString(result.remarks, "", NAMEDATALEN);
+            result.remarks = "";
 
             results.push_back(result);
         }
@@ -849,11 +842,9 @@ TEST_F(SQLSpecialColumnsTest, SpecialColumnsRowVer) {
     std::vector<SHOWCOLUMNSResult> intermediateRS;
     SHOWCOLUMNSResult result;
     
-    // Set up test data for a timestamp column with safe string copying
-    result.column_name_Len = safeCopyString(result.column_name, "last_updated", 
-                                          sizeof(result.column_name));
-    result.data_type_Len = safeCopyString(result.data_type, "timestamp", 
-                                        sizeof(result.data_type));
+    // Set up test data for a timestamp column
+    result.column_name = "last_updated";
+    result.data_type = "timestamp";
     result.numeric_precision = 0;
     result.numeric_scale = 6;  // microseconds
     result.character_maximum_length = 0;
@@ -930,19 +921,19 @@ protected:
             std::string suffix = std::to_string(i);
 
             if (maxLength) {
-                result.table_cat_Len = safeCopyString(result.table_cat, getMaxStr().c_str(), NAMEDATALEN);
-                result.table_schem_Len = safeCopyString(result.table_schem, getMaxStr().c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.column_name_Len = safeCopyString(result.column_name, getMaxStr().c_str(), NAMEDATALEN);
+                result.table_cat = getMaxStr();
+                result.table_schem = getMaxStr();
+                result.table_name = getMaxStr();
+                result.column_name = getMaxStr();
             } else {
-                result.table_cat_Len = safeCopyString(result.table_cat, ("catalog" + suffix).c_str(), NAMEDATALEN);
-                result.table_schem_Len = safeCopyString(result.table_schem, ("schema" + suffix).c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, ("table" + suffix).c_str(), NAMEDATALEN);
-                result.column_name_Len = safeCopyString(result.column_name, ("column" + suffix).c_str(), NAMEDATALEN);
+                result.table_cat = "catalog" + suffix;
+                result.table_schem = "schema" + suffix;
+                result.table_name = "table" + suffix;
+                result.column_name = "column" + suffix;
             }
-            result.grantor_Len = safeCopyString(result.grantor, "admin", NAMEDATALEN);
-            result.grantee_Len = safeCopyString(result.grantee, "user1", NAMEDATALEN);
-            result.privilege_Len = safeCopyString(result.privilege, "SELECT", NAMEDATALEN);
+            result.grantor = "admin";
+            result.grantee = "user1";
+            result.privilege = "SELECT";
             result.admin_option = 1;
             results.push_back(result);
         }
@@ -1023,17 +1014,17 @@ protected:
             std::string suffix = std::to_string(i);
 
             if (maxLength) {
-                result.table_cat_Len = safeCopyString(result.table_cat, getMaxStr().c_str(), NAMEDATALEN);
-                result.table_schem_Len = safeCopyString(result.table_schem, getMaxStr().c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, getMaxStr().c_str(), NAMEDATALEN);
+                result.table_cat = getMaxStr();
+                result.table_schem = getMaxStr();
+                result.table_name = getMaxStr();
             } else {
-                result.table_cat_Len = safeCopyString(result.table_cat, ("catalog" + suffix).c_str(), NAMEDATALEN);
-                result.table_schem_Len = safeCopyString(result.table_schem, ("schema" + suffix).c_str(), NAMEDATALEN);
-                result.table_name_Len = safeCopyString(result.table_name, ("table" + suffix).c_str(), NAMEDATALEN);
+                result.table_cat = "catalog" + suffix;
+                result.table_schem = "schema" + suffix;
+                result.table_name = "table" + suffix;
             }
-            result.grantor_Len = safeCopyString(result.grantor, "admin", NAMEDATALEN);
-            result.grantee_Len = safeCopyString(result.grantee, "user1", NAMEDATALEN);
-            result.privilege_Len = safeCopyString(result.privilege, "SELECT", NAMEDATALEN);
+            result.grantor = "admin";
+            result.grantee = "user1";
+            result.privilege = "SELECT";
             result.admin_option = 1;
             results.push_back(result);
         }
@@ -1113,13 +1104,13 @@ protected:
             std::string suffix = std::to_string(i);
 
             if (maxLength) {
-                result.object_cat_Len = safeCopyString(result.object_cat, getMaxStr().c_str(), NAMEDATALEN);
-                result.object_schem_Len = safeCopyString(result.object_schem, getMaxStr().c_str(), NAMEDATALEN);
-                result.object_name_Len = safeCopyString(result.object_name, getMaxStr().c_str(), NAMEDATALEN);
+                result.object_cat = getMaxStr();
+                result.object_schem = getMaxStr();
+                result.object_name = getMaxStr();
             } else {
-                result.object_cat_Len = safeCopyString(result.object_cat, ("catalog" + suffix).c_str(), NAMEDATALEN);
-                result.object_schem_Len = safeCopyString(result.object_schem, ("schema" + suffix).c_str(), NAMEDATALEN);
-                result.object_name_Len = safeCopyString(result.object_name, ("procedure_function" + suffix).c_str(), NAMEDATALEN);
+                result.object_cat = "catalog" + suffix;
+                result.object_schem = "schema" + suffix;
+                result.object_name = "procedure_function" + suffix;
             }
             result.object_type = SQL_PT_PROCEDURE;
             results.push_back(result);
@@ -1212,25 +1203,25 @@ protected:
             std::string suffix = std::to_string(i);
 
             if (maxLength) {
-                result.database_name_Len = safeCopyString(result.database_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.schema_name_Len = safeCopyString(result.schema_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.procedure_function_name_Len = safeCopyString(result.procedure_function_name, getMaxStr().c_str(), NAMEDATALEN);
-                result.column_name_Len = safeCopyString(result.column_name, getMaxStr().c_str(), NAMEDATALEN);
+                result.database_name = getMaxStr();
+                result.schema_name = getMaxStr();
+                result.procedure_function_name = getMaxStr();
+                result.column_name = getMaxStr();
             } else {
-                result.database_name_Len = safeCopyString(result.database_name, ("catalog" + suffix).c_str(), NAMEDATALEN);
-                result.schema_name_Len = safeCopyString(result.schema_name, ("schema" + suffix).c_str(), NAMEDATALEN);
-                result.procedure_function_name_Len = safeCopyString(result.procedure_function_name, ("procedure_function" + suffix).c_str(), NAMEDATALEN);
-                result.column_name_Len = safeCopyString(result.column_name, ("column" + suffix).c_str(), NAMEDATALEN);
+                result.database_name = "catalog" + suffix;
+                result.schema_name = "schema" + suffix;
+                result.procedure_function_name = "procedure_function" + suffix;
+                result.column_name = "column" + suffix;
             }
-            result.parameter_type_Len = safeCopyString(result.parameter_type, "IN", NAMEDATALEN);
+            result.parameter_type = "IN";
             result.ordinal_position = 1;
-            result.column_default_Len = safeCopyString(result.column_default, "", NAMEDATALEN);
-            result.is_nullable_Len = safeCopyString(result.is_nullable, "NO", NAMEDATALEN);
-            result.data_type_Len = safeCopyString(result.data_type, "character varying", NAMEDATALEN);
+            result.column_default = "";
+            result.is_nullable = "NO";
+            result.data_type = "character varying";
             result.character_maximum_length = 256;
             result.numeric_precision = 0;
             result.numeric_scale = 0;
-            result.remarks_Len = safeCopyString(result.remarks, "", NAMEDATALEN);
+            result.remarks = "";
             
             results.push_back(result);
         }
@@ -1244,20 +1235,20 @@ protected:
             SHOWCOLUMNSResult result{};  // Zero-initialize
             std::string suffix = std::to_string(i+1);
 
-            result.database_name_Len = safeCopyString(result.database_name, ("catalog" + suffix).c_str(), NAMEDATALEN);
-            result.schema_name_Len = safeCopyString(result.schema_name, ("schema" + suffix).c_str(), NAMEDATALEN);
-            result.procedure_function_name_Len = safeCopyString(result.procedure_function_name, ("procedure_function" + suffix).c_str(), NAMEDATALEN);
-            result.column_name_Len = safeCopyString(result.column_name, ("column" + suffix).c_str(), NAMEDATALEN);
-            result.parameter_type_Len = safeCopyString(result.parameter_type, "IN", NAMEDATALEN);
+            result.database_name = "catalog" + suffix;
+            result.schema_name = "schema" + suffix;
+            result.procedure_function_name = "procedure_function" + suffix;
+            result.column_name = "column" + suffix;
+            result.parameter_type = "IN";
             result.ordinal_position = 1;
-            result.column_default_Len = safeCopyString(result.column_default, "", NAMEDATALEN);
-            result.is_nullable_Len = safeCopyString(result.is_nullable, "NO", NAMEDATALEN);
-            result.data_type_Len = safeCopyString(result.data_type, mixedCaseDataType[i].c_str(), NAMEDATALEN);
+            result.column_default = "";
+            result.is_nullable = "NO";
+            result.data_type = mixedCaseDataType[i];
             // "string" types use character_maximum_length; "binary" types do not
             result.character_maximum_length = isBinaryType(mixedCaseDataType[i]) ? 0 : 256;
             result.numeric_precision = 0;
             result.numeric_scale = 0;
-            result.remarks_Len = safeCopyString(result.remarks, "", NAMEDATALEN);
+            result.remarks = "";
             results.push_back(result);
         }
         return results;
@@ -1596,18 +1587,18 @@ TEST_P(SQLColumnsParamTest, SQLColumnsAllDataTypes) {
     for (int i = 0; i < 3; i++) {
         SHOWCOLUMNSResult result;
         std::string suffix = std::to_string(i + 1);
-        result.database_name_Len = safeCopyString(result.database_name, ("test_catalog" + suffix).c_str(), NAMEDATALEN);
-        result.schema_name_Len = safeCopyString(result.schema_name, ("test_schema" + suffix).c_str(), NAMEDATALEN);
-        result.table_name_Len = safeCopyString(result.table_name, ("test_table" + suffix).c_str(), NAMEDATALEN);
-        result.column_name_Len = safeCopyString(result.column_name, ("test_column" + suffix).c_str(), NAMEDATALEN);
+        result.database_name = "test_catalog" + suffix;
+        result.schema_name = "test_schema" + suffix;
+        result.table_name = "test_table" + suffix;
+        result.column_name = "test_column" + suffix;
         result.ordinal_position = input.ordinal_position;
-        result.column_default_Len = safeCopyString(result.column_default, "", NAMEDATALEN);
-        result.is_nullable_Len = safeCopyString(result.is_nullable, input.is_nullable.c_str(), NAMEDATALEN);
-        result.data_type_Len = safeCopyString(result.data_type, input.data_type.c_str(), NAMEDATALEN);
+        result.column_default = "";
+        result.is_nullable = input.is_nullable;
+        result.data_type = input.data_type;
         result.character_maximum_length = input.character_maximum_length;
         result.numeric_precision = input.numeric_precision;
         result.numeric_scale = input.numeric_scale;
-        result.remarks_Len = safeCopyString(result.remarks, input.remark.c_str(), NAMEDATALEN);
+        result.remarks = input.remark;
         testRS.push_back(result);
     }
 
@@ -1687,19 +1678,19 @@ TEST_P(SQLProcedureColumnsParamTest, SQLProcedureColumnsAllDataTypes) {
     for (int i = 0; i < 3; i++) {
         SHOWCOLUMNSResult result;
         std::string suffix = std::to_string(i + 1);
-        result.database_name_Len = safeCopyString(result.database_name, ("test_catalog" + suffix).c_str(), NAMEDATALEN);
-        result.schema_name_Len = safeCopyString(result.schema_name, ("test_schema" + suffix).c_str(), NAMEDATALEN);
-        result.procedure_function_name_Len = safeCopyString(result.procedure_function_name, ("test_procedure_function" + suffix).c_str(), NAMEDATALEN);
-        result.column_name_Len = safeCopyString(result.column_name, ("test_column" + suffix).c_str(), NAMEDATALEN);
+        result.database_name = "test_catalog" + suffix;
+        result.schema_name = "test_schema" + suffix;
+        result.procedure_function_name = "test_procedure_function" + suffix;
+        result.column_name = "test_column" + suffix;
         result.ordinal_position = input.ordinal_position;
-        result.column_default_Len = safeCopyString(result.column_default, "", NAMEDATALEN);
-        result.is_nullable_Len = safeCopyString(result.is_nullable, input.is_nullable.c_str(), NAMEDATALEN);
-        result.data_type_Len = safeCopyString(result.data_type, input.data_type.c_str(), NAMEDATALEN);
+        result.column_default = "";
+        result.is_nullable = input.is_nullable;
+        result.data_type = input.data_type;
         result.character_maximum_length = input.character_maximum_length;
         result.numeric_precision = input.numeric_precision;
         result.numeric_scale = input.numeric_scale;
-        result.remarks_Len = safeCopyString(result.remarks, input.remark.c_str(), NAMEDATALEN);
-        result.parameter_type_Len = safeCopyString(result.parameter_type, parameter_type.c_str(), NAMEDATALEN);
+        result.remarks = input.remark;
+        result.parameter_type = parameter_type;
         testRS.push_back(result);
     }
 
@@ -1754,3 +1745,744 @@ INSTANTIATE_TEST_SUITE_P(METADATA_API_SUITE, SQLProcedureColumnsParamTest,
 
 
 
+
+/*====================================================================================================================================================*/
+// Tests for long string preservation through the post-processing pipeline.
+// Verify that std::string-based SHOW*Result structs correctly preserve
+// full-length data (e.g., long table/column comments, long column defaults)
+// without truncation or data corruption.
+//
+// With the old fixed-buffer design, a mismatch between _Len and buffer size
+// caused PQsetvalue to do a heap overread. With std::string fields, data and
+// length are always in sync, making the overread structurally impossible.
+// These tests verify that long strings survive the full pipeline intact.
+/*====================================================================================================================================================*/
+
+class SQLTablesBufferOverreadTest : public RsMetadataAPIPostProcessorTest {
+};
+
+// Verify that sqlTablesPostProcessing preserves remarks longer than 256 bytes without truncation.
+// Passes a 1473-byte remark string and validates the stored value matches exactly.
+TEST_F(SQLTablesBufferOverreadTest, LongRemarksPreservedFully) {
+    SHOWTABLESResult result{};
+    result.database_name = "testdb";
+    result.schema_name = "public";
+    result.table_name = "test_table";
+    result.table_type = "TABLE";
+
+    // Create a remark longer than the old MAX_REMARK_LEN (256)
+    std::string longRemark(1473, 'R');
+    result.remarks = longRemark;
+
+    std::vector<SHOWTABLESResult> testRS = {result};
+
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
+        stmt, "TABLE", testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    int storedLen = PQgetlength(res, 0, kSQLTables_REMARKS_COL_NUM);
+    const char* storedVal = PQgetvalue(res, 0, kSQLTables_REMARKS_COL_NUM);
+
+    // With std::string, the full 1473-byte remark should be stored
+    EXPECT_EQ(storedLen, (int)longRemark.size())
+        << "Remarks should be stored at full length, not truncated";
+    EXPECT_EQ(std::string(storedVal, storedLen), longRemark)
+        << "Stored remarks content should match the original";
+}
+
+// Verify that sqlTablesPostProcessing preserves database names longer than 128 bytes without truncation.
+// Passes a 200-byte database_name and validates the stored length matches exactly.
+TEST_F(SQLTablesBufferOverreadTest, LongNameFieldPreservedFully) {
+    SHOWTABLESResult result{};
+
+    std::string longName(500, 'D');
+    result.database_name = longName;
+    result.schema_name = "public";
+    result.table_name = "test_table";
+    result.table_type = "TABLE";
+    result.remarks = "ok";
+
+    std::vector<SHOWTABLESResult> testRS = {result};
+
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
+        stmt, "TABLE", testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    int storedLen = PQgetlength(res, 0, kSQLTables_TABLE_CATALOG_COL_NUM);
+    EXPECT_EQ(storedLen, (int)longName.size())
+        << "database_name should be stored at full length";
+}
+
+// Verify that sqlTablesPostProcessing preserves all fields when multiple fields exceed 128 bytes.
+// Passes rows with 200-byte name fields and 1473-byte remarks, validates all stored lengths.
+TEST_F(SQLTablesBufferOverreadTest, MultipleLongFieldsPreserved) {
+    SHOWTABLESResult result{};
+
+    std::string longName(300, 'X');
+    std::string longRemark(2000, 'R');
+
+    result.database_name = longName;
+    result.schema_name = std::string(400, 'S');
+    result.table_name = std::string(500, 'T');
+    result.table_type = "TABLE";
+    result.remarks = longRemark;
+
+    std::vector<SHOWTABLESResult> testRS = {result};
+
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
+        stmt, "TABLE", testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTables_TABLE_CATALOG_COL_NUM), 300)
+        << "database_name length mismatch";
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTables_TABLE_SCHEM_COL_NUM), 400)
+        << "schema_name length mismatch";
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTables_TABLE_NAME_COL_NUM), 500)
+        << "table_name length mismatch";
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTables_REMARKS_COL_NUM), 2000)
+        << "remarks length mismatch";
+}
+
+/*====================================================================================================================================================*/
+// Level 1: String Length Boundary Tests
+// Verify that std::string fields of all lengths survive the post-processing
+// pipeline (PQsetvalue → PQgetvalue round-trip) without truncation or corruption.
+/*====================================================================================================================================================*/
+
+class SQLTablesStringBoundaryTest : public RsMetadataAPIPostProcessorTest {
+protected:
+    // Helper: create a SHOWTABLESResult with specified remarks length and
+    // optional field lengths for name fields
+    SHOWTABLESResult makeResult(size_t remarksLen, size_t nameLen = 10) {
+        SHOWTABLESResult r;
+        r.database_name = std::string(nameLen, 'D');
+        r.schema_name = std::string(nameLen, 'S');
+        r.table_name = std::string(nameLen, 'T');
+        r.table_type = "TABLE";
+        r.remarks = std::string(remarksLen, 'R');
+        return r;
+    }
+
+    void verifyRoundTrip(const std::vector<SHOWTABLESResult>& testRS) {
+        SQLRETURN rc = RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
+            stmt, "TABLE", testRS);
+        EXPECT_EQ(rc, SQL_SUCCESS);
+
+        RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+        PGresult *res = pStmt->pResultHead->pgResult;
+        ASSERT_NE(res, nullptr);
+        ASSERT_EQ(PQntuples(res), (int)testRS.size());
+
+        for (size_t i = 0; i < testRS.size(); i++) {
+            EXPECT_EQ(PQgetlength(res, i, kSQLTables_TABLE_CATALOG_COL_NUM),
+                       (int)testRS[i].database_name.value().size())
+                << "Row " << i << " database_name length mismatch";
+            EXPECT_EQ(std::string(PQgetvalue(res, i, kSQLTables_TABLE_CATALOG_COL_NUM),
+                                  PQgetlength(res, i, kSQLTables_TABLE_CATALOG_COL_NUM)),
+                       testRS[i].database_name)
+                << "Row " << i << " database_name content mismatch";
+
+            EXPECT_EQ(PQgetlength(res, i, kSQLTables_TABLE_SCHEM_COL_NUM),
+                       (int)testRS[i].schema_name.value().size())
+                << "Row " << i << " schema_name length mismatch";
+
+            EXPECT_EQ(PQgetlength(res, i, kSQLTables_TABLE_NAME_COL_NUM),
+                       (int)testRS[i].table_name.value().size())
+                << "Row " << i << " table_name length mismatch";
+
+            EXPECT_EQ(PQgetlength(res, i, kSQLTables_REMARKS_COL_NUM),
+                       (int)testRS[i].remarks.value().size())
+                << "Row " << i << " remarks length mismatch";
+            EXPECT_EQ(std::string(PQgetvalue(res, i, kSQLTables_REMARKS_COL_NUM),
+                                  PQgetlength(res, i, kSQLTables_REMARKS_COL_NUM)),
+                       testRS[i].remarks.value_or(""))
+                << "Row " << i << " remarks content mismatch";
+        }
+    }
+};
+
+// Verify that empty string fields survive the post-processing round-trip without corruption.
+TEST_F(SQLTablesStringBoundaryTest, EmptyStrings) {
+    SHOWTABLESResult r;
+    r.database_name = "";
+    r.schema_name = "";
+    r.table_name = "";
+    r.table_type = "TABLE";
+    r.remarks = "";
+    verifyRoundTrip({r});
+}
+
+// Verify that normal-length strings (well within limits) round-trip correctly through post-processing.
+TEST_F(SQLTablesStringBoundaryTest, NormalLength) {
+    verifyRoundTrip({makeResult(50, 20)});
+}
+
+// Verify that name fields at exactly 127 bytes (max identifier length) round-trip correctly.
+TEST_F(SQLTablesStringBoundaryTest, BoundaryNAMEDATALEN_Minus1) {
+    // 127 bytes — exactly fits old NAMEDATALEN buffer
+    verifyRoundTrip({makeResult(50, NAMEDATALEN - 1)});
+}
+
+// Verify that remarks at exactly 255 bytes round-trip correctly.
+TEST_F(SQLTablesStringBoundaryTest, BoundaryMAX_REMARK_LEN_Minus1) {
+    // 255 bytes — exactly fits old MAX_REMARK_LEN buffer
+    verifyRoundTrip({makeResult(DEFAULT_MAX_REMARK_LEN - 1)});
+}
+
+// Verify that name fields at 128 bytes (one byte over max identifier length) are preserved.
+TEST_F(SQLTablesStringBoundaryTest, OverBoundaryNAMEDATALEN) {
+    // 128 bytes — would have overread by 1 byte with old fixed buffer
+    verifyRoundTrip({makeResult(50, NAMEDATALEN)});
+}
+
+// Verify that name fields at 129 bytes are preserved without truncation.
+TEST_F(SQLTablesStringBoundaryTest, OverBoundaryNAMEDATALEN_Plus1) {
+    // 129 bytes
+    verifyRoundTrip({makeResult(50, NAMEDATALEN + 1)});
+}
+
+// Verify that remarks at 256 bytes (one byte over the old limit) are preserved.
+TEST_F(SQLTablesStringBoundaryTest, OverBoundaryMAX_REMARK_LEN) {
+    // 256 bytes — would have overread by 1 byte
+    verifyRoundTrip({makeResult(DEFAULT_MAX_REMARK_LEN)});
+}
+
+// Verify that remarks at 257 bytes are preserved without truncation.
+TEST_F(SQLTablesStringBoundaryTest, OverBoundaryMAX_REMARK_LEN_Plus1) {
+    // 257 bytes
+    verifyRoundTrip({makeResult(DEFAULT_MAX_REMARK_LEN + 1)});
+}
+
+// Verify that 1473-byte remarks (a realistic large table COMMENT size) round-trip correctly.
+TEST_F(SQLTablesStringBoundaryTest, LargeRemarks_DMS_Bug) {
+    // 1473 bytes — exact length from the DMS customer bug report
+    verifyRoundTrip({makeResult(1473)});
+}
+
+// Verify that very large remarks (8192 bytes) round-trip correctly through post-processing.
+TEST_F(SQLTablesStringBoundaryTest, VeryLargeRemarks) {
+    // 8192 bytes — realistic large table COMMENT
+    verifyRoundTrip({makeResult(8192)});
+}
+
+// Verify that single-character string fields round-trip correctly through post-processing.
+TEST_F(SQLTablesStringBoundaryTest, SingleCharStrings) {
+    verifyRoundTrip({makeResult(1, 1)});
+}
+
+// Verify that multiple rows with varying field lengths all survive post-processing correctly.
+TEST_F(SQLTablesStringBoundaryTest, MultiRowMixedLengths) {
+    std::vector<SHOWTABLESResult> testRS = {
+        makeResult(0, 5),           // empty remarks, short names
+        makeResult(50, 20),         // normal
+        makeResult(255, 127),       // at old boundary
+        makeResult(1473, 200),      // over boundary (DMS bug)
+        makeResult(8192, 500),      // very large
+    };
+    verifyRoundTrip(testRS);
+}
+
+// Verify that table type filtering works correctly when string fields exceed typical lengths.
+TEST_F(SQLTablesStringBoundaryTest, TableTypeFilter_LongFields) {
+    // Verify table type filtering still works with oversized fields
+    SHOWTABLESResult view;
+    view.database_name = std::string(200, 'D');
+    view.schema_name = std::string(200, 'S');
+    view.table_name = std::string(200, 'T');
+    view.table_type = "VIEW";
+    view.remarks = std::string(1000, 'R');
+
+    SHOWTABLESResult table = makeResult(1473, 200);
+
+    std::vector<SHOWTABLESResult> testRS = {view, table};
+
+    // Filter for TABLE only — should exclude the VIEW
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
+        stmt, "TABLE", testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);  // Only the TABLE row
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTables_REMARKS_COL_NUM), 1473);
+}
+
+// Verify that an empty result set is handled correctly by post-processing.
+TEST_F(SQLTablesStringBoundaryTest, ZeroRows) {
+    std::vector<SHOWTABLESResult> empty;
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
+        stmt, "TABLE", empty);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    EXPECT_EQ(pStmt->pResultHead->iNumberOfRowsInMem, 0);
+}
+
+// Verify that std::nullopt fields produce SQL NULL (PQgetisnull == true),
+// while empty strings produce non-null zero-length values.
+TEST_F(SQLTablesStringBoundaryTest, NulloptFieldsProduceSQLNull) {
+    SHOWTABLESResult r;
+    r.database_name = std::nullopt;  // SQL NULL
+    r.schema_name = "";              // empty but not NULL
+    r.table_name = "test";
+    r.table_type = "TABLE";
+    r.remarks = std::nullopt;        // SQL NULL
+
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlTablesPostProcessing(
+        stmt, "TABLE", {r});
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    // nullopt → SQL NULL
+    EXPECT_TRUE(PQgetisnull(res, 0, kSQLTables_TABLE_CATALOG_COL_NUM))
+        << "database_name=nullopt should produce SQL NULL";
+    EXPECT_TRUE(PQgetisnull(res, 0, kSQLTables_REMARKS_COL_NUM))
+        << "remarks=nullopt should produce SQL NULL";
+
+    // "" → non-null, zero-length
+    EXPECT_FALSE(PQgetisnull(res, 0, kSQLTables_TABLE_SCHEM_COL_NUM))
+        << "schema_name=\"\" should NOT be SQL NULL";
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTables_TABLE_SCHEM_COL_NUM), 0)
+        << "schema_name=\"\" should have zero length";
+
+    // "test" → non-null, length 4
+    EXPECT_FALSE(PQgetisnull(res, 0, kSQLTables_TABLE_NAME_COL_NUM));
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTables_TABLE_NAME_COL_NUM), 4);
+}
+
+/*====================================================================================================================================================*/
+// UTF-8 Content Tests — Verify multi-byte UTF-8 characters are preserved through post-processing.
+/*====================================================================================================================================================*/
+
+// Verify that 2-byte UTF-8 characters (e.g., ñ) in remarks are preserved through post-processing.
+TEST_F(SQLTablesStringBoundaryTest, UTF8_TwoByte) {
+    SHOWTABLESResult r;
+    // Build a string with 2-byte UTF-8 chars (ñ = 0xC3 0xB1) at boundary
+    std::string twoByteChars;
+    for (int i = 0; i < 128; i++) twoByteChars += "\xC3\xB1";  // 256 bytes, 128 chars
+    r.database_name = "testdb";
+    r.schema_name = "public";
+    r.table_name = "test";
+    r.table_type = "TABLE";
+    r.remarks = twoByteChars;
+    verifyRoundTrip({r});
+}
+
+// Verify that 3-byte UTF-8 characters (e.g., 中) in remarks are preserved through post-processing.
+TEST_F(SQLTablesStringBoundaryTest, UTF8_ThreeByte) {
+    SHOWTABLESResult r;
+    // Build a string with 3-byte UTF-8 chars (中 = 0xE4 0xB8 0xAD)
+    std::string threeByteChars;
+    for (int i = 0; i < 100; i++) threeByteChars += "\xE4\xB8\xAD";  // 300 bytes
+    r.database_name = "testdb";
+    r.schema_name = "public";
+    r.table_name = "test";
+    r.table_type = "TABLE";
+    r.remarks = threeByteChars;
+    verifyRoundTrip({r});
+}
+
+// Verify that 4-byte UTF-8 characters (e.g., 😀) in remarks are preserved through post-processing.
+TEST_F(SQLTablesStringBoundaryTest, UTF8_FourByte) {
+    SHOWTABLESResult r;
+    // Build a string with 4-byte UTF-8 chars (😀 = 0xF0 0x9F 0x98 0x80)
+    std::string fourByteChars;
+    for (int i = 0; i < 75; i++) fourByteChars += "\xF0\x9F\x98\x80";  // 300 bytes
+    r.database_name = "testdb";
+    r.schema_name = "public";
+    r.table_name = "test";
+    r.table_type = "TABLE";
+    r.remarks = fourByteChars;
+    verifyRoundTrip({r});
+}
+
+// Verify that mixed ASCII and multi-byte UTF-8 strings in remarks are preserved through post-processing.
+TEST_F(SQLTablesStringBoundaryTest, UTF8_MixedWithASCII) {
+    SHOWTABLESResult r;
+    std::string mixed = "Hello ";
+    for (int i = 0; i < 50; i++) mixed += "\xC3\xB1";   // 2-byte
+    mixed += " World ";
+    for (int i = 0; i < 30; i++) mixed += "\xE4\xB8\xAD"; // 3-byte
+    mixed += " End";
+    r.database_name = "testdb";
+    r.schema_name = "public";
+    r.table_name = "test";
+    r.table_type = "TABLE";
+    r.remarks = mixed;
+    verifyRoundTrip({r});
+}
+
+/*====================================================================================================================================================*/
+// All Struct Types — Boundary Tests
+// Verify that each metadata result struct type preserves fields exceeding typical identifier lengths.
+/*====================================================================================================================================================*/
+
+class SQLColumnsStringBoundaryTest : public RsMetadataAPIPostProcessorTest {};
+
+// Verify that sqlColumnsPostProcessing preserves column defaults and remarks exceeding typical lengths.
+// Passes a 4500-byte COLUMN_DEF and 500-byte REMARKS, validates both are stored at full length.
+TEST_F(SQLColumnsStringBoundaryTest, LongColumnDefault) {
+    SHOWCOLUMNSResult r;
+    r.database_name = "testdb";
+    r.schema_name = "public";
+    r.table_name = "test";
+    r.column_name = "col1";
+    r.ordinal_position = 1;
+    r.column_default = std::string(4500, 'D');  // exceeds old MAX_COLUMN_DEF_LEN (4000)
+    r.is_nullable = "YES";
+    r.data_type = "character varying";
+    r.character_maximum_length = 256;
+    r.remarks = std::string(500, 'R');  // exceeds old MAX_REMARK_LEN (256)
+
+    std::vector<SHOWCOLUMNSResult> testRS = {r};
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(stmt, testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumns_COLUMN_DEF_COL_NUM), 4500)
+        << "column_default should preserve full 4500-byte value";
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumns_REMARKS_COL_NUM), 500)
+        << "remarks should preserve full 500-byte value";
+    EXPECT_EQ(std::string(PQgetvalue(res, 0, kSQLColumns_COLUMN_DEF_COL_NUM), 4500),
+              std::string(4500, 'D'));
+}
+
+// Verify that sqlColumnsPostProcessing preserves all name fields when they exceed 128 bytes.
+// Passes 200-byte catalog, schema, table, and column names, validates all stored lengths.
+TEST_F(SQLColumnsStringBoundaryTest, LongColumnName) {
+    SHOWCOLUMNSResult r;
+    r.database_name = std::string(200, 'D');
+    r.schema_name = std::string(200, 'S');
+    r.table_name = std::string(200, 'T');
+    r.column_name = std::string(200, 'C');
+    r.ordinal_position = 1;
+    r.is_nullable = "NO";
+    r.data_type = "integer";
+    r.character_maximum_length = 0;
+    r.numeric_precision = 32;
+
+    std::vector<SHOWCOLUMNSResult> testRS = {r};
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(stmt, testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumns_TABLE_CAT_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumns_TABLE_SCHEM_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumns_TABLE_NAME_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumns_COLUMN_NAME_COL_NUM), 200);
+}
+
+// Verify that std::nullopt fields on COLUMN_DEF and REMARKS produce SQL NULL,
+// while empty strings produce non-null zero-length values.
+TEST_F(SQLColumnsStringBoundaryTest, NulloptFieldsProduceSQLNull) {
+    SHOWCOLUMNSResult r;
+    r.database_name = "testdb";
+    r.schema_name = "public";
+    r.table_name = "test";
+    r.column_name = "col1";
+    r.ordinal_position = 1;
+    r.column_default = std::nullopt;  // SQL NULL — no default defined
+    r.is_nullable = "YES";
+    r.data_type = "character varying";
+    r.character_maximum_length = 256;
+    r.remarks = std::nullopt;         // SQL NULL — no comment
+
+    std::vector<SHOWCOLUMNSResult> testRS = {r};
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(stmt, testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    // nullopt → SQL NULL
+    EXPECT_TRUE(PQgetisnull(res, 0, kSQLColumns_COLUMN_DEF_COL_NUM))
+        << "column_default=nullopt should produce SQL NULL";
+    EXPECT_TRUE(PQgetisnull(res, 0, kSQLColumns_REMARKS_COL_NUM))
+        << "remarks=nullopt should produce SQL NULL";
+
+    // Non-null fields should not be NULL
+    EXPECT_FALSE(PQgetisnull(res, 0, kSQLColumns_TABLE_CAT_COL_NUM));
+    EXPECT_FALSE(PQgetisnull(res, 0, kSQLColumns_TABLE_NAME_COL_NUM));
+}
+
+// Verify that empty string COLUMN_DEF and REMARKS are distinct from SQL NULL.
+TEST_F(SQLColumnsStringBoundaryTest, EmptyStringDistinctFromNull) {
+    SHOWCOLUMNSResult r;
+    r.database_name = "testdb";
+    r.schema_name = "public";
+    r.table_name = "test";
+    r.column_name = "col1";
+    r.ordinal_position = 1;
+    r.column_default = "";    // empty string — DEFAULT ''
+    r.is_nullable = "YES";
+    r.data_type = "character varying";
+    r.character_maximum_length = 256;
+    r.remarks = "";           // empty string — empty comment
+
+    std::vector<SHOWCOLUMNSResult> testRS = {r};
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(stmt, testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    // "" → non-null, zero-length (distinct from SQL NULL)
+    EXPECT_FALSE(PQgetisnull(res, 0, kSQLColumns_COLUMN_DEF_COL_NUM))
+        << "column_default=\"\" should NOT be SQL NULL";
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumns_COLUMN_DEF_COL_NUM), 0);
+
+    EXPECT_FALSE(PQgetisnull(res, 0, kSQLColumns_REMARKS_COL_NUM))
+        << "remarks=\"\" should NOT be SQL NULL";
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumns_REMARKS_COL_NUM), 0);
+}
+
+class SQLPrimaryKeysStringBoundaryTest : public RsMetadataAPIPostProcessorTest {};
+
+// Verify that sqlPrimaryKeysPostProcessing preserves all fields when they exceed 128 bytes.
+// Passes 200-byte catalog, schema, table, column, and PK names, validates all stored lengths.
+TEST_F(SQLPrimaryKeysStringBoundaryTest, OverBoundaryAllFields) {
+    SHOWCONSTRAINTSPRIMARYKEYSResult r;
+    r.database_name = std::string(200, 'D');
+    r.schema_name = std::string(200, 'S');
+    r.table_name = std::string(200, 'T');
+    r.column_name = std::string(200, 'C');
+    r.key_seq = 1;
+    r.pk_name = std::string(200, 'P');
+
+    std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult> testRS = {r};
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlPrimaryKeysPostProcessing(stmt, testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    EXPECT_EQ(PQgetlength(res, 0, kSQLPrimaryKeys_TABLE_CAT_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLPrimaryKeys_TABLE_SCHEM_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLPrimaryKeys_TABLE_NAME_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLPrimaryKeys_COLUMN_NAME_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLPrimaryKeys_PK_NAME_COL_NUM), 200);
+}
+
+class SQLForeignKeysStringBoundaryTest : public RsMetadataAPIPostProcessorTest {};
+
+// Verify that sqlForeignKeysPostProcessing preserves all fields when they exceed 128 bytes.
+// Passes 200-byte PK/FK catalog, schema, table, column, and constraint names, validates all stored lengths.
+TEST_F(SQLForeignKeysStringBoundaryTest, OverBoundaryAllFields) {
+    SHOWCONSTRAINTSFOREIGNKEYSResult r;
+    r.pk_table_cat = std::string(200, 'A');
+    r.pk_table_schem = std::string(200, 'B');
+    r.pk_table_name = std::string(200, 'C');
+    r.pk_column_name = std::string(200, 'D');
+    r.fk_table_cat = std::string(200, 'E');
+    r.fk_table_schem = std::string(200, 'F');
+    r.fk_table_name = std::string(200, 'G');
+    r.fk_column_name = std::string(200, 'H');
+    r.key_seq = 1;
+    r.update_rule = 1;
+    r.delete_rule = 1;
+    r.fk_name = std::string(200, 'I');
+    r.pk_name = std::string(200, 'J');
+    r.deferrability = 7;
+
+    std::vector<SHOWCONSTRAINTSFOREIGNKEYSResult> testRS = {r};
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlForeignKeysPostProcessing(stmt, testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    EXPECT_EQ(PQgetlength(res, 0, kSQLForeignKeys_PKTABLE_CAT_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLForeignKeys_PKTABLE_SCHEM_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLForeignKeys_PKTABLE_NAME_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLForeignKeys_PKCOLUMN_NAME_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLForeignKeys_FKTABLE_CAT_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLForeignKeys_FKTABLE_SCHEM_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLForeignKeys_FKTABLE_NAME_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLForeignKeys_FKCOLUMN_NAME_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLForeignKeys_FK_NAME_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLForeignKeys_PK_NAME_COL_NUM), 200);
+}
+
+class SQLProceduresStringBoundaryTest : public RsMetadataAPIPostProcessorTest {};
+
+// Verify that sqlProceduresPostProcessing handles a procedure with a very long argument list (5000 bytes).
+// Validates that the procedure name and catalog are preserved even when argument_list is oversized.
+TEST_F(SQLProceduresStringBoundaryTest, LongArgumentList) {
+    SHOWPROCEDURESFUNCTIONSResult r;
+    r.object_cat = "testdb";
+    r.object_schem = "public";
+    r.object_name = "my_proc";
+    r.argument_list = std::string(5000, 'A');  // exceeds old 4096-byte buffer
+    r.object_type = SQL_PT_PROCEDURE;
+
+    std::vector<SHOWPROCEDURESFUNCTIONSResult> testRS = {r};
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlProceduresPostProcessing(stmt, testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    // Procedures post-processing doesn't expose argument_list directly,
+    // but verify the other fields survived
+    EXPECT_EQ(PQgetlength(res, 0, kSQLProcedures_PROCEDURE_CAT_COL_NUM), 6);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLProcedures_PROCEDURE_NAME_COL_NUM), 7);
+}
+
+class SQLGrantsStringBoundaryTest : public RsMetadataAPIPostProcessorTest {};
+
+// Verify that sqlTablePrivilegesPostProcessing preserves all fields when they exceed 128 bytes.
+// Passes 200-byte catalog, schema, table, grantor, and grantee names, validates all stored lengths.
+TEST_F(SQLGrantsStringBoundaryTest, TablePrivileges_OverBoundary) {
+    SHOWGRANTSTABLEResult r;
+    r.table_cat = std::string(200, 'C');
+    r.table_schem = std::string(200, 'S');
+    r.table_name = std::string(200, 'T');
+    r.grantor = std::string(200, 'G');
+    r.grantee = std::string(200, 'U');
+    r.privilege = "SELECT";
+    r.admin_option = 1;
+
+    std::vector<SHOWGRANTSTABLEResult> testRS = {r};
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlTablePrivilegesPostProcessing(stmt, testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTablePrivileges_TABLE_CAT_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTablePrivileges_TABLE_SCHEM_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTablePrivileges_TABLE_NAME_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTablePrivileges_GRANTOR_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTablePrivileges_GRANTEE_COL_NUM), 200);
+}
+
+// Verify that sqlColumnPrivilegesPostProcessing preserves all fields when they exceed 128 bytes.
+// Passes 200-byte catalog, schema, table, column, grantor, and grantee names, validates all stored lengths.
+TEST_F(SQLGrantsStringBoundaryTest, ColumnPrivileges_OverBoundary) {
+    SHOWGRANTSCOLUMNResult r;
+    r.table_cat = std::string(200, 'C');
+    r.table_schem = std::string(200, 'S');
+    r.table_name = std::string(200, 'T');
+    r.column_name = std::string(200, 'N');
+    r.grantor = std::string(200, 'G');
+    r.grantee = std::string(200, 'U');
+    r.privilege = "INSERT";
+    r.admin_option = 0;
+
+    std::vector<SHOWGRANTSCOLUMNResult> testRS = {r};
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlColumnPrivilegesPostProcessing(stmt, testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumnPrivileges_TABLE_CAT_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumnPrivileges_TABLE_SCHEM_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumnPrivileges_TABLE_NAME_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumnPrivileges_COLUMN_NAME_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumnPrivileges_GRANTOR_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumnPrivileges_GRANTEE_COL_NUM), 200);
+}
+
+class SQLSchemasStringBoundaryTest : public RsMetadataAPIPostProcessorTest {};
+
+// Verify that sqlSchemasPostProcessing preserves database and schema names when they exceed 128 bytes.
+// Passes 200-byte database and schema names, validates both stored lengths.
+TEST_F(SQLSchemasStringBoundaryTest, OverBoundary) {
+    SHOWSCHEMASResult r;
+    r.database_name = std::string(200, 'D');
+    r.schema_name = std::string(200, 'S');
+
+    std::vector<SHOWSCHEMASResult> testRS = {r};
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlSchemasPostProcessing(stmt, testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+    ASSERT_EQ(PQntuples(res), 1);
+
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTables_TABLE_CATALOG_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLTables_TABLE_SCHEM_COL_NUM), 200);
+}
+
+/*====================================================================================================================================================*/
+// Null Numeric Fields with Long String Fields
+// Verify that SQL_NULL_DATA on numeric fields does not interfere with long string field storage.
+/*====================================================================================================================================================*/
+
+// Verify that sqlColumnsPostProcessing correctly handles NULL numeric fields alongside long string fields.
+// Passes a 200-byte database name and 500-byte remarks with NULL sort_key and dist_key, validates all fields.
+TEST_F(SQLColumnsStringBoundaryTest, NullNumericFieldsWithLongStrings) {
+    SHOWCOLUMNSResult r;
+    r.database_name = std::string(200, 'D');
+    r.schema_name = "public";
+    r.table_name = "test";
+    r.column_name = "col1";
+    r.ordinal_position = 1;
+    r.is_nullable = "YES";
+    r.data_type = "character varying";
+    r.character_maximum_length = 256;
+    r.remarks = std::string(500, 'R');
+    r.sort_key = 0;
+    r.sort_key_Len = SQL_NULL_DATA;
+    r.dist_key = 0;
+    r.dist_key_Len = SQL_NULL_DATA;
+
+    std::vector<SHOWCOLUMNSResult> testRS = {r};
+    SQLRETURN rc = RsMetadataAPIPostProcessor::sqlColumnsPostProcessing(stmt, testRS);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)stmt;
+    PGresult *res = pStmt->pResultHead->pgResult;
+    ASSERT_NE(res, nullptr);
+
+    // Verify long strings survived
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumns_TABLE_CAT_COL_NUM), 200);
+    EXPECT_EQ(PQgetlength(res, 0, kSQLColumns_REMARKS_COL_NUM), 500);
+
+    // Verify NULL numeric fields
+    EXPECT_TRUE(PQgetisnull(res, 0, kSQLColumns_SORT_KEY_COL_NUM));
+    EXPECT_TRUE(PQgetisnull(res, 0, kSQLColumns_DIST_KEY_COL_NUM));
+}

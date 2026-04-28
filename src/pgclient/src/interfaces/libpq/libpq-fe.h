@@ -519,7 +519,7 @@ extern PGresult *PQmakeEmptyPGresult(PGconn *conn, ExecStatusType status);
 extern PGresult *PQcopyResult(const PGresult *src, int flags);
 extern int	PQsetResultAttrs(PGresult *res, int numAttributes, PGresAttDesc *attDescs);
 extern void *PQresultAlloc(PGresult *res, size_t nBytes);
-extern int	PQsetvalue(PGresult *res, int tup_num, int field_num, char *value, int len);
+extern int	PQsetvalue(PGresult *res, int tup_num, int field_num, const char *value, int len);
 
 extern unsigned char *PQescapeByteaConn(PGconn *conn,
 				  const unsigned char *from, size_t from_length,

@@ -146,7 +146,7 @@ SQLRETURN RsMetadataServerProxy::sqlTables(
         for (const auto& curSchema : schemas) {
             // Get table list
             rc = RsMetadataServerProxyHelpers::ShowTablesHelper(
-                     phstmt, curCatalog, char2String(curSchema.schema_name),
+                     phstmt, curCatalog, curSchema.schema_name.value_or(""),
                      tableName, intermediateRS)
                      .execute();
             if (!SQL_SUCCEEDED(rc)) {
@@ -221,7 +221,7 @@ SQLRETURN RsMetadataServerProxy::sqlColumns(
         for (const auto& curSchema : schemas) {
             // Get table list
             rc = RsMetadataServerProxyHelpers::ShowTablesHelper(
-                     phstmt, curCatalog, char2String(curSchema.schema_name),
+                     phstmt, curCatalog, curSchema.schema_name.value_or(""),
                      tableName, tables)
                      .execute();
             if (!SQL_SUCCEEDED(rc)) {
@@ -231,8 +231,8 @@ SQLRETURN RsMetadataServerProxy::sqlColumns(
             for (const auto& curTable : tables) {
                 // Get column list
                 rc = RsMetadataServerProxyHelpers::ShowColumnsHelper(
-                         phstmt, curCatalog, char2String(curSchema.schema_name),
-                         char2String(curTable.table_name), columnName,
+                         phstmt, curCatalog, curSchema.schema_name.value_or(""),
+                         curTable.table_name.value_or(""), columnName,
                          intermediateRS)
                          .execute();
                 if (!SQL_SUCCEEDED(rc)) {
@@ -312,13 +312,7 @@ SQLRETURN RsMetadataServerProxy::sqlPrimaryKeys(
             }
         } else {
             SHOWSCHEMASResult schemaResult;
-            schemaResult.schema_name_Len = std::snprintf(
-                reinterpret_cast<char*>(schemaResult.schema_name),
-                NAMEDATALEN,
-                "%.*s",
-                static_cast<int>(schemaName.size()),
-                schemaName.data()
-            );
+            schemaResult.schema_name = schemaName;
             schemas.push_back(schemaResult);
         }
 
@@ -326,7 +320,7 @@ SQLRETURN RsMetadataServerProxy::sqlPrimaryKeys(
             // Get table list
             if (tableName.empty()) {
                 rc = RsMetadataServerProxyHelpers::ShowTablesHelper(phstmt, curCatalog,
-                                    char2String(curSchema.schema_name), tableName,
+                                    curSchema.schema_name.value_or(""), tableName,
                                     tables).execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     RS_LOG_ERROR("sqlPrimaryKeys", "Error in ShowTablesHelper");
@@ -334,20 +328,14 @@ SQLRETURN RsMetadataServerProxy::sqlPrimaryKeys(
                 }
             } else {
                 SHOWTABLESResult tableResult;
-                tableResult.table_name_Len = std::snprintf(
-                    reinterpret_cast<char*>(tableResult.table_name),
-                    NAMEDATALEN,
-                    "%.*s",
-                    static_cast<int>(tableName.size()),
-                    tableName.data()
-                );
+                tableResult.table_name = tableName;
                 tables.push_back(tableResult);
             }
             for (const auto& curTable : tables) {
                 // Get primary key list
                 rc = RsMetadataServerProxyHelpers::ShowConstraintsPkHelper(
-                         phstmt, curCatalog, char2String(curSchema.schema_name),
-                         char2String(curTable.table_name), intermediateRS).execute();
+                         phstmt, curCatalog, curSchema.schema_name.value_or(""),
+                         curTable.table_name.value_or(""), intermediateRS).execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     RS_LOG_ERROR("sqlPrimaryKeys", "Error in ShowConstraintsPkHelper");
                     return rc;
@@ -452,10 +440,9 @@ bool RsMetadataServerProxy::matchesConstraints(
     const std::string &pkSchema,
     const std::string &pkTable) {
     
-    auto matches = [](const SQLCHAR* value, const std::string& expected) -> bool {
+    auto matches = [](const std::optional<std::string>& value, const std::string& expected) -> bool {
         if (expected.empty()) return true;
-        if (!value) return false;
-        return strncmp(reinterpret_cast<const char*>(value), expected.c_str(), NAMEDATALEN) == 0;
+        return value.value_or("") == expected;
     };
 
     return matches(result.pk_table_cat, pkCatalog) &&
@@ -504,13 +491,7 @@ SQLRETURN RsMetadataServerProxy::processKeysCase(
             }
         } else {
             SHOWSCHEMASResult schemaResult;
-            schemaResult.schema_name_Len = std::snprintf(
-                reinterpret_cast<char*>(schemaResult.schema_name),
-                NAMEDATALEN,
-                "%.*s",
-                static_cast<int>(schemaName.size()),
-                schemaName.data()
-            );
+            schemaResult.schema_name = schemaName;
             schemas.push_back(schemaResult);
         }
 
@@ -518,7 +499,7 @@ SQLRETURN RsMetadataServerProxy::processKeysCase(
             // Get table list
             if (tableName.empty()) {
                 rc = RsMetadataServerProxyHelpers::ShowTablesHelper(phstmt, curCatalog,
-                                    char2String(curSchema.schema_name), tableName,
+                                    curSchema.schema_name.value_or(""), tableName,
                                     tables).execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     RS_LOG_ERROR("processKeysCase", "Error in ShowTablesHelper");
@@ -526,20 +507,14 @@ SQLRETURN RsMetadataServerProxy::processKeysCase(
                 }
             } else {
                 SHOWTABLESResult tableResult;
-                tableResult.table_name_Len = std::snprintf(
-                    reinterpret_cast<char*>(tableResult.table_name),
-                    NAMEDATALEN,
-                    "%.*s",
-                    static_cast<int>(tableName.size()),
-                    tableName.data()
-                );
+                tableResult.table_name = tableName;
                 tables.push_back(tableResult);
             }
             for (const auto& curTable : tables) {
                 // Get foreign key list
                 rc = RsMetadataServerProxyHelpers::ShowConstraintsFkHelper(phstmt, curCatalog,
-                                         char2String(curSchema.schema_name),
-                                         char2String(curTable.table_name),
+                                         curSchema.schema_name.value_or(""),
+                                         curTable.table_name.value_or(""),
                                          isExportedKeys, intermediateRS).execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     const char* keyType = isExportedKeys ? "exported" : "imported";
@@ -614,13 +589,7 @@ SQLRETURN RsMetadataServerProxy::sqlSpecialColumns(
             }
         } else {
             SHOWSCHEMASResult schemaResult;
-            schemaResult.schema_name_Len = std::snprintf(
-                reinterpret_cast<char*>(schemaResult.schema_name),
-                NAMEDATALEN,
-                "%.*s",
-                static_cast<int>(schemaName.size()),
-                schemaName.data()
-            );
+            schemaResult.schema_name = schemaName;
             schemas.push_back(schemaResult);
         }
 
@@ -628,7 +597,7 @@ SQLRETURN RsMetadataServerProxy::sqlSpecialColumns(
             // Get table list
             if (tableName.empty()) {
                 rc = RsMetadataServerProxyHelpers::ShowTablesHelper(
-                         phstmt, curCatalog, char2String(curSchema.schema_name),
+                         phstmt, curCatalog, curSchema.schema_name.value_or(""),
                          tableName, tables)
                          .execute();
                 if (!SQL_SUCCEEDED(rc)) {
@@ -637,13 +606,7 @@ SQLRETURN RsMetadataServerProxy::sqlSpecialColumns(
                 }
             } else {
                 SHOWTABLESResult tableResult;
-                tableResult.table_name_Len = std::snprintf(
-                    reinterpret_cast<char*>(tableResult.table_name),
-                    NAMEDATALEN,
-                    "%.*s",
-                    static_cast<int>(tableName.size()),
-                    tableName.data()
-                );
+                tableResult.table_name = tableName;
                 tables.push_back(tableResult);
             }
 
@@ -651,8 +614,8 @@ SQLRETURN RsMetadataServerProxy::sqlSpecialColumns(
                 // Step 1: Get primary key columns for the current table
                 std::vector<SHOWCONSTRAINTSPRIMARYKEYSResult> pkResults;
                 rc = RsMetadataServerProxyHelpers::ShowConstraintsPkHelper(phstmt, curCatalog,
-                                    char2String(curSchema.schema_name),
-                                    char2String(curTable.table_name), pkResults).execute();
+                                    curSchema.schema_name.value_or(""),
+                                    curTable.table_name.value_or(""), pkResults).execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     RS_LOG_ERROR("sqlSpecialColumns", 
                                "Error in ShowConstraintsPkHelper");
@@ -664,14 +627,14 @@ SQLRETURN RsMetadataServerProxy::sqlSpecialColumns(
                     // Create a set of primary key column names for efficient lookup
                     std::set<std::string> pkColumnNames;
                     for (const auto& pk : pkResults) {
-                        pkColumnNames.insert(char2String(pk.column_name));
+                        pkColumnNames.insert(pk.column_name.value_or(""));
                     }
 
                     // Step 3: Call SHOW COLUMNS once for the entire table
                     std::vector<SHOWCOLUMNSResult> allColumns;
                     rc = RsMetadataServerProxyHelpers::ShowColumnsHelper(phstmt, curCatalog,
-                                           char2String(curSchema.schema_name),
-                                           char2String(curTable.table_name),
+                                           curSchema.schema_name.value_or(""),
+                                           curTable.table_name.value_or(""),
                                            RsMetadataAPIHelper::SQL_EMPTY,
                                            allColumns).execute();
 
@@ -683,8 +646,7 @@ SQLRETURN RsMetadataServerProxy::sqlSpecialColumns(
 
                     // Step 4: Filter the result from SHOW COLUMNS based on primary key columns
                     for (const auto& column : allColumns) {
-                        std::string columnName = char2String(column.column_name);
-                        if (pkColumnNames.find(columnName) != pkColumnNames.end()) {
+                        if (pkColumnNames.find(column.column_name.value_or("")) != pkColumnNames.end()) {
                             intermediateRS.push_back(column);
                         }
                     }
@@ -760,13 +722,7 @@ SQLRETURN RsMetadataServerProxy::sqlColumnPrivileges(
             }
         } else {
             SHOWSCHEMASResult schemaResult;
-            schemaResult.schema_name_Len = std::snprintf(
-                reinterpret_cast<char*>(schemaResult.schema_name),
-                NAMEDATALEN,
-                "%.*s",
-                static_cast<int>(schemaName.size()),
-                schemaName.data()
-            );
+            schemaResult.schema_name = schemaName;
             schemas.push_back(schemaResult);
         }
 
@@ -774,7 +730,7 @@ SQLRETURN RsMetadataServerProxy::sqlColumnPrivileges(
             // Get table list
             if (tableName.empty()) {
                 rc = RsMetadataServerProxyHelpers::ShowTablesHelper(phstmt, curCatalog,
-                                      char2String(curSchema.schema_name),
+                                      curSchema.schema_name.value_or(""),
                                       tableName, tables).execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     RS_LOG_ERROR("sqlColumnPrivileges", "Error in ShowTablesHelper");
@@ -782,21 +738,15 @@ SQLRETURN RsMetadataServerProxy::sqlColumnPrivileges(
                 }
             } else {
                 SHOWTABLESResult tableResult;
-                tableResult.table_name_Len = std::snprintf(
-                    reinterpret_cast<char*>(tableResult.table_name),
-                    NAMEDATALEN,
-                    "%.*s",
-                    static_cast<int>(tableName.size()),
-                    tableName.data()
-                );
+                tableResult.table_name = tableName;
                 tables.push_back(tableResult);
             }
 
             for (const auto& curTable : tables) {
                 // Get column privileges
                 rc = RsMetadataServerProxyHelpers::ShowGrantsColumnHelper(phstmt, curCatalog,
-                                    char2String(curSchema.schema_name),
-                                    char2String(curTable.table_name),
+                                    curSchema.schema_name.value_or(""),
+                                    curTable.table_name.value_or(""),
                                     columnName, intermediateRS).execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     RS_LOG_ERROR("sqlColumnPrivileges", "Error in ShowGrantsColumnHelper");
@@ -871,7 +821,7 @@ SQLRETURN RsMetadataServerProxy::sqlTablePrivileges(
         for (const auto& curSchema : schemas) {
             // Get table list
             rc = RsMetadataServerProxyHelpers::ShowTablesHelper(
-                     phstmt, curCatalog, char2String(curSchema.schema_name),
+                     phstmt, curCatalog, curSchema.schema_name.value_or(""),
                      tableName, tables)
                      .execute();
             if (!SQL_SUCCEEDED(rc)) {
@@ -880,8 +830,8 @@ SQLRETURN RsMetadataServerProxy::sqlTablePrivileges(
             }
             for (const auto& curTable : tables) {
                 rc = RsMetadataServerProxyHelpers::ShowGrantsTableHelper(phstmt, curCatalog,
-                                  char2String(curSchema.schema_name),
-                                    char2String(curTable.table_name), intermediateRS).execute();
+                                  curSchema.schema_name.value_or(""),
+                                    curTable.table_name.value_or(""), intermediateRS).execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     RS_LOG_ERROR("sqlTablePrivileges", "Error in ShowGrantsTableHelper");
                     return rc;
@@ -961,7 +911,7 @@ SQLRETURN RsMetadataServerProxy::sqlProcedures(
 
             // Get procedures
             rc = RsMetadataServerProxyHelpers::ShowProceduresFunctionsHelper(
-                     phstmt, curCatalog, char2String(curSchema.schema_name),
+                     phstmt, curCatalog, curSchema.schema_name.value_or(""),
                      procName, true, procedureFunctionResults).execute();
             if (!SQL_SUCCEEDED(rc)) {
                 RS_LOG_ERROR("sqlProcedures", "ShowProceduresFunctionsHelper");
@@ -970,7 +920,7 @@ SQLRETURN RsMetadataServerProxy::sqlProcedures(
 
             // Get functions
             rc = RsMetadataServerProxyHelpers::ShowProceduresFunctionsHelper(
-                     phstmt, curCatalog, char2String(curSchema.schema_name),
+                     phstmt, curCatalog, curSchema.schema_name.value_or(""),
                      procName, false, procedureFunctionResults).execute();
             if (!SQL_SUCCEEDED(rc)) {
                 RS_LOG_ERROR("sqlProcedures", "Error executing SHOW FUNCTIONS query");
@@ -980,9 +930,7 @@ SQLRETURN RsMetadataServerProxy::sqlProcedures(
             // Sort only by procedure/function name within this catalog/schema
             std::sort(procedureFunctionResults.begin(), procedureFunctionResults.end(),
                   [](const SHOWPROCEDURESFUNCTIONSResult& a, const SHOWPROCEDURESFUNCTIONSResult& b) {
-                      std::string nameA(reinterpret_cast<const char*>(a.object_name), a.object_name_Len);
-                      std::string nameB(reinterpret_cast<const char*>(b.object_name), b.object_name_Len);
-                      return _stricmp(nameA.c_str(), nameB.c_str()) < 0;
+                      return _stricmp(a.object_name.value_or("").c_str(), b.object_name.value_or("").c_str()) < 0;
                   });
             
             // Append to final results
@@ -1061,7 +1009,7 @@ SQLRETURN RsMetadataServerProxy::sqlProcedureColumns(
 
             // Get procedures
             rc = RsMetadataServerProxyHelpers::ShowProceduresFunctionsHelper(
-                     phstmt, catalogs[i], char2String(schemas[j].schema_name),
+                     phstmt, catalogs[i], schemas[j].schema_name.value_or(""),
                      procName, true, procedureFunctionResults).execute();
             if (!SQL_SUCCEEDED(rc)) {
                 RS_LOG_ERROR("sqlProcedureColumns", "Error in ShowProceduresFunctionsHelper for procedure");
@@ -1070,7 +1018,7 @@ SQLRETURN RsMetadataServerProxy::sqlProcedureColumns(
 
             // Get functions
             rc = RsMetadataServerProxyHelpers::ShowProceduresFunctionsHelper(
-                     phstmt, catalogs[i], char2String(schemas[j].schema_name),
+                     phstmt, catalogs[i], schemas[j].schema_name.value_or(""),
                      procName, false, procedureFunctionResults).execute();
             if (!SQL_SUCCEEDED(rc)) {
                 RS_LOG_ERROR("sqlProcedureColumns", "Error in ShowProceduresFunctionsHelper for function");
@@ -1080,16 +1028,14 @@ SQLRETURN RsMetadataServerProxy::sqlProcedureColumns(
             // Sort only by procedure/function name within this catalog/schema
             std::sort(procedureFunctionResults.begin(), procedureFunctionResults.end(),
                   [](const SHOWPROCEDURESFUNCTIONSResult& a, const SHOWPROCEDURESFUNCTIONSResult& b) {
-                      std::string nameA(reinterpret_cast<const char*>(a.object_name), a.object_name_Len);
-                      std::string nameB(reinterpret_cast<const char*>(b.object_name), b.object_name_Len);
-                      return _stricmp(nameA.c_str(), nameB.c_str()) < 0;
+                      return _stricmp(a.object_name.value_or("").c_str(), b.object_name.value_or("").c_str()) < 0;
                   });
 
             // Get columns for each procedure and function
             for (int k = 0; k < procedureFunctionResults.size(); k++) {
                 bool isProcedure = (procedureFunctionResults[k].object_type == SQL_PT_PROCEDURE);
                 std::string sqlBase = isProcedure ? RsMetadataAPIHelper::kshowParamsProcQuery : RsMetadataAPIHelper::kshowParamsFuncQuery;
-                std::string argumentListStr = char2String(procedureFunctionResults[k].argument_list);
+                std::string argumentListStr = procedureFunctionResults[k].argument_list.value_or("");
                 try {
                     auto [sqlQuery, argumentList] = RsMetadataAPIHelper::createParameterizedQueryString(
                         argumentListStr,
@@ -1099,9 +1045,8 @@ SQLRETURN RsMetadataServerProxy::sqlProcedureColumns(
                     rc = RsMetadataServerProxyHelpers::
                             ShowProcedureFunctionColumnsHelper(
                                 phstmt, catalogs[i],
-                                char2String(schemas[j].schema_name),
-                                char2String(
-                                    procedureFunctionResults[k].object_name),
+                                schemas[j].schema_name.value_or(""),
+                                procedureFunctionResults[k].object_name.value_or(""),
                                 columnName,
                                 sqlQuery,
                                 argumentList,
@@ -1114,7 +1059,7 @@ SQLRETURN RsMetadataServerProxy::sqlProcedureColumns(
                     }
                 } catch (const std::invalid_argument& e) {
                     RS_LOG_ERROR("sqlProcedureColumns", "Invalid argument list for procedure/function '%s': %s",
-                        char2String(procedureFunctionResults[k].object_name).c_str(), e.what());
+                        procedureFunctionResults[k].object_name.value_or("").c_str(), e.what());
                     return SQL_ERROR;
                 } catch (...) {
                     RS_LOG_ERROR("sqlProcedureColumns", "Unexpected exception during query preparation or query execution");

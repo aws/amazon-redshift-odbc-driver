@@ -7,6 +7,7 @@
  */
 
 #include "rsMetadataServerProxyHelper.h"
+#include <limits>
 
 namespace RsMetadataServerProxyHelpers {
     //-------------------------------------------------------------------------
@@ -197,6 +198,45 @@ namespace RsMetadataServerProxyHelpers {
         return rc;
     }
 
+    std::optional<std::string> ShowDiscoveryBase::extractStringField(
+        const SQLCHAR* buf, SQLLEN bufSize, SQLLEN len, const std::string& colName) {
+        if (len == SQL_NULL_DATA) {
+            return std::nullopt;  // preserve SQL NULL
+        }
+        if (len <= 0) {
+            return std::string(); // genuine empty string
+        }
+        if (len < bufSize) {
+            // Data fits in buffer — no truncation
+            return std::string(reinterpret_cast<const char*>(buf), len);
+        }
+        // Truncation detected — resolve column index only when needed (avoid
+        // per-row getIndex overhead for the common non-truncation path)
+        SQLUSMALLINT colIndex = getIndex(m_pStmt, colName);
+        RS_LOG_DEBUG("extractStringField",
+                "Truncation detected for column %d: len=%lld, bufSize=%lld. "
+                "Falling back to SQLGetData.",
+                colIndex, (long long)len, (long long)bufSize);
+
+        std::string result(len, '\0');
+        SQLLEN actualLen = 0;
+        SQLLEN pcbLenIndInternal = (std::numeric_limits<SQLLEN>::min)();
+        SQLRETURN rc = RS_STMT_INFO::RS_SQLGetData(
+            m_pStmt, colIndex, SQL_C_CHAR,
+            result.data(), len + 1, &actualLen,
+            TRUE, pcbLenIndInternal);
+        if (SQL_SUCCEEDED(rc) && actualLen > 0 && actualLen != SQL_NULL_DATA) {
+            result.resize(actualLen);
+        } else {
+            // Fallback: use whatever was in the buffer (truncated)
+            RS_LOG_WARN("extractStringField",
+                "SQLGetData fallback failed for column %d, using truncated data", colIndex);
+            result = std::string(reinterpret_cast<const char*>(buf),
+                                 std::min<SQLLEN>(len, bufSize - 1));
+        }
+        return result;
+    }
+
     //-------------------------------------------------------------------------
     // ShowDatabasesHelper Implementation
     //-------------------------------------------------------------------------
@@ -326,13 +366,18 @@ namespace RsMetadataServerProxyHelpers {
         {
             ColumnBindingCleanup guard(m_stmt);
 
-            SHOWSCHEMASResult cur;
+            // Local fixed buffers for SQLBindCol targets
+            SQLCHAR buf_database_name[NAMEDATALEN] = {0};
+            SQLLEN len_database_name = 0;
+            SQLCHAR buf_schema_name[NAMEDATALEN] = {0};
+            SQLLEN len_schema_name = 0;
+
             std::vector<ColumnBinding> bindings = {
                 {RsMetadataAPIHelper::kSHOW_SCHEMAS_database_name, SQL_C_CHAR,
-                 cur.database_name, sizeof(cur.database_name), &cur.database_name_Len,
+                 buf_database_name, sizeof(buf_database_name), &len_database_name,
                  "Failed to bind column for database_name"},
                 {RsMetadataAPIHelper::kSHOW_SCHEMAS_schema_name, SQL_C_CHAR,
-                 cur.schema_name, sizeof(cur.schema_name), &cur.schema_name_Len,
+                 buf_schema_name, sizeof(buf_schema_name), &len_schema_name,
                  "Failed to bind column for schema_name"}
             };
 
@@ -344,8 +389,10 @@ namespace RsMetadataServerProxyHelpers {
 
             while (SQL_SUCCEEDED(
                 rc = RS_STMT_INFO::RS_SQLFetchScroll(m_pStmt, SQL_FETCH_NEXT, 0))) {
-                m_intermediateRS.emplace_back(cur);
-                cur = SHOWSCHEMASResult{}; // Reset for next row to avoid stale NULL values
+                SHOWSCHEMASResult cur;
+                cur.database_name = extractStringField(buf_database_name, sizeof(buf_database_name), len_database_name, RsMetadataAPIHelper::kSHOW_SCHEMAS_database_name);
+                cur.schema_name = extractStringField(buf_schema_name, sizeof(buf_schema_name), len_schema_name, RsMetadataAPIHelper::kSHOW_SCHEMAS_schema_name);
+                m_intermediateRS.emplace_back(std::move(cur));
             }
         }
         RS_LOG_TRACE(m_operationName, "number of schemas: %d", m_intermediateRS.size());
@@ -395,37 +442,48 @@ namespace RsMetadataServerProxyHelpers {
         {
             ColumnBindingCleanup guard(m_stmt);
 
-            SHOWTABLESResult cur;
+            // Local fixed buffers for SQLBindCol targets
+            SQLCHAR buf_database_name[NAMEDATALEN] = {0};  SQLLEN len_database_name = 0;
+            SQLCHAR buf_schema_name[NAMEDATALEN] = {0};     SQLLEN len_schema_name = 0;
+            SQLCHAR buf_table_name[NAMEDATALEN] = {0};      SQLLEN len_table_name = 0;
+            SQLCHAR buf_table_type[NAMEDATALEN] = {0};      SQLLEN len_table_type = 0;
+            SQLCHAR buf_remarks[DEFAULT_MAX_REMARK_LEN] = {0};      SQLLEN len_remarks = 0;
+            SQLCHAR buf_owner[NAMEDATALEN] = {0};           SQLLEN len_owner = 0;
+            SQLCHAR buf_last_altered[NAMEDATALEN] = {0};    SQLLEN len_last_altered = 0;
+            SQLCHAR buf_last_modified[NAMEDATALEN] = {0};   SQLLEN len_last_modified = 0;
+            SQLCHAR buf_dist_style[NAMEDATALEN] = {0};      SQLLEN len_dist_style = 0;
+            SQLCHAR buf_table_subtype[NAMEDATALEN] = {0};   SQLLEN len_table_subtype = 0;
+
             std::vector<ColumnBinding> bindings = {
                 {RsMetadataAPIHelper::kSHOW_TABLES_database_name, SQL_C_CHAR,
-                 cur.database_name, sizeof(cur.database_name), &cur.database_name_Len,
+                 buf_database_name, sizeof(buf_database_name), &len_database_name,
                  "Failed to bind column for database_name"},
                 {RsMetadataAPIHelper::kSHOW_TABLES_schema_name, SQL_C_CHAR,
-                 cur.schema_name, sizeof(cur.schema_name), &cur.schema_name_Len,
+                 buf_schema_name, sizeof(buf_schema_name), &len_schema_name,
                  "Failed to bind column for schema_name"},
                 {RsMetadataAPIHelper::kSHOW_TABLES_table_name, SQL_C_CHAR,
-                 cur.table_name, sizeof(cur.table_name), &cur.table_name_Len,
+                 buf_table_name, sizeof(buf_table_name), &len_table_name,
                  "Failed to bind column for table_name"},
                 {RsMetadataAPIHelper::kSHOW_TABLES_table_type, SQL_C_CHAR,
-                 cur.table_type, sizeof(cur.table_type), &cur.table_type_Len,
+                 buf_table_type, sizeof(buf_table_type), &len_table_type,
                  "Failed to bind column for table_type"},
                 {RsMetadataAPIHelper::kSHOW_TABLES_remarks, SQL_C_CHAR,
-                 cur.remarks, sizeof(cur.remarks), &cur.remarks_Len,
+                 buf_remarks, sizeof(buf_remarks), &len_remarks,
                  "Failed to bind column for remarks"},
                  {RsMetadataAPIHelper::kSHOW_TABLES_owner, SQL_C_CHAR,
-                 cur.owner, sizeof(cur.owner), &cur.owner_Len,
+                 buf_owner, sizeof(buf_owner), &len_owner,
                  "Failed to bind column for owner"},
                 {RsMetadataAPIHelper::kSHOW_TABLES_last_altered_time, SQL_C_CHAR,
-                 cur.last_altered_time, sizeof(cur.last_altered_time), &cur.last_altered_time_Len,
+                 buf_last_altered, sizeof(buf_last_altered), &len_last_altered,
                  "Failed to bind column for last_altered_time"},
                 {RsMetadataAPIHelper::kSHOW_TABLES_last_modified_time, SQL_C_CHAR,
-                 cur.last_modified_time, sizeof(cur.last_modified_time), &cur.last_modified_time_Len,
+                 buf_last_modified, sizeof(buf_last_modified), &len_last_modified,
                  "Failed to bind column for last_modified_time"},
                 {RsMetadataAPIHelper::kSHOW_TABLES_dist_style, SQL_C_CHAR,
-                 cur.dist_style, sizeof(cur.dist_style), &cur.dist_style_Len,
+                 buf_dist_style, sizeof(buf_dist_style), &len_dist_style,
                  "Failed to bind column for dist_style"},
                 {RsMetadataAPIHelper::kSHOW_TABLES_table_subtype, SQL_C_CHAR,
-                 cur.table_subtype, sizeof(cur.table_subtype), &cur.table_subtype_Len,
+                 buf_table_subtype, sizeof(buf_table_subtype), &len_table_subtype,
                  "Failed to bind column for table_subtype"}
             };
 
@@ -437,8 +495,18 @@ namespace RsMetadataServerProxyHelpers {
 
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
-                m_intermediateRS.emplace_back(cur);
-                cur = SHOWTABLESResult{}; // Reset for next row to avoid stale NULL values
+                SHOWTABLESResult cur;
+                cur.database_name    = extractStringField(buf_database_name, sizeof(buf_database_name), len_database_name, RsMetadataAPIHelper::kSHOW_TABLES_database_name);
+                cur.schema_name      = extractStringField(buf_schema_name, sizeof(buf_schema_name), len_schema_name, RsMetadataAPIHelper::kSHOW_TABLES_schema_name);
+                cur.table_name       = extractStringField(buf_table_name, sizeof(buf_table_name), len_table_name, RsMetadataAPIHelper::kSHOW_TABLES_table_name);
+                cur.table_type       = extractStringField(buf_table_type, sizeof(buf_table_type), len_table_type, RsMetadataAPIHelper::kSHOW_TABLES_table_type);
+                cur.remarks          = extractStringField(buf_remarks, sizeof(buf_remarks), len_remarks, RsMetadataAPIHelper::kSHOW_TABLES_remarks);
+                cur.owner            = extractStringField(buf_owner, sizeof(buf_owner), len_owner, RsMetadataAPIHelper::kSHOW_TABLES_owner);
+                cur.last_altered_time = extractStringField(buf_last_altered, sizeof(buf_last_altered), len_last_altered, RsMetadataAPIHelper::kSHOW_TABLES_last_altered_time);
+                cur.last_modified_time = extractStringField(buf_last_modified, sizeof(buf_last_modified), len_last_modified, RsMetadataAPIHelper::kSHOW_TABLES_last_modified_time);
+                cur.dist_style       = extractStringField(buf_dist_style, sizeof(buf_dist_style), len_dist_style, RsMetadataAPIHelper::kSHOW_TABLES_dist_style);
+                cur.table_subtype    = extractStringField(buf_table_subtype, sizeof(buf_table_subtype), len_table_subtype, RsMetadataAPIHelper::kSHOW_TABLES_table_subtype);
+                m_intermediateRS.emplace_back(std::move(cur));
             }
         }
         RS_LOG_TRACE(m_operationName, "number of tables: %d", m_intermediateRS.size());
@@ -492,58 +560,76 @@ namespace RsMetadataServerProxyHelpers {
         {
             ColumnBindingCleanup guard(m_stmt);
 
-            SHOWCOLUMNSResult cur;
+            // Local fixed buffers for SQLBindCol targets
+            SQLCHAR buf_database_name[NAMEDATALEN] = {0};       SQLLEN len_database_name = 0;
+            SQLCHAR buf_schema_name[NAMEDATALEN] = {0};         SQLLEN len_schema_name = 0;
+            SQLCHAR buf_table_name[NAMEDATALEN] = {0};          SQLLEN len_table_name = 0;
+            SQLCHAR buf_column_name[NAMEDATALEN] = {0};         SQLLEN len_column_name = 0;
+            SQLSMALLINT ordinal_position = 0;                   SQLLEN ordinal_position_Len = 0;
+            SQLCHAR buf_column_default[MAX_COLUMN_DEF_LEN] = {0}; SQLLEN len_column_default = 0;
+            SQLCHAR buf_is_nullable[NAMEDATALEN] = {0};         SQLLEN len_is_nullable = 0;
+            SQLCHAR buf_data_type[NAMEDATALEN] = {0};           SQLLEN len_data_type = 0;
+            SQLINTEGER character_maximum_length = 0;             SQLLEN character_maximum_length_Len = 0;
+            SQLSMALLINT numeric_precision = 0;                  SQLLEN numeric_precision_Len = 0;
+            SQLSMALLINT numeric_scale = 0;                      SQLLEN numeric_scale_Len = 0;
+            SQLCHAR buf_remarks[DEFAULT_MAX_REMARK_LEN] = {0};         SQLLEN len_remarks = 0;
+            SQLCHAR buf_sort_key_type[NAMEDATALEN] = {0};       SQLLEN len_sort_key_type = 0;
+            SQLINTEGER sort_key = 0;                            SQLLEN sort_key_Len = 0;
+            SQLINTEGER dist_key = 0;                            SQLLEN dist_key_Len = 0;
+            SQLCHAR buf_encoding[NAMEDATALEN] = {0};            SQLLEN len_encoding = 0;
+            SQLCHAR buf_collation[NAMEDATALEN] = {0};           SQLLEN len_collation = 0;
+
             std::vector<ColumnBinding> bindings = {
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_database_name, SQL_C_CHAR,
-                cur.database_name, sizeof(cur.database_name), &cur.database_name_Len,
+                buf_database_name, sizeof(buf_database_name), &len_database_name,
                 "Failed to bind column for database_name"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_schema_name, SQL_C_CHAR,
-                cur.schema_name, sizeof(cur.schema_name), &cur.schema_name_Len,
+                buf_schema_name, sizeof(buf_schema_name), &len_schema_name,
                 "Failed to bind column for schema_name"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_table_name, SQL_C_CHAR,
-                cur.table_name, sizeof(cur.table_name), &cur.table_name_Len,
+                buf_table_name, sizeof(buf_table_name), &len_table_name,
                 "Failed to bind column for table_name"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_column_name, SQL_C_CHAR,
-                cur.column_name, sizeof(cur.column_name), &cur.column_name_Len,
+                buf_column_name, sizeof(buf_column_name), &len_column_name,
                 "Failed to bind column for column_name"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_ordinal_position, SQL_C_SSHORT,
-                &cur.ordinal_position, sizeof(cur.ordinal_position), &cur.ordinal_position_Len,
+                &ordinal_position, sizeof(ordinal_position), &ordinal_position_Len,
                 "Failed to bind column for ordinal_position"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_column_default, SQL_C_CHAR,
-                cur.column_default, sizeof(cur.column_default), &cur.column_default_Len,
+                buf_column_default, sizeof(buf_column_default), &len_column_default,
                 "Failed to bind column for column_default"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_is_nullable, SQL_C_CHAR,
-                cur.is_nullable, sizeof(cur.is_nullable), &cur.is_nullable_Len,
+                buf_is_nullable, sizeof(buf_is_nullable), &len_is_nullable,
                 "Failed to bind column for is_nullable"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_data_type, SQL_C_CHAR,
-                cur.data_type, sizeof(cur.data_type), &cur.data_type_Len,
+                buf_data_type, sizeof(buf_data_type), &len_data_type,
                 "Failed to bind column for data_type"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_character_maximum_length, SQL_C_SLONG,
-                &cur.character_maximum_length, sizeof(cur.character_maximum_length), &cur.character_maximum_length_Len,
+                &character_maximum_length, sizeof(character_maximum_length), &character_maximum_length_Len,
                 "Failed to bind column for character_maximum_length"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_numeric_precision, SQL_C_SSHORT,
-                &cur.numeric_precision, sizeof(cur.numeric_precision), &cur.numeric_precision_Len,
+                &numeric_precision, sizeof(numeric_precision), &numeric_precision_Len,
                 "Failed to bind column for numeric_precision"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_numeric_scale, SQL_C_SSHORT,
-                &cur.numeric_scale, sizeof(cur.numeric_scale), &cur.numeric_scale_Len,
+                &numeric_scale, sizeof(numeric_scale), &numeric_scale_Len,
                 "Failed to bind column for numeric_scale"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_remarks, SQL_C_CHAR,
-                cur.remarks, sizeof(cur.remarks), &cur.remarks_Len,
+                buf_remarks, sizeof(buf_remarks), &len_remarks,
                 "Failed to bind column for remarks"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_sort_key_type, SQL_C_CHAR,
-                cur.sort_key_type, sizeof(cur.sort_key_type), &cur.sort_key_type_Len,
+                buf_sort_key_type, sizeof(buf_sort_key_type), &len_sort_key_type,
                 "Failed to bind column for sort_key_type"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_sort_key, SQL_C_SLONG,
-                &cur.sort_key, sizeof(cur.sort_key), &cur.sort_key_Len,
+                &sort_key, sizeof(sort_key), &sort_key_Len,
                 "Failed to bind column for sort_key"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_dist_key, SQL_C_SLONG,
-                &cur.dist_key, sizeof(cur.dist_key), &cur.dist_key_Len,
+                &dist_key, sizeof(dist_key), &dist_key_Len,
                 "Failed to bind column for dist_key"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_encoding, SQL_C_CHAR,
-                cur.encoding, sizeof(cur.encoding), &cur.encoding_Len,
+                buf_encoding, sizeof(buf_encoding), &len_encoding,
                 "Failed to bind column for encoding"},
                 {RsMetadataAPIHelper::kSHOW_COLUMNS_collation, SQL_C_CHAR,
-                cur.collation, sizeof(cur.collation), &cur.collation_Len,
+                buf_collation, sizeof(buf_collation), &len_collation,
                 "Failed to bind column for collation"}
             };
 
@@ -555,8 +641,31 @@ namespace RsMetadataServerProxyHelpers {
 
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
-                m_intermediateRS.emplace_back(cur);
-                cur = SHOWCOLUMNSResult{}; // Reset for next row to avoid stale NULL values
+                SHOWCOLUMNSResult cur;
+                cur.database_name = extractStringField(buf_database_name, sizeof(buf_database_name), len_database_name, RsMetadataAPIHelper::kSHOW_COLUMNS_database_name);
+                cur.schema_name = extractStringField(buf_schema_name, sizeof(buf_schema_name), len_schema_name, RsMetadataAPIHelper::kSHOW_COLUMNS_schema_name);
+                cur.table_name = extractStringField(buf_table_name, sizeof(buf_table_name), len_table_name, RsMetadataAPIHelper::kSHOW_COLUMNS_table_name);
+                cur.column_name = extractStringField(buf_column_name, sizeof(buf_column_name), len_column_name, RsMetadataAPIHelper::kSHOW_COLUMNS_column_name);
+                cur.ordinal_position = ordinal_position_Len == SQL_NULL_DATA ? 0 : ordinal_position;
+                cur.ordinal_position_Len = ordinal_position_Len;
+                cur.column_default = extractStringField(buf_column_default, sizeof(buf_column_default), len_column_default, RsMetadataAPIHelper::kSHOW_COLUMNS_column_default);
+                cur.is_nullable = extractStringField(buf_is_nullable, sizeof(buf_is_nullable), len_is_nullable, RsMetadataAPIHelper::kSHOW_COLUMNS_is_nullable);
+                cur.data_type = extractStringField(buf_data_type, sizeof(buf_data_type), len_data_type, RsMetadataAPIHelper::kSHOW_COLUMNS_data_type);
+                cur.character_maximum_length = character_maximum_length_Len == SQL_NULL_DATA ? 0 : character_maximum_length;
+                cur.character_maximum_length_Len = character_maximum_length_Len;
+                cur.numeric_precision = numeric_precision_Len == SQL_NULL_DATA ? 0 : numeric_precision;
+                cur.numeric_precision_Len = numeric_precision_Len;
+                cur.numeric_scale = numeric_scale_Len == SQL_NULL_DATA ? 0 : numeric_scale;
+                cur.numeric_scale_Len = numeric_scale_Len;
+                cur.remarks = extractStringField(buf_remarks, sizeof(buf_remarks), len_remarks, RsMetadataAPIHelper::kSHOW_COLUMNS_remarks);
+                cur.sort_key_type = extractStringField(buf_sort_key_type, sizeof(buf_sort_key_type), len_sort_key_type, RsMetadataAPIHelper::kSHOW_COLUMNS_sort_key_type);
+                cur.sort_key = sort_key_Len == SQL_NULL_DATA ? 0 : sort_key;
+                cur.sort_key_Len = sort_key_Len;
+                cur.dist_key = dist_key_Len == SQL_NULL_DATA ? 0 : dist_key;
+                cur.dist_key_Len = dist_key_Len;
+                cur.encoding = extractStringField(buf_encoding, sizeof(buf_encoding), len_encoding, RsMetadataAPIHelper::kSHOW_COLUMNS_encoding);
+                cur.collation = extractStringField(buf_collation, sizeof(buf_collation), len_collation, RsMetadataAPIHelper::kSHOW_COLUMNS_collation);
+                m_intermediateRS.emplace_back(std::move(cur));
             }
         }
         RS_LOG_TRACE(m_operationName, "number of columns: %d", m_intermediateRS.size());
@@ -602,25 +711,32 @@ namespace RsMetadataServerProxyHelpers {
         {
             ColumnBindingCleanup guard(m_stmt);
 
-            SHOWCONSTRAINTSPRIMARYKEYSResult cur;
+            // Local fixed buffers for SQLBindCol targets
+            SQLCHAR buf_database_name[NAMEDATALEN] = {0};   SQLLEN len_database_name = 0;
+            SQLCHAR buf_schema_name[NAMEDATALEN] = {0};     SQLLEN len_schema_name = 0;
+            SQLCHAR buf_table_name[NAMEDATALEN] = {0};      SQLLEN len_table_name = 0;
+            SQLCHAR buf_column_name[NAMEDATALEN] = {0};     SQLLEN len_column_name = 0;
+            SQLSMALLINT key_seq = 0;                        SQLLEN key_seq_Len = 0;
+            SQLCHAR buf_pk_name[NAMEDATALEN] = {0};         SQLLEN len_pk_name = 0;
+
             std::vector<ColumnBinding> bindings = {
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_PK_database_name, SQL_C_CHAR,
-                cur.database_name, sizeof(cur.database_name), &cur.database_name_Len,
+                buf_database_name, sizeof(buf_database_name), &len_database_name,
                 "Failed to bind column for database_name"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_PK_schema_name, SQL_C_CHAR,
-                cur.schema_name, sizeof(cur.schema_name), &cur.schema_name_Len,
+                buf_schema_name, sizeof(buf_schema_name), &len_schema_name,
                 "Failed to bind column for schema_name"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_PK_table_name, SQL_C_CHAR,
-                cur.table_name, sizeof(cur.table_name), &cur.table_name_Len,
+                buf_table_name, sizeof(buf_table_name), &len_table_name,
                 "Failed to bind column for table_name"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_PK_column_name, SQL_C_CHAR,
-                cur.column_name, sizeof(cur.column_name), &cur.column_name_Len,
+                buf_column_name, sizeof(buf_column_name), &len_column_name,
                 "Failed to bind column for column_name"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_PK_key_seq, SQL_C_SSHORT,
-                &cur.key_seq, sizeof(cur.key_seq), &cur.key_seq_Len,
+                &key_seq, sizeof(key_seq), &key_seq_Len,
                 "Failed to bind column for key_seq"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_PK_pk_name, SQL_C_CHAR,
-                cur.pk_name, sizeof(cur.pk_name), &cur.pk_name_Len,
+                buf_pk_name, sizeof(buf_pk_name), &len_pk_name,
                 "Failed to bind column for pk_name"}
             };
 
@@ -632,8 +748,15 @@ namespace RsMetadataServerProxyHelpers {
 
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
-                m_intermediateRS.emplace_back(cur);
-                cur = SHOWCONSTRAINTSPRIMARYKEYSResult{}; // Reset for next row to avoid stale NULL values
+                SHOWCONSTRAINTSPRIMARYKEYSResult cur;
+                cur.database_name = extractStringField(buf_database_name, sizeof(buf_database_name), len_database_name, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_PK_database_name);
+                cur.schema_name = extractStringField(buf_schema_name, sizeof(buf_schema_name), len_schema_name, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_PK_schema_name);
+                cur.table_name = extractStringField(buf_table_name, sizeof(buf_table_name), len_table_name, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_PK_table_name);
+                cur.column_name = extractStringField(buf_column_name, sizeof(buf_column_name), len_column_name, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_PK_column_name);
+                cur.key_seq = key_seq_Len == SQL_NULL_DATA ? 0 : key_seq;
+                cur.key_seq_Len = key_seq_Len;
+                cur.pk_name = extractStringField(buf_pk_name, sizeof(buf_pk_name), len_pk_name,  RsMetadataAPIHelper::kSHOW_CONSTRAINTS_PK_pk_name);
+                m_intermediateRS.emplace_back(std::move(cur));
             }
         }
         RS_LOG_TRACE(m_operationName, "number of primary keys: %d", m_intermediateRS.size());
@@ -682,49 +805,64 @@ namespace RsMetadataServerProxyHelpers {
         {
             ColumnBindingCleanup guard(m_stmt);
 
-            SHOWCONSTRAINTSFOREIGNKEYSResult cur;
+            // Local fixed buffers for SQLBindCol targets
+            SQLCHAR buf_pk_table_cat[NAMEDATALEN] = {0};      SQLLEN len_pk_table_cat = 0;
+            SQLCHAR buf_pk_table_schem[NAMEDATALEN] = {0};    SQLLEN len_pk_table_schem = 0;
+            SQLCHAR buf_pk_table_name[NAMEDATALEN] = {0};     SQLLEN len_pk_table_name = 0;
+            SQLCHAR buf_pk_column_name[NAMEDATALEN] = {0};    SQLLEN len_pk_column_name = 0;
+            SQLCHAR buf_fk_table_cat[NAMEDATALEN] = {0};      SQLLEN len_fk_table_cat = 0;
+            SQLCHAR buf_fk_table_schem[NAMEDATALEN] = {0};    SQLLEN len_fk_table_schem = 0;
+            SQLCHAR buf_fk_table_name[NAMEDATALEN] = {0};     SQLLEN len_fk_table_name = 0;
+            SQLCHAR buf_fk_column_name[NAMEDATALEN] = {0};    SQLLEN len_fk_column_name = 0;
+            SQLSMALLINT key_seq = 0;                          SQLLEN key_seq_Len = 0;
+            SQLSMALLINT update_rule = 0;                      SQLLEN update_rule_Len = 0;
+            SQLSMALLINT delete_rule = 0;                      SQLLEN delete_rule_Len = 0;
+            SQLCHAR buf_fk_name[NAMEDATALEN] = {0};           SQLLEN len_fk_name = 0;
+            SQLCHAR buf_pk_name[NAMEDATALEN] = {0};           SQLLEN len_pk_name = 0;
+            SQLSMALLINT deferrability = 0;                    SQLLEN deferrability_Len = 0;
+
             std::vector<ColumnBinding> bindings = {
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_pk_database_name, SQL_C_CHAR,
-                cur.pk_table_cat, sizeof(cur.pk_table_cat), &cur.pk_table_cat_Len,
+                buf_pk_table_cat, sizeof(buf_pk_table_cat), &len_pk_table_cat,
                 "Failed to bind column for pk_table_cat"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_pk_schema_name, SQL_C_CHAR,
-                cur.pk_table_schem, sizeof(cur.pk_table_schem), &cur.pk_table_schem_Len,
+                buf_pk_table_schem, sizeof(buf_pk_table_schem), &len_pk_table_schem,
                 "Failed to bind column for pk_table_schem"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_pk_table_name, SQL_C_CHAR,
-                cur.pk_table_name, sizeof(cur.pk_table_name), &cur.pk_table_name_Len,
+                buf_pk_table_name, sizeof(buf_pk_table_name), &len_pk_table_name,
                 "Failed to bind column for pk_table_name"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_pk_column_name, SQL_C_CHAR,
-                cur.pk_column_name, sizeof(cur.pk_column_name), &cur.pk_column_name_Len,
+                buf_pk_column_name, sizeof(buf_pk_column_name), &len_pk_column_name,
                 "Failed to bind column for pk_column_name"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_fk_database_name, SQL_C_CHAR,
-                cur.fk_table_cat, sizeof(cur.fk_table_cat), &cur.fk_table_cat_Len,
+                buf_fk_table_cat, sizeof(buf_fk_table_cat), &len_fk_table_cat,
                 "Failed to bind column for fk_table_cat"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_fk_schema_name, SQL_C_CHAR,
-                cur.fk_table_schem, sizeof(cur.fk_table_schem), &cur.fk_table_schem_Len,
+                buf_fk_table_schem, sizeof(buf_fk_table_schem), &len_fk_table_schem,
                 "Failed to bind column for fk_table_schem"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_fk_table_name, SQL_C_CHAR,
-                cur.fk_table_name, sizeof(cur.fk_table_name), &cur.fk_table_name_Len,
+                buf_fk_table_name, sizeof(buf_fk_table_name), &len_fk_table_name,
                 "Failed to bind column for fk_table_name"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_fk_column_name, SQL_C_CHAR,
-                cur.fk_column_name, sizeof(cur.fk_column_name), &cur.fk_column_name_Len,
+                buf_fk_column_name, sizeof(buf_fk_column_name), &len_fk_column_name,
                 "Failed to bind column for fk_column_name"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_key_seq, SQL_C_SSHORT,
-                &cur.key_seq, sizeof(cur.key_seq), &cur.key_seq_Len,
+                &key_seq, sizeof(key_seq), &key_seq_Len,
                 "Failed to bind column for key_seq"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_update_rule, SQL_C_SSHORT,
-                &cur.update_rule, sizeof(cur.update_rule), &cur.update_rule_Len,
+                &update_rule, sizeof(update_rule), &update_rule_Len,
                 "Failed to bind column for update_rule"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_delete_rule, SQL_C_SSHORT,
-                &cur.delete_rule, sizeof(cur.delete_rule), &cur.delete_rule_Len,
+                &delete_rule, sizeof(delete_rule), &delete_rule_Len,
                 "Failed to bind column for delete_rule"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_fk_name, SQL_C_CHAR,
-                cur.fk_name, sizeof(cur.fk_name), &cur.fk_name_Len,
+                buf_fk_name, sizeof(buf_fk_name), &len_fk_name,
                 "Failed to bind column for fk_name"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_pk_name, SQL_C_CHAR,
-                cur.pk_name, sizeof(cur.pk_name), &cur.pk_name_Len,
+                buf_pk_name, sizeof(buf_pk_name), &len_pk_name,
                 "Failed to bind column for pk_name"},
                 {RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_deferrability, SQL_C_SSHORT,
-                &cur.deferrability, sizeof(cur.deferrability), &cur.deferrability_Len,
+                &deferrability, sizeof(deferrability), &deferrability_Len,
                 "Failed to bind column for deferrability"}
             };
 
@@ -736,8 +874,26 @@ namespace RsMetadataServerProxyHelpers {
 
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
-                m_intermediateRS.emplace_back(cur);
-                cur = SHOWCONSTRAINTSFOREIGNKEYSResult{}; // Reset for next row to avoid stale NULL values
+                SHOWCONSTRAINTSFOREIGNKEYSResult cur;
+                cur.pk_table_cat = extractStringField(buf_pk_table_cat, sizeof(buf_pk_table_cat), len_pk_table_cat, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_pk_database_name);
+                cur.pk_table_schem = extractStringField(buf_pk_table_schem, sizeof(buf_pk_table_schem), len_pk_table_schem, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_pk_schema_name);
+                cur.pk_table_name = extractStringField(buf_pk_table_name, sizeof(buf_pk_table_name), len_pk_table_name, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_pk_table_name);
+                cur.pk_column_name = extractStringField(buf_pk_column_name, sizeof(buf_pk_column_name), len_pk_column_name, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_pk_column_name);
+                cur.fk_table_cat = extractStringField(buf_fk_table_cat, sizeof(buf_fk_table_cat), len_fk_table_cat, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_fk_database_name);
+                cur.fk_table_schem = extractStringField(buf_fk_table_schem, sizeof(buf_fk_table_schem), len_fk_table_schem, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_fk_schema_name);
+                cur.fk_table_name = extractStringField(buf_fk_table_name, sizeof(buf_fk_table_name), len_fk_table_name, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_fk_table_name);
+                cur.fk_column_name = extractStringField(buf_fk_column_name, sizeof(buf_fk_column_name), len_fk_column_name, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_fk_column_name);
+                cur.key_seq = key_seq_Len == SQL_NULL_DATA ? 0 : key_seq;
+                cur.key_seq_Len = key_seq_Len;
+                cur.update_rule =update_rule_Len == SQL_NULL_DATA ? 0 : update_rule;
+                cur.update_rule_Len = update_rule_Len;
+                cur.delete_rule = delete_rule_Len == SQL_NULL_DATA ? 0 : delete_rule;
+                cur.delete_rule_Len = delete_rule_Len;
+                cur.fk_name = extractStringField(buf_fk_name, sizeof(buf_fk_name), len_fk_name, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_fk_name);
+                cur.pk_name = extractStringField(buf_pk_name, sizeof(buf_pk_name), len_pk_name, RsMetadataAPIHelper::kSHOW_CONSTRAINTS_FK_pk_name);
+                cur.deferrability = deferrability_Len == SQL_NULL_DATA ? 0 : deferrability;
+                cur.deferrability_Len = deferrability_Len;
+                m_intermediateRS.emplace_back(std::move(cur));
             }
         }
         RS_LOG_TRACE(m_operationName, "number of foreign keys: %d",
@@ -786,31 +942,40 @@ namespace RsMetadataServerProxyHelpers {
         {
             ColumnBindingCleanup guard(m_stmt);
 
-            SHOWGRANTSCOLUMNResult cur;
+            // Local fixed buffers for SQLBindCol targets
+            SQLCHAR buf_table_cat[NAMEDATALEN] = {0};       SQLLEN len_table_cat = 0;
+            SQLCHAR buf_table_schem[NAMEDATALEN] = {0};     SQLLEN len_table_schem = 0;
+            SQLCHAR buf_table_name[NAMEDATALEN] = {0};      SQLLEN len_table_name = 0;
+            SQLCHAR buf_column_name[NAMEDATALEN] = {0};     SQLLEN len_column_name = 0;
+            SQLCHAR buf_grantor[NAMEDATALEN] = {0};         SQLLEN len_grantor = 0;
+            SQLCHAR buf_grantee[NAMEDATALEN] = {0};         SQLLEN len_grantee = 0;
+            SQLCHAR buf_privilege[NAMEDATALEN] = {0};       SQLLEN len_privilege = 0;
+            SQLSMALLINT admin_option = 0;                   SQLLEN admin_option_len = 0;
+
             std::vector<ColumnBinding> bindings = {
                 {RsMetadataAPIHelper::kSHOW_GRANTS_database_name, SQL_C_CHAR,
-                cur.table_cat, sizeof(cur.table_cat), &cur.table_cat_Len,
+                buf_table_cat, sizeof(buf_table_cat), &len_table_cat,
                 "Failed to bind column for database_name"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_schema_name, SQL_C_CHAR,
-                cur.table_schem, sizeof(cur.table_schem), &cur.table_schem_Len,
+                buf_table_schem, sizeof(buf_table_schem), &len_table_schem,
                 "Failed to bind column for schema_name"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_table_name, SQL_C_CHAR,
-                cur.table_name, sizeof(cur.table_name), &cur.table_name_Len,
+                buf_table_name, sizeof(buf_table_name), &len_table_name,
                 "Failed to bind column for table_name"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_column_name, SQL_C_CHAR,
-                cur.column_name, sizeof(cur.column_name), &cur.column_name_Len,
+                buf_column_name, sizeof(buf_column_name), &len_column_name,
                 "Failed to bind column for column_name"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_grantor, SQL_C_CHAR,
-                cur.grantor, sizeof(cur.grantor), &cur.grantor_Len,
+                buf_grantor, sizeof(buf_grantor), &len_grantor,
                 "Failed to bind column for grantor"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_identity_name, SQL_C_CHAR,
-                cur.grantee, sizeof(cur.grantee), &cur.grantee_Len,
+                buf_grantee, sizeof(buf_grantee), &len_grantee,
                 "Failed to bind column for identity_name"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_privilege_type, SQL_C_CHAR,
-                cur.privilege, sizeof(cur.privilege), &cur.privilege_Len,
+                buf_privilege, sizeof(buf_privilege), &len_privilege,
                 "Failed to bind column for privilege_type"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_admin_option, SQL_C_BIT,
-                &cur.admin_option, sizeof(cur.admin_option), &cur.admin_option_len,
+                &admin_option, sizeof(admin_option), &admin_option_len,
                 "Failed to bind column for admin_option"}
             };
 
@@ -824,9 +989,20 @@ namespace RsMetadataServerProxyHelpers {
 
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
+                SHOWGRANTSCOLUMNResult cur;
+                cur.table_cat = extractStringField(buf_table_cat, sizeof(buf_table_cat), len_table_cat, RsMetadataAPIHelper::kSHOW_GRANTS_database_name);
+                cur.table_schem = extractStringField(buf_table_schem, sizeof(buf_table_schem), len_table_schem, RsMetadataAPIHelper::kSHOW_GRANTS_schema_name);
+                cur.table_name = extractStringField(buf_table_name, sizeof(buf_table_name), len_table_name, RsMetadataAPIHelper::kSHOW_GRANTS_table_name);
+                cur.column_name = extractStringField(buf_column_name, sizeof(buf_column_name), len_column_name, RsMetadataAPIHelper::kSHOW_GRANTS_column_name);
+                cur.grantor = extractStringField(buf_grantor, sizeof(buf_grantor), len_grantor, RsMetadataAPIHelper::kSHOW_GRANTS_grantor);
+                cur.grantee = extractStringField(buf_grantee, sizeof(buf_grantee), len_grantee, RsMetadataAPIHelper::kSHOW_GRANTS_identity_name);
+                cur.privilege = extractStringField(buf_privilege, sizeof(buf_privilege), len_privilege, RsMetadataAPIHelper::kSHOW_GRANTS_privilege_type);
+                cur.admin_option = admin_option_len == SQL_NULL_DATA ? 0 : admin_option;
+                cur.admin_option_len = admin_option_len;
+
                 // Apply pattern matching
-                if(RsMetadataAPIHelper::patternMatch(char2String(cur.column_name), m_column)) {
-                    tempResults.emplace_back(cur);
+                if(RsMetadataAPIHelper::patternMatch(cur.column_name.value_or(""), m_column)) {
+                    tempResults.emplace_back(std::move(cur));
                 }
                 cur = SHOWGRANTSCOLUMNResult{}; // Reset for next row to avoid stale NULL values
             }
@@ -834,12 +1010,12 @@ namespace RsMetadataServerProxyHelpers {
             // Sort the results based on privilege
             std::sort(tempResults.begin(), tempResults.end(),
                 [](const SHOWGRANTSCOLUMNResult& a, const SHOWGRANTSCOLUMNResult& b) {
-                    return char2String(a.privilege) < char2String(b.privilege);
+                    return a.privilege < b.privilege;
             });
 
             m_intermediateRS.insert(m_intermediateRS.end(),
-                          tempResults.begin(),
-                          tempResults.end());
+                          std::make_move_iterator(tempResults.begin()),
+                          std::make_move_iterator(tempResults.end()));
         }
         RS_LOG_TRACE(m_operationName, "number of column privileges: %d", m_intermediateRS.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
@@ -884,28 +1060,36 @@ namespace RsMetadataServerProxyHelpers {
         {
             ColumnBindingCleanup guard(m_stmt);
 
-            SHOWGRANTSTABLEResult cur;
+            // Local fixed buffers for SQLBindCol targets
+            SQLCHAR buf_table_cat[NAMEDATALEN] = {0};       SQLLEN len_table_cat = 0;
+            SQLCHAR buf_table_schem[NAMEDATALEN] = {0};     SQLLEN len_table_schem = 0;
+            SQLCHAR buf_table_name[NAMEDATALEN] = {0};      SQLLEN len_table_name = 0;
+            SQLCHAR buf_grantor[NAMEDATALEN] = {0};         SQLLEN len_grantor = 0;
+            SQLCHAR buf_grantee[NAMEDATALEN] = {0};         SQLLEN len_grantee = 0;
+            SQLCHAR buf_privilege[NAMEDATALEN] = {0};       SQLLEN len_privilege = 0;
+            SQLSMALLINT admin_option = 0;                   SQLLEN admin_option_len = 0;
+
             std::vector<ColumnBinding> bindings = {
                 {RsMetadataAPIHelper::kSHOW_GRANTS_database_name, SQL_C_CHAR,
-                cur.table_cat, sizeof(cur.table_cat), &cur.table_cat_Len,
+                buf_table_cat, sizeof(buf_table_cat), &len_table_cat,
                 "Failed to bind column for database_name"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_schema_name, SQL_C_CHAR,
-                cur.table_schem, sizeof(cur.table_schem), &cur.table_schem_Len,
+                buf_table_schem, sizeof(buf_table_schem), &len_table_schem,
                 "Failed to bind column for schema_name"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_object_name, SQL_C_CHAR,
-                cur.table_name, sizeof(cur.table_name), &cur.table_name_Len,
+                buf_table_name, sizeof(buf_table_name), &len_table_name,
                 "Failed to bind column for table_name"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_grantor, SQL_C_CHAR,
-                cur.grantor, sizeof(cur.grantor), &cur.grantor_Len,
+                buf_grantor, sizeof(buf_grantor), &len_grantor,
                 "Failed to bind column for grantor"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_identity_name, SQL_C_CHAR,
-                cur.grantee, sizeof(cur.grantee), &cur.grantee_Len,
+                buf_grantee, sizeof(buf_grantee), &len_grantee,
                 "Failed to bind column for identity_name"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_privilege_type, SQL_C_CHAR,
-                cur.privilege, sizeof(cur.privilege), &cur.privilege_Len,
+                buf_privilege, sizeof(buf_privilege), &len_privilege,
                 "Failed to bind column for privilege_type"},
                 {RsMetadataAPIHelper::kSHOW_GRANTS_admin_option, SQL_C_BIT,
-                &cur.admin_option, sizeof(cur.admin_option), &cur.admin_option_len,
+                &admin_option, sizeof(admin_option), &admin_option_len,
                 "Failed to bind column for admin_option"}
             };
 
@@ -919,19 +1103,27 @@ namespace RsMetadataServerProxyHelpers {
 
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
-                tempResults.emplace_back(cur);
-                cur = SHOWGRANTSTABLEResult{}; // Reset for next row to avoid stale NULL values
+                SHOWGRANTSTABLEResult cur;
+                cur.table_cat = extractStringField(buf_table_cat, sizeof(buf_table_cat), len_table_cat, RsMetadataAPIHelper::kSHOW_GRANTS_database_name);
+                cur.table_schem = extractStringField(buf_table_schem, sizeof(buf_table_schem), len_table_schem, RsMetadataAPIHelper::kSHOW_GRANTS_schema_name);
+                cur.table_name = extractStringField(buf_table_name, sizeof(buf_table_name), len_table_name, RsMetadataAPIHelper::kSHOW_GRANTS_object_name);
+                cur.grantor = extractStringField(buf_grantor, sizeof(buf_grantor), len_grantor, RsMetadataAPIHelper::kSHOW_GRANTS_grantor);
+                cur.grantee = extractStringField(buf_grantee, sizeof(buf_grantee), len_grantee, RsMetadataAPIHelper::kSHOW_GRANTS_identity_name);
+                cur.privilege = extractStringField(buf_privilege, sizeof(buf_privilege), len_privilege, RsMetadataAPIHelper::kSHOW_GRANTS_privilege_type);
+                cur.admin_option = admin_option_len == SQL_NULL_DATA ? 0 : admin_option;
+                cur.admin_option_len = admin_option_len;
+                tempResults.emplace_back(std::move(cur));
             }
 
             // Sort the results based on privilege
             std::sort(tempResults.begin(), tempResults.end(),
                 [](const SHOWGRANTSTABLEResult& a, const SHOWGRANTSTABLEResult& b) {
-                    return char2String(a.privilege) < char2String(b.privilege);
+                    return a.privilege < b.privilege;
             });
 
             m_intermediateRS.insert(m_intermediateRS.end(),
-                          tempResults.begin(),
-                          tempResults.end());
+                          std::make_move_iterator(tempResults.begin()),
+                          std::make_move_iterator(tempResults.end()));
         }
         RS_LOG_TRACE(m_operationName, "number of table privileges: %d", m_intermediateRS.size());
         return (rc == SQL_NO_DATA) ? SQL_SUCCESS : rc;
@@ -986,7 +1178,12 @@ namespace RsMetadataServerProxyHelpers {
         {
             ColumnBindingCleanup guard(m_stmt);
 
-            SHOWPROCEDURESFUNCTIONSResult cur;
+            // Local fixed buffers for SQLBindCol targets
+            SQLCHAR buf_object_cat[NAMEDATALEN] = {0};      SQLLEN len_object_cat = 0;
+            SQLCHAR buf_object_schem[NAMEDATALEN] = {0};    SQLLEN len_object_schem = 0;
+            SQLCHAR buf_object_name[NAMEDATALEN] = {0};     SQLLEN len_object_name = 0;
+            SQLCHAR buf_argument_list[4096] = {0};          SQLLEN len_argument_list = 0;
+
             std::string database_name = isProcedures 
                 ? RsMetadataAPIHelper::kSHOW_PROCEDURES_database_name
                 : RsMetadataAPIHelper::kSHOW_FUNCTIONS_database_name;
@@ -1005,16 +1202,16 @@ namespace RsMetadataServerProxyHelpers {
 
             std::vector<ColumnBinding> bindings = {
                 {database_name, SQL_C_CHAR,
-                cur.object_cat, sizeof(cur.object_cat), &cur.object_cat_Len,
+                buf_object_cat, sizeof(buf_object_cat), &len_object_cat,
                 "Failed to bind column for database_name"},
                 {schema_name, SQL_C_CHAR,
-                cur.object_schem, sizeof(cur.object_schem), &cur.object_schem_Len,
+                buf_object_schem, sizeof(buf_object_schem), &len_object_schem,
                 "Failed to bind column for schema_name"},
                 {procedure_function_name, SQL_C_CHAR,
-                cur.object_name, sizeof(cur.object_name), &cur.object_name_Len,
+                buf_object_name, sizeof(buf_object_name), &len_object_name,
                 "Failed to bind column for procedure_name / function_name"},
                 {argument_list, SQL_C_CHAR,
-                cur.argument_list, sizeof(cur.argument_list), &cur.argument_list_Len,
+                buf_argument_list, sizeof(buf_argument_list), &len_argument_list,
                 "Failed to bind column for argument list"}
             };
 
@@ -1024,15 +1221,18 @@ namespace RsMetadataServerProxyHelpers {
                 return rc;
             }
 
-            cur.object_type = isProcedures ? SQL_PT_PROCEDURE : SQL_PT_FUNCTION;
-            cur.object_type_Len = sizeof(SQLSMALLINT);
+            SQLSMALLINT object_type = isProcedures ? SQL_PT_PROCEDURE : SQL_PT_FUNCTION;
 
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
-                m_intermediateRS.emplace_back(cur);
-                cur = SHOWPROCEDURESFUNCTIONSResult{}; // Reset for next row to avoid stale NULL values
-                cur.object_type = isProcedures ? SQL_PT_PROCEDURE : SQL_PT_FUNCTION;
+                SHOWPROCEDURESFUNCTIONSResult cur;
+                cur.object_cat = extractStringField(buf_object_cat, sizeof(buf_object_cat), len_object_cat, database_name);
+                cur.object_schem = extractStringField(buf_object_schem, sizeof(buf_object_schem), len_object_schem, schema_name);
+                cur.object_name = extractStringField(buf_object_name, sizeof(buf_object_name), len_object_name, procedure_function_name);
+                cur.argument_list = extractStringField(buf_argument_list, sizeof(buf_argument_list), len_argument_list, argument_list);
+                cur.object_type = object_type;
                 cur.object_type_Len = sizeof(SQLSMALLINT);
+                m_intermediateRS.emplace_back(std::move(cur));
             }
         }
         RS_LOG_TRACE(m_operationName, "number of procedures/functions: %d", m_intermediateRS.size());
@@ -1088,41 +1288,52 @@ namespace RsMetadataServerProxyHelpers {
         {
             ColumnBindingCleanup guard(m_stmt);
 
-            SHOWCOLUMNSResult cur;
+            // Local fixed buffers for SQLBindCol targets
+            SQLCHAR buf_database_name[NAMEDATALEN] = {0};       SQLLEN len_database_name = 0;
+            SQLCHAR buf_schema_name[NAMEDATALEN] = {0};         SQLLEN len_schema_name = 0;
+            SQLCHAR buf_procedure_function_name[NAMEDATALEN] = {0}; SQLLEN len_procedure_function_name = 0;
+            SQLCHAR buf_column_name[NAMEDATALEN] = {0};         SQLLEN len_column_name = 0;
+            SQLCHAR buf_parameter_type[NAMEDATALEN] = {0};      SQLLEN len_parameter_type = 0;
+            SQLSMALLINT ordinal_position = 0;                   SQLLEN ordinal_position_Len = 0;
+            SQLCHAR buf_data_type[NAMEDATALEN] = {0};           SQLLEN len_data_type = 0;
+            SQLINTEGER character_maximum_length = 0;             SQLLEN character_maximum_length_Len = 0;
+            SQLSMALLINT numeric_precision = 0;                  SQLLEN numeric_precision_Len = 0;
+            SQLSMALLINT numeric_scale = 0;                      SQLLEN numeric_scale_Len = 0;
+
             std::string object_name = isProcedure
                 ? RsMetadataAPIHelper::kSHOW_PARAMETERS_procedure_name
                 : RsMetadataAPIHelper::kSHOW_PARAMETERS_function_name;
 
             std::vector<ColumnBinding> bindings = {
                 {RsMetadataAPIHelper::kSHOW_PARAMETERS_database_name, SQL_C_CHAR,
-                cur.database_name, sizeof(cur.database_name), &cur.database_name_Len,
+                buf_database_name, sizeof(buf_database_name), &len_database_name,
                 "Failed to bind column for database_name"},
                 {RsMetadataAPIHelper::kSHOW_PARAMETERS_schema_name, SQL_C_CHAR,
-                cur.schema_name, sizeof(cur.schema_name), &cur.schema_name_Len,
+                buf_schema_name, sizeof(buf_schema_name), &len_schema_name,
                 "Failed to bind column for schema_name"},
                 {object_name, SQL_C_CHAR,
-                cur.procedure_function_name, sizeof(cur.procedure_function_name), &cur.procedure_function_name_Len,
+                buf_procedure_function_name, sizeof(buf_procedure_function_name), &len_procedure_function_name,
                 "Failed to bind column for procedure/function name"},
                 {RsMetadataAPIHelper::kSHOW_PARAMETERS_parameter_name, SQL_C_CHAR,
-                cur.column_name, sizeof(cur.column_name), &cur.column_name_Len,
+                buf_column_name, sizeof(buf_column_name), &len_column_name,
                 "Failed to bind column for column_name"},
                 {RsMetadataAPIHelper::kSHOW_PARAMETERS_parameter_type, SQL_C_CHAR,
-                cur.parameter_type, sizeof(cur.parameter_type), &cur.parameter_type_Len,
+                buf_parameter_type, sizeof(buf_parameter_type), &len_parameter_type,
                 "Failed to bind column for parameter_type"},
                 {RsMetadataAPIHelper::kSHOW_PARAMETERS_ordinal_position, SQL_C_SSHORT,
-                &cur.ordinal_position, sizeof(cur.ordinal_position), &cur.ordinal_position_Len,
+                &ordinal_position, sizeof(ordinal_position), &ordinal_position_Len,
                 "Failed to bind column for ordinal_position"},
                 {RsMetadataAPIHelper::kSHOW_PARAMETERS_data_type, SQL_C_CHAR,
-                cur.data_type, sizeof(cur.data_type), &cur.data_type_Len,
+                buf_data_type, sizeof(buf_data_type), &len_data_type,
                 "Failed to bind column for data_type"},
                 {RsMetadataAPIHelper::kSHOW_PARAMETERS_character_maximum_length, SQL_C_SLONG,
-                &cur.character_maximum_length, sizeof(cur.character_maximum_length), &cur.character_maximum_length_Len,
+                &character_maximum_length, sizeof(character_maximum_length), &character_maximum_length_Len,
                 "Failed to bind column for character_maximum_length"},
                 {RsMetadataAPIHelper::kSHOW_PARAMETERS_numeric_precision, SQL_C_SSHORT,
-                &cur.numeric_precision, sizeof(cur.numeric_precision), &cur.numeric_precision_Len,
+                &numeric_precision, sizeof(numeric_precision), &numeric_precision_Len,
                 "Failed to bind column for numeric_precision"},
                 {RsMetadataAPIHelper::kSHOW_PARAMETERS_numeric_scale, SQL_C_SSHORT,
-                &cur.numeric_scale, sizeof(cur.numeric_scale), &cur.numeric_scale_Len,
+                &numeric_scale, sizeof(numeric_scale), &numeric_scale_Len,
                 "Failed to bind column for numeric_scale"}
             };
 
@@ -1134,8 +1345,22 @@ namespace RsMetadataServerProxyHelpers {
 
             while (SQL_SUCCEEDED(rc = RS_STMT_INFO::RS_SQLFetchScroll(
                                     m_pStmt, SQL_FETCH_NEXT, 0))) {
-                m_intermediateRS.emplace_back(cur);
-                cur = SHOWCOLUMNSResult{}; // Reset for next row to avoid stale NULL values
+                SHOWCOLUMNSResult cur;
+                cur.database_name = extractStringField(buf_database_name, sizeof(buf_database_name), len_database_name, RsMetadataAPIHelper::kSHOW_PARAMETERS_database_name);
+                cur.schema_name = extractStringField(buf_schema_name, sizeof(buf_schema_name), len_schema_name, RsMetadataAPIHelper::kSHOW_PARAMETERS_schema_name);
+                cur.procedure_function_name = extractStringField(buf_procedure_function_name, sizeof(buf_procedure_function_name), len_procedure_function_name, object_name);
+                cur.column_name = extractStringField(buf_column_name, sizeof(buf_column_name), len_column_name, RsMetadataAPIHelper::kSHOW_PARAMETERS_parameter_name);
+                cur.parameter_type = extractStringField(buf_parameter_type, sizeof(buf_parameter_type), len_parameter_type, RsMetadataAPIHelper::kSHOW_PARAMETERS_parameter_type);
+                cur.ordinal_position = ordinal_position_Len == SQL_NULL_DATA ? 0 : ordinal_position;
+                cur.ordinal_position_Len = ordinal_position_Len;
+                cur.data_type = extractStringField(buf_data_type, sizeof(buf_data_type), len_data_type, RsMetadataAPIHelper::kSHOW_PARAMETERS_data_type);
+                cur.character_maximum_length = character_maximum_length_Len == SQL_NULL_DATA ? 0 : character_maximum_length;
+                cur.character_maximum_length_Len = character_maximum_length_Len;
+                cur.numeric_precision = numeric_precision_Len == SQL_NULL_DATA ? 0 : numeric_precision;
+                cur.numeric_precision_Len = numeric_precision_Len;
+                cur.numeric_scale = numeric_scale_Len == SQL_NULL_DATA ? 0 : numeric_scale;
+                cur.numeric_scale_Len = numeric_scale_Len;
+                m_intermediateRS.emplace_back(std::move(cur));
             }
         }
         RS_LOG_TRACE(m_operationName, "number of procedure/function columns: %d", m_intermediateRS.size());

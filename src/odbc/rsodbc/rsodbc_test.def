@@ -223,6 +223,7 @@ EXPORTS
 	?getSqlTablePrivilegesColName@RsMetadataAPIHelper@@SAPEBDH@Z
 	?getSqlProceduresColName@RsMetadataAPIHelper@@SAPEBDH@Z
 	?getSqlProcedureColumnsColName@RsMetadataAPIHelper@@SAPEBDH@Z
+	?sqlSchemasPostProcessing@RsMetadataAPIPostProcessor@@SAFPEAXAEBV?$vector@USHOWSCHEMASResult@@V?$allocator@USHOWSCHEMASResult@@@std@@@std@@@Z
 	?sqlTablesPostProcessing@RsMetadataAPIPostProcessor@@SAFPEAXV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV?$vector@USHOWTABLESResult@@V?$allocator@USHOWTABLESResult@@@std@@@3@@Z
 	?sqlColumnsPostProcessing@RsMetadataAPIPostProcessor@@SAFPEAXAEBV?$vector@USHOWCOLUMNSResult@@V?$allocator@USHOWCOLUMNSResult@@@std@@@std@@@Z
 	?sqlPrimaryKeysPostProcessing@RsMetadataAPIPostProcessor@@SAFPEAXAEBV?$vector@USHOWCONSTRAINTSPRIMARYKEYSResult@@V?$allocator@USHOWCONSTRAINTSPRIMARYKEYSResult@@@std@@@std@@@Z
@@ -239,6 +240,8 @@ EXPORTS
 	PQntuples
 	PQnfields
 	PQfname
+	PQgetlength
+	PQgetisnull
 	PQgetvalue
 	getRsLoglevel
 	copyWBinaryDataBigLen

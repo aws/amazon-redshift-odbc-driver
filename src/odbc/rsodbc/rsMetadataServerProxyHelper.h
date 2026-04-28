@@ -60,6 +60,21 @@ namespace RsMetadataServerProxyHelpers {
         SQLRETURN columnBindingHelper(std::vector<ColumnBinding>& bindings);
 
         /**
+         * @brief Extract a string field from a bound buffer, using SQLGetData
+         *        if the data was truncated during fetch.
+         *        Fast path: if _Len < bufSize, the data fits — just construct from buffer.
+         *        Slow path: if _Len >= bufSize, data was truncated by RS_SQLFetchScroll.
+         *
+         * @param buf       The fixed buffer that was bound via SQLBindCol
+         * @param bufSize   sizeof(buf)
+         * @param len       The length indicator set by RS_SQLFetchScroll
+         * @param colName   Column name
+         * @return The complete (non-truncated) string value, or std::nullopt for SQL NULL
+         */
+        std::optional<std::string> extractStringField(const SQLCHAR* buf, SQLLEN bufSize,
+                                       SQLLEN len, const std::string& colName);
+
+        /**
          * @class ColumnBindingCleanup
          * @brief RAII guard for automatic ODBC column binding cleanup
          * 

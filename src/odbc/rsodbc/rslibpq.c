@@ -3145,7 +3145,7 @@ void setDescRecAttributes(RS_STMT_INFO *pStmt, RS_DESC_REC *pDescRec,
     } else {
         // Set size for special column names or use default
         if (strcmp(pName, "REMARKS") == 0) {
-            pDescRec->iSize = MAX_REMARK_LEN;
+            pDescRec->iSize = DEFAULT_MAX_REMARK_LEN;
         } else if (strcmp(pName, "COLUMN_DEF") == 0) {
             pDescRec->iSize = MAX_COLUMN_DEF_LEN;
         } else {
@@ -3310,6 +3310,26 @@ SQLRETURN libpqInitializeResultSetField(RS_STMT_INFO *pStmt, char **colName,
     PQcleanupCustomizeAttrs(column, colNum);
     RS_LOG_TRACE("rslibpq", "Successfully create empty PGresult object");
     return rc;
+}
+
+/**
+ * @brief Helper to call PQsetvalue with a std::optional<std::string> field.
+ *
+ * If the optional has a value, passes data/size to PQsetvalue.
+ * If nullopt, passes NULL/NULL_LEN to store a proper SQL NULL.
+ *
+ * @param res      PGresult to set the value on
+ * @param rowNum   Row index (0-based)
+ * @param colNum   Column index (0-based)
+ * @param val      Optional string value; nullopt produces SQL NULL
+ */
+static inline void setOptionalValue(PGresult *res, int rowNum, int colNum,
+                                       const std::optional<std::string>& val) {
+    if (val.has_value()) {
+        PQsetvalue(res, rowNum, colNum, val->data(), val->size());
+    } else {
+        PQsetvalue(res, rowNum, colNum, NULL, NULL_LEN);
+    }
 }
 
 SQLRETURN libpqCreateSQLGetTypeInfoCustomizedResultSet(
@@ -3479,12 +3499,10 @@ SQLRETURN libpqCreateSQLSchemasCustomizedResultSet(
     }
 
     for (int i = 0; i < intermediateRSSize; i++) {
-        PQsetvalue(res, i, kSQLTables_TABLE_CATALOG_COL_NUM,
-                   (char *)intermediateRS[i].database_name,
-                   intermediateRS[i].database_name_Len);
-        PQsetvalue(res, i, kSQLTables_TABLE_SCHEM_COL_NUM,
-                   (char *)intermediateRS[i].schema_name,
-                   intermediateRS[i].schema_name_Len);
+        setOptionalValue(res, i, kSQLTables_TABLE_CATALOG_COL_NUM,
+                   intermediateRS[i].database_name);
+        setOptionalValue(res, i, kSQLTables_TABLE_SCHEM_COL_NUM,
+                   intermediateRS[i].schema_name);
         PQsetvalue(res, i, kSQLTables_TABLE_NAME_COL_NUM, NULL, NULL_LEN);
         PQsetvalue(res, i, kSQLTables_TABLE_TYPE_COL_NUM, NULL, NULL_LEN);
         PQsetvalue(res, i, kSQLTables_REMARKS_COL_NUM, NULL, NULL_LEN);
@@ -3591,38 +3609,28 @@ SQLRETURN libpqCreateSQLTablesCustomizedResultSet(
 
     for (int i = 0; i < intermediateRSSize; i++) {
         if (tableType.empty() ||
-            typeSet.find(char2String(intermediateRS[i].table_type)) !=
+            typeSet.find(intermediateRS[i].table_type.value_or("")) !=
                 typeSet.end()) {
-            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_CATALOG_COL_NUM,
-                       (char *)intermediateRS[i].database_name,
-                       intermediateRS[i].database_name_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_SCHEM_COL_NUM,
-                       (char *)intermediateRS[i].schema_name,
-                       intermediateRS[i].schema_name_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_NAME_COL_NUM,
-                       (char *)intermediateRS[i].table_name,
-                       intermediateRS[i].table_name_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_TYPE_COL_NUM,
-                       (char *)intermediateRS[i].table_type,
-                       intermediateRS[i].table_type_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_REMARKS_COL_NUM,
-                       (char *)intermediateRS[i].remarks,
-                       intermediateRS[i].remarks_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_OWNER_COL_NUM,
-                       (char *)intermediateRS[i].owner,
-                       intermediateRS[i].owner_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_LAST_ALTERED_TIME_COL_NUM,
-                       (char *)intermediateRS[i].last_altered_time,
-                       intermediateRS[i].last_altered_time_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_LAST_MODIFIED_TIME_COL_NUM,
-                       (char *)intermediateRS[i].last_modified_time,
-                       intermediateRS[i].last_modified_time_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_DIST_STYLE_COL_NUM,
-                       (char *)intermediateRS[i].dist_style,
-                       intermediateRS[i].dist_style_Len);
-            PQsetvalue(res, finalRowNum, kSQLTables_TABLE_SUBTYPE_COL_NUM,
-                       (char *)intermediateRS[i].table_subtype,
-                       intermediateRS[i].table_subtype_Len);
+            setOptionalValue(res, finalRowNum, kSQLTables_TABLE_CATALOG_COL_NUM,
+                       intermediateRS[i].database_name);
+            setOptionalValue(res, finalRowNum, kSQLTables_TABLE_SCHEM_COL_NUM,
+                       intermediateRS[i].schema_name);
+            setOptionalValue(res, finalRowNum, kSQLTables_TABLE_NAME_COL_NUM,
+                       intermediateRS[i].table_name);
+            setOptionalValue(res, finalRowNum, kSQLTables_TABLE_TYPE_COL_NUM,
+                       intermediateRS[i].table_type);
+            setOptionalValue(res, finalRowNum, kSQLTables_REMARKS_COL_NUM,
+                       intermediateRS[i].remarks);
+            setOptionalValue(res, finalRowNum, kSQLTables_OWNER_COL_NUM,
+                       intermediateRS[i].owner);
+            setOptionalValue(res, finalRowNum, kSQLTables_LAST_ALTERED_TIME_COL_NUM,
+                       intermediateRS[i].last_altered_time);
+            setOptionalValue(res, finalRowNum, kSQLTables_LAST_MODIFIED_TIME_COL_NUM,
+                       intermediateRS[i].last_modified_time);
+            setOptionalValue(res, finalRowNum, kSQLTables_DIST_STYLE_COL_NUM,
+                       intermediateRS[i].dist_style);
+            setOptionalValue(res, finalRowNum, kSQLTables_TABLE_SUBTYPE_COL_NUM,
+                       intermediateRS[i].table_subtype);
             finalRowNum += 1;
         }
     }
@@ -3689,7 +3697,7 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
         num_pre_radix = 0;
         dateTimeCustomizePrecision = false;
         std::string rsType;
-        std::string dataType = char2String(intermediateRS[i].data_type);
+        std::string dataType = intermediateRS[i].data_type.value_or("");
 
         ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
             dataType,
@@ -3729,24 +3737,20 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
             rsType, intermediateRS[i].character_maximum_length);
 
         // Catalog name
-        PQsetvalue(res, i, kSQLColumns_TABLE_CAT_COL_NUM,
-                   (char *)intermediateRS[i].database_name,
-                   intermediateRS[i].database_name_Len);
+        setOptionalValue(res, i, kSQLColumns_TABLE_CAT_COL_NUM,
+                   intermediateRS[i].database_name);
 
         // Schema name
-        PQsetvalue(res, i, kSQLColumns_TABLE_SCHEM_COL_NUM,
-                   (char *)intermediateRS[i].schema_name,
-                   intermediateRS[i].schema_name_Len);
+        setOptionalValue(res, i, kSQLColumns_TABLE_SCHEM_COL_NUM,
+                   intermediateRS[i].schema_name);
 
         // Table name
-        PQsetvalue(res, i, kSQLColumns_TABLE_NAME_COL_NUM,
-                   (char *)intermediateRS[i].table_name,
-                   intermediateRS[i].table_name_Len);
+        setOptionalValue(res, i, kSQLColumns_TABLE_NAME_COL_NUM,
+                   intermediateRS[i].table_name);
 
         // Column name
-        PQsetvalue(res, i, kSQLColumns_COLUMN_NAME_COL_NUM,
-                   (char *)intermediateRS[i].column_name,
-                   intermediateRS[i].column_name_Len);
+        setOptionalValue(res, i, kSQLColumns_COLUMN_NAME_COL_NUM,
+                   intermediateRS[i].column_name);
 
         // SQL type (concise data type)
         numStr = std::to_string(sqlType);
@@ -3797,19 +3801,17 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
 
         // Nullable
         numStr = std::to_string(RsMetadataAPIHelper::getNullable(
-            char2String(intermediateRS[i].is_nullable)));
+            intermediateRS[i].is_nullable.value_or("")));
         PQsetvalue(res, i, kSQLColumns_NULLABLE_COL_NUM, numStr.data(),
                    numStr.size());
 
         // Remarks
-        PQsetvalue(res, i, kSQLColumns_REMARKS_COL_NUM,
-                   (char *)intermediateRS[i].remarks,
-                   intermediateRS[i].remarks_Len);
+        setOptionalValue(res, i, kSQLColumns_REMARKS_COL_NUM,
+                   intermediateRS[i].remarks);
 
         // Column default
-        PQsetvalue(res, i, kSQLColumns_COLUMN_DEF_COL_NUM,
-                   (char *)intermediateRS[i].column_default,
-                   intermediateRS[i].column_default_Len);
+        setOptionalValue(res, i, kSQLColumns_COLUMN_DEF_COL_NUM,
+                   intermediateRS[i].column_default);
 
         // SQL Data type (non-concise data type)
         numStr = std::to_string(sqlDataType);
@@ -3840,14 +3842,12 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
                    numStr.size());
 
         // Is nullable
-        PQsetvalue(res, i, kSQLColumns_IS_NULLABLE_COL_NUM,
-                   (char *)intermediateRS[i].is_nullable,
-                   intermediateRS[i].is_nullable_Len);
+        setOptionalValue(res, i, kSQLColumns_IS_NULLABLE_COL_NUM,
+                   intermediateRS[i].is_nullable);
 
         // Sort key type
-        PQsetvalue(res, i, kSQLColumns_SORT_KEY_TYPE_COL_NUM,
-                   (char *)intermediateRS[i].sort_key_type,
-                   intermediateRS[i].sort_key_type_Len);
+        setOptionalValue(res, i, kSQLColumns_SORT_KEY_TYPE_COL_NUM,
+                   intermediateRS[i].sort_key_type);
 
         // Sort key
         if (intermediateRS[i].sort_key_Len == SQL_NULL_DATA) {
@@ -3867,14 +3867,12 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
                     numStr.size());
         }
         // Encoding
-        PQsetvalue(res, i, kSQLColumns_ENCODING_COL_NUM,
-                   (char *)intermediateRS[i].encoding,
-                   intermediateRS[i].encoding_Len);
+        setOptionalValue(res, i, kSQLColumns_ENCODING_COL_NUM,
+                   intermediateRS[i].encoding);
 
         // Collation
-        PQsetvalue(res, i, kSQLColumns_COLLATION_COL_NUM,
-                   (char *)intermediateRS[i].collation,
-                   intermediateRS[i].collation_Len);
+        setOptionalValue(res, i, kSQLColumns_COLLATION_COL_NUM,
+                   intermediateRS[i].collation);
     }
 
     return SQL_SUCCESS;
@@ -3910,24 +3908,20 @@ SQLRETURN libpqCreateSQLPrimaryKeysCustomizedResultSet(
         const auto& row = intermediateRS[i];
 
         // TABLE_CAT (catalog name)
-        PQsetvalue(res, i, kSQLPrimaryKeys_TABLE_CAT_COL_NUM,
-                   (char *)row.database_name,
-                   row.database_name_Len);
+        setOptionalValue(res, i, kSQLPrimaryKeys_TABLE_CAT_COL_NUM,
+                   row.database_name);
 
         // TABLE_SCHEM (schema name)
-        PQsetvalue(res, i, kSQLPrimaryKeys_TABLE_SCHEM_COL_NUM,
-                   (char *)row.schema_name,
-                   row.schema_name_Len);
+        setOptionalValue(res, i, kSQLPrimaryKeys_TABLE_SCHEM_COL_NUM,
+                   row.schema_name);
 
         // TABLE_NAME
-        PQsetvalue(res, i, kSQLPrimaryKeys_TABLE_NAME_COL_NUM,
-                   (char *)row.table_name,
-                   row.table_name_Len);
+        setOptionalValue(res, i, kSQLPrimaryKeys_TABLE_NAME_COL_NUM,
+                   row.table_name);
 
         // COLUMN_NAME
-        PQsetvalue(res, i, kSQLPrimaryKeys_COLUMN_NAME_COL_NUM,
-                   (char *)row.column_name,
-                   row.column_name_Len);
+        setOptionalValue(res, i, kSQLPrimaryKeys_COLUMN_NAME_COL_NUM,
+                   row.column_name);
 
         // KEY_SEQ (sequence number within primary key)
         std::string keySeqStr = std::to_string(row.key_seq);
@@ -3938,9 +3932,8 @@ SQLRETURN libpqCreateSQLPrimaryKeysCustomizedResultSet(
         }
 
         // PK_NAME (primary key name)
-        PQsetvalue(res, i, kSQLPrimaryKeys_PK_NAME_COL_NUM,
-                   (char *)row.pk_name,
-                   row.pk_name_Len);
+        setOptionalValue(res, i, kSQLPrimaryKeys_PK_NAME_COL_NUM,
+                   row.pk_name);
     }
 
     return SQL_SUCCESS;
@@ -3977,44 +3970,36 @@ SQLRETURN libpqCreateSQLForeignKeysCustomizedResultSet(
     std::string numStr = {0};
     for (int i = 0; i < intermediateRSSize; i++) {
         // pk Catalog name
-        PQsetvalue(res, i, kSQLForeignKeys_PKTABLE_CAT_COL_NUM,
-                   (char *)intermediateRS[i].pk_table_cat,
-                   intermediateRS[i].pk_table_cat_Len);
+        setOptionalValue(res, i, kSQLForeignKeys_PKTABLE_CAT_COL_NUM,
+                   intermediateRS[i].pk_table_cat);
 
         // pk Schema name
-        PQsetvalue(res, i, kSQLForeignKeys_PKTABLE_SCHEM_COL_NUM,
-                   (char *)intermediateRS[i].pk_table_schem,
-                   intermediateRS[i].pk_table_schem_Len);
+        setOptionalValue(res, i, kSQLForeignKeys_PKTABLE_SCHEM_COL_NUM,
+                   intermediateRS[i].pk_table_schem);
 
         // pk Table name
-        PQsetvalue(res, i, kSQLForeignKeys_PKTABLE_NAME_COL_NUM,
-                   (char *)intermediateRS[i].pk_table_name,
-                   intermediateRS[i].pk_table_name_Len);
+        setOptionalValue(res, i, kSQLForeignKeys_PKTABLE_NAME_COL_NUM,
+                   intermediateRS[i].pk_table_name);
 
         // pk Column name
-        PQsetvalue(res, i, kSQLForeignKeys_PKCOLUMN_NAME_COL_NUM,
-                   (char *)intermediateRS[i].pk_column_name,
-                   intermediateRS[i].pk_column_name_Len);
+        setOptionalValue(res, i, kSQLForeignKeys_PKCOLUMN_NAME_COL_NUM,
+                   intermediateRS[i].pk_column_name);
 
         // fk Catalog name
-        PQsetvalue(res, i, kSQLForeignKeys_FKTABLE_CAT_COL_NUM,
-                   (char *)intermediateRS[i].fk_table_cat,
-                   intermediateRS[i].fk_table_cat_Len);
+        setOptionalValue(res, i, kSQLForeignKeys_FKTABLE_CAT_COL_NUM,
+                   intermediateRS[i].fk_table_cat);
 
         // fk Schema name
-        PQsetvalue(res, i, kSQLForeignKeys_FKTABLE_SCHEM_COL_NUM,
-                   (char *)intermediateRS[i].fk_table_schem,
-                   intermediateRS[i].fk_table_schem_Len);
+        setOptionalValue(res, i, kSQLForeignKeys_FKTABLE_SCHEM_COL_NUM,
+                   intermediateRS[i].fk_table_schem);
 
         // fk Table name
-        PQsetvalue(res, i, kSQLForeignKeys_FKTABLE_NAME_COL_NUM,
-                   (char *)intermediateRS[i].fk_table_name,
-                   intermediateRS[i].fk_table_name_Len);
+        setOptionalValue(res, i, kSQLForeignKeys_FKTABLE_NAME_COL_NUM,
+                   intermediateRS[i].fk_table_name);
 
         // fk Column name
-        PQsetvalue(res, i, kSQLForeignKeys_FKCOLUMN_NAME_COL_NUM,
-                   (char *)intermediateRS[i].fk_column_name,
-                   intermediateRS[i].fk_column_name_Len);
+        setOptionalValue(res, i, kSQLForeignKeys_FKCOLUMN_NAME_COL_NUM,
+                   intermediateRS[i].fk_column_name);
 
         // Key sequence number
         numStr = std::to_string(intermediateRS[i].key_seq);
@@ -4036,14 +4021,12 @@ SQLRETURN libpqCreateSQLForeignKeysCustomizedResultSet(
                    numStr.size());
 
         // fk name
-        PQsetvalue(res, i, kSQLForeignKeys_FK_NAME_COL_NUM,
-                   (char *)intermediateRS[i].fk_name,
-                   intermediateRS[i].fk_name_Len);
+        setOptionalValue(res, i, kSQLForeignKeys_FK_NAME_COL_NUM,
+                   intermediateRS[i].fk_name);
 
         // pk name
-        PQsetvalue(res, i, kSQLForeignKeys_PK_NAME_COL_NUM,
-                   (char *)intermediateRS[i].pk_name,
-                   intermediateRS[i].pk_name_Len);
+        setOptionalValue(res, i, kSQLForeignKeys_PK_NAME_COL_NUM,
+                   intermediateRS[i].pk_name);
 
         // deferrability
         numStr = std::to_string(intermediateRS[i].deferrability_Len == SQL_NULL_DATA
@@ -4108,7 +4091,7 @@ SQLRETURN libpqCreateSQLSpecialColumnsCustomizedResultSet(
         decimalDigit = 0;
         dateTimeCustomizePrecision = false;
         std::string rsType;
-        std::string dataType = char2String(intermediateRS[i].data_type);
+        std::string dataType = intermediateRS[i].data_type.value_or("");
 
         ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
             dataType,
@@ -4149,9 +4132,8 @@ SQLRETURN libpqCreateSQLSpecialColumnsCustomizedResultSet(
                   strValue.length());
 
         // COLUMN_NAME
-        PQsetvalue(res, i, kSQLSpecialColumns_COLUMN_NAME,
-                  (char *)intermediateRS[i].column_name,
-                  intermediateRS[i].column_name_Len);
+        setOptionalValue(res, i, kSQLSpecialColumns_COLUMN_NAME,
+                  intermediateRS[i].column_name);
 
         // DATA_TYPE
         strValue = std::to_string(sqlType);
@@ -4254,34 +4236,28 @@ SQLRETURN libpqCreateSQLTablePrivilegesCustomizedResultSet(
     std::string isGrantable = "NO";
     for (int i = 0; i < intermediateRSSize; i++) {
         // TABLE_CAT (catalog name)
-        PQsetvalue(res, i, kSQLTablePrivileges_TABLE_CAT_COL_NUM,
-                  (char *)intermediateRS[i].table_cat,
-                  intermediateRS[i].table_cat_Len);
+        setOptionalValue(res, i, kSQLTablePrivileges_TABLE_CAT_COL_NUM,
+                  intermediateRS[i].table_cat);
 
         // TABLE_SCHEM (schema name)
-        PQsetvalue(res, i, kSQLTablePrivileges_TABLE_SCHEM_COL_NUM,
-                  (char *)intermediateRS[i].table_schem,
-                  intermediateRS[i].table_schem_Len);
+        setOptionalValue(res, i, kSQLTablePrivileges_TABLE_SCHEM_COL_NUM,
+                  intermediateRS[i].table_schem);
 
         // TABLE_NAME
-        PQsetvalue(res, i, kSQLTablePrivileges_TABLE_NAME_COL_NUM,
-                  (char *)intermediateRS[i].table_name,
-                  intermediateRS[i].table_name_Len);
+        setOptionalValue(res, i, kSQLTablePrivileges_TABLE_NAME_COL_NUM,
+                  intermediateRS[i].table_name);
 
         // GRANTOR
-        PQsetvalue(res, i, kSQLTablePrivileges_GRANTOR_COL_NUM,
-                  (char *)intermediateRS[i].grantor,
-                  intermediateRS[i].grantor_Len);
+        setOptionalValue(res, i, kSQLTablePrivileges_GRANTOR_COL_NUM,
+                  intermediateRS[i].grantor);
 
         // GRANTEE
-        PQsetvalue(res, i, kSQLTablePrivileges_GRANTEE_COL_NUM,
-                  (char *)intermediateRS[i].grantee,
-                  intermediateRS[i].grantee_Len);
+        setOptionalValue(res, i, kSQLTablePrivileges_GRANTEE_COL_NUM,
+                  intermediateRS[i].grantee);
 
         // PRIVILEGE
-        PQsetvalue(res, i, kSQLTablePrivileges_PRIVILEGE_COL_NUM,
-                  (char *)intermediateRS[i].privilege,
-                  intermediateRS[i].privilege_Len);
+        setOptionalValue(res, i, kSQLTablePrivileges_PRIVILEGE_COL_NUM,
+                  intermediateRS[i].privilege);
 
         // IS_GRANTABLE
         isGrantable = (intermediateRS[i].admin_option_len != SQL_NULL_DATA &&
@@ -4326,39 +4302,32 @@ SQLRETURN libpqCreateSQLColumnPrivilegesCustomizedResultSet(
 
     for (int i = 0; i < intermediateRSSize; i++) {
         // TABLE_CAT
-        PQsetvalue(res, i, kSQLColumnPrivileges_TABLE_CAT_COL_NUM,
-                  (char *)intermediateRS[i].table_cat,
-                  intermediateRS[i].table_cat_Len);
+        setOptionalValue(res, i, kSQLColumnPrivileges_TABLE_CAT_COL_NUM,
+                  intermediateRS[i].table_cat);
 
         // TABLE_SCHEM
-        PQsetvalue(res, i, kSQLColumnPrivileges_TABLE_SCHEM_COL_NUM,
-                  (char *)intermediateRS[i].table_schem,
-                  intermediateRS[i].table_schem_Len);
+        setOptionalValue(res, i, kSQLColumnPrivileges_TABLE_SCHEM_COL_NUM,
+                  intermediateRS[i].table_schem);
 
         // TABLE_NAME
-        PQsetvalue(res, i, kSQLColumnPrivileges_TABLE_NAME_COL_NUM,
-                  (char *)intermediateRS[i].table_name,
-                  intermediateRS[i].table_name_Len);
+        setOptionalValue(res, i, kSQLColumnPrivileges_TABLE_NAME_COL_NUM,
+                  intermediateRS[i].table_name);
 
         // COLUMN_NAME
-        PQsetvalue(res, i, kSQLColumnPrivileges_COLUMN_NAME_COL_NUM,
-                  (char *)intermediateRS[i].column_name,
-                  intermediateRS[i].column_name_Len);
+        setOptionalValue(res, i, kSQLColumnPrivileges_COLUMN_NAME_COL_NUM,
+                  intermediateRS[i].column_name);
 
         // GRANTOR
-        PQsetvalue(res, i, kSQLColumnPrivileges_GRANTOR_COL_NUM,
-                  (char *)intermediateRS[i].grantor,
-                  intermediateRS[i].grantor_Len);
+        setOptionalValue(res, i, kSQLColumnPrivileges_GRANTOR_COL_NUM,
+                  intermediateRS[i].grantor);
 
         // GRANTEE
-        PQsetvalue(res, i, kSQLColumnPrivileges_GRANTEE_COL_NUM,
-                  (char *)intermediateRS[i].grantee,
-                  intermediateRS[i].grantee_Len);
+        setOptionalValue(res, i, kSQLColumnPrivileges_GRANTEE_COL_NUM,
+                  intermediateRS[i].grantee);
 
         // PRIVILEGE
-        PQsetvalue(res, i, kSQLColumnPrivileges_PRIVILEGE_COL_NUM,
-                  (char *)intermediateRS[i].privilege,
-                  intermediateRS[i].privilege_Len);
+        setOptionalValue(res, i, kSQLColumnPrivileges_PRIVILEGE_COL_NUM,
+                  intermediateRS[i].privilege);
 
         // IS_GRANTABLE
         isGrantable = (intermediateRS[i].admin_option_len != SQL_NULL_DATA &&
@@ -4403,19 +4372,16 @@ SQLRETURN libpqCreateSQLProceduresCustomizedResultSet(
 
     for (int i = 0; i < intermediateRSSize; i++) {
         // PROCEDURE_CAT
-        PQsetvalue(res, i, kSQLProcedures_PROCEDURE_CAT_COL_NUM,
-                  (char *)intermediateRS[i].object_cat,
-                  intermediateRS[i].object_cat_Len);
+        setOptionalValue(res, i, kSQLProcedures_PROCEDURE_CAT_COL_NUM,
+                  intermediateRS[i].object_cat);
 
         // PROCEDURE_SCHEM
-        PQsetvalue(res, i, kSQLProcedures_PROCEDURE_SCHEM_COL_NUM,
-                  (char *)intermediateRS[i].object_schem,
-                  intermediateRS[i].object_schem_Len);
+        setOptionalValue(res, i, kSQLProcedures_PROCEDURE_SCHEM_COL_NUM,
+                  intermediateRS[i].object_schem);
 
         // PROCEDURE_NAME
-        PQsetvalue(res, i, kSQLProcedures_PROCEDURE_NAME_COL_NUM,
-                  (char *)intermediateRS[i].object_name,
-                  intermediateRS[i].object_name_Len);
+        setOptionalValue(res, i, kSQLProcedures_PROCEDURE_NAME_COL_NUM,
+                  intermediateRS[i].object_name);
 
         // NUM_INPUT_PARAMS (reserved for future use)
         PQsetvalue(res, i, kSQLProcedures_NUM_INPUT_PARAMS_COL_NUM, NULL, NULL_LEN);
@@ -4496,7 +4462,7 @@ SQLRETURN libpqCreateSQLProcedureColumnsCustomizedResultSet(
         num_pre_radix = 0;
         dateTimeCustomizePrecision = false;
         std::string rsType;
-        std::string dataType = char2String(intermediateRS[i].data_type);
+        std::string dataType = intermediateRS[i].data_type.value_or("");
 
         ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
             dataType,
@@ -4536,28 +4502,24 @@ SQLRETURN libpqCreateSQLProcedureColumnsCustomizedResultSet(
             rsType, intermediateRS[i].character_maximum_length);
 
         // Catalog name
-        PQsetvalue(res, i, kSQLProcedureColumns_PROCEDURE_CAT_COL_NUM,
-                   (char *)intermediateRS[i].database_name,
-                   intermediateRS[i].database_name_Len);
+        setOptionalValue(res, i, kSQLProcedureColumns_PROCEDURE_CAT_COL_NUM,
+                   intermediateRS[i].database_name);
 
         // Schema name
-        PQsetvalue(res, i, kSQLProcedureColumns_PROCEDURE_SCHEM_COL_NUM,
-                   (char *)intermediateRS[i].schema_name,
-                   intermediateRS[i].schema_name_Len);
+        setOptionalValue(res, i, kSQLProcedureColumns_PROCEDURE_SCHEM_COL_NUM,
+                   intermediateRS[i].schema_name);
 
         // Procedure name
-        PQsetvalue(res, i, kSQLProcedureColumns_PROCEDURE_NAME_COL_NUM,
-                   (char *)intermediateRS[i].procedure_function_name,
-                   intermediateRS[i].procedure_function_name_Len);
+        setOptionalValue(res, i, kSQLProcedureColumns_PROCEDURE_NAME_COL_NUM,
+                   intermediateRS[i].procedure_function_name);
 
         // Column name
-        PQsetvalue(res, i, kSQLProcedureColumns_COLUMN_NAME_COL_NUM,
-                   (char *)intermediateRS[i].column_name,
-                   intermediateRS[i].column_name_Len);
+        setOptionalValue(res, i, kSQLProcedureColumns_COLUMN_NAME_COL_NUM,
+                   intermediateRS[i].column_name);
 
         // Column type
         numStr = std::to_string(
-            RsMetadataAPIHelper::getProcedureFunctionColumnType(char2String(intermediateRS[i].parameter_type))
+            RsMetadataAPIHelper::getProcedureFunctionColumnType(intermediateRS[i].parameter_type.value_or(""))
         );
         PQsetvalue(res, i, kSQLProcedureColumns_COLUMN_TYPE_COL_NUM, numStr.data(),
                    numStr.size());

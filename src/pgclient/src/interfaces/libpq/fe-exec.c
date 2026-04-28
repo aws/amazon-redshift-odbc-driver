@@ -450,7 +450,7 @@ dupEvents(PGEvent *events, int count)
  * Returns a non-zero value for success and zero for failure.
  */
 int
-PQsetvalue(PGresult *res, int tup_num, int field_num, char *value, int len)
+PQsetvalue(PGresult *res, int tup_num, int field_num, const char *value, int len)
 {
 	PGresAttValue *attval;
 

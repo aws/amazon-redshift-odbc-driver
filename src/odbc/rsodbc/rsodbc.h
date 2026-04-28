@@ -30,6 +30,7 @@
 #include <set>
 #include <list>
 #include <string_view>
+#include <optional>
 #include <vector>
 
 #include "libpq-fe.h"
@@ -71,7 +72,7 @@
 #define PADB_MAX_PARAMETERS 32767
 #define MAX_LARGE_TEMP_BUF_LEN        1024
 #define MAX_SMALL_TEMP_BUF_LEN        32
-#define MAX_REMARK_LEN     256  // Size of remarks was defined as 256 in padb side
+#define DEFAULT_MAX_REMARK_LEN     1024 // Default Max length of comment defined in padb
 #define MAX_SQL_LEN        1024
 #define MAX_COLUMN_DEF_LEN 4000 // Size of column default was defined as 4000 in padb side
 #define INT2_LEN    5
@@ -956,115 +957,77 @@ typedef struct _tuple {
 
 // Define structure to store SHOW SCHEMAS result for post-processing
 struct SHOWSCHEMASResult {
-    SQLCHAR database_name[NAMEDATALEN] = {0};
-    SQLLEN database_name_Len = 0;
-    SQLCHAR schema_name[NAMEDATALEN] = {0};
-    SQLLEN schema_name_Len = 0;
+    std::optional<std::string> database_name;
+    std::optional<std::string> schema_name;
 };
 
 // Define structure to store SHOW TABLES result for post-processing
 struct SHOWTABLESResult {
-    SQLCHAR database_name[NAMEDATALEN] = {0};
-    SQLLEN database_name_Len = 0;
-    SQLCHAR schema_name[NAMEDATALEN] = {0};
-    SQLLEN schema_name_Len = 0;
-    SQLCHAR table_name[NAMEDATALEN] = {0};
-    SQLLEN table_name_Len = 0;
-    SQLCHAR table_type[NAMEDATALEN] = {0};
-    SQLLEN table_type_Len = 0;
-    SQLCHAR remarks[MAX_REMARK_LEN] = {0};
-    SQLLEN remarks_Len = 0;
-    SQLCHAR owner[NAMEDATALEN] = {0};
-    SQLLEN owner_Len = 0;
-    SQLCHAR last_altered_time[NAMEDATALEN] = {0};
-    SQLLEN last_altered_time_Len = 0;
-    SQLCHAR last_modified_time[NAMEDATALEN] = {0};
-    SQLLEN last_modified_time_Len = 0;
-    SQLCHAR dist_style[NAMEDATALEN] = {0};
-    SQLLEN dist_style_Len = 0;
-    SQLCHAR table_subtype[NAMEDATALEN] = {0};
-    SQLLEN table_subtype_Len = 0;
+    std::optional<std::string> database_name;
+    std::optional<std::string> schema_name;
+    std::optional<std::string> table_name;
+    std::optional<std::string> table_type;
+    std::optional<std::string> remarks;
+    std::optional<std::string> owner;
+    std::optional<std::string> last_altered_time;
+    std::optional<std::string> last_modified_time;
+    std::optional<std::string> dist_style;
+    std::optional<std::string> table_subtype;
 };
 
 // Define structure to store SHOW COLUMNS result for post-processing
 struct SHOWCOLUMNSResult {
-    SQLCHAR database_name[NAMEDATALEN] = {0};
-    SQLLEN database_name_Len = 0;
-    SQLCHAR schema_name[NAMEDATALEN] = {0};
-    SQLLEN schema_name_Len = 0;
-    SQLCHAR table_name[NAMEDATALEN] = {0};
-    SQLLEN table_name_Len = 0;
-    SQLCHAR column_name[NAMEDATALEN] = {0};
-    SQLLEN column_name_Len = 0;
+    std::optional<std::string> database_name;
+    std::optional<std::string> schema_name;
+    std::optional<std::string> table_name;
+    std::optional<std::string> column_name;
     SQLSMALLINT ordinal_position = 0;
     SQLLEN ordinal_position_Len = 0;
-    SQLCHAR column_default[MAX_COLUMN_DEF_LEN] = {0};
-    SQLLEN column_default_Len = 0;
-    SQLCHAR is_nullable[NAMEDATALEN] = {0};
-    SQLLEN is_nullable_Len = 0;
-    SQLCHAR data_type[NAMEDATALEN] = {0};
-    SQLLEN data_type_Len = 0;
+    std::optional<std::string> column_default;
+    std::optional<std::string> is_nullable;
+    std::optional<std::string> data_type;
     SQLINTEGER character_maximum_length = 0;
     SQLLEN character_maximum_length_Len = 0;
     SQLSMALLINT numeric_precision = 0;
     SQLLEN numeric_precision_Len = 0;
     SQLSMALLINT numeric_scale = 0;
     SQLLEN numeric_scale_Len = 0;
-    SQLCHAR remarks[MAX_REMARK_LEN] = {0};
-    SQLLEN remarks_Len = 0;
-    SQLCHAR procedure_function_name[NAMEDATALEN] = {0};
-    SQLLEN procedure_function_name_Len = 0;
-    SQLCHAR parameter_type[NAMEDATALEN] = {0};
-    SQLLEN parameter_type_Len = 0;
-    SQLCHAR sort_key_type[NAMEDATALEN] = {0};
-    SQLLEN sort_key_type_Len = 0;
+    std::optional<std::string> remarks;
+    std::optional<std::string> procedure_function_name;
+    std::optional<std::string> parameter_type;
+    std::optional<std::string> sort_key_type;
     SQLINTEGER sort_key = 0;
     SQLLEN sort_key_Len = 0;
     SQLINTEGER dist_key = 0;
     SQLLEN dist_key_Len = 0;
-    SQLCHAR encoding[NAMEDATALEN] = {0};
-    SQLLEN encoding_Len = 0;
-    SQLCHAR collation[NAMEDATALEN] = {0};
-    SQLLEN collation_Len = 0;
+    std::optional<std::string> encoding;
+    std::optional<std::string> collation;
 };
 
 // Define structure to store SHOW CONSTRAINTS PRIMARY KEYS result for post-processing
 struct SHOWCONSTRAINTSPRIMARYKEYSResult {
-    SQLCHAR database_name[NAMEDATALEN] = {0};
-    SQLLEN database_name_Len = 0;
-    SQLCHAR schema_name[NAMEDATALEN] = {0};
-    SQLLEN schema_name_Len = 0;
-    SQLCHAR table_name[NAMEDATALEN] = {0};
-    SQLLEN table_name_Len = 0;
-    SQLCHAR column_name[NAMEDATALEN] = {0};
-    SQLLEN column_name_Len = 0;
+    std::optional<std::string> database_name;
+    std::optional<std::string> schema_name;
+    std::optional<std::string> table_name;
+    std::optional<std::string> column_name;
     SQLSMALLINT key_seq = 0;
     SQLLEN key_seq_Len = 0;
-    SQLCHAR pk_name[NAMEDATALEN] = {0};
-    SQLLEN pk_name_Len = 0;
+    std::optional<std::string> pk_name;
 };
 
 // Define structure to store SHOW CONSTRAINTS FOREIGN KEYS result for post-processing
 struct SHOWCONSTRAINTSFOREIGNKEYSResult {
     // Primary key table information
-    SQLCHAR pk_table_cat[NAMEDATALEN] = {0};
-    SQLLEN pk_table_cat_Len = 0;
-    SQLCHAR pk_table_schem[NAMEDATALEN] = {0};
-    SQLLEN pk_table_schem_Len = 0;
-    SQLCHAR pk_table_name[NAMEDATALEN] = {0};
-    SQLLEN pk_table_name_Len = 0;
-    SQLCHAR pk_column_name[NAMEDATALEN] = {0};
-    SQLLEN pk_column_name_Len = 0;
+    std::optional<std::string> pk_table_cat;
+    std::optional<std::string> pk_table_schem;
+    std::optional<std::string> pk_table_name;
+    std::optional<std::string> pk_column_name;
 
     // Foreign key table information
-    SQLCHAR fk_table_cat[NAMEDATALEN] = {0};
-    SQLLEN fk_table_cat_Len = 0;
-    SQLCHAR fk_table_schem[NAMEDATALEN] = {0};
-    SQLLEN fk_table_schem_Len = 0;
-    SQLCHAR fk_table_name[NAMEDATALEN] = {0};
-    SQLLEN fk_table_name_Len = 0;
-    SQLCHAR fk_column_name[NAMEDATALEN] = {0};
-    SQLLEN fk_column_name_Len = 0;
+    std::optional<std::string> fk_table_cat;
+    std::optional<std::string> fk_table_schem;
+    std::optional<std::string> fk_table_name;
+    std::optional<std::string> fk_column_name;
 
     // Key sequence
     SQLSMALLINT key_seq = 0;
@@ -1077,10 +1040,8 @@ struct SHOWCONSTRAINTSFOREIGNKEYSResult {
     SQLLEN delete_rule_Len = 0;
 
     // Constraint names
-    SQLCHAR fk_name[NAMEDATALEN] = {0};
-    SQLLEN fk_name_Len = 0;
-    SQLCHAR pk_name[NAMEDATALEN] = {0};
-    SQLLEN pk_name_Len = 0;
+    std::optional<std::string> fk_name;
+    std::optional<std::string> pk_name;
 
     // Deferrability
     SQLSMALLINT deferrability = 0;
@@ -1089,52 +1050,35 @@ struct SHOWCONSTRAINTSFOREIGNKEYSResult {
 
 // Define structure to store SHOW GRANTS ON COLUMN result for post-processing
 struct SHOWGRANTSCOLUMNResult {
-    SQLCHAR table_cat[NAMEDATALEN] = {0};
-    SQLLEN table_cat_Len = 0;
-    SQLCHAR table_schem[NAMEDATALEN] = {0};
-    SQLLEN table_schem_Len = 0;
-    SQLCHAR table_name[NAMEDATALEN] = {0};
-    SQLLEN table_name_Len = 0;
-    SQLCHAR column_name[NAMEDATALEN] = {0};
-    SQLLEN column_name_Len = 0;
-    SQLCHAR grantor[NAMEDATALEN] = {0};
-    SQLLEN grantor_Len = 0;
-    SQLCHAR grantee[NAMEDATALEN] = {0};
-    SQLLEN grantee_Len = 0;
-    SQLCHAR privilege[NAMEDATALEN] = {0};
-    SQLLEN privilege_Len = 0;
+    std::optional<std::string> table_cat;
+    std::optional<std::string> table_schem;
+    std::optional<std::string> table_name;
+    std::optional<std::string> column_name;
+    std::optional<std::string> grantor;
+    std::optional<std::string> grantee;
+    std::optional<std::string> privilege;
     SQLSMALLINT admin_option = 0;
     SQLLEN admin_option_len = 0;
 };
 
 // Define structure to store SHOW GRANTS ON TABLE result for post-processing
 struct SHOWGRANTSTABLEResult {
-    SQLCHAR table_cat[NAMEDATALEN] = {0};
-    SQLLEN table_cat_Len = 0;
-    SQLCHAR table_schem[NAMEDATALEN] = {0};
-    SQLLEN table_schem_Len = 0;
-    SQLCHAR table_name[NAMEDATALEN] = {0};
-    SQLLEN table_name_Len = 0;
-    SQLCHAR grantor[NAMEDATALEN] = {0};
-    SQLLEN grantor_Len = 0;
-    SQLCHAR grantee[NAMEDATALEN] = {0};
-    SQLLEN grantee_Len = 0;
-    SQLCHAR privilege[NAMEDATALEN] = {0};
-    SQLLEN privilege_Len = 0;
+    std::optional<std::string> table_cat;
+    std::optional<std::string> table_schem;
+    std::optional<std::string> table_name;
+    std::optional<std::string> grantor;
+    std::optional<std::string> grantee;
+    std::optional<std::string> privilege;
     SQLSMALLINT admin_option = 0;
     SQLLEN admin_option_len = 0;
 };
 
 // Define structure to store SHOW PROCEDURES/FUNCTIONS result for post-processing
 struct SHOWPROCEDURESFUNCTIONSResult {
-    SQLCHAR object_cat[NAMEDATALEN] = {0};
-    SQLLEN object_cat_Len = 0;
-    SQLCHAR object_schem[NAMEDATALEN] = {0};
-    SQLLEN object_schem_Len = 0;
-    SQLCHAR object_name[NAMEDATALEN] = {0};
-    SQLLEN object_name_Len = 0;
-    SQLCHAR argument_list[4096] = {0}; // 32 * 128 (32 maximum argument)
-    SQLLEN argument_list_Len = 0;
+    std::optional<std::string> object_cat;
+    std::optional<std::string> object_schem;
+    std::optional<std::string> object_name;
+    std::optional<std::string> argument_list;
     SQLSMALLINT object_type = 0;
     SQLLEN object_type_Len = 0;
 };
