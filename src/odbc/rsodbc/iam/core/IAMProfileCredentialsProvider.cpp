@@ -141,9 +141,7 @@ AWSCredentials IAMProfileCredentialsProvider::GetAWSCredentials(const rs_string&
         {
             IAMUtils::ThrowConnectionExceptionWithInfo(
                 "Profile has both credential_source and source_profile. "
-                "Only one can be specified. credential_source provides base "
-                "credentials directly (e.g., from EC2 instance metadata), while "
-                "source_profile references another named profile.");
+                "Only one can be specified.");
         }
 
         if (!credentialSource.empty() && !IAMUtils::isEmpty(credential_process))

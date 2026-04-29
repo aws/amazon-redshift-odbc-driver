@@ -189,7 +189,18 @@ class ScopedEnvVar {
 // Per the AWS SDK specification, credential_source and source_profile are
 // mutually exclusive, and credential_source requires role_arn. These tests
 // verify the driver returns clear error messages for invalid configurations.
+//
+// Skipped on Windows: on Windows rsodbc64-test is a DLL with static CRT
+// (/MT). The AWS SDK reads env vars via _dupenv_s (CRT cache), but
+// _putenv_s from the test EXE only updates the EXE's CRT cache -- the
+// DLL's cache is separate and never sees the redirect. The SDK falls back
+// to %USERPROFILE%\.aws\credentials, which does not contain the test
+// profiles, so LoadProfile throws "No AWS profile found" before the
+// validation code under test runs. On Mac/Linux rsodbc64-test is a static
+// library so there is one shared CRT and the env-var redirect works.
 // =============================================================================
+
+#ifndef _WIN32
 
 TEST(CREDENTIAL_SOURCE_ERROR_TEST_SUITE,
      MutualExclusivity_CredentialSourceAndSourceProfile) {
@@ -274,6 +285,8 @@ TEST(CREDENTIAL_SOURCE_ERROR_TEST_SUITE, CredentialSourceRequiresRoleArn) {
             << "Error message should mention role_arn, got: " << errorMessage;
     }
 }
+
+#endif // !_WIN32
 
 // =============================================================================
 // Fuzz test: unrecognized credential_source values
