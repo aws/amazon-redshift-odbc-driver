@@ -1455,19 +1455,13 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLSpecialColumns(SQLHSTMT phstmt,
 
     if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
     {
-        // Error out if IdentifierType is SQL_ROWVER since Redshift doesn't support column that are
-        // automatically updated by the data source when any value in the row is updated by any transaction
-        if (hIdenType == SQL_ROWVER) {
-            RS_LOG_ERROR("RS_SQLSpecialColumns",
-                         "Redshift doesn't support IdentifierType as SQL_ROWVER");
-            addError(&pStmt->pErrorList, "HYC00",
-                     "Redshift doesn't support IdentifierType as SQL_ROWVER",
-                     0, NULL);
-            return SQL_ERROR;
-        }
-
-        // Validate IdentifierType
-        if (hIdenType != SQL_BEST_ROWID) {
+        // Validate IdentifierType. SQL_BEST_ROWID and SQL_ROWVER are the two valid
+        // values per the ODBC spec. SQL_ROWVER is accepted but always yields an
+        // empty result set because Redshift does not implement rowversion-style
+        // system columns. Returning SQL_ERROR for SQL_ROWVER breaks clients such
+        // as Microsoft Access that call SQLSpecialColumns(SQL_ROWVER) during
+        // metadata discovery.
+        if (hIdenType != SQL_BEST_ROWID && hIdenType != SQL_ROWVER) {
             RS_LOG_ERROR("SQLSpecialColumns", "Invalid IdentifierType value specified");
             addError(&pStmt->pErrorList, "HY097", "Invalid IdentifierType value specified", 0, NULL);
             return SQL_ERROR;
@@ -1496,9 +1490,17 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLSpecialColumns(SQLHSTMT phstmt,
 
         std::vector<SHOWCOLUMNSResult> intermediateRS;
 
-        // Return Empty ResultSet if catalog or schemaPattern or tableNamePattern is empty string. SIM: Redshift-112709
-        bool retEmpty = false;
-        if (!retEmpty) {
+        // Return an empty result set when the input yields no matching special
+        // columns by definition. This skips the server round-trip and lets the
+        // post-processor build the empty 8-column result set. Cases:
+        //   - SQL_ROWVER: Redshift has no rowversion-style system columns.
+        //   - (reserved for SIM Redshift-112709: empty catalog / schema /
+        //     tableNamePattern.)
+        bool retEmpty = (hIdenType == SQL_ROWVER);
+        if (retEmpty) {
+            RS_LOG_DEBUG("RSCAT",
+                         "SQL_ROWVER requested; returning empty result set (Redshift has no rowversion columns)");
+        } else {
             rc = executeWithInternalStmt(pStmt,
                 [&](SQLHSTMT stmt) -> SQLRETURN {
                     return RsMetadataServerProxy::sqlSpecialColumns(stmt,
