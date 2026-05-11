@@ -414,7 +414,7 @@ static void getCatalogFilterCondition(char *catalogFilter,
 										short cbCatalogName,
 										bool apiSupportedOnlyForConnectedDatabase,
 										char * databaseColName);
-static char *escapedFilterCondition(const char *pName, short cbName);
+char *escapedFilterCondition(const char *pName, short cbName);
 
 static void buildLocalSchemaTablesQuery(char *pszCatalogQuery,
 	RS_STMT_INFO *pStmt,
@@ -5832,13 +5832,20 @@ static void buildExternalSchemaColumnsQuery(char *pszCatalogQuery,
 
 char *escapedFilterCondition(const char *pName, short cbName)
 {
-	char *pEscapedName = (char *)rs_calloc(cbName * 2, sizeof(char));
+	// Allocate enough for worst case: every char is ' or \ and gets doubled,
+	// plus null terminator.
+	char *pEscapedName = (char *)rs_calloc(cbName * 2 + 1, sizeof(char));
 	const char *pSrc = pName;
 	char *pDest = pEscapedName;
 
 	while (*pSrc)
 	{
-		if (*pSrc == '\'')
+		if (*pSrc == '\\')
+		{
+			*pDest = '\\';
+			pDest++;
+		}
+		else if (*pSrc == '\'')
 		{
 			*pDest = '\'';
 			pDest++;

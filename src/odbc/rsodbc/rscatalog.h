@@ -161,4 +161,8 @@ class RsCatalog {
 
 };
 
+// Escapes a string value for safe inclusion in SQL string literals.
+// Doubles both backslashes and single quotes.
+char *escapedFilterCondition(const char *pName, short cbName);
+
 #endif // __RS_CATALOG_H__
