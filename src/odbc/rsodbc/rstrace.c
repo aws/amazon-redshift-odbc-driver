@@ -12,6 +12,12 @@
 #include "rslock.h"
 #include "rserror.h"
 
+// Minimum address threshold to distinguish real pointers from offset values.
+// When SQL_ATTR_PARAM_BIND_OFFSET_PTR is used (e.g., by MSDASQL), pValue and
+// pcbLenInd may be small offset values rather than valid memory addresses.
+// Addresses below this threshold are not safe to dereference.
+#define RS_MIN_VALID_POINTER_ADDR 0x10000
+
 /*====================================================================================================================================================*/
 
 //---------------------------------------------------------------------------------------------------------igarish
@@ -3772,7 +3778,10 @@ void RsTrace::TraceSQLBindParameter(int iCallOrRet,
             tracePointer("pValue",pValue);
             traceStrLargeLen("cbLen",(long)cbLen);
             tracePointer("pcbLenInd",pcbLenInd);
-            traceStrOutLargeLen("*pcbLenInd",(SQLINTEGER *)pcbLenInd);
+            // Do not dereference pcbLenInd - it may be an offset pointer
+            // when SQL_ATTR_PARAM_BIND_OFFSET_PTR is set (e.g., by MSDASQL).
+            if(pcbLenInd && (uintptr_t)pcbLenInd > RS_MIN_VALID_POINTER_ADDR)
+                traceStrOutLargeLen("*pcbLenInd",(SQLINTEGER *)pcbLenInd);
             traceClosingBracket();
 
             break;
@@ -4333,8 +4342,11 @@ void RsTrace::TraceSQLGetData(int  iCallOrRet,
                 traceErrorList(NULL,NULL,phstmt,NULL);
             else 
             {
-                traceData("*pValue", hType, pValue, cbLen);
-                traceStrOutLargeLen("*pcbLenInd",(SQLINTEGER *)pcbLenInd);
+                // Guard against NULL or clearly invalid pointers before dereferencing.
+                if(pValue && (uintptr_t)pValue > RS_MIN_VALID_POINTER_ADDR)
+                    traceData("*pValue", hType, pValue, cbLen);
+                if(pcbLenInd && (uintptr_t)pcbLenInd > RS_MIN_VALID_POINTER_ADDR)
+                    traceStrOutLargeLen("*pcbLenInd",(SQLINTEGER *)pcbLenInd);
             }
 
             break;

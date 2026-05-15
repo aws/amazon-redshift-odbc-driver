@@ -847,7 +847,7 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
             long lParamsToBind = (pAPDDescHeader.lArraySize <= 0) ? 1 : pAPDDescHeader.lArraySize;
             long lParamProcessed = 0;
             int  iArrayBinding = (lParamsToBind > 1);
-            int  iBindOffset = (pAPDDescHeader.plBindOffsetPtr) ?  *((int*)pAPDDescHeader.plBindOffsetPtr) : 0;
+            SQLLEN iBindOffset = (pAPDDescHeader.plBindOffsetPtr) ?  *((SQLLEN*)pAPDDescHeader.plBindOffsetPtr) : 0;
             int  iMultiInsert = pStmt->iMultiInsert;
             int  iLastBatchMultiInsert = pStmt->iLastBatchMultiInsert;
             int  iOffset = 0;
@@ -986,7 +986,9 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                                         pDescRec->pDataAtExec->cbLen));
                                 } else if (pDescRec->pcbLenInd) {
                                     if (pAPDDescHeader.lBindType == SQL_BIND_BY_COLUMN) {
-                                        plParamDataStrLenInd = (SQLLEN *)(pDescRec->pcbLenInd + lParamProcessed);
+                                        plParamDataStrLenInd = (SQLLEN *)((char*)pDescRec->pcbLenInd + 
+                                                                        iBindOffset +
+                                                                        (lParamProcessed * sizeof(SQLLEN)));
                                     }
                                     else {
                                         plParamDataStrLenInd = (SQLLEN *)((char *)pDescRec->pcbLenInd +
