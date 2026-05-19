@@ -526,7 +526,7 @@ pclose_check(FILE *stream)
 
 		snprintf(str, sizeof(str), "%d: %s", WTERMSIG(exitstatus),
 				 WTERMSIG(exitstatus) < NSIG ?
-				 sys_siglist[WTERMSIG(exitstatus)] : "(unknown)");
+				 strsignal(WTERMSIG(exitstatus)) : "(unknown)");
 		log_error(_("child process was terminated by signal %s"), str);
 	}
 #else
