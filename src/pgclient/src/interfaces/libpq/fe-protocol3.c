@@ -2157,6 +2157,8 @@ build_startup_packet(const PGconn *conn, char *packet,
 		ADD_STARTUP_OPTION("client_protocol_version", conn->client_protocol_version);
 	if (conn->driver_version && conn->driver_version[0])
 		ADD_STARTUP_OPTION("driver_version", conn->driver_version);
+	if (conn->driver_discovery_version && conn->driver_discovery_version[0])
+		ADD_STARTUP_OPTION("driver_discovery_version", conn->driver_discovery_version);
 	if (conn->os_version && conn->os_version[0])
 		ADD_STARTUP_OPTION("os_version", conn->os_version);
 	if (conn->plugin_name && conn->plugin_name[0])

@@ -37,6 +37,9 @@
 
 #define RS_MAX_VARCHAR_COLUMN_SIZE 65535
 
+// Driver discovery version sent to server in startup packet
+#define DRIVER_DISCOVERY_VERSION 1
+
 #ifdef WIN32
 #include "win_port.h"
 #endif // WIN32

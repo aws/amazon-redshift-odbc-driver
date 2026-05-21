@@ -85,6 +85,7 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
     char szStreamingCursorRows[MAX_NUMBER_BUF_LEN];
     char szSslDefaultCertPath [MAX_PATH + 1];
 	char szClientProtocolVersion[MAX_NUMBER_BUF_LEN];
+	char szDriverDiscoveryVersion[MAX_NUMBER_BUF_LEN];
 	char szOsVersion[MAX_TEMP_BUF_LEN];
 	char szDriverVersion[MAX_TEMP_BUF_LEN];
 
@@ -237,6 +238,11 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 			snprintf(szClientProtocolVersion, sizeof(szClientProtocolVersion), "%d", EXTENDED_RESULT_METADATA_SERVER_PROTOCOL_VERSION);
 		ppKeywords[iCount] = "client_protocol_version";
 		ppValues[iCount++] = szClientProtocolVersion;
+
+		// Driver discovery version
+		snprintf(szDriverDiscoveryVersion, sizeof(szDriverDiscoveryVersion), "%d", DRIVER_DISCOVERY_VERSION);
+		ppKeywords[iCount] = "driver_discovery_version";
+		ppValues[iCount++] = szDriverDiscoveryVersion;
 
 		// Driver version
 		ppKeywords[iCount] = "driver_version";

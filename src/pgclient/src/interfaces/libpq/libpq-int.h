@@ -480,6 +480,7 @@ struct pg_conn
 	int	   server_protocol_version;		/* Redshift server protocol version */
 	char *client_protocol_version;
 	char *driver_version;
+	char *driver_discovery_version;
 	char *os_version;
 	char *plugin_name;
 

@@ -280,6 +280,9 @@ static const PQconninfoOption PQconninfoOptions[] = {
 	{ "driver_version", NULL, NULL, NULL,
 		"Driver-Version", "", 64 },
 
+	{ "driver_discovery_version", NULL, NULL, NULL,
+		"Driver-Discovery-Version", "", 10 },
+
 	{ "os_version", NULL, NULL, NULL,
 		"OS-Version", "", 64 },
 
@@ -989,6 +992,8 @@ fillPGconn(PGconn *conn, PQconninfoOption *connOptions)
 	conn->client_protocol_version = tmp ? strdup(tmp) : NULL;
 	tmp = conninfo_getval(connOptions, "driver_version");
 	conn->driver_version = tmp ? strdup(tmp) : NULL;
+	tmp = conninfo_getval(connOptions, "driver_discovery_version");
+	conn->driver_discovery_version = tmp ? strdup(tmp) : NULL;
 	tmp = conninfo_getval(connOptions, "os_version");
 	conn->os_version = tmp ? strdup(tmp) : NULL;
 	tmp = conninfo_getval(connOptions, "plugin_name");
@@ -3470,6 +3475,8 @@ freePGconn(PGconn *conn)
 		free(conn->client_protocol_version);
 	if (conn->driver_version)
 		free(conn->driver_version);
+	if (conn->driver_discovery_version)
+		free(conn->driver_discovery_version);
 	if (conn->os_version)
 		free(conn->os_version);
 	if (conn->plugin_name)
