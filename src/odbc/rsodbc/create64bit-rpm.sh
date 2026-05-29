@@ -10,6 +10,29 @@ echo "create64bit-rpm.sh: odbc_version=$odbc_version, svn_rev=$svn_rev, arch_nam
 echo "RS_ROOT_DIR=${RS_ROOT_DIR}"
 INSTALL_DIR=${INSTALL_DIR:="${RS_ROOT_DIR}/cmake-build/install/"}
 
+# Resolve rpmbuild from Brazil's Rpm-4.x package (rpm 4.18.2).
+# rpm >= 4.14 is required to produce the PAYLOADDIGEST header tag. Without it, RPM
+# verification fails on FIPS-enabled systems (RHEL 8/9, AL2023) where MD5 is disabled
+# and PAYLOADDIGEST is the only mechanism to verify payload integrity before extraction.
+# No fallback to system rpmbuild (4.11.3) — a missing PAYLOADDIGEST is a silent customer-facing failure.
+_BRAZIL_BOOTSTRAP="${BRAZIL_BOOTSTRAP:-brazil-bootstrap}"
+if ! command -v "$_BRAZIL_BOOTSTRAP" >/dev/null 2>&1; then
+  echo "ERROR: Cannot locate brazil-bootstrap (tried: '$_BRAZIL_BOOTSTRAP')."
+  echo "       Ensure BRAZIL_BOOTSTRAP is exported by the calling script (custom-build)"
+  echo "       or that brazil-bootstrap is available on PATH."
+  exit 1
+fi
+RPM_TOOL=$("$_BRAZIL_BOOTSTRAP" --package Rpm-4.x)
+if [ ! -x "${RPM_TOOL}/bin/rpmbuild" ]; then
+  echo "ERROR: Rpm-4.x package resolved to '${RPM_TOOL}' but rpmbuild binary not found."
+  echo "       Verify that Rpm-4.x is present in the version set and built for this platform."
+  exit 1
+fi
+RPMBUILD="${RPM_TOOL}/bin/rpmbuild"
+export LD_LIBRARY_PATH="${RPM_TOOL}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+echo "Using Brazil rpmbuild: $RPMBUILD"
+"$RPMBUILD" --version
+
 if [ ! -d ./rpm ]
 then
 	mkdir -p ./rpm
@@ -68,9 +91,9 @@ cp -avrf /tmp/redshiftodbcx64/ /var/tmp/redshiftodbcx64/
 rpm_src=$HOME/rpmbuild/RPMS/${arch_name}/AmazonRedshiftODBC-64-bit-${odbc_version}-${svn_rev}.${arch_name}.rpm
 rpm_new_name=AmazonRedshiftODBC-64-bit-${odbc_version}.${svn_rev}.${arch_name}.rpm
 
-# Build the 64 bit rpm 
+# Build the 64 bit rpm
 echo Running the 64 bit rpm build using this spec file: $spec_file
-rpmbuild -v --target ${arch_name} -bb $spec_file
+$RPMBUILD -v --target ${arch_name} -bb $spec_file
 if [ $? -ne 0 ]
 then
     exit $?
