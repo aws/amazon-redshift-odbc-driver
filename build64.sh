@@ -141,6 +141,13 @@ if [ -n "${RS_BUILD_TYPE}" ]; then
     cmake_command="${cmake_command} -DRS_BUILD_TYPE=${RS_BUILD_TYPE} -DCMAKE_BUILD_TYPE=${RS_BUILD_TYPE}"
 fi
 
+# Add installer package-type tag if specified.
+# Used by create64bit-{deb,rpm}.sh build paths to bake the installer type
+# (deb|rpm) into the driver_version string for connection-log attribution.
+if [ -n "${RS_PACKAGE_TYPE:-}" ]; then
+    cmake_command="${cmake_command} -DRS_PACKAGE_TYPE=${RS_PACKAGE_TYPE}"
+fi
+
 # Display the final CMake command
 echo cmake command is ${cmake_command}
 

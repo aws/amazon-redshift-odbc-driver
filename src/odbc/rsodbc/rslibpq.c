@@ -245,8 +245,11 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 		ppValues[iCount++] = szDriverDiscoveryVersion;
 
 		// Driver version
+		// The " | <pkg_type>" suffix is baked in at compile time via
+		// ODBC_DRIVER_VERSION_PKG_SUFFIX (see rsversion.h.in). Source builds
+		// resolve it to "" so the wire string matches the historical format.
 		ppKeywords[iCount] = "driver_version";
-		snprintf(szDriverVersion, sizeof(szDriverVersion),"Redshift ODBC Driver %s", ODBC_DRIVER_VERSION);
+		snprintf(szDriverVersion, sizeof(szDriverVersion),"Redshift ODBC Driver %s%s", ODBC_DRIVER_VERSION, ODBC_DRIVER_VERSION_PKG_SUFFIX);
 		ppValues[iCount++] = szDriverVersion;
 
 		// OS version

@@ -234,6 +234,12 @@ if defined ENABLE_TESTING (
     set "cmake_command=!cmake_command! -DENABLE_TESTING=%ENABLE_TESTING%"
 )
 
+rem Forward installer package-type tag (e.g. msi) when set by the MSI release pipeline.
+rem Bakes " | msi" into driver_version for stl_connection_log attribution.
+if defined RS_PACKAGE_TYPE (
+    set "cmake_command=!cmake_command! -DRS_PACKAGE_TYPE=!RS_PACKAGE_TYPE!"
+)
+
 echo "RSODBC CMAKE COMMAND: %cmake_command%"
 call %cmake_command%
 if %ERRORLEVEL% neq 0 (

@@ -8,6 +8,12 @@
 #define STRPRODUCTVER      "@ODBC_VERSION_MAJOR@, @ODBC_VERSION_MINOR@, @ODBC_VERSION_PATCH@, "
 #define ODBC_DRIVER_VERSION_FULL "@ODBC_VERSION_MAJOR@.@ODBC_VERSION_MINOR@.@ODBC_VERSION_PATCH@.@ODBC_VERSION_SVN@"
 
+// Installer package-type suffix appended to the driver_version string sent to
+// the server (stl_connection_log.driver_version). Populated at configure time
+// from the CMake RS_PACKAGE_TYPE variable. Empty by default so source/dev
+// builds report exactly the same string as before.
+#define ODBC_DRIVER_VERSION_PKG_SUFFIX "@ODBC_DRIVER_VERSION_PKG_SUFFIX@"
+
 // Return ODBC version as string
 std::string rsodbcVersion();
 
