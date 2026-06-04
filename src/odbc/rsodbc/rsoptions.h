@@ -55,8 +55,9 @@ class RsOptions {
 
     static bool isStrConnectAttr(SQLINTEGER iAttribute);
 
+    static bool isValidCurrentRow(RS_STMT_INFO* pStmt);
 };
+bool isStatementAttribute(SQLINTEGER iAttribute);
+bool isConnectionAttribute(SQLINTEGER iAttribute);
 
 #endif // __RS_OPTIONS_H__
-
-

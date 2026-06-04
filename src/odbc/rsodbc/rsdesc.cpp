@@ -160,6 +160,8 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
     RS_DESC_INFO *pDesc = (RS_DESC_INFO *)phdesc;
     RS_DESC_HEADER &pDescHeader = pDesc->pDescHeader;
     SQLINTEGER *piVal = (SQLINTEGER *)pValue;
+    SQLLEN *plVal = (SQLLEN*)pValue;
+    SQLULEN *pulVal = (SQLULEN *)pValue;
     short *phVal = (short *)pValue;
     void **ppVal = (void **)pValue;
     RS_DESC_REC *pDescRec = NULL;
@@ -237,7 +239,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
 
         case SQL_DESC_ARRAY_SIZE:
         {
-            getSQLINTEGERVal(pDescHeader.lArraySize,piVal, pcbLen);
+            getSQLULENVal(pDescHeader.lArraySize, pulVal, pcbLen);
             break;
         }
 
@@ -255,7 +257,17 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
 
         case SQL_DESC_BIND_TYPE:
         {
-            getSQLINTEGERVal(pDescHeader.lBindType,piVal, pcbLen);
+            if (iInternal) {
+                // Called by SQLSetStmtAttr internally which requires
+                // SQLULEN to be returned
+                getSQLULENVal(pDescHeader.lBindType, pulVal, pcbLen);
+                RS_LOG_TRACE("RSDESC", "Returning SQL_DESC_BIND_TYPE as SQLULEN");
+            } else {
+                // Called by SQLGetDescField directly which requires
+                // SQLINTEGER to be returned
+                getSQLINTEGERVal(pDescHeader.lBindType, piVal, pcbLen);
+                RS_LOG_TRACE("RSDESC", "Returning SQL_DESC_BIND_TYPE as SQLINTEGER");
+            }
             break;
         }
 
@@ -310,7 +322,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
 
         case SQL_DESC_CONCISE_TYPE:
         {
-            getShortVal(getConciseType(pDescRec->hConciseType, pDescRec->hType), phVal, pcbLen);
+            getShortVal(pDescRec->hConciseType, phVal, pcbLen);
             break;
         }
 
@@ -328,7 +340,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
 
         case SQL_DESC_DATETIME_INTERVAL_CODE:
         {
-            getShortVal(getDateTimeIntervalCode(pDescRec->hDateTimeIntervalCode,pDescRec->hType),phVal, pcbLen);
+            getShortVal(pDescRec->hDateTimeIntervalCode, phVal, pcbLen);
             break;
         }
 
@@ -340,7 +352,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
 
         case SQL_DESC_DISPLAY_SIZE:
         {
-            getSQLINTEGERVal(pDescRec->iDisplaySize,piVal, pcbLen);
+            getSQLLENVal(pDescRec->iDisplaySize, plVal, pcbLen);
             break;
         }
 
@@ -355,11 +367,11 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
             long lLen;
 
             if(iDescType == RS_IRD || iDescType == RS_IPD || pDescRec->iSize == 0)
-                lLen = getSize(pDescRec->hType, pDescRec->iSize);
+                lLen = getSize(pDescRec->hConciseType, pDescRec->iSize);
             else
                 lLen = pDescRec->iSize;
 
-            getSQLINTEGERVal(lLen,piVal, pcbLen);
+            getSQLULENVal(lLen, pulVal, pcbLen);
 
             break;
         }
@@ -397,7 +409,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
 
         case SQL_DESC_OCTET_LENGTH:
         {
-            getSQLINTEGERVal(pDescRec->iOctetLen,piVal, pcbLen);
+            getSQLLENVal(pDescRec->iOctetLen, plVal, pcbLen);
             break;
         }
 
@@ -424,7 +436,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescField(SQLHDESC phdesc,
             short hScale;
 
             if(iDescType == RS_IRD || iDescType == RS_IPD || pDescRec->hScale == 0)
-                hScale = getScale(pDescRec->hType, pDescRec->hScale);
+                hScale = getScale(pDescRec->hConciseType, pDescRec->hScale);
             else
                 hScale = pDescRec->hScale;
 
@@ -670,7 +682,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLGetDescRec(SQLHDESC phdesc,
     if(pDescRec != NULL)
     {
         if(pName)
-            copyStrDataSmallLen(pDescRec->szName, MAX_IDEN_LEN, (char *)pName, cbName, pcbName);
+            copyStrDataSmallLen(pDescRec->szName, MAX_IDEN_LEN, (char *)pName, cbName, pcbName, &pDesc->pErrorList);
 
         if(phType)
             *phType = pDescRec->hType;
@@ -984,6 +996,18 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
 
         case SQL_DESC_DATA_PTR:
         {
+            // A consistency check is performed by the driver automatically
+            // whenever an application passes in a value for the SQL_DESC_DATA_PTR
+            // field of the ARD, APD, or IPD. If the value is invalid, the driver returns
+            // SQL_ERROR with the error code HY021.
+            // Note that the SQL_DESC_DATA_PTR field was only used for ARD and APD.
+            // SQL_DESC_DATA_PTR field in IPD can be set to force a consistency check
+            bool isODBC2 = isODBC2BehaviorByDesc(pDesc);
+            if (pDesc->iType != RS_IRD && !validateDescriptorConsistency(pDescRec, isODBC2)) {
+                rc = SQL_ERROR;
+                addError(&pDesc->pErrorList, "HY021", "Inconsistent descriptor information", 0, NULL);
+                goto error;
+            }
             pDescRec->pValue = pValue;
             break;
         }
@@ -1002,7 +1026,7 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
 
         case SQL_DESC_NAME:
         {
-            copyStrDataSmallLen((char *)pValue, cbLen, pDescRec->szName, MAX_IDEN_LEN, NULL);
+            copyStrDataSmallLen((char *)pValue, cbLen, pDescRec->szName, MAX_IDEN_LEN, NULL, &pDesc->pErrorList);
             break;
         }
 
@@ -1051,24 +1075,105 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
             pDescRec->hScale = hVal;
             break;
         }
-
+        // ============================================================================
+        // SQL_DESC_TYPE Field Handler
+        // ============================================================================
+        // Per ODBC spec: SQL_DESC_TYPE specifies the verbose SQL or C data type.
+        // For datetime/interval types, this field contains SQL_DATETIME or SQL_INTERVAL
+        // (the verbose types), NOT the concise types like SQL_TYPE_DATE or SQL_INTERVAL_YEAR.
+        //
+        // Key ODBC Requirements:
+        // 1. SQL_DESC_TYPE cannot be set directly to concise datetime/interval types
+        //    (e.g., SQL_TYPE_DATE, SQL_INTERVAL_YEAR) - these are invalid for this field
+        // 2. When SQL_DESC_TYPE is set to a non-datetime/interval type:
+        //    - SQL_DESC_CONCISE_TYPE is set to the same value
+        //    - SQL_DESC_DATETIME_INTERVAL_CODE is set to 0
+        // 3. When SQL_DESC_TYPE is set to SQL_DATETIME or SQL_INTERVAL:
+        //    - SQL_DESC_CONCISE_TYPE is derived from SQL_DESC_DATETIME_INTERVAL_CODE
+        //    - Additional precision fields are set based on the specific subtype
+        // 4. IRD (Implementation Row Descriptor) fields are read-only and cannot be modified
+        // ============================================================================
         case SQL_DESC_TYPE:
         {
-            pDescRec->hType = hVal;
+            // Validate descriptor type: IRD is read-only per ODBC spec
+            // Only ARD, APD, and IPD descriptors can have their TYPE field modified
+            if (pDesc->iType != RS_IRD) {
+                SQLSMALLINT type = (SQLSMALLINT)hVal;
+
+                // Per ODBC spec, SQL_DESC_TYPE must use verbose types (SQL_DATETIME/SQL_INTERVAL)
+                // for datetime/interval data, NOT concise types (SQL_TYPE_DATE, SQL_INTERVAL_YEAR, etc.)
+                // Attempting to set concise types here violates ODBC specification and causes
+                // inconsistent descriptor state
+                if (isDatetimeType(type) || isIntervalType(type)) {
+                    rc = SQL_ERROR;
+                    addError(&pDesc->pErrorList,"HY021", "Inconsistent descriptor information", 0, NULL);
+                    goto error;
+                }
+
+                // Determine descriptor context for proper type mapping
+                // IPD uses SQL types, while ARD/APD use C types
+                bool isIPD = pDesc->iType == RS_IPD;
+
+                // ODBC version affects type constants (ODBC 2.x uses SQL_DATE vs ODBC 3.x uses SQL_TYPE_DATE)
+                bool isODBC2 = isODBC2BehaviorByDesc(pDesc);
+
+                // Synchronize all interdependent fields based on the new TYPE value
+                // This ensures SQL_DESC_CONCISE_TYPE and SQL_DESC_DATETIME_INTERVAL_CODE
+                // are properly updated according to ODBC specification requirements
+                syncFieldsFromType(pDescRec, type, isIPD, isODBC2);
+            } else {
+                // IRD fields are populated by the driver after statement execution
+                // Applications cannot modify SQL_DESC_TYPE fields in IRD
+                rc = SQL_ERROR;
+                addError(&pDesc->pErrorList,"HY016", "Cannot modify an implementation row descriptor", 0, NULL);
+                goto error;
+            }
             break;
         }
-
+        // ============================================================================
+        // SQL_DESC_CONCISE_TYPE Field Handler
+        // ============================================================================
+        // Per ODBC spec: SQL_DESC_CONCISE_TYPE specifies the concise data type for ALL
+        // data types, including datetime and interval types.
+        //
+        // Key ODBC Requirements:
+        // 1. This field accepts both concise types (SQL_TYPE_DATE, SQL_INTERVAL_YEAR)
+        //    and non-datetime/interval types (SQL_INTEGER, SQL_VARCHAR)
+        // 2. When set to a datetime/interval concise type:
+        //    - SQL_DESC_TYPE is set to verbose type (SQL_DATETIME or SQL_INTERVAL)
+        //    - SQL_DESC_DATETIME_INTERVAL_CODE is set to the appropriate subcode
+        // 3. When set to a non-datetime/interval type:
+        //    - SQL_DESC_TYPE is set to the same value
+        //    - SQL_DESC_DATETIME_INTERVAL_CODE is set to 0
+        // 4. This is the primary field applications use to specify data types
+        // ============================================================================
         case SQL_DESC_CONCISE_TYPE:
         {
-            pDescRec->hConciseType = hVal;
+            // Validate descriptor type: IRD is read-only per ODBC spec
+            // Only ARD, APD, and IPD descriptors can have their TYPE field modified
+            if (pDesc->iType != RS_IRD) {
+                SQLSMALLINT conciseType = (SQLSMALLINT)hVal;
 
-            if(pDesc->iType == RS_APD
-                 || pDesc->iType == RS_ARD
-                 || pDesc->iType == RS_IPD)
-            {
-                pDescRec->hType = getCTypeFromConciseType(hVal, pDescRec->hDateTimeIntervalCode, pDescRec->hType);
+                // Per ODBC spec, SQL_DESC_CONCISE_TYPE must use concise types (SQL_TYPE_DATE, SQL_INTERVAL_YEAR, etc.)
+                // for datetime/interval data, NOT verbose types (SQL_DATETIME/SQL_INTERVAL)
+                // Attempting to set verbose types here violates ODBC specification and causes inconsistent
+                // descriptor state
+                if (conciseType == SQL_DATETIME || conciseType == SQL_INTERVAL) {
+                    rc = SQL_ERROR;
+                    addError(&pDesc->pErrorList,"HY021", "Inconsistent descriptor information", 0, NULL);
+                    goto error;
+                }
+                // Synchronize all interdependent descriptor fields
+                // This function handles the complex mapping between concise types,
+                // verbose types, and interval codes according to ODBC specification
+                syncFieldsFromConciseType(pDescRec, conciseType);
+            } else {
+                // IRD fields are populated by the driver after statement execution
+                // Applications cannot modify SQL_DESC_CONCISE_TYPE fields in IRD
+                rc = SQL_ERROR;
+                addError(&pDesc->pErrorList,"HY016", "Cannot modify an implementation row descriptor", 0, NULL);
+                goto error;
             }
-
             break;
         }
 
@@ -1100,10 +1205,56 @@ SQLRETURN  SQL_API RsDesc::RS_SQLSetDescField(SQLHDESC phdesc,
             // Do nothing. Unused.
             break;
         }
-
+        // ============================================================================
+        // SQL_DESC_DATETIME_INTERVAL_CODE Field Handler
+        // ============================================================================
+        // Per ODBC spec: SQL_DESC_DATETIME_INTERVAL_CODE contains the subcode for
+        // specific datetime or interval data types when SQL_DESC_TYPE is SQL_DATETIME
+        // or SQL_INTERVAL.
+        //
+        // Key ODBC Requirements:
+        // 1. This field is only meaningful when SQL_DESC_TYPE is SQL_DATETIME or SQL_INTERVAL
+        // 2. Valid values are interval codes (SQL_CODE_YEAR to SQL_CODE_MINUTE_TO_SECOND)
+        //    or datetime codes (SQL_CODE_DATE, SQL_CODE_TIME, SQL_CODE_TIMESTAMP)
+        // 3. When set, SQL_DESC_CONCISE_TYPE/SQL_DESC_TYPE is updated to the corresponding
+        //    concise/verbose type
+        // ============================================================================
         case SQL_DESC_DATETIME_INTERVAL_CODE:
         {
-            pDescRec->hDateTimeIntervalCode = hVal;
+            // Validate descriptor type: IRD is read-only per ODBC spec
+            // Only ARD, APD, and IPD descriptors can have their TYPE field modified
+            if (pDesc->iType != RS_IRD) {
+                SQLSMALLINT code = (SQLSMALLINT)hVal;
+
+                // Per ODBC spec, SQL_DESC_DATETIME_INTERVAL_CODE must contain either:
+                // - A datetime code (SQL_CODE_DATE, SQL_CODE_TIME, SQL_CODE_TIMESTAMP)
+                // - An interval code (SQL_CODE_YEAR through SQL_CODE_MINUTE_TO_SECOND)
+                // Any other value creates an inconsistent descriptor state
+                if (!isIntervalCode(code) && !isDateTimeCode(code)) {
+                    rc = SQL_ERROR;
+                    addError(&pDesc->pErrorList,"HY021", "Inconsistent descriptor information", 0, NULL);
+                    goto error;
+                }
+
+                // Determine descriptor context for proper type mapping
+                // IPD uses SQL types, while ARD/APD use C types
+                bool isIPD = pDesc->iType == RS_IPD;
+
+                // ODBC version affects type constants (ODBC 2.x uses SQL_DATE vs ODBC 3.x uses SQL_TYPE_DATE)
+                bool isODBC2 = isODBC2BehaviorByDesc(pDesc);
+
+                // Synchronize interdependent fields based on the interval code
+                // This is complex because the code alone doesn't determine whether
+                // we're dealing with datetime or interval types - we need to check
+                // SQL_DESC_TYPE or SQL_DESC_CONCISE_TYPE to disambiguate
+                syncFieldsFromIntervalCode(pDescRec, code, isIPD, isODBC2);
+            } else {
+                // IRD fields are populated by the driver after statement execution
+                // Applications cannot modify SQL_DESC_DATETIME_INTERVAL_CODE fields in IRD
+                rc = SQL_ERROR;
+                addError(&pDesc->pErrorList,"HY016", "Cannot modify an implementation row descriptor", 0, NULL);
+                goto error;
+            }
             break;
         }
 
@@ -1185,7 +1336,6 @@ SQLRETURN  SQL_API SQLSetDescRec(SQLHDESC phdesc,
     SQLRETURN rc = SQL_SUCCESS;
     RS_DESC_INFO *pDesc = (RS_DESC_INFO *)phdesc;
     RS_DESC_REC     *pDescRec;
-    int iIsWritableField;
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLSetDescRec(FUNC_CALL, 0, phdesc, hRecNumber, hType, hSubType, iOctetLength, hPrecision, hScale, pData, plStrLen, plIndicator);
@@ -1206,40 +1356,20 @@ SQLRETURN  SQL_API SQLSetDescRec(SQLHDESC phdesc,
         goto error; 
     }
 
-    iIsWritableField = isWritableField(pDesc, SQL_DESC_TYPE);
-    if(iIsWritableField)
-    {
-        iIsWritableField = isWritableField(pDesc, SQL_DESC_DATETIME_INTERVAL_CODE);
-        if(iIsWritableField)
-        {
-            iIsWritableField = isWritableField(pDesc, SQL_DESC_OCTET_LENGTH);
-            if(iIsWritableField)
-            {
-                iIsWritableField = isWritableField(pDesc, SQL_DESC_PRECISION);
-                if(iIsWritableField)
-                {
-                    iIsWritableField = isWritableField(pDesc, SQL_DESC_SCALE);
-                    if(iIsWritableField)
-                    {
-                        iIsWritableField = isWritableField(pDesc, SQL_DESC_DATA_PTR);
-                        if(iIsWritableField)
-                        {
-                            iIsWritableField = isWritableField(pDesc, SQL_DESC_OCTET_LENGTH_PTR);
-                            if(iIsWritableField)
-                            {
-                                iIsWritableField = isWritableField(pDesc, SQL_DESC_INDICATOR_PTR);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    // Based on the ODBC spec, IRD is not allowed in SQLSetDescRec
+    if(pDesc->iType == RS_IRD) {
+        rc = SQL_ERROR;
+        addError(&pDesc->pErrorList,"HY016", "Cannot modify an implementation row descriptor", 0, NULL);
+        goto error;
     }
 
-    if(!iIsWritableField)
-    {
+    // Per ODBC spec, hType (SQL_DESC_TYPE) must use verbose types (SQL_DATETIME/SQL_INTERVAL)
+    // for datetime/interval data, NOT concise types (SQL_TYPE_DATE, SQL_INTERVAL_YEAR, etc.)
+    // Attempting to set concise types here violates ODBC specification and causes
+    // inconsistent descriptor state
+    if ((isDatetimeType(hType) || isIntervalType(hType))) {
         rc = SQL_ERROR;
-        addError(&pDesc->pErrorList,"HY000", "Field is not writable", 0, NULL);
+        addError(&pDesc->pErrorList,"HY021", "Inconsistent descriptor information", 0, NULL);
         goto error;
     }
 
@@ -1265,8 +1395,20 @@ SQLRETURN  SQL_API SQLSetDescRec(SQLHDESC phdesc,
         // Set values
         if(pDescRec)
         {
-            pDescRec->hType    = hType;
             pDescRec->hDateTimeIntervalCode = hSubType;
+            // Determine descriptor context for proper type mapping
+            // IPD uses SQL types, while ARD/APD use C types
+            bool isIPD = pDesc->iType == RS_IPD;
+
+            // ODBC version affects type constants (ODBC 2.x uses SQL_DATE vs
+            // ODBC 3.x uses SQL_TYPE_DATE)
+            bool isODBC2 = isODBC2BehaviorByDesc(pDesc);
+
+            // Synchronize all interdependent fields based on the new TYPE value
+            // This ensures SQL_DESC_CONCISE_TYPE and
+            // SQL_DESC_DATETIME_INTERVAL_CODE are properly updated according to
+            // ODBC specification requirements
+            syncFieldsFromType(pDescRec, hType, isIPD, isODBC2);
             pDescRec->iOctetLen = (int) iOctetLength;
             pDescRec->iPrecision = hPrecision;
             pDescRec->hScale = hScale;
@@ -1281,6 +1423,12 @@ SQLRETURN  SQL_API SQLSetDescRec(SQLHDESC phdesc,
                 {
                     pDescRec->cbLen  = iOctetLength;
                 }
+            }
+
+            if (!validateDescriptorConsistency(pDescRec, isODBC2)) {
+                rc = SQL_ERROR;
+                addError(&pDesc->pErrorList, "HY021", "Inconsistent descriptor information", 0, NULL);
+                goto error;
             }
         }
     }

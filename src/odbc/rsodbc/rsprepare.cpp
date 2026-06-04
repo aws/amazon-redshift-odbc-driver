@@ -517,13 +517,20 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLGetCursorName(SQLHSTMT phstmt,
 
     if(pStmt->szCursorName[0] == '\0')
     {
-        rc = SQL_ERROR;
-        addError(&pStmt->pErrorList,"HY015", "No cursor name available", 0, NULL);
-        RS_LOG_ERROR("RS_SQLGetCursorName", "No cursor name available");
-        goto error; 
+        if(pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion == SQL_OV_ODBC2)
+        {
+            // ODBC 2.x: HY015 when no cursor name is set and no execution done.
+            rc = SQL_ERROR;
+            addError(&pStmt->pErrorList,"HY015", "No cursor name available", 0, NULL);
+            RS_LOG_ERROR("RS_SQLGetCursorName", "No cursor name available");
+            goto error;
+        }
+        // ODBC 3.x: always return a name; generate implicit one (prefixed SQL_CUR).
+        snprintf(pStmt->szCursorName, sizeof(pStmt->szCursorName),
+                 "%s%p", IMPLICIT_CURSOR_NAME_PREFIX, phstmt);
     }
 
-    rc = copyStrDataSmallLen(pStmt->szCursorName, SQL_NTS, (char *)pCursorName, cbLen, pcbLen);
+    rc = copyStrDataSmallLen(pStmt->szCursorName, SQL_NTS, (char *)pCursorName, cbLen, pcbLen, &pStmt->pErrorList);
 
 error:
 

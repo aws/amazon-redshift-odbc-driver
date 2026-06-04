@@ -277,6 +277,9 @@ function(get_rsodbc_deps rsodbc_deps)
 endfunction()
 
 function(basic_build_settings)
+  # Prevent WinSock header conflicts
+  add_compile_definitions(WIN32_LEAN_AND_MEAN)
+
   # Set compiler flags for Debug mode
   if(RS_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Configuring Debug build")

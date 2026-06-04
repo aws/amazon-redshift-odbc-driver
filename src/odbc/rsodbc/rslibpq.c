@@ -671,38 +671,85 @@ SQLRETURN libpqCancelQuery(RS_STMT_INFO *pStmt)
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_CONN_INFO *pConn = pStmt->phdbc;
+
+    // Validate connection handle
+    // Cancellation requires a valid, active connection to the server
+    // Without a connection, we cannot send the cancellation request
+    if (!pConn || !pConn->pgConn) {
+        RS_LOG_ERROR("libpqCancelQuery", "Invalid connection");
+        addError(&pStmt->pErrorList, "HY000",
+            "Invalid connection for cancellation", 0, NULL);
+        return SQL_ERROR;
+    }
+
     PGcancel *pgCancelObj = PQgetCancel(pConn->pgConn);
 
-    if(pgCancelObj)
-    {
+    if (pgCancelObj) {
+        RS_LOG_TRACE("libpqCancelQuery", "Canceling query through PQgetCancel object");
+
         char errBuf[MAX_ERR_MSG_LEN + 1];
         int valid; 
             
         errBuf[0] = '\0';
         errBuf[MAX_ERR_MSG_LEN] = '\0';
+
+        // Send cancellation request to the server
+        // PQcancel performs the following:
+        // 1. Opens a NEW connection to the server (separate from query connection)
+        // 2. Sends a cancellation message
+        // 3. Returns immediately without waiting for query to actually stop
+        //
+        // Return value:
+        // - 1 (TRUE): Cancellation request sent successfully
+        // - 0 (FALSE): Cancellation failed (errBuf contains reason)
+        //
+        // Important: Success means the REQUEST was sent, not that the query was canceled
+        // The query may still complete if it finishes before cancellation takes effect
         valid = PQcancel(pgCancelObj, errBuf, MAX_ERR_MSG_LEN);
-        if(!valid && errBuf[0] != '\0')
-        {
+        if (!valid) {
+            // Cancellation request failed
+            // Possible reasons:
+            // - Network error (cannot reach server)
+            // - Invalid backend PID or secret key
+            // - Server is shutting down
+            // - Query already completed
             rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HY000", errBuf, 0, NULL);
+            if (errBuf[0] == '\0') {
+                snprintf(errBuf, sizeof(errBuf), "Cancellation failed without error message");
+            }
+            addError(&pStmt->pErrorList,"HY018", errBuf, 0, NULL);
+            RS_LOG_DEBUG("libpqCancelQuery", "Error message: %s", errBuf);
+        } else {
+            // Cancellation request sent successfully
+            // Set flag to skip all pending results from the canceled query
+            //
+            // Why this is needed:
+            // - The server will send back error 57014 ("Query cancelled on user's request")
+            // - There may be partial results already in the network buffer
+            // - We need to discard these to prevent them from appearing in subsequent operations
+            //
+            // Important: This flag tells the driver to SKIP results, but does NOT consume them
+            // The 57014 error remains in the connection's message stream until explicitly consumed
+            // Caller must handle this by either:
+            // 1. Consuming the error via PQgetResult loop (recommended)
+            // 2. Calling SQLFreeStmt(SQL_CLOSE) to clear the statement
+            // 3. Calling SQLEndTran(SQL_ROLLBACK) to clear the transaction
+            pgSetSkipAllResultsCsc(pStmt->pCscStatementContext, TRUE);
+            RS_LOG_DEBUG("libpqCancelQuery", "Query cancellation successfully, skipping results");
         }
 
         PQfreeCancel(pgCancelObj);
         pgCancelObj = NULL;
-
-        if(rc == SQL_SUCCESS)
-        {
-            // Skip all results
-            pgSetSkipAllResultsCsc(pStmt->pCscStatementContext, TRUE);  
-        }
-    }
-    else
-    {
+    } else {
         char *pError = libpqErrorMsg(pConn);
-
+        RS_LOG_DEBUG("libpqCancelQuery", "Failed to get PGcancel object: %s",
+            pError ? pError : "unknown error");
         rc = SQL_ERROR;
-        if(pError && *pError != '\0')
+        if (!isNullOrEmptyString((SQLCHAR*)pError)) {
             addError(&pStmt->pErrorList,"HY000", pError, 0, pConn);
+        } else {
+            addError(&pStmt->pErrorList,"HY000", "Failed to obtain cancel object from server", 0, NULL);
+        }
     }
 
     return rc;
@@ -1007,8 +1054,8 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                                 }
                                 // -------- CONVERT --------
                                 short hPrepSQLType;
-                                if (pIPDRec && pIPDRec->hType != 0) {
-                                    hPrepSQLType = pIPDRec->hType;
+                                if (pIPDRec && pIPDRec->hConciseType != 0) {
+                                    hPrepSQLType = pIPDRec->hConciseType;
                                 } else {
                                     hPrepSQLType = pDescRec->hParamSQLType;
                                 }
@@ -1017,10 +1064,11 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                                     pParamData,
                                     iParamDataLen,
                                     plParamDataStrLenInd,
-                                    pDescRec->hType,
+                                    pDescRec->hConciseType,
                                     pDescRec->hParamSQLType,
                                     hPrepSQLType,
                                     &(pBindParamStrBuf[iOffset]), 
+                                    pDescRec,
                                     &iConversionError);
                                 if (iConversionError)
                                 {
@@ -1970,9 +2018,10 @@ SQLRETURN libpqDescribeParams(RS_STMT_INFO *pStmt, RS_PREPARE_INFO *pPrepare, PG
                     pgType = PQparamtype(pgResult, iParam);
 
                     int useUnicode = pConn->pConnectProps ? pConn->pConnectProps->iUseUnicode : 0;
-                    pDescRec->hType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode);
-                    pDescRec->iSize = getParamSize(pDescRec->hType);
-                    pDescRec->hScale = getParamScale(pDescRec->hType);
+                    SQLSMALLINT conciseType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode);
+                    syncFieldsFromConciseType(pDescRec, conciseType);
+                    pDescRec->iSize = getParamSize(conciseType);
+                    pDescRec->hScale = getParamScale(conciseType);
                     pDescRec->hNullable = SQL_NULLABLE_UNKNOWN;
                 } // Param loop
             } 
@@ -2106,7 +2155,7 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
 
         // Column name is allocated in libpq
         pName = PQfname(pgResult, col);
-        copyStrDataSmallLen(pName, SQL_NTS, pDescRec->szName, MAX_IDEN_LEN, NULL);
+        copyStrDataSmallLen(pName, SQL_NTS, pDescRec->szName, MAX_IDEN_LEN, NULL, (pResult->phstmt) ? &pResult->phstmt->pErrorList : NULL);
         if(pResult->phstmt && pResult->phstmt->iCatalogQuery)
         {
             // Make the column name upper case
@@ -2118,7 +2167,9 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
         pgType = PQftype(pgResult, col);
         int useUnicode = (pResult->phstmt && pResult->phstmt->phdbc && pResult->phstmt->phdbc->pConnectProps)
             ? pResult->phstmt->phdbc->pConnectProps->iUseUnicode : 0;
-        pDescRec->hType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode);
+        SQLSMALLINT conciseType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode);
+        syncFieldsFromConciseType(pDescRec, conciseType);
+
 
         if(iFetchRefCursor && (pgType == REFCURSOROID))
         {
@@ -2164,23 +2215,28 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
         }
         else
         {
-            if(pDescRec->hType == SQL_NUMERIC
-                || pDescRec->hType == SQL_DECIMAL)
+            if(pDescRec->hConciseType == SQL_NUMERIC
+                || pDescRec->hConciseType == SQL_DECIMAL)
             {
                 // Upper 2 bytes are precision
                 pDescRec->iSize = (pgMod >> 16) & 0xFFFF;
             }
-            else
-            if(pgType == TIMETZOID)
+            else if(pgType == TIMETZOID) {
                 pDescRec->iSize = MAX_TIMETZOID_SIZE;
-            else
-            {
+            }
+            else if(pgType == GEOMETRY || pgType == GEOMETRYHEX) {
+                pDescRec->iSize = MAX_GEOMETRY_SIZE;
+            }
+            else if(pgType == GEOGRAPHY) {
+                pDescRec->iSize = MAX_GEOGRAPHY_SIZE;
+            }
+            else {
                 pDescRec->iSize = pgMod - 4; // 4 for sizeof(int) itself.
             }
         }
 
-        if(pDescRec->hType == SQL_NUMERIC
-            || pDescRec->hType == SQL_DECIMAL)
+        if(pDescRec->hConciseType == SQL_NUMERIC
+            || pDescRec->hConciseType == SQL_DECIMAL)
         {
             if(pgMod == -1)
                 pDescRec->hScale = 0;
@@ -2211,7 +2267,7 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
 		pTemp = PQfcatalog_name(pgResult, col);
 		if (pTemp)
 		{
-			copyStrDataSmallLen(pTemp, SQL_NTS, pDescRec->szCatalogName, MAX_IDEN_LEN, NULL);
+			copyStrDataSmallLen(pTemp, SQL_NTS, pDescRec->szCatalogName, MAX_IDEN_LEN, NULL, (pResult->phstmt) ? &pResult->phstmt->pErrorList : NULL);
 			if (pResult->phstmt && pResult->phstmt->iCatalogQuery)
 			{
 				// Make the catalog name upper case
@@ -2225,7 +2281,7 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
 		pTemp = PQfschema_name(pgResult, col);
 		if (pTemp)
 		{
-			copyStrDataSmallLen(pTemp, SQL_NTS, pDescRec->szSchemaName, MAX_IDEN_LEN, NULL);
+			copyStrDataSmallLen(pTemp, SQL_NTS, pDescRec->szSchemaName, MAX_IDEN_LEN, NULL, (pResult->phstmt) ? &pResult->phstmt->pErrorList : NULL);
 			if (pResult->phstmt && pResult->phstmt->iCatalogQuery)
 			{
 				// Make the catalog name upper case
@@ -2239,7 +2295,7 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
 		pTemp = PQftable_name(pgResult, col);
 		if (pTemp)
 		{
-			copyStrDataSmallLen(pTemp, SQL_NTS, pDescRec->szTableName, MAX_IDEN_LEN, NULL);
+			copyStrDataSmallLen(pTemp, SQL_NTS, pDescRec->szTableName, MAX_IDEN_LEN, NULL, (pResult->phstmt) ? &pResult->phstmt->pErrorList : NULL);
 			if (pResult->phstmt && pResult->phstmt->iCatalogQuery)
 			{
 				// Make the catalog name upper case
@@ -2249,19 +2305,29 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
 		else
 			pDescRec->szTableName[0] = '\0';
 
+        // Base column name (actual column name, not alias)
+        pTemp = PQfcol_name(pgResult, col);
+        if (pTemp && *pTemp != '\0') {
+            copyStrDataSmallLen(pTemp, SQL_NTS, pDescRec->szBaseColumnName, MAX_IDEN_LEN, NULL, (pResult->phstmt) ? &pResult->phstmt->pErrorList : NULL);
+        }
+        else {
+            // Fall back to szName if base column name not available
+            copyStrDataSmallLen(pDescRec->szName, SQL_NTS, pDescRec->szBaseColumnName, MAX_IDEN_LEN, NULL, (pResult->phstmt) ? &pResult->phstmt->pErrorList : NULL);
+        }
+
 		case_sensitive = PQfcase_sensitive(pgResult, col);
-        pDescRec->cCaseSensitive = getCaseSensitive(pDescRec->hType, pDescRec->hRsSpecialType, case_sensitive);
-        pDescRec->iDisplaySize = getDisplaySize(pDescRec->hType, pDescRec->iSize, pDescRec->hRsSpecialType);
+        pDescRec->cCaseSensitive = getCaseSensitive(pDescRec->hConciseType, pDescRec->hRsSpecialType, case_sensitive);
+        pDescRec->iDisplaySize = getDisplaySize(pDescRec->hConciseType, pDescRec->iSize, pDescRec->hRsSpecialType);
         pDescRec->cFixedPrecScale = SQL_FALSE;
-        getLiteralPrefix(pDescRec->hType, pDescRec->szLiteralPrefix, pDescRec->hRsSpecialType);
-        getLiteralSuffix(pDescRec->hType, pDescRec->szLiteralSuffix, pDescRec->hRsSpecialType);
-        getTypeName(pDescRec->hType, pDescRec->szTypeName, sizeof(pDescRec->szTypeName), pDescRec->hRsSpecialType);
-        pDescRec->iNumPrecRadix = getNumPrecRadix(pDescRec->hType);
-        pDescRec->iOctetLen = getOctetLen(pDescRec->hType, pDescRec->iSize, pDescRec->hRsSpecialType);
-        pDescRec->iPrecision = getPrecision(pDescRec->hType, pDescRec->iSize, pDescRec->hRsSpecialType);
-        pDescRec->iSearchable = getSearchable(pDescRec->hType, pDescRec->hRsSpecialType);
+        getLiteralPrefix(pDescRec->hConciseType, pDescRec->szLiteralPrefix, pDescRec->hRsSpecialType);
+        getLiteralSuffix(pDescRec->hConciseType, pDescRec->szLiteralSuffix, pDescRec->hRsSpecialType);
+        getTypeName(pDescRec->hConciseType, pDescRec->szTypeName, sizeof(pDescRec->szTypeName), pDescRec->hRsSpecialType);
+        pDescRec->iNumPrecRadix = getNumPrecRadix(pDescRec->hConciseType);
+        pDescRec->iOctetLen = getOctetLen(pDescRec->hConciseType, pDescRec->iSize, pDescRec->hRsSpecialType);
+        pDescRec->iPrecision = getPrecision(pDescRec->hConciseType, pDescRec->iSize, pDescRec->hRsSpecialType);
+        pDescRec->iSearchable = getSearchable(pDescRec->hConciseType, pDescRec->hRsSpecialType);
         pDescRec->iUnNamed = getUnNamed(pDescRec->szName);
-        pDescRec->cUnsigned = getUnsigned(pDescRec->hType);
+        pDescRec->cUnsigned = getUnsigned(pDescRec->hConciseType);
         pDescRec->iUpdatable = getUpdatable();
     } // Col loop
 }
@@ -2502,7 +2568,20 @@ SQLRETURN setResultInStmt(SQLRETURN rc, RS_STMT_INFO *pStmt, PGresult *pgResult,
                     }
                 }
                 else
+                {
                     pResult->lRowsUpdated = (long)llRowsUpdated;
+
+                    // Return SQL_NO_DATA when DML command affects 0 rows
+                    if(llRowsUpdated == 0) {
+                        char *cmdTag = PQcmdStatus(pgResult);
+                        if(cmdTag && (strncmp(cmdTag, "UPDATE", 6) == 0 ||
+                                    strncmp(cmdTag, "INSERT", 6) == 0 ||
+                                    strncmp(cmdTag, "DELETE", 6) == 0)) {
+                            rc = SQL_NO_DATA;
+                        }
+                    }
+
+                }
             }
         }
         else
@@ -3113,18 +3192,19 @@ bool initializeIRDRecord(RS_STMT_INFO *pStmt, RS_RESULT_INFO *pResult,
     pDescRec->hRecNumber = i + 1;
 
     // Copy the column name to the descriptor record
-    copyStrDataSmallLen(pName, SQL_NTS, pDescRec->szName, MAX_IDEN_LEN, NULL);
+    copyStrDataSmallLen(pName, SQL_NTS, pDescRec->szName, MAX_IDEN_LEN, NULL, &pStmt->pErrorList);
 
     // Map Data type OID to SQL type
     int useUnicode = (pStmt->phdbc && pStmt->phdbc->pConnectProps)
         ? pStmt->phdbc->pConnectProps->iUseUnicode : 0;
-    pDescRec->hType = mapPgTypeToSqlType(pgType, &(pDescRec->hRsSpecialType), useUnicode);
+    SQLSMALLINT conciseType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode);
 
-    if (pDescRec->hType == SQL_UNKNOWN_TYPE) {
+    if (conciseType == SQL_UNKNOWN_TYPE) {
         handleIRDInitializationError(pStmt,
                                      "Fail to convert pg type oid to sql type");
         return false;
     }
+    syncFieldsFromConciseType(pDescRec, conciseType);
 
     // Set additional attributes for the descriptor record
     setDescRecAttributes(pStmt, pDescRec, pgType, pName);
@@ -3170,23 +3250,23 @@ void setDescRecAttributes(RS_STMT_INFO *pStmt, RS_DESC_REC *pDescRec,
     pDescRec->hNullable = SQL_TRUE;
     pDescRec->cAutoInc = SQL_FALSE;
     pDescRec->iDisplaySize = getDisplaySize(
-        pDescRec->hType, pDescRec->iSize, pDescRec->hRsSpecialType);
+        pDescRec->hConciseType, pDescRec->iSize, pDescRec->hRsSpecialType);
     pDescRec->cFixedPrecScale = SQL_FALSE;
-    getLiteralPrefix(pDescRec->hType, pDescRec->szLiteralPrefix,
+    getLiteralPrefix(pDescRec->hConciseType, pDescRec->szLiteralPrefix,
                         pDescRec->hRsSpecialType);
-    getLiteralSuffix(pDescRec->hType, pDescRec->szLiteralSuffix,
+    getLiteralSuffix(pDescRec->hConciseType, pDescRec->szLiteralSuffix,
                         pDescRec->hRsSpecialType);
-    getTypeName(pDescRec->hType, pDescRec->szTypeName,
+    getTypeName(pDescRec->hConciseType, pDescRec->szTypeName,
                 sizeof(pDescRec->szTypeName), pDescRec->hRsSpecialType);
-    pDescRec->iNumPrecRadix = getNumPrecRadix(pDescRec->hType);
-    pDescRec->iOctetLen = getOctetLen(pDescRec->hType, pDescRec->iSize,
+    pDescRec->iNumPrecRadix = getNumPrecRadix(pDescRec->hConciseType);
+    pDescRec->iOctetLen = getOctetLen(pDescRec->hConciseType, pDescRec->iSize,
                                         pDescRec->hRsSpecialType);
     pDescRec->iPrecision = getPrecision(
-        pDescRec->hType, pDescRec->iSize, pDescRec->hRsSpecialType);
+        pDescRec->hConciseType, pDescRec->iSize, pDescRec->hRsSpecialType);
     pDescRec->iSearchable =
-        getSearchable(pDescRec->hType, pDescRec->hRsSpecialType);
+        getSearchable(pDescRec->hConciseType, pDescRec->hRsSpecialType);
     pDescRec->iUnNamed = getUnNamed(pDescRec->szName);
-    pDescRec->cUnsigned = getUnsigned(pDescRec->hType);
+    pDescRec->cUnsigned = getUnsigned(pDescRec->hConciseType);
     pDescRec->iUpdatable = getUpdatable();
 }
 
@@ -3304,6 +3384,7 @@ SQLRETURN libpqInitializeResultSetField(RS_STMT_INFO *pStmt, char **colName,
     pResult->iNumberOfCols = colNum;
 
     // Populate column (PGresAttDesc*) into pResult->pgResult (PGresult *)
+
     if (!PQsetResultAttrs(pResult->pgResult, colNum, column)) {
         return handleInitializeResultSetError(pStmt, column, colNum, result, "Failed to set result attributes");
     }
@@ -3451,6 +3532,9 @@ SQLRETURN libpqCreateSQLCatalogsCustomizedResultSet(
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
 
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
+
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
 
@@ -3497,6 +3581,9 @@ SQLRETURN libpqCreateSQLSchemasCustomizedResultSet(
 
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
+
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
 
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
@@ -3546,6 +3633,9 @@ SQLRETURN libpqCreateSQLTableTypesCustomizedResultSet(
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
 
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
+
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
 
@@ -3592,6 +3682,9 @@ SQLRETURN libpqCreateSQLTablesCustomizedResultSet(
 
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
+
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
 
     // Reset the current row number for fetching result
     pStmt->pResultHead->iCurRow = -1;
@@ -3669,6 +3762,9 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
 
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
+
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
 
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
@@ -3904,6 +4000,9 @@ SQLRETURN libpqCreateSQLPrimaryKeysCustomizedResultSet(
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
 
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
+
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
 
@@ -3966,6 +4065,9 @@ SQLRETURN libpqCreateSQLForeignKeysCustomizedResultSet(
 
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
+
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
 
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
@@ -4067,6 +4169,9 @@ SQLRETURN libpqCreateSQLSpecialColumnsCustomizedResultSet(
 
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
+
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
 
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
@@ -4233,6 +4338,9 @@ SQLRETURN libpqCreateSQLTablePrivilegesCustomizedResultSet(
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
 
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
+
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
 
@@ -4297,6 +4405,9 @@ SQLRETURN libpqCreateSQLColumnPrivilegesCustomizedResultSet(
 
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
+
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
 
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
@@ -4368,6 +4479,9 @@ SQLRETURN libpqCreateSQLProceduresCustomizedResultSet(
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
 
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
+
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;
 
@@ -4434,6 +4548,9 @@ SQLRETURN libpqCreateSQLProcedureColumnsCustomizedResultSet(
 
     // Set the total column number
     PQsetNumAttributes(res, columnNum);
+
+    // Update the cursor state
+    pStmt->iStatus = RS_EXECUTE_STMT;
 
     // Set the total row number
     pStmt->pResultHead->iNumberOfRowsInMem = intermediateRSSize;

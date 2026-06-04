@@ -540,10 +540,22 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
         }
 
         case SQL_CONVERT_BINARY:
+        case SQL_CONVERT_VARBINARY:
+        case SQL_CONVERT_LONGVARBINARY:
+        {
+            iVal = SQL_CVT_BINARY
+                   | SQL_CVT_VARBINARY
+                   | SQL_CVT_LONGVARBINARY
+                   | SQL_CVT_CHAR
+                   | SQL_CVT_VARCHAR
+                   | SQL_CVT_LONGVARCHAR;
+            rc = integerInfoResponse(iVal, piVal, pcbLen, piRetType);
+            break;
+        }
+
+        case SQL_CONVERT_GUID:
         case SQL_CONVERT_INTERVAL_YEAR_MONTH:
         case SQL_CONVERT_INTERVAL_DAY_TIME:
-        case SQL_CONVERT_LONGVARBINARY:
-        case SQL_CONVERT_VARBINARY:
         {
             iVal = 0;
             rc = integerInfoResponse(iVal, piVal, pcbLen, piRetType);
@@ -1163,8 +1175,7 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
 
         case SQL_STATIC_CURSOR_ATTRIBUTES2:
         {
-            iVal = SQL_CA2_READ_ONLY_CONCURRENCY | SQL_CA2_OPT_VALUES_CONCURRENCY | SQL_CA2_CRC_EXACT
-                    | SQL_CA2_SIMULATE_TRY_UNIQUE;
+            iVal = SQL_CA2_READ_ONLY_CONCURRENCY | SQL_CA2_OPT_VALUES_CONCURRENCY | SQL_CA2_CRC_EXACT;
             rc = integerInfoResponse(iVal, piVal, pcbLen, piRetType);
             break;
         }
@@ -1303,11 +1314,11 @@ SQLRETURN  SQL_API RsDrvInfo::RS_SQLGetInfo(SQLHDBC phdbc,
             break;
         }
 
-        default: 
+        default:
         {
             rc = SQL_ERROR;
-            addError(&pConn->pErrorList,"HYC00", "Optional field not implemented.", 0, NULL);
-            goto error; 
+            addError(&pConn->pErrorList,"HY096", "Information type out of range", 0, NULL);
+            goto error;
         }
      } // Switch
 
@@ -1592,4 +1603,3 @@ static SQLRETURN integerInfoResponse(SQLUINTEGER iData, SQLUINTEGER *phBuf, SQLS
 
     return rc;
 }
-

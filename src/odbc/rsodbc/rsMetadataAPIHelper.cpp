@@ -813,8 +813,8 @@ const std::unordered_map<std::string, int> RsMetadataAPIHelper::bufferLenMap = {
     {"timetz", sizeof(SQL_TIME_STRUCT)},
     {"timestamp", sizeof(SQL_TIMESTAMP_STRUCT)},
     {"timestamptz", sizeof(SQL_TIMESTAMP_STRUCT)},
-    {"intervaly2m", sizeof(INTERVALY2M_STRUCT)},
-    {"intervald2s", sizeof(INTERVALD2S_STRUCT)}};
+    {"intervaly2m", sizeof(SQL_INTERVAL_STRUCT)},
+    {"intervald2s", sizeof(SQL_INTERVAL_STRUCT)}};
 
 const std::unordered_map<std::string, int>
     RsMetadataAPIHelper::numPrecRadixMap = {

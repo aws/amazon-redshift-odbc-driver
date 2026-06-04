@@ -161,7 +161,7 @@ SQLRETURN SQL_API RsParameter::RS_SQLBindParameter(SQLHSTMT     phstmt,
             // Store app values
             pDescRec->hRecNumber    = hParam;
             pDescRec->hInOutType  = hInOutType;
-            pDescRec->hType        = hType;
+            syncFieldsFromConciseType(pDescRec, hType);
             pDescRec->hParamSQLType    = hSQLType;
             pDescRec->iSize    = (int)iColSize;
             pDescRec->hScale        = hScale;
@@ -315,8 +315,10 @@ SQLRETURN SQL_API RsParameter::RS_SQLDescribeParam(SQLHSTMT         phstmt,
             {
                 RS_DESC_REC *pDescRec = &pStmt->pIPD->pDescRecHead[hParam - 1];
 
+                // Based on the ODBC spec, we should return from the
+                // SQL_DESC_CONCISE_TYPE record field of the IPD
                 if(pDataType)
-                    *pDataType = pDescRec->hType;
+                    *pDataType = pDescRec->hConciseType;
 
                 if(pParamSize)
                     *pParamSize = pDescRec->iSize;

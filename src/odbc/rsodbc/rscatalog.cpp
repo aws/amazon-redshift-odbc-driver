@@ -599,11 +599,13 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
                                SQLSMALLINT cbTableType)
 {
     SQLRETURN rc = SQL_SUCCESS;
-	if(!VALID_HSTMT(phstmt)) {
-        return SQL_INVALID_HANDLE;
-	}
 
-	RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    rc = validateStatementForCatalogFunction(phstmt);
+    if (rc != SQL_SUCCESS) {
+        return rc;
+    }
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
 	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4){
 		if (isEmptyString(pSchemaName) && isEmptyString(pTableName) && isSqlAllCatalogs(pCatalogName, cbCatalogName)) {
@@ -620,6 +622,7 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLTables(SQLHSTMT phstmt,
 				std::string errorMsg = RsMetadataErrors::formatError(
 					RsMetadataErrors::PROXY_CALL_FAILED,
 					RsMetadataErrors::TYPE_CATALOG);
+				RS_LOG_ERROR("RS_SQLTables", "%s", errorMsg.c_str());
 				RS_LOG_ERROR("RS_SQLTables", "%s", errorMsg.c_str());
 				addError(&pStmt->pErrorList,
 					const_cast<char*>(RsMetadataErrors::GENERAL_ERROR.c_str()),
@@ -973,12 +976,13 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLColumns(SQLHSTMT phstmt,
                                SQLSMALLINT cbColumnName)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    if (!VALID_HSTMT(phstmt)) {
-        rc = SQL_INVALID_HANDLE;
+    rc = validateStatementForCatalogFunction(phstmt);
+    if (rc != SQL_SUCCESS) {
         return rc;
     }
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
     if (showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4) {
         // Parameter validation check
@@ -1272,14 +1276,15 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLStatistics(SQLHSTMT phstmt,
                                    SQLUSMALLINT hReserved)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
-    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
 
-    if(!VALID_HSTMT(phstmt))
-    {
-        rc = SQL_INVALID_HANDLE;
+    rc = validateStatementForCatalogFunction(phstmt);
+    if (rc != SQL_SUCCESS) {
         return rc;
     }
+
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    char szCatalogQuery[MAX_CATALOG_QUERY_LEN];
 
     if(pTableName == NULL || cbTableName == SQL_NULL_DATA)
     {
@@ -1435,18 +1440,15 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLSpecialColumns(SQLHSTMT phstmt,
                                        SQLUSMALLINT hNullable)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    if(!VALID_HSTMT(phstmt)) {
-        return SQL_INVALID_HANDLE;
-	}
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    if (!VALID_HSTMT(phstmt)) {
-        rc = SQL_INVALID_HANDLE;
+    rc = validateStatementForCatalogFunction(phstmt);
+    if (rc != SQL_SUCCESS) {
         return rc;
     }
 
-    if(pTableName == NULL || cbTableName == SQL_NULL_DATA)
-    {
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    if(pTableName == NULL || cbTableName == SQL_NULL_DATA) {
         rc = SQL_ERROR;
         RS_LOG_ERROR("RS_SQLSpecialColumns", "Table name parameter cannot be null");
         addError(&pStmt->pErrorList,"HY009", "Invalid use of null pointer:RS_SQLSpecialColumns", 0, NULL);
@@ -1703,15 +1705,15 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedureColumns(SQLHSTMT           phstmt,
                                         SQLSMALLINT      cbColumnName)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    if (!VALID_HSTMT(phstmt)) {
-        rc = SQL_INVALID_HANDLE;
+    rc = validateStatementForCatalogFunction(phstmt);
+    if (rc != SQL_SUCCESS) {
         return rc;
     }
 
-    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
-    {
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4) {
         // Convert parameters to strings
         std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
         std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);
@@ -2445,15 +2447,15 @@ SQLRETURN SQL_API RsCatalog::RS_SQLProcedures(SQLHSTMT           phstmt,
                                 SQLSMALLINT        cbProcName)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    if (!VALID_HSTMT(phstmt)) {
-        rc = SQL_INVALID_HANDLE;
+    rc = validateStatementForCatalogFunction(phstmt);
+    if (rc != SQL_SUCCESS) {
         return rc;
     }
 
-    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
-    {
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4) {
         // Convert parameters to strings
         std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
         std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);
@@ -2671,16 +2673,16 @@ SQLRETURN SQL_API RsCatalog::RS_SQLForeignKeys(SQLHSTMT               phstmt,
                                     SQLSMALLINT        cbFkTableName)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    if (!VALID_HSTMT(phstmt)) {
-        rc = SQL_INVALID_HANDLE;
+    rc = validateStatementForCatalogFunction(phstmt);
+    if (rc != SQL_SUCCESS) {
         return rc;
     }
 
-	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
-	{
-		// Check if at least one table name is provided (either PK or FK)
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4) {
+        // Check if at least one table name is provided (either PK or FK)
         if((pPkTableName == NULL || cbPkTableName == SQL_NULL_DATA) && (pFkTableName == NULL || cbFkTableName == SQL_NULL_DATA)) {
             RS_LOG_ERROR("RS_SQLForeignKeys", "Either primary key table name or foreign key table name must be provided");
             addError(&pStmt->pErrorList, "HY009", "Invalid use of null pointer", 0, NULL);
@@ -2919,15 +2921,15 @@ SQLRETURN SQL_API RsCatalog::RS_SQLPrimaryKeys(SQLHSTMT           phstmt,
                                     SQLSMALLINT     cbTableName)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    if (!VALID_HSTMT(phstmt)) {
-        rc = SQL_INVALID_HANDLE;
+    rc = validateStatementForCatalogFunction(phstmt);
+    if (rc != SQL_SUCCESS) {
         return rc;
     }
 
-	if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
-	{
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4) {
         // Check if required parameter TableName is provided
         if(pTableName == NULL || cbTableName == SQL_NULL_DATA) {
             RS_LOG_ERROR("RS_SQLPrimaryKeys", "Table name parameter cannot be null or empty");
@@ -3224,11 +3226,11 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
          SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA,
          "timestamptz", 0, 6, SQL_DATETIME, SQL_CODE_TIMESTAMP, SQL_NULL_DATA,
          SQL_NULL_DATA},
-        {"intervaly2m", SQL_INTERVAL_YEAR_TO_MONTH, 32, "\'", "\'", "",
+        {"intervaly2m", SQL_INTERVAL_YEAR_TO_MONTH, 13, "\'", "\'", "",
          SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE,
          SQL_NULL_DATA, "intervaly2m", 0, 0, SQL_INTERVAL,
          SQL_CODE_YEAR_TO_MONTH, SQL_NULL_DATA, SQL_NULL_DATA},
-        {"intervald2s", SQL_INTERVAL_DAY_TO_SECOND, 64, "\'", "\'", "",
+        {"intervald2s", SQL_INTERVAL_DAY_TO_SECOND, 26, "\'", "\'", "",
          SQL_NULLABLE, SQL_FALSE, SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE,
          SQL_NULL_DATA, "intervald2s", 0, 0, SQL_INTERVAL,
          SQL_CODE_DAY_TO_SECOND, SQL_NULL_DATA, SQL_NULL_DATA}};
@@ -3348,15 +3350,15 @@ SQLRETURN SQL_API RsCatalog::RS_SQLColumnPrivileges(SQLHSTMT           phstmt,
                                         SQLSMALLINT      cbColumnName)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    if (!VALID_HSTMT(phstmt)) {
-        rc = SQL_INVALID_HANDLE;
+    rc = validateStatementForCatalogFunction(phstmt);
+    if (rc != SQL_SUCCESS) {
         return rc;
     }
 
-    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
-    {
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4) {
         // Check if required parameter TableName is provided
         if(pTableName == NULL || cbTableName == SQL_NULL_DATA) {
             RS_LOG_ERROR("RS_SQLColumnPrivileges", "Table name parameter cannot be null or empty");
@@ -3573,15 +3575,15 @@ SQLRETURN SQL_API RsCatalog::RS_SQLTablePrivileges(SQLHSTMT           phstmt,
                                         SQLSMALLINT      cbTableName)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
 
-    if (!VALID_HSTMT(phstmt)) {
-        rc = SQL_INVALID_HANDLE;
+    rc = validateStatementForCatalogFunction(phstmt);
+    if (rc != SQL_SUCCESS) {
         return rc;
     }
 
-    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4)
-    {
+    RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+
+    if(showDiscoveryVersion(pStmt) >= MIN_SHOW_DISCOVERY_VERSION_V4) {
         // Convert parameters to strings
         std::string catalogName = (isNullOrEmptyString(pCatalogName)) ? "" : char2String(pCatalogName);
         std::string schemaName = (isNullOrEmptyString(pSchemaName)) ? "" : char2String(pSchemaName);

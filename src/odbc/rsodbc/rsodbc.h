@@ -210,8 +210,10 @@
 #define MAX_TIMETZOID_SIZE		21 
 #define MAX_TIMESTAMPOID_SIZE   29
 #define MAX_TIMESTAMPTZOID_SIZE 35
-#define MAX_INTERVALY2MOID_SIZE 32
-#define MAX_INTERVALD2SOID_SIZE 64
+// [-]YYYYYYYYY-MM = 1 + 9 + 3 = 13
+#define MAX_INTERVALY2MOID_SIZE 13
+// [-]DDDDDDDDD HH:MM:SS.ffffff = 1 + 9 + 1 + 9 + 6 = 26
+#define MAX_INTERVALD2SOID_SIZE 26
 #define MAX_SUPER_SIZE			4194304
 #define MAX_VARBYTE_SIZE		1024000 
 #define MAX_GEOMETRY_SIZE		1024000 
@@ -778,7 +780,8 @@ typedef struct _RS_DESC_REC
     short hRecNumber; // ARD: Record Number. Col number or param number. Start from 1.
 
     // COL_INFO/PARAM_INFO/BIND_PARAM
-    char szName[MAX_IDEN_LEN + 1];    // IRD: SQL_DESC_BASE_COLUMN_NAME, R. IRD: SQL_DESC_LABEL, R. IRD: SQL_DESC_NAME, R. IPD: SQL_DESC_NAME, R/W. 
+    char szName[MAX_IDEN_LEN + 1];    // IRD: SQL_DESC_LABEL, R. IRD: SQL_DESC_NAME, R. IPD: SQL_DESC_NAME, R/W.
+    char szBaseColumnName[MAX_IDEN_LEN + 1]; // IRD: SQL_DESC_BASE_COLUMN_NAME, R. Actual column name (not alias). 
     short hType;            // SQL or C Type. IRD: SQL_DESC_TYPE, R. IPD: SQL_DESC_TYPE, R/W. APD: SQL_DESC_TYPE R/W. ARD: SQL_DESC_TYPE, R/W.  
     int  iSize;                // IRD: SQL_DESC_LENGTH, R. IPD: SQL_DESC_LENGTH, R/W. APD: SQL_DESC_LENGTH, R/W. 
     short hScale;            // IRD: SQL_DESC_SCALE, R. IPD: SQL_DESC_SCALE, R/W. APD: SQL_DESC_SCALE, R/W. ARD: SQL_DESC_SCALE, R/W.
@@ -1643,7 +1646,7 @@ public:
       iQueryTimeout = pConn->pConnectProps->iQueryTimeout;
       iRetrieveData = SQL_RD_DEFAULT;
       iRowNumber = 0;
-      iSimulateCursor = SQL_SC_NON_UNIQUE;
+      //   iSimulateCursor = SQL_SC_NON_UNIQUE; // Not Supported
       iUseBookmark = SQL_UB_DEFAULT;
     }
 
@@ -1661,10 +1664,10 @@ public:
     int iMaxRows;
     int iMetaDataId;
     int iNoScan;
-    int iQueryTimeout;                  
+    int iQueryTimeout;
     int iRetrieveData;
     int iRowNumber;                      /* Read Only */
-    int iSimulateCursor;
+    // int iSimulateCursor; // Not Supported
     int iUseBookmark;
 };
 

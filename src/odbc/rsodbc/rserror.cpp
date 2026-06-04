@@ -109,7 +109,7 @@ SQLRETURN  SQL_API RsError::RS_SQLError(SQLHENV phenv,
     // Do we have any error or warning?
     if(pError != NULL)
     {
-        rc = copyStrDataSmallLen(pError->szErrMsg, SQL_NTS, (char *)pMessageText, cbLen, pcbLen);
+        rc = copyStrDataSmallLen(pError->szErrMsg, SQL_NTS, (char *)pMessageText, cbLen, pcbLen, NULL);
 
         if(pSqlstate != NULL)
             rs_strncpy((char *)pSqlstate, pError->szSqlState, sizeof(pError->szSqlState));
@@ -545,7 +545,7 @@ SQLRETURN  SQL_API RsError::RS_SQLGetDiagField(SQLSMALLINT HandleType,
             //
             case SQL_DIAG_CURSOR_ROW_COUNT:
             {
-                iRetType = SQL_C_LONG;
+                iRetType = SQL_C_SBIGINT;
 
                 if(HandleType == SQL_HANDLE_STMT && pStmt)
                 {
@@ -554,9 +554,9 @@ SQLRETURN  SQL_API RsError::RS_SQLGetDiagField(SQLSMALLINT HandleType,
                         RS_RESULT_INFO *pResult = pStmt->pResultHead;
 
                         if(pResult && (pResult->iNumberOfCols > 0))
-                            *(SQLINTEGER *)pDiagInfo = pResult->iNumberOfRowsInMem;
+                            *(SQLLEN *)pDiagInfo = pResult->iNumberOfRowsInMem;
                         else
-                            *(SQLINTEGER *)pDiagInfo = 0;
+                            *(SQLLEN *)pDiagInfo = 0;
                     }
                 }
                 else
@@ -622,7 +622,7 @@ SQLRETURN  SQL_API RsError::RS_SQLGetDiagField(SQLSMALLINT HandleType,
 
             case SQL_DIAG_ROW_COUNT:
             {
-                iRetType = SQL_C_LONG;
+                iRetType = SQL_C_SBIGINT;
 
                 if(HandleType == SQL_HANDLE_STMT && pStmt)
                 {
@@ -631,9 +631,9 @@ SQLRETURN  SQL_API RsError::RS_SQLGetDiagField(SQLSMALLINT HandleType,
                         RS_RESULT_INFO *pResult = pStmt->pResultHead;
 
                         if(pResult && (pResult->iNumberOfCols == 0))
-                            *(SQLINTEGER *)pDiagInfo = pResult->lRowsUpdated;
+                            *(SQLLEN *)pDiagInfo = pResult->lRowsUpdated;
                         else
-                            *(SQLINTEGER *)pDiagInfo = 0;
+                            *(SQLLEN *)pDiagInfo = 0;
                     }
                 }
                 else
@@ -795,12 +795,12 @@ SQLRETURN  SQL_API RsError::RS_SQLGetDiagField(SQLSMALLINT HandleType,
 
             case SQL_DIAG_ROW_NUMBER:
             {
-                iRetType = SQL_C_LONG;
+                iRetType = SQL_C_SBIGINT;
 
                 if(HandleType == SQL_HANDLE_STMT)
                 {
                     if(pDiagInfo)
-                        *(SQLINTEGER *)pDiagInfo = SQL_ROW_NUMBER_UNKNOWN;
+                        *(SQLLEN *)pDiagInfo = SQL_ROW_NUMBER_UNKNOWN;
                 }
                 else
                     rc = SQL_ERROR;
@@ -844,6 +844,22 @@ SQLRETURN  SQL_API RsError::RS_SQLGetDiagField(SQLSMALLINT HandleType,
 
                 if (pcbLen)  
                     *pcbLen = sizeof(SQLINTEGER);
+
+                break;
+            }
+
+            case SQL_C_SBIGINT:
+            {
+                // Per ODBC 3.x spec, SQL_DIAG_ROW_COUNT, SQL_DIAG_CURSOR_ROW_COUNT,
+                // and SQL_DIAG_ROW_NUMBER are SQLLEN (8 bytes on 64-bit).
+                // We reuse SQL_C_SBIGINT (a standard ODBC 8-byte signed type) to
+                // distinguish these from the 4-byte SQLINTEGER fields (SQL_C_LONG)
+                // so pcbLen reports the correct size to the application.
+                if(rc == SQL_SUCCESS_WITH_INFO)
+                    rc = SQL_SUCCESS;
+
+                if (pcbLen)
+                    *pcbLen = sizeof(SQLLEN);
 
                 break;
             }
@@ -937,5 +953,3 @@ SQLRETURN SQL_API SQLGetDiagFieldW(SQLSMALLINT     hHandleType,
 
     return rc;
 }
-
-

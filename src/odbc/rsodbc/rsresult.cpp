@@ -164,16 +164,16 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLDescribeCol(SQLHSTMT phstmt,
             {
                 RS_DESC_REC *pDescRec = &pDescRecHead[hCol - 1];
 
-                rc = copyStrDataSmallLen(pDescRec->szName, SQL_NTS, (char *)pColName, cbLen, pcbLen);
+                rc = copyStrDataSmallLen(pDescRec->szName, SQL_NTS, (char *)pColName, cbLen, pcbLen, &pStmt->pErrorList);
 
                 if(pDataType)
-                    *pDataType = pDescRec->hType;
+                    *pDataType = pDescRec->hConciseType;
 
                 if(pColSize)
-                    *pColSize = getSize(pDescRec->hType, pDescRec->iSize);
+                    *pColSize = getSize(pDescRec->hConciseType, pDescRec->iSize);
 
                 if(pDecimalDigits)
-                    *pDecimalDigits = getScale(pDescRec->hType, pDescRec->hScale);
+                    *pDecimalDigits = getScale(pDescRec->hConciseType, pDescRec->hScale);
 
                 if(pNullable)
                     *pNullable = pDescRec->hNullable;
@@ -456,7 +456,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLBindCol(SQLHSTMT phstmt,
         {
             // Store app values
             pDescRec->hRecNumber = hCol;
-            pDescRec->hType        = hType;
+            syncFieldsFromConciseType(pDescRec, hType);
             pDescRec->pValue    = pValue;
             pDescRec->cbLen        = cbLen;
             pDescRec->pcbLenInd = pcbLenInd;
@@ -565,7 +565,18 @@ SQLRETURN SQL_API SQLMoreResults(SQLHSTMT    phstmt)
         }
     }
     else
-        rc = SQL_NO_DATA_FOUND;
+    {
+        // ODBC 3.x spec: HY010 (function sequence error) when statement has never
+        // been executed. ODBC 2.x had no such requirement; SQL_NO_DATA was acceptable.
+        if(pStmt->iStatus < RS_EXECUTE_STMT &&
+           pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion != SQL_OV_ODBC2)
+        {
+            rc = SQL_ERROR;
+            addError(&pStmt->pErrorList, "HY010", "Function sequence error", 0, NULL);
+        }
+        else
+            rc = SQL_NO_DATA_FOUND;
+    }
 
 error:
 
@@ -718,8 +729,6 @@ SQLRETURN  SQL_API SQLGetData(SQLHSTMT phstmt,
         goto error;
     }
 
-    // Clear error list
-    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
     rc = RS_STMT_INFO::RS_SQLGetData(pStmt, hCol, hType, pValue, cbLen,
                                      pcbLenInd, FALSE, pcbLenIndInternal);
     if (pcbLenInd &&
@@ -750,8 +759,19 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
                                   SQLLEN &pcbLenIndInternal)
 
 {
+
+    if (!VALID_HSTMT(pStmt)) {
+        RS_LOG_ERROR("RS_SQLGetData", "Invalid statement handle");
+        return SQL_INVALID_HANDLE;
+    }
+
     SQLRETURN rc = SQL_SUCCESS;
+
     RS_RESULT_INFO *pResult = pStmt->pResultHead;
+    SQLSMALLINT actualCType = hType;
+
+    // Clear error list
+    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     if(pcbLenInd)
         *pcbLenInd = 0L;
@@ -766,20 +786,56 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
     */
     pcbLenIndInternal = 0;
 
+    // Buffer length validation
+    if (cbLen < 0) {
+        addError(&pStmt->pErrorList, "HY090", "Invalid string or buffer length", 0, NULL);
+        return SQL_ERROR;
+    }
+
+    // Validate TargetValuePtr - cannot be NULL per ODBC spec
+    // Exception: internal calls from SQLFetchScroll may pass NULL for unbound columns
     if (!iInternal && pValue == NULL) {
-        rc = SQL_ERROR;
         addError(&pStmt->pErrorList, "HY009", "Invalid use of null pointer", 0, NULL);
+        return SQL_ERROR;
+    }
+
+    // Check for result set existence
+    if (!pResult)
+    {
+        rc = SQL_ERROR;
+        addError(&pStmt->pErrorList,"24000", "Invalid cursor state", 0, NULL);
         goto error;
     }
 
-    if (pResult) {
+    // Handle SQL_ARD_TYPE - must have valid ARD record or return error
+    if (hType == SQL_ARD_TYPE) {
+        // Find existing ARD record (read-only, don't create)
+        RS_DESC_REC *pARDRec =
+            (pStmt->pStmtAttr && pStmt->pStmtAttr->pARD)
+                ? checkAndAddDescRec(pStmt->pStmtAttr->pARD, hCol, FALSE, NULL)
+                : NULL;
+
+        if (!pARDRec) {
+            rc = SQL_ERROR;
+            addError(&pStmt->pErrorList, "07009", "Invalid descriptor index", 0,
+                     NULL);
+            goto error;
+        }
+
+        actualCType = pARDRec->hType;
+    }
+
+    if(pResult)
+    {
         if(pResult->iNumberOfCols && pStmt->pIRD->pDescRecHead)
         {
 
 			if(!iInternal && hCol == 0) {
                 rc = SQL_ERROR;
-                addError(&pStmt->pErrorList,"HY000", "SQLGetData: Bookmark is not supported", 0, NULL);
-                goto error; 
+                // Per ODBC spec, 07009 (Invalid descriptor index) is the
+                // correct SQLSTATE when bookmarks are not supported.
+                addError(&pStmt->pErrorList,"07009", "SQLGetData: Bookmark column is not supported", 0, NULL);
+                goto error;
             }
 			if(!iInternal && (hCol == pResult->iPrevhCol))
 			{
@@ -802,12 +858,13 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
                 pcbLenIndInternal = iDataLen;
                 if (pValue && pData && (iDataLen != SQL_NULL_DATA)) {
                   rc = convertSQLDataToCData(
-                      pStmt, pData, iDataLen, pDescRec->hType, pValue, cbLen,
-                      &(pResult->getColumnReadOffset(hCol)), &pcbLenIndInternal, hType,
+                      pStmt, pData, iDataLen, pDescRec->hConciseType, pValue, cbLen,
+                      &(pResult->getColumnReadOffset(hCol)), &pcbLenIndInternal, actualCType,
                       pDescRec->hRsSpecialType, format, pDescRec);
                       if(pcbLenInd) {
                         *pcbLenInd = pcbLenIndInternal;
                       }
+
                 } else if (iDataLen == SQL_NULL_DATA) {
                   if (pValue && (cbLen > 0)) *(char *)pValue = '\0';
                     pcbLenIndInternal = SQL_NULL_DATA;
@@ -827,15 +884,15 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLGetData(RS_STMT_INFO *pStmt,
             else
             {
                 rc = SQL_ERROR;
-                addError(&pStmt->pErrorList,"HY000", "SQLGetData: Invalid column number", 0, NULL);
-                goto error; 
+                addError(&pStmt->pErrorList,"07009", "Invalid descriptor index", 0, NULL);
+                goto error;
             }
         }
         else
         {
             rc = SQL_ERROR;
-            addError(&pStmt->pErrorList,"HY000", "No columns found", 0, NULL);
-            goto error; 
+            addError(&pStmt->pErrorList,"24000", "Invalid cursor state", 0, NULL);
+            goto error;
         }
     } else {
         rc = SQL_ERROR;
@@ -1220,9 +1277,10 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLColAttribute(SQLHSTMT        phstmt,
     isCharIdentifier = isStrFieldIdentifier(hFieldIdentifier);
 
     // Is buffer valid?
-    if((isCharIdentifier 
-            && ((pcValue == NULL && pcbLen == NULL) || (cbLen < 0 && cbLen != SQL_NTS)))
-        || (!isCharIdentifier && plValue == NULL))
+    // Per ODBC spec, SQL_ERROR (HY090) should only be returned when
+    // CharacterAttributePtr is a character string AND BufferLength < 0 (not equal to SQL_NTS).
+    // Passing NULL with BufferLength=0 should return SQL_SUCCESS.
+    if(isCharIdentifier && (cbLen < 0 && cbLen != SQL_NTS))
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY090", "Invalid string or buffer length", 0, NULL);
@@ -1248,8 +1306,9 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLColAttribute(SQLHSTMT        phstmt,
     {
         if(hFieldIdentifier == SQL_DESC_COUNT)
         {
-            *plValue = 0;
-            *plValue = pResult->iNumberOfCols;
+            if (plValue) {
+                *plValue = pResult->iNumberOfCols;
+            }
         }
         else
         {
@@ -1263,150 +1322,186 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLColAttribute(SQLHSTMT        phstmt,
                     {
                         case SQL_DESC_AUTO_UNIQUE_VALUE:
                         {
-                            *plValue = pDescRec->cAutoInc;
+                            if (plValue) {
+                                *plValue = pDescRec->cAutoInc;
+                            }
                             break;
                         }
 
                         case SQL_DESC_BASE_COLUMN_NAME:
+                        {
+                            rc = copyStrDataSmallLen(pDescRec->szBaseColumnName, SQL_NTS, (char *)pcValue, cbLen, pcbLen, &pStmt->pErrorList);
+                            break;
+                        }
+
                         case SQL_DESC_LABEL:
                         case SQL_DESC_NAME:
                         {
-                            rc = copyStrDataSmallLen(pDescRec->szName, SQL_NTS, (char *)pcValue, cbLen, pcbLen);
+                            rc = copyStrDataSmallLen(pDescRec->szName, SQL_NTS, (char *)pcValue, cbLen, pcbLen, &pStmt->pErrorList);
                             break;
                         }
 
                         case SQL_DESC_BASE_TABLE_NAME:
                         case SQL_DESC_TABLE_NAME:
                         {
-                            rc = copyStrDataSmallLen(pDescRec->szTableName, SQL_NTS, (char *)pcValue, cbLen, pcbLen);
+                            rc = copyStrDataSmallLen(pDescRec->szTableName, SQL_NTS, (char *)pcValue, cbLen, pcbLen, &pStmt->pErrorList);
                             break;
                         }
 
                         case SQL_DESC_CASE_SENSITIVE:
                         {
-                            *plValue = pDescRec->cCaseSensitive;
+                            if (plValue) {
+                                *plValue = pDescRec->cCaseSensitive;
+                            }
                             break;
                         }
 
                         case SQL_DESC_CATALOG_NAME:
                         {
-                            rc = copyStrDataSmallLen(pDescRec->szCatalogName, SQL_NTS, (char *)pcValue, cbLen, pcbLen);
+                            rc = copyStrDataSmallLen(pDescRec->szCatalogName, SQL_NTS, (char *)pcValue, cbLen, pcbLen, &pStmt->pErrorList);
                             break;
                         }
 
                         case SQL_DESC_CONCISE_TYPE:
                         {
-                            *plValue = getConciseType(pDescRec->hConciseType, pDescRec->hType);
+                            if (plValue) {
+                                *plValue = pDescRec->hConciseType;
+                            }
                             break;
                         }
 
-                        case SQL_DESC_TYPE:
-                        {
-                            *plValue = pDescRec->hType;
+                        case SQL_DESC_TYPE: {
+                            if(plValue) {
+                                // Return verbose data type per ODBC spec
+                                *plValue = pDescRec->hType;
 
-                            // Convert to ODBC2 type, if needed
-                            CONVERT_TO_ODBC2_SQL_DATE_TYPES(pStmt, plValue);
-
+                                // Convert to ODBC2 type, if needed
+                                CONVERT_TO_ODBC2_SQL_DATE_TYPES(pStmt, plValue);
+                            }
                             break;
                         }
 
                         case SQL_DESC_DISPLAY_SIZE:
                         {
-                            *plValue = pDescRec->iDisplaySize;
+                            if (plValue) {
+                                *plValue = pDescRec->iDisplaySize;
+                            }
                             break;
                         }
 
                         case SQL_DESC_FIXED_PREC_SCALE:
                         {
-                            *plValue = pDescRec->cFixedPrecScale;
+                            if (plValue) {
+                                *plValue = pDescRec->cFixedPrecScale;
+                            }
                             break;
                         }
 
                         case SQL_DESC_LENGTH:
                         case SQL_COLUMN_LENGTH:
                         {
-                            *plValue = getSize(pDescRec->hType, pDescRec->iSize);
+                            if (plValue) {
+                                *plValue = getSize(pDescRec->hConciseType, pDescRec->iSize);
+                            }
                             break;
                         }
 
                         case SQL_DESC_LITERAL_PREFIX:
                         {
-                            rc = copyStrDataSmallLen(pDescRec->szLiteralPrefix, SQL_NTS, (char *)pcValue, cbLen, pcbLen);
+                            rc = copyStrDataSmallLen(pDescRec->szLiteralPrefix, SQL_NTS, (char *)pcValue, cbLen, pcbLen, &pStmt->pErrorList);
                             break;
                         }
 
                         case SQL_DESC_LITERAL_SUFFIX:
                         {
-                            rc = copyStrDataSmallLen(pDescRec->szLiteralSuffix, SQL_NTS, (char *)pcValue, cbLen, pcbLen);
+                            rc = copyStrDataSmallLen(pDescRec->szLiteralSuffix, SQL_NTS, (char *)pcValue, cbLen, pcbLen, &pStmt->pErrorList);
                             break;
                         }
 
                         case SQL_DESC_LOCAL_TYPE_NAME:
                         case SQL_DESC_TYPE_NAME:
                         {
-                            rc = copyStrDataSmallLen(pDescRec->szTypeName, SQL_NTS, (char *)pcValue, cbLen, pcbLen);
+                            rc = copyStrDataSmallLen(pDescRec->szTypeName, SQL_NTS, (char *)pcValue, cbLen, pcbLen, &pStmt->pErrorList);
                             break;
                         }
 
                         case SQL_DESC_NULLABLE:
                         {
-                            *plValue = pDescRec->hNullable; 
+                            if (plValue) {
+                                *plValue = pDescRec->hNullable;
+                            }
                             break;
                         }
 
                         case SQL_DESC_NUM_PREC_RADIX:
                         {
-                            *plValue = pDescRec->iNumPrecRadix;
+                            if (plValue) {
+                                *plValue = pDescRec->iNumPrecRadix;
+                            }
                             break;
                         }
 
                         case SQL_DESC_OCTET_LENGTH:
                         {
-                            *plValue = pDescRec->iOctetLen;
+                            if (plValue) {
+                                *plValue = pDescRec->iOctetLen;
+                            }
                             break;
                         }
 
                         case SQL_DESC_PRECISION:
                         case SQL_COLUMN_PRECISION:
                         {
-                            *plValue = pDescRec->iPrecision;
+                            if (plValue) {
+                                *plValue = pDescRec->iPrecision;
+                            }
                             break;
                         }
 
                         case SQL_DESC_SCALE:
                         case SQL_COLUMN_SCALE:
                         {
-                            *plValue = getScale(pDescRec->hType, pDescRec->hScale);
+                            if (plValue) {
+                                *plValue = getScale(pDescRec->hConciseType, pDescRec->hScale);
+                            }
                             break;
                         }
 
                         case SQL_DESC_SCHEMA_NAME:
                         {
-                            rc = copyStrDataSmallLen(pDescRec->szSchemaName, SQL_NTS, (char *)pcValue, cbLen, pcbLen);
+                            rc = copyStrDataSmallLen(pDescRec->szSchemaName, SQL_NTS, (char *)pcValue, cbLen, pcbLen, &pStmt->pErrorList);
                             break;
                         }
 
                         case SQL_DESC_SEARCHABLE:
                         {
-                            *plValue = pDescRec->iSearchable;
+                            if (plValue) {
+                                *plValue = pDescRec->iSearchable;
+                            }
                             break;
                         }
 
                         case SQL_DESC_UNNAMED:
                         {
-                            *plValue = pDescRec->iUnNamed;
+                            if (plValue) {
+                                *plValue = pDescRec->iUnNamed;
+                            }
                             break;
                         }
 
                         case SQL_DESC_UNSIGNED:
                         {
-                            *plValue = pDescRec->cUnsigned;
+                            if (plValue) {
+                                *plValue = pDescRec->cUnsigned;
+                            }
                             break;
                         }
 
                         case SQL_DESC_UPDATABLE:
                         {
-                            *plValue = pDescRec->iUpdatable;
+                            if (plValue) {
+                                *plValue = pDescRec->iUpdatable;
+                            }
                             break;
                         }
 
@@ -1421,7 +1516,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLColAttribute(SQLHSTMT        phstmt,
                 else
                 {
                     rc = SQL_ERROR;
-                    addError(&pStmt->pErrorList,"HY000", "SQLColAttribute: Invalid column number", 0, NULL);
+                    addError(&pStmt->pErrorList,"07009", "SQLColAttribute: Invalid column number", 0, NULL);
                     goto error; 
                 }
             }
@@ -1549,6 +1644,10 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
 
 		// Reset previous hCol for SQLGetData
 		pResult->iPrevhCol = 0;
+
+        // Tracks if any row had SQL_SUCCESS_WITH_INFO to decide the final rc
+        bool anyRowInfo = false;
+        int numErrorRows = 0; // Tracks the number of rows with SQL_ERROR
 
         // Loop for block cursor
         for(lRowFetched = 0; lRowFetched < lRowsToFetch; lRowFetched++)
@@ -1825,12 +1924,13 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
 
             } // Switch
 
+            SQLUSMALLINT rowStatus = SQL_ROW_SUCCESS;
             if(rc == SQL_SUCCESS)
             {
                 if(pStmt->pStmtAttr->iRetrieveData == SQL_RD_ON)
                 {
                     RS_DESC_REC *pDescRec;
-                    SQLRETURN rc1;
+                    SQLRETURN colStatus; // Tracks the return status of SQLGetData for the current column
 
                     // Put data in bind buffers, if any
                     for(pDescRec = pStmt->pStmtAttr->pARD->pDescRecHead; pDescRec != NULL; pDescRec = pDescRec->pNext)
@@ -1878,48 +1978,32 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                         pValueCharPtr_ += (lRowFetched * iValOffset) + iBindOffset;
                         pcbLenInd = (SQLLEN *)(pcbLenInd ? ((char *)pcbLenInd + iBindOffset) : NULL);
                         SQLLEN pcbLenIndInternal = (std::numeric_limits<SQLLEN>::min)();
-                        rc1 = RS_STMT_INFO::RS_SQLGetData(
-                            pStmt, pDescRec->hRecNumber, pDescRec->hType,
+                        colStatus = RS_STMT_INFO::RS_SQLGetData(
+                            pStmt, pDescRec->hRecNumber, pDescRec->hConciseType,
                             (SQLPOINTER)pValueCharPtr_, pDescRec->cbLen,
                             pcbLenInd, TRUE, pcbLenIndInternal);
 
                         pStmt->pResultHead->getColumnReadOffset(pDescRec->hRecNumber) = 0;
-                        //TODO: Check for SQL_SUCCESS_WITH_INFO
-                        if(rc1 == SQL_ERROR)
-                        {
-                            rc = SQL_ERROR;
-                            break;
+                        if (colStatus == SQL_ERROR) {
+                            rowStatus = SQL_ROW_ERROR;
+                            break; // stop processing this row, break from the column loop
+                        } else if (colStatus == SQL_SUCCESS_WITH_INFO){
+                            rowStatus = SQL_ROW_SUCCESS_WITH_INFO;
                         }
-                    } // Column loop
+                        // else: SQL_SUCCESS, rowStatus remains SQL_ROW_SUCCESS
+                    } // End of Column loop
 
-                    // Put the fetch count
-                    if(pIRDDescHeader.valid)
-                    {
-                        // Row count
-                        if(pIRDDescHeader.plRowsProcessedPtr)
-                            *(pIRDDescHeader.plRowsProcessedPtr) = lRowFetched + 1;
-
-                        // Row status
-                        if(pIRDDescHeader.phArrayStatusPtr)
-                        {
-                            short hRowStatus;
-
-                            if(rc == SQL_SUCCESS)
-                                hRowStatus = SQL_ROW_SUCCESS;
-                            else
-                            if(rc == SQL_SUCCESS_WITH_INFO)
-                                hRowStatus = SQL_ROW_SUCCESS_WITH_INFO;
-                            else
-                            if(rc == SQL_ERROR)
-                                hRowStatus = SQL_ROW_ERROR;
-                            else
-                                hRowStatus = SQL_ROW_ERROR;
-
-                            *(pIRDDescHeader.phArrayStatusPtr + lRowFetched) = hRowStatus;
-                        }
-                    } 
+                    // Finalize row status after column loop
+                    if (pIRDDescHeader.valid && pIRDDescHeader.phArrayStatusPtr) {
+                        *(pIRDDescHeader.phArrayStatusPtr + lRowFetched) = rowStatus;
+                    }
+                    anyRowInfo = (rowStatus == SQL_ROW_SUCCESS_WITH_INFO) ? true : anyRowInfo;
+                    // Update error rows
+                    if (rowStatus == SQL_ROW_ERROR) {
+                        numErrorRows++;
+                    }
                 } // SQL_RD_ON
-            } // Success
+            } // end of rc == SQL_SUCCESS
             else
             {
                 if(rc == SQL_NO_DATA)
@@ -1933,24 +2017,44 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                                 SQL_ROW_NOROW;
                         }
                     } // SQL_RD_ON
-                }
+                } // SQL_NO_DATA
 
-                break; // SQL_NO_DATA
+                break; // break from the row loop
             }
-        } // Rows loop
+        } // End of rows loop
 
-        // Check for last partial set of rows
-        if(rc == SQL_NO_DATA)
-        {
-            if(lRowFetched > 0)
-                rc = SQL_SUCCESS;
-        } 
+        // Set number of successfully processed rows
+        if (pIRDDescHeader.valid && pIRDDescHeader.plRowsProcessedPtr) {
+            *(pIRDDescHeader.plRowsProcessedPtr) = lRowFetched;
+        }
+
+        // Decide final return code based on rows processed
+        // According to ODBC spec: SQLFetch/SQLFetchScroll continues fetching rows until it has
+        // fetched all the rows in the rowset. It returns SQL_SUCCESS_WITH_INFO
+        // unless an error occurs in every row of the rowset (not including rows
+        // with status SQL_ROW_NOROW), in which case it returns SQL_ERROR. In
+        // particular, if the rowset size is 1 and an error occurs in that row,
+        // SQLFetch returns SQL_ERROR.
+        if (lRowFetched == 0) {
+            return SQL_NO_DATA;
+        } else if (lRowFetched == numErrorRows) {
+            return SQL_ERROR;
+        } else if (anyRowInfo || numErrorRows > 0) {
+            return SQL_SUCCESS_WITH_INFO;
+        }
+        return SQL_SUCCESS;
     }
     else
     {
         rc = SQL_ERROR;
+        // SQLFetch on idle statement should return HY010
+        if(pStmt->iStatus == RS_CLOSE_STMT) {
+            rc = SQL_ERROR;
+            addError(&pStmt->pErrorList,"HY010", "Function sequence error", 0, NULL);
+            goto error;
+        }
         addError(&pStmt->pErrorList,"24000", "Invalid cursor state", 0, NULL);
-        goto error; 
+        goto error;
     }
 
 error:

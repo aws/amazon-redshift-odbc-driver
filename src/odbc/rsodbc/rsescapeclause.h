@@ -11,7 +11,7 @@ typedef struct _RS_STR_BUF RS_STR_BUF;
 
 
 // Maximum replacement length for ODBC escape clause conversion
-#define MAX_ODBC_ESCAPE_CLAUSE_REPLACE_LEN 20
+#define MAX_ODBC_ESCAPE_CLAUSE_REPLACE_LEN 256
 
 // ODBC escape clause markers
 #define ODBC_ESCAPE_CLAUSE_START_MARKER '{'

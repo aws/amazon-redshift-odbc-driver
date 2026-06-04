@@ -1548,7 +1548,7 @@ public:
                 },
                 ColumnsTestExpected{
                     "intervaly2m", SQL_INTERVAL_YEAR_TO_MONTH, SQL_INTERVAL, SQL_CODE_YEAR_TO_MONTH,
-                    "32", "8", "", "10", "0", "", "15", "NO"
+                    "13", "28", "", "10", "0", "", "15", "NO"
                 }
             ),
             // intervald2s
@@ -1558,7 +1558,7 @@ public:
                 },
                 ColumnsTestExpected{
                     "intervald2s", SQL_INTERVAL_DAY_TO_SECOND, SQL_INTERVAL, SQL_CODE_DAY_TO_SECOND,
-                    "64", "20", "6", "10", "0", "", "16", "NO"
+                    "26", "28", "6", "10", "0", "", "16", "NO"
                 }
             ),
             // intervald2s customized second fraction
@@ -1568,7 +1568,7 @@ public:
                 },
                 ColumnsTestExpected{
                     "intervald2s", SQL_INTERVAL_DAY_TO_SECOND, SQL_INTERVAL, SQL_CODE_DAY_TO_SECOND,
-                    "64", "20", "4", "10", "0", "", "16", "NO"
+                    "26", "28", "4", "10", "0", "", "16", "NO"
                 }
             )
         };

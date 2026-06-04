@@ -269,7 +269,6 @@ SQLRETURN getSupportedAttribute(SQLINTEGER &iAttribute, SQLUSMALLINT hOption) {
         SQL_ATTR_ROW_ARRAY_SIZE,        // SQL_ROWSET_SIZE 27, 9 (map)
         SQL_ATTR_ROW_BIND_TYPE,         // SQL_BIND_TYPE 5
         SQL_ATTR_ROW_NUMBER,            // SQL_ROW_NUMBER, get 14
-        SQL_ATTR_SIMULATE_CURSOR,       // SQL_SIMULATE_CURSOR 10
         SQL_ATTR_USE_BOOKMARKS,         // SQL_USE_BOOKMARKS 12
         SQL_ATTR_FETCH_BOOKMARK_PTR,    //  sqlext 16
         SQL_ATTR_PARAM_BIND_OFFSET_PTR, // sqlext 17
@@ -475,6 +474,7 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetConnectAttr(SQLHDBC phdbc,
 {
     SQLRETURN rc = SQL_SUCCESS;
     int *piVal = (int *)pValue;
+    SQLULEN *puVal = (SQLULEN *)pValue;
     void **ppVal = (void **)pValue;
     RS_CONN_ATTR_INFO *pConnAttr;
     RS_CONNECT_PROPS_INFO *pConnectProps;
@@ -539,7 +539,7 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetConnectAttr(SQLHDBC phdbc,
 
         case SQL_ATTR_ASYNC_ENABLE:
         {
-            *piVal = pConnAttr->iAsyncEnable;
+            *puVal = pConnAttr->iAsyncEnable;
             break;
         }
 
@@ -709,7 +709,7 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetStmtAttr(SQLHSTMT        phstmt,
                                         SQLINTEGER  *pcbLen)
 {
     SQLRETURN rc = SQL_SUCCESS;
-    int *piVal = (int *)pValue;
+    SQLULEN *pulVal = (SQLULEN *)pValue;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
     RS_STMT_ATTR_INFO *pStmtAttr;
 
@@ -727,6 +727,13 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetStmtAttr(SQLHSTMT        phstmt,
     {
         rc = SQL_ERROR;
         addError(&pStmt->pErrorList,"HY000", "Output buffer is NULL", 0, NULL);
+        goto error;
+    }
+
+    if (!isStatementAttribute(iAttribute)) {
+        rc = SQL_ERROR;
+        addError(&pStmt->pErrorList, "HY092",
+                "Invalid attribute specified for SQLGetStmtAttr", 0, NULL);
         goto error;
     }
 
@@ -752,31 +759,31 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetStmtAttr(SQLHSTMT        phstmt,
 
         case SQL_ATTR_ASYNC_ENABLE:
         {
-            *piVal = pStmtAttr->iAsyncEnable;
+            *pulVal = pStmtAttr->iAsyncEnable;
             break;
         }
 
         case SQL_ATTR_CONCURRENCY:
         {
-            *piVal = pStmtAttr->iConcurrency;
+            *pulVal = pStmtAttr->iConcurrency;
             break;
         }
 
         case SQL_ATTR_CURSOR_SCROLLABLE:
         {
-            *piVal = pStmtAttr->iCursorScrollable;
+            *pulVal = pStmtAttr->iCursorScrollable;
             break;
         }
 
         case SQL_ATTR_CURSOR_SENSITIVITY:
         {
-            *piVal = pStmtAttr->iCursorSensitivity;
+            *pulVal = pStmtAttr->iCursorSensitivity;
             break;
         }
 
         case SQL_ATTR_CURSOR_TYPE:
         {
-            *piVal = pStmtAttr->iCursorType;
+            *pulVal = pStmtAttr->iCursorType;
             break;
         }
 
@@ -807,31 +814,31 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetStmtAttr(SQLHSTMT        phstmt,
 
         case SQL_ATTR_KEYSET_SIZE:
         {
-            *piVal = pStmtAttr->iKeysetSize;
+            *pulVal = pStmtAttr->iKeysetSize;
             break;
         }
 
         case SQL_ATTR_MAX_LENGTH:
         {
-            *piVal = pStmtAttr->iMaxLength;
+            *pulVal = pStmtAttr->iMaxLength;
             break;
         }
 
         case SQL_ATTR_MAX_ROWS:
         {
-            *piVal = pStmtAttr->iMaxRows;
+            *pulVal = pStmtAttr->iMaxRows;
             break;
         }
 
         case SQL_ATTR_METADATA_ID:
         {
-            *piVal = pStmtAttr->iMetaDataId;
+            *pulVal = pStmtAttr->iMetaDataId;
             break;
         }
 
         case SQL_ATTR_NOSCAN:
         {
-            *piVal = pStmtAttr->iNoScan;
+            *pulVal = pStmtAttr->iNoScan;
             break;
         }
 
@@ -873,13 +880,13 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetStmtAttr(SQLHSTMT        phstmt,
 
         case SQL_ATTR_QUERY_TIMEOUT:
         {
-            *piVal = pStmtAttr->iQueryTimeout;
+            *pulVal = pStmtAttr->iQueryTimeout;
             break;
         }
 
         case SQL_ATTR_RETRIEVE_DATA:
         {
-            *piVal = pStmtAttr->iRetrieveData;
+            *pulVal = pStmtAttr->iRetrieveData;
             break;
         }
 
@@ -904,7 +911,12 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetStmtAttr(SQLHSTMT        phstmt,
 
         case SQL_ATTR_ROW_NUMBER:
         {
-            *piVal = pStmtAttr->iRowNumber;
+            if (isValidCurrentRow(pStmt)) {
+                RS_RESULT_INFO *pResult = pStmt->pResultHead;
+                *pulVal = (SQLULEN)(pResult->iRowOffset + pResult->iCurRow + 1);
+            } else {
+                *pulVal = 0; // No current row
+            }
             break;
         }
 
@@ -926,18 +938,12 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetStmtAttr(SQLHSTMT        phstmt,
             break;
         }
 
-        case SQL_ATTR_SIMULATE_CURSOR:
-        {
-            *piVal = pStmtAttr->iSimulateCursor;
-            break;
-        }
-
         case SQL_ATTR_USE_BOOKMARKS:
         {
-            *piVal = pStmtAttr->iUseBookmark;
+            *pulVal = pStmtAttr->iUseBookmark;
             break;
         }
-
+        case SQL_ATTR_SIMULATE_CURSOR:
         case SQL_ATTR_ENABLE_AUTO_IPD:
         default:
         {
@@ -1007,6 +1013,22 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
 
     pConnAttr = pConn->pConnAttr;
     pConnectProps = pConn->pConnectProps;
+
+    // ODBC version compatibility: SQLSetConnectAttr behavior varies by ODBC
+    // version
+    // ODBC 2.x: Permits setting statement attributes at connection level
+    // ODBC 3.x: Restricts to connection-level attributes only (HY092 error
+    // for statement attributes)
+    // Exception: SQL_ATTR_METADATA_ID and SQL_ATTR_ASYNC_ENABLE are both
+    // connection and statement attribute
+    if ((pConn->phenv->pEnvAttr->iOdbcVersion == SQL_OV_ODBC3) &&
+        isStatementAttribute(iAttribute) &&
+        !isConnectionAttribute(iAttribute)) {
+        rc = SQL_ERROR;
+        addError(&pConn->pErrorList, "HY092",
+                 "Invalid attribute specified for SQLSetConnectAttr", 0, NULL);
+        goto error;
+    }
 
     switch(iAttribute)
     {
@@ -1092,6 +1114,14 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
                 goto error;
             }
 
+            // Validate string length
+            // cbLen must be >= 0 or SQL_NTS (-3)
+            if (cbLen < 0 && cbLen != SQL_NTS) {
+                rc = SQL_ERROR;
+                addError(&pConn->pErrorList,"HY090", "Invalid string or buffer length", 0, NULL);
+                goto error;
+            }
+
             if(pConn->isConnectionOpen())
             {
                 rc = SQL_ERROR;
@@ -1135,7 +1165,17 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
 
         case SQL_ATTR_ODBC_CURSORS:
         {
-            if(iVal != SQL_CUR_USE_IF_NEEDED 
+            // Per ODBC spec, SQL_ATTR_ODBC_CURSORS must be set before connecting.
+            if(pConn->isConnectionOpen())
+            {
+                rc = SQL_ERROR;
+                addError(&pConn->pErrorList, "08002",
+                         "SQL_ATTR_ODBC_CURSORS cannot be set after connection is open",
+                         0, NULL);
+                goto error;
+            }
+
+            if(iVal != SQL_CUR_USE_IF_NEEDED
                 && iVal != SQL_CUR_USE_ODBC
                 && iVal != SQL_CUR_USE_DRIVER)
             {
@@ -1199,6 +1239,15 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
                 goto error;
             }
 
+            // Validate string length
+            // cbLen must be >= 0 or SQL_NTS (-3)
+            if(cbLen < 0 && cbLen != SQL_NTS)
+            {
+                rc = SQL_ERROR;
+                addError(&pConn->pErrorList,"HY090", "Invalid string or buffer length", 0, NULL);
+                goto error;
+            }
+
             pConnAttr->pTraceFile = (char *)rs_free(pConnAttr->pTraceFile);
             pConnAttr->pTraceFile = rs_strdup((char *)pValue, cbLen);
 
@@ -1211,6 +1260,15 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
             {
                 rc = SQL_ERROR;
                 addError(&pConn->pErrorList,"HY009", "Invalid use of null pointer", 0, NULL);
+                goto error;
+            }
+
+            // Validate string length
+            // cbLen must be >= 0 or SQL_NTS (-3)
+            if(cbLen < 0 && cbLen != SQL_NTS)
+            {
+                rc = SQL_ERROR;
+                addError(&pConn->pErrorList,"HY090", "Invalid string or buffer length", 0, NULL);
                 goto error;
             }
 
@@ -1280,14 +1338,14 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetConnectAttr(SQLHDBC phdbc,
             break;
         }
 
-        case SQL_ATTR_QUERY_TIMEOUT:
+        case SQL_ATTR_QUERY_TIMEOUT: // stmt attribute which can be set here for ODBC 2.x spec
         {
             if(iVal < 0)
             {
                 rc = SQL_ERROR;
                 addError(&pConn->pErrorList,"HY024", "Invalid attribute value", 0, NULL);
                 goto error;
-            } 
+            }
 
             pConnectProps->iQueryTimeout = iVal;
             break;
@@ -1362,6 +1420,13 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetStmtAttr(SQLHSTMT    phstmt,
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     pStmtAttr = pStmt->pStmtAttr;
+
+    if (!isStatementAttribute(iAttribute)) {
+        rc = SQL_ERROR;
+        addError(&pStmt->pErrorList, "HY092",
+                "Invalid attribute specified for SQLSetStmtAttr", 0, NULL);
+        goto error;
+    }
 
     switch(iAttribute)
     {
@@ -1487,6 +1552,12 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetStmtAttr(SQLHSTMT    phstmt,
             }
 
             pStmtAttr->iCursorType = iVal;
+
+            // SQL_ATTR_CURSOR_SCROLLABLE should be implicitly set to SQL_SCROLLABLE
+            // after setting SQL_ATTR_CURSOR_TYPE to STATIC
+            if (iVal == SQL_CURSOR_STATIC) {
+                pStmtAttr->iCursorScrollable = SQL_SCROLLABLE;
+            }
             break;
         }
 
@@ -1649,28 +1720,6 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetStmtAttr(SQLHSTMT    phstmt,
             break;
         }
 
-        case SQL_ATTR_SIMULATE_CURSOR:
-        {
-            if(iVal != SQL_SC_NON_UNIQUE
-                && iVal != SQL_SC_TRY_UNIQUE
-                && iVal != SQL_SC_UNIQUE)
-            {
-                rc = SQL_ERROR;
-                addError(&pStmt->pErrorList,"HY024", "Invalid attribute value", 0, NULL);
-                goto error;
-            }
-
-            if(iVal != SQL_SC_NON_UNIQUE)
-            {
-                rc = SQL_SUCCESS_WITH_INFO;
-                addError(&pStmt->pErrorList,"01S02", "Option value changed", 0, NULL);
-                goto error;
-            }
-
-            pStmtAttr->iSimulateCursor = iVal;
-            break;
-        }
-
         case SQL_ATTR_USE_BOOKMARKS:
         {
             if(iVal != SQL_UB_OFF
@@ -1685,6 +1734,7 @@ SQLRETURN  SQL_API RsOptions::RS_SQLSetStmtAttr(SQLHSTMT    phstmt,
             break;
         }
 
+        case SQL_ATTR_SIMULATE_CURSOR:
         case SQL_ATTR_ENABLE_AUTO_IPD:
         default:
         {
@@ -2225,4 +2275,84 @@ bool RsOptions::isStrConnectAttr(SQLINTEGER iAttribute) {
     return iAttribute == SQL_ATTR_CURRENT_CATALOG
         || iAttribute == SQL_ATTR_TRACEFILE
         || iAttribute == SQL_ATTR_TRANSLATE_LIB;
+}
+
+// Checks if a statement has a valid current row position
+bool RsOptions::isValidCurrentRow(RS_STMT_INFO* pStmt) {
+    if (!pStmt) {
+        return false;
+    }
+
+    RS_RESULT_INFO *pResult = pStmt->pResultHead;
+    return pResult && pResult->iRowOffset >= 0 && pResult->iCurRow >= 0 &&
+           pResult->iCurRow < pResult->iNumberOfRowsInMem;
+}
+
+// Determines if an attribute is a statement-level attribute according to ODBC 3.0 specification
+bool isStatementAttribute(SQLINTEGER iAttribute)
+{
+    static const std::unordered_set<SQLINTEGER> validStatementAttributes = {
+        SQL_ATTR_APP_PARAM_DESC,
+        SQL_ATTR_APP_ROW_DESC,
+        SQL_ATTR_ASYNC_ENABLE,
+        SQL_ATTR_CONCURRENCY,
+        SQL_ATTR_CURSOR_SCROLLABLE,
+        SQL_ATTR_CURSOR_SENSITIVITY,
+        SQL_ATTR_CURSOR_TYPE,
+        SQL_ATTR_ENABLE_AUTO_IPD,
+        SQL_ATTR_FETCH_BOOKMARK_PTR,
+        SQL_ATTR_IMP_PARAM_DESC,
+        SQL_ATTR_IMP_ROW_DESC,
+        SQL_ATTR_KEYSET_SIZE,
+        SQL_ATTR_MAX_LENGTH,
+        SQL_ATTR_MAX_ROWS,
+        SQL_ATTR_METADATA_ID,
+        SQL_ATTR_NOSCAN,
+        SQL_ATTR_PARAM_BIND_OFFSET_PTR,
+        SQL_ATTR_PARAM_BIND_TYPE,
+        SQL_ATTR_PARAM_OPERATION_PTR,
+        SQL_ATTR_PARAM_STATUS_PTR,
+        SQL_ATTR_PARAMS_PROCESSED_PTR,
+        SQL_ATTR_PARAMSET_SIZE,
+        SQL_ATTR_QUERY_TIMEOUT,
+        SQL_ATTR_RETRIEVE_DATA,
+        SQL_ATTR_ROW_ARRAY_SIZE,
+        SQL_ROWSET_SIZE, // ODBC 2.x alias for SQL_ATTR_ROW_ARRAY_SIZE, ONLY
+                         // attribute with a different numeric value from its
+                         // ODBC 3.x counterpart
+        SQL_ATTR_ROW_BIND_OFFSET_PTR,
+        SQL_ATTR_ROW_BIND_TYPE,
+        SQL_ATTR_ROW_NUMBER,
+        SQL_ATTR_ROW_OPERATION_PTR,
+        SQL_ATTR_ROW_STATUS_PTR,
+        SQL_ATTR_ROWS_FETCHED_PTR,
+        SQL_ATTR_SIMULATE_CURSOR,
+        SQL_ATTR_USE_BOOKMARKS
+    };
+    return validStatementAttributes.find(iAttribute) != validStatementAttributes.end();
+}
+
+// Determines if an attribute is a connection-level attribute according to ODBC 3.0 specification
+bool isConnectionAttribute(SQLINTEGER iAttribute)
+{
+    static const std::unordered_set<SQLINTEGER> validConnectionAttributes = {
+        SQL_ATTR_ACCESS_MODE,
+        SQL_ATTR_ASYNC_ENABLE,
+        SQL_ATTR_AUTO_IPD,
+        SQL_ATTR_AUTOCOMMIT,
+        SQL_ATTR_CONNECTION_DEAD,
+        SQL_ATTR_CONNECTION_TIMEOUT,
+        SQL_ATTR_CURRENT_CATALOG,
+        SQL_ATTR_LOGIN_TIMEOUT,
+        SQL_ATTR_METADATA_ID,
+        SQL_ATTR_ODBC_CURSORS,
+        SQL_ATTR_PACKET_SIZE,
+        SQL_ATTR_QUIET_MODE,
+        SQL_ATTR_TRACE,
+        SQL_ATTR_TRACEFILE,
+        SQL_ATTR_TRANSLATE_LIB,
+        SQL_ATTR_TRANSLATE_OPTION,
+        SQL_ATTR_TXN_ISOLATION
+    };
+    return validConnectionAttributes.find(iAttribute) != validConnectionAttributes.end();
 }

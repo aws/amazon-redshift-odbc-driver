@@ -213,9 +213,37 @@ SQLRETURN  SQL_API RsExecute::RS_SQLExecDirect(SQLHSTMT phstmt,
     {
         int iPrepare = pStmt->pExecThread->iPrepare;
 
+        // Check the status of the executing thread
+        // This function returns:
+        // - SQL_STILL_EXECUTING: Thread is still running, caller should poll again
+        // - SQL_SUCCESS/SQL_SUCCESS_WITH_INFO: Thread completed successfully
+        // - SQL_ERROR: Thread encountered an error (including cancellation)
         rc = checkExecutingThread(pStmt);
-        if(rc != SQL_STILL_EXECUTING)
-        {
+        if (rc == SQL_ERROR) {
+            // Check if the error is due to query cancellation
+            // When SQLCancel is called, it sets statement status to RS_CANCEL_STMT
+            // and the server returns error 57014 ("Query cancelled on user's request")
+            // if the cancellation was successful
+            if (pStmt->iStatus == RS_CANCEL_STMT) {
+                // Map PostgreSQL/Redshift server error 57014 to ODBC-compliant HY008
+                // Per ODBC spec: Canceled operations should return SQLSTATE HY008 (Operation canceled)
+                // Server returns: SQLSTATE 57014 (Query cancelled on user's request)
+                // This mapping ensures ODBC compliance and consistent error reporting
+                if (!pStmt->pErrorList) {
+                    addError(&pStmt->pErrorList, "HY000", "Error list is null", 0, NULL);
+                    goto error;
+                }
+                RS_ERROR_INFO *pError = pStmt->pErrorList;
+                if (strncmp(pError->szSqlState, "57014", SQL_SQLSTATE_SIZE) == 0) {
+                    // Clear the server error and replace with ODBC-compliant error
+                    pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
+                    addError(&pStmt->pErrorList, "HY008", "Operation canceled", 0, NULL);
+                    RS_LOG_DEBUG("RS_SQLExecDirect",
+                        "Operation canceled. Mapped server error 57014 to ODBC HY008");
+                }
+                goto error;
+            }
+        } else if (rc != SQL_STILL_EXECUTING) {
             waitAndFreeExecThread(pStmt, FALSE);
             if(!iPrepare)
                 return rc;
@@ -575,6 +603,7 @@ SQLRETURN  SQL_API SQLCancel(SQLHSTMT phstmt)
 {
     SQLRETURN rc = SQL_SUCCESS;
     RS_STMT_INFO *pStmt = (RS_STMT_INFO *)phstmt;
+    bool bWasExecuting = false;
 
     if(IS_TRACE_LEVEL_API_CALL())
         TraceSQLCancel(FUNC_CALL, 0, phstmt);
@@ -588,11 +617,120 @@ SQLRETURN  SQL_API SQLCancel(SQLHSTMT phstmt)
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
+    // Determine if statement is actively executing
+    // RS_EXECUTE_STMT: Statement is executed and cursor is opened
+    // pResultHead: the head of result set to determine if query execution is finished
+    // RS_EXECUTE_STMT_NEED_DATA: Statement is waiting for data-at-execution parameters
+    if (pStmt &&
+        ((pStmt->iStatus == RS_EXECUTE_STMT && pStmt->pResultHead == NULL) ||
+         pStmt->iStatus == RS_EXECUTE_STMT_NEED_DATA)) {
+        bWasExecuting = true;
+    }
+
+    // ============================================================================
+    // CASE 1: Handle idle statement (not currently executing or waiting for data)
+    // ============================================================================
+    if (!bWasExecuting) {
+        RS_LOG_TRACE("SQLCancel", "No operation in progress");
+
+        // Check if cursor is open (results available but not being fetched)
+        if (pStmt && (pStmt->iStatus == RS_EXECUTE_STMT && pStmt->pResultHead != NULL)) {
+            // ODBC 2.x vs 3.x behavior difference:
+            // - ODBC 2.x: SQLCancel on idle statement closes cursor (like SQLFreeStmt with SQL_CLOSE)
+            // - ODBC 3.x: SQLCancel on idle statement has no effect (cursor remains open)
+            if (isODBC2Behavior(pStmt)) {
+                // ODBC 2.x: Close cursor and clear result set
+                // This is equivalent to calling SQLFreeStmt(phstmt, SQL_CLOSE)
+                rc = RS_STMT_INFO::RS_SQLFreeStmt(phstmt, SQL_CLOSE, TRUE);
+                if (rc == SQL_SUCCESS) {
+                    RS_LOG_DEBUG("SQLCancel", "Cursor closed successfully (ODBC 2 behavior)");
+                } else {
+                    RS_LOG_DEBUG("SQLCancel", "Error closing cursor: %d", rc);
+                }
+            } else {
+                // ODBC 3.x: No action taken - cursor remains open
+                // Applications should use SQLCloseCursor explicitly in ODBC 3.x
+                RS_LOG_DEBUG("SQLCancel", "No action taken on idle statement (ODBC 3 behavior)");
+            }
+        } else {
+            // No cursor to close - statement is completely idle
+            // Return SQL_SUCCESS per ODBC spec (no-op is successful)
+            RS_LOG_DEBUG("SQLCancel", "No cursor open, returning success");
+        }
+        goto error;
+    }
+
+    // ============================================================================
+    // CASE 2: Handle data-at-execution cancellation (CLIENT-SIDE ONLY)
+    // ============================================================================
+    // Per ODBC specification: "If the application calls SQLCancel while the driver
+    // still needs data for data-at-execution parameters, the driver cancels statement
+    // execution; the application can then call SQLExecute or SQLExecDirect again."
+    //
+    // Key points:
+    // 1. This is a CLIENT-SIDE operation only - NO server communication
+    // 2. The statement returns to RS_PREPARE_STMT state with bindings intact
+    // 3. No error diagnostic is set (this is not an error condition)
+    // 4. The application can immediately re-execute with the same bindings
+    // 5. This is fundamentally different from canceling an executing query
+    if (pStmt->iStatus == RS_EXECUTE_STMT_NEED_DATA) {
+        RS_LOG_DEBUG("SQLCancel", "Statement in data-at-execution state - "
+                                  "performing client-side reset");
+
+        int wasPrepared = pStmt->iExecutePreparedDataAtExec;
+        // Reset data-at-execution tracking variables
+        // These track which parameter is being processed and buffer state
+        pStmt->pszCmdDataAtExec = NULL;              // Clear DAE command buffer
+        pStmt->iExecutePreparedDataAtExec = 0;       // Reset DAE execution flag
+        pStmt->lParamProcessedDataAtExec = 0;        // Reset parameter counter
+        pStmt->pAPDRecDataAtExec = NULL;             // Clear current APD record pointer
+
+        // Return to appropriate state based on how we got here
+        // CRITICAL: This allows immediate re-execution without rebinding parameters
+        // The APD (Application Parameter Descriptor) records remain intact, preserving
+        // all parameter bindings including the SQL_DATA_AT_EXEC indicators
+        pStmt->iStatus = wasPrepared ? RS_PREPARE_STMT : RS_ALLOCATE_STMT;
+
+        RS_LOG_DEBUG("SQLCancel", "Data-at-execution state reset - statement ready for re-execution");
+        goto error;
+    }
+
+    // ============================================================================
+    // CASE 3: Handle query execution cancellation (SERVER-SIDE)
+    // ============================================================================
+    // If we reach here, the statement is in RS_EXECUTE_STMT state, meaning
+    // a query is actively executing on the Redshift/PostgreSQL server.
+    // This requires sending a cancellation request via the PostgreSQL wire protocol.
+    RS_LOG_DEBUG("SQLCancel", "Statement executing on server - sending cancellation request");
+
+    // libpqCancelQuery performs the actual cancellation:
+    // 1. Obtains PGcancel object via PQgetCancel()
+    // 2. Sends cancellation request via PQcancel()
+    // 3. Sets flag to skip all pending results
+    // 4. Frees the cancel object
     rc = libpqCancelQuery(pStmt);
 
-    if(rc == SQL_SUCCESS)
+    if (rc == SQL_SUCCESS) {
+        // Cancellation request sent successfully
+        // Set statement status to indicate cancellation
+        // Note: The actual query cancellation happens asynchronously on the server
+        // The executing function should continue to be called until it returns
+        // SQL_ERROR with SQLSTATE HY008 (Operation canceled)
         pStmt->iStatus = RS_CANCEL_STMT;
+        RS_LOG_DEBUG("SQLCancel", "Cancellation successful");
+    } else if (rc == SQL_ERROR) {
+        // Server declined the cancellation request or cancellation failed
+        // This can happen if:
+        // - Query already completed
+        // - Server is in a state where cancellation is not possible
+        // - Network error prevented cancellation request from reaching server
+        // libpqCancelQuery already added error diagnostics to pStmt->pErrorList
+        RS_LOG_DEBUG("SQLCancel", "Cancellation failed - see libpqCancelQuery diagnostics");
+    }
 
+    // Note: After successful cancellation, the connection remains valid and usable
+    // However, if in a transaction, PostgreSQL/Redshift will abort the transaction
+    // Applications must call SQLEndTran(SQL_ROLLBACK) to clear the aborted state
 error:
 
     if(IS_TRACE_LEVEL_API_CALL())

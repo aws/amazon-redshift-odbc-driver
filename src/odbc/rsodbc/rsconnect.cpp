@@ -609,28 +609,37 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
 
         RS_LOG_TRACE("RSCNN", "RS_SQLDriverConnect: processing connection string");
 
-        if ((hDriverCompletion        != SQL_DRIVER_COMPLETE) 
-            &&(hDriverCompletion    != SQL_DRIVER_PROMPT) 
-            && (hDriverCompletion    != SQL_DRIVER_COMPLETE_REQUIRED) 
-            && (hDriverCompletion    != SQL_DRIVER_NOPROMPT))
-        {
-            addError(&pConn->pErrorList,"HY000", "Invalid driver completion option", 0, NULL);
+        // Check if connection is already open
+        if (pConn->isConnectionOpen()) {
+            addError(&pConn->pErrorList, "08002", "Connection name in use", 0,
+                     NULL);
             rc = SQL_ERROR;
             goto error;
         }
 
-        if ((cbConnStrIn != SQL_NTS) && (cbConnStrIn < 0))
+        if ((hDriverCompletion        != SQL_DRIVER_COMPLETE)
+            &&(hDriverCompletion    != SQL_DRIVER_PROMPT)
+            && (hDriverCompletion    != SQL_DRIVER_COMPLETE_REQUIRED)
+            && (hDriverCompletion    != SQL_DRIVER_NOPROMPT))
         {
-            addError(&pConn->pErrorList,"HY000","Invalid connection string length", 0, NULL);
+            addError(&pConn->pErrorList,"HY110", "Invalid driver completion option", 0, NULL);
             rc = SQL_ERROR;
             goto error;
         }
-         
+        // Validate StringLength1 and BufferLength
+        if (((cbConnStrIn != SQL_NTS) && (cbConnStrIn < 0)) ||
+            (cbConnStrOut < 0)) {
+            addError(&pConn->pErrorList, "HY090",
+                     "Invalid string or buffer length", 0, NULL);
+            rc = SQL_ERROR;
+            goto error;
+        }
+
         pConnectProps = pConn->pConnectProps;
         pConn->resetConnectProps();
 
         if ((szConnStrIn == NULL) || (!cbConnStrIn) ||
-            ((cbConnStrIn == SQL_NTS) && (!szConnStrIn[0])))  
+            ((cbConnStrIn == SQL_NTS) && (!szConnStrIn[0])))
         {
             iPrompt = TRUE;
         }
@@ -645,17 +654,17 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
         pConn->parseConnectString((char *)szConnStrIn, cbConnStrIn, TRUE , FALSE);
         initTraceFromConnectionString(pConn->pConnectProps);
 
-        if(hDriverCompletion == SQL_DRIVER_NOPROMPT) 
+        if(hDriverCompletion == SQL_DRIVER_NOPROMPT)
             iPrompt = FALSE;
-        else 
+        else
         {
             if(pConnectProps->szPort[0] == '\0' || pConnectProps->szDatabase[0] == '\0')
             {
                 iPrompt = TRUE;
             }
         }
-            
-        if(iPrompt) 
+
+        if(iPrompt)
         {
 #ifdef WIN32
             if(hwnd == NULL)
@@ -665,10 +674,10 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
                 goto error;
             }
 
-            iRet = (short)DialogBoxParam((HINSTANCE)gRsGlobalVars.hModule,  
+            iRet = (short)DialogBoxParam((HINSTANCE)gRsGlobalVars.hModule,
                                              MAKEINTRESOURCE(DRIVER_CONNECT_DIALOG), (HWND) hwnd,
                                              (DLGPROC) driverConnectProcLoop, (LPARAM)phdbc);
-          
+
 
             if(iRet == -1)
             {
@@ -676,16 +685,16 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
                 rc = SQL_ERROR;
                 goto error;
             }
-            else 
-            if(iRet == DRV_CONNECT_DLG_ERROR) 
+            else
+            if(iRet == DRV_CONNECT_DLG_ERROR)
                 rc = SQL_ERROR;
-            else 
+            else
             if (!iRet)
                 rc = SQL_NO_DATA_FOUND;
             else
                 rc = SQL_SUCCESS;
 #endif
-#if defined LINUX 
+#if defined LINUX
             addError(&pConn->pErrorList,"HY000", "Dialog couldn't created", 0, NULL);
             rc = SQL_ERROR;
             goto error;
@@ -703,7 +712,7 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
                 pConn->iInternal = FALSE;
             }
             else
-            { 
+            {
 				// Check for AuthProfile
 				rc = pConn->readAuthProfile(TRUE);
 				if (rc == SQL_ERROR)
@@ -712,7 +721,7 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
 				}
 
 
-                /* DSN less connection 
+                /* DSN less connection
                 */
 				if (pConnectProps->szPort[0] == '\0')
 					strncpy(pConnectProps->szPort, DEFAULT_PORT, sizeof(pConnectProps->szPort));
@@ -724,7 +733,7 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
                     // If managed VPC is not supplied, the parameters should present because we are making serverless
                     // connection using the GetClusterCredentials API.
                     if ((pConnectProps->pIamProps->szClusterId[0] == '\0') &&
-                        (pConnectProps->pIamProps->szWorkGroup[0] == '\0')) 
+                        (pConnectProps->pIamProps->szWorkGroup[0] == '\0'))
                     {
                         addError(
                             &pConn->pErrorList,
@@ -749,7 +758,7 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
                 }
             }
 
-            if (rc != SQL_SUCCESS) 
+            if (rc != SQL_SUCCESS)
                 goto error;
         }
 
@@ -863,21 +872,24 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
             actualOutputLen += strlen(pConnectProps->szPort);
             actualOutputLen += strlen(";");
         }
-       
+
         if(pcbConnStrOut)
             *pcbConnStrOut = (short) actualOutputLen;
 
-        if(szConnStrOut && (cbConnStrOut > 0))
-        {
-            if(actualOutputLen > strlen((char *)szConnStrOut))
+        if (szConnStrOut && (cbConnStrOut > 0)) {
+            if (actualOutputLen > strlen((char *)szConnStrOut)) {
                 rc = SQL_SUCCESS_WITH_INFO;
-        }
-        else
-        if(actualOutputLen > 0)
+                addError(&pConn->pErrorList, "01004",
+                         "String data, right truncated", 0, NULL);
+            }
+        } else if (actualOutputLen > 0) {
             rc = SQL_SUCCESS_WITH_INFO;
+            addError(&pConn->pErrorList, "01004",
+                     "String data, right truncated", 0, NULL);
+        }
     }
 
-error: 
+error:
 
     return rc;
 }
@@ -1085,9 +1097,17 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLBrowseConnect(SQLHDBC          phdbc,
     RS_LOG_TRACE("RSCNN", "RS_SQLBrowseConnect: processing connection string (iteration %d)",
                  pConn->iBrowseIteration + 1);
 
-    if ((cbConnStrIn != SQL_NTS) && (cbConnStrIn < 0))
+    // Check if connection is already open
+    if (pConn->isConnectionOpen()) {
+        addError(&pConn->pErrorList, "08002", "Connection name in use", 0, NULL);
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+    // Validate input string length and output buffer length
+    if (((cbConnStrIn != SQL_NTS) && (cbConnStrIn < 0) || (cbConnStrOut < 0)))
     {
-        addError(&pConn->pErrorList,"HY000","Invalid connection string length", 0, NULL);
+        addError(&pConn->pErrorList, "HY090", "Invalid string or buffer length", 0, NULL);
         rc = SQL_ERROR;
         return rc;
     }

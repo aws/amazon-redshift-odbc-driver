@@ -174,7 +174,41 @@ EXPORTS
 	getMaxRowsForCsc
 	getResultSetTypeForCsc
 	getResultConcurrencyTypeForCsc
+	convertSQLDataToCData
+	copyToCBinary
+	copyVariableToCBinary
+	convertScaledIntegerToNumericString
+	convertCParamDataToSQLData
+	convertStringNumericToIntegerCType
+	calculateMinNumericBufferLength
+	parseAndBuildInteger
+	clearErrorList
+	parseExponent
+	trimWhitespace
+	convertNumericStringToScaledIntegerExtended
+	convertStringNumericToFloatCType
+	prepareStringForNumericConversion
+	parseDateString
+	parseTimestampString
+	parseTimeString
+	isDigitStr
+	isLeapYear
+	validateDate
+	parseDatePart
+	parseTimePart
+	parseFraction
+	addError
 	releasePaStrBuf
+	getIntervalY2MData
+	getIntervalD2SData
+	convertCharToIntervalD2S
+	convertCharToIntervalY2M
+	intervaly2m_out
+	intervald2s_out
+	parse_intervaly2m
+	parse_intervald2s
+	returnInvalidIntervalY2M
+	returnInvalidIntervalD2S
 	?ValidateURL@IAMUtils@IamSupport@Redshift@@SAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?sqlTypeNameMap@@YAPEADF@Z
 	?getColumnSize@RsMetadataAPIHelper@@SAHAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@HF@Z
@@ -196,6 +230,7 @@ EXPORTS
 	zpq_serialize_compressors
 	zpq_parse_compression_setting
 	makeNullTerminatedStr
+	makeNullTerminateIntVal
 	??0IAMCredentials@IamSupport@Redshift@@QEAA@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@00@Z
 	??1IAMCredentials@IamSupport@Redshift@@UEAA@XZ
 	??0IAMConfiguration@IamSupport@Redshift@@QEAA@AEBVIAMCredentials@12@@Z
@@ -260,6 +295,12 @@ EXPORTS
 	?lookupSqlType@ODBCEscapeClauseProcessor@@SAPEBDAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?lookupIntervalToken@ODBCEscapeClauseProcessor@@SAPEBDAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
 	?RS_SQLGetData@RS_STMT_INFO@@SAFPEAV1@GFPEAX_JPEA_JHAEA_J@Z
+	getShortVal
+	getIntVal
+	getSQLINTEGERVal
+	getSQLLENVal
+	getSQLULENVal
+	getPointerVal
 	?IsTimeToRefresh@AWSCredentialsProvider@Auth@Aws@@MEAA_NJ@Z
 	?Reload@AWSCredentialsProvider@Auth@Aws@@MEAAXXZ
 	?SetAccessId@IAMConfiguration@IamSupport@Redshift@@QEAAXAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
