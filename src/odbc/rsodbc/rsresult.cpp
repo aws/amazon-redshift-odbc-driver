@@ -566,16 +566,12 @@ SQLRETURN SQL_API SQLMoreResults(SQLHSTMT    phstmt)
     }
     else
     {
-        // ODBC 3.x spec: HY010 (function sequence error) when statement has never
-        // been executed. ODBC 2.x had no such requirement; SQL_NO_DATA was acceptable.
-        if(pStmt->iStatus < RS_EXECUTE_STMT &&
-           pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion != SQL_OV_ODBC2)
-        {
-            rc = SQL_ERROR;
-            addError(&pStmt->pErrorList, "HY010", "Function sequence error", 0, NULL);
-        }
-        else
-            rc = SQL_NO_DATA_FOUND;
+        // ODBC spec Appendix B state transition table: SQLMoreResults always
+        // returns SQL_NO_DATA in states S1 (allocated), S2-S3 (prepared), and
+        // S4 (executed, last result). HY010 for SQLMoreResults is exclusively
+        // a Driver Manager responsibility (async/need-data scenarios per "(DM)"
+        // prefix in the diagnostics table). Simba 1.x also returns SQL_NO_DATA here.
+        rc = SQL_NO_DATA_FOUND;
     }
 
 error:

@@ -15403,8 +15403,13 @@ void convertScaledIntegerToNumericString(SQL_NUMERIC_STRUCT *pnVal,char *pNumDat
 	    if (i = len - 1, i < pnVal->scale)
 		    i = pnVal->scale;
 
-        // Output data before decimal digit
-	    for (; i >= pnVal->scale; i--)
+        // Output data before decimal digit. Guard i >= 0: a negative scale would
+        // otherwise drive i below 0 and read pTempBuf[-1], pTempBuf[-2], ... which
+        // is out of bounds. That uninitialized stack read produced platform-
+        // dependent garbage (e.g. a 0xFF byte became '/' on Linux aarch64,
+        // corrupting the output string), while x86/macOS happened to read zero
+        // bytes and pass. The 128-bit path never supported negative scale.
+	    for (; i >= pnVal->scale && i >= 0; i--)
 		    pNumData[outputLen++] = pTempBuf[i] + '0';
 
 	    if (pnVal->scale > 0)
