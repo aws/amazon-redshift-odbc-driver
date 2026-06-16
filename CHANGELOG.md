@@ -1,6 +1,44 @@
 Changelog
 =========
 
+v2.2.0 (2026-06-16)
+---------------------
+1. Behavior Change: UPDATE, INSERT, and DELETE statements that affect zero rows now return SQL_NO_DATA instead of SQL_SUCCESS, aligning with the ODBC specification
+2. Behavior Change: Overhauled SQL-to-C and C-to-SQL data type conversion to be fully ODBC-compliant, adding numeric range checking, fractional-truncation detection, and specific SQLSTATE codes (07006, 22001, 22003, 22007, 22008, 22015, 22018, 01004, 01S07); conversions that previously succeeded silently or returned a generic error may now return a specific warning or error, and converting SQL_TIME to a C timestamp now fills the current date instead of zeroes.
+3. Behavior Change: Changed INTERVAL YEAR TO MONTH and INTERVAL DAY TO SECOND output to a unified SQL-standard string format and corrected interval metadata; SQL_C_BINARY retrieval of intervals now returns the full SQL_INTERVAL_STRUCT.
+4. Behavior Change: Removed unsupported SQL_ATTR_SIMULATE_CURSOR statement attribute, which now returns HYC00 ("Optional feature not implemented") instead of succeeding silently.
+5. Behavior Change: Enforced ODBC 3.x attribute scoping so statement attributes can no longer be set on the connection via SQLSetConnectAttr (now returns HY092); the dual-purpose SQL_ATTR_METADATA_ID and SQL_ATTR_ASYNC_ENABLE remain allowed, and ODBC 2.x behavior is unchanged.
+6. Behavior Change: Corrected SQLColAttribute precision, scale, type, display size, and radix values for DATE, TIME, REAL, DOUBLE, binary, and geometry columns, and now returns 07009 for invalid column numbers.
+7. Behavior Change: Fixed SQLDescribeParam to report the correct concise SQL type for datetime and interval parameters (e.g., SQL_TYPE_TIMESTAMP instead of the verbose SQL_DATETIME).
+8. Behavior Change: Changed SQLCancel in ODBC 2.x mode to behave like SQLFreeStmt(SQL_CLOSE), mapped server-side cancel (57014) to HY008, and SQLFetch on a closed statement now returns HY010.
+9. Behavior Change: SQLGetStmtAttr and SQLGetDescField now write the full SQLULEN/SQLLEN width (8 bytes on 64-bit), where some attributes previously returned only 4 bytes, and SQL_ATTR_ROW_NUMBER now returns the actual current row number.
+10. Added Debian (.deb) package support
+11. Added driver_discovery_version parameter to the startup packet, enabling SHOW SCHEMAS to return pg_catalog in its results.
+12. Added missing SQL_C_BINARY conversion support for all SQL types
+13. Added SQL_CONVERT_GUID and corrected SQL_CONVERT_BINARY reporting in SQLGetInfo
+14. Enabled native installation of the macOS package on Apple Silicon (arm64) without requiring Rosetta 2.
+15. Improved SQLGetData error handling with proper SQLSTATE codes for NULL target pointers (HY009), negative buffer lengths (HY090), invalid columns (07009), and invalid cursor state (24000), added SQL_ARD_TYPE support, and corrected error-list lifetime so it is also cleared on the SQLFetchScroll path.
+16. Improved SQLSetStmtAttr to reject invalid attribute identifiers (HY092) and implicitly set SQL_ATTR_CURSOR_SCROLLABLE to SQL_SCROLLABLE when a static cursor is requested
+17. Improved SQLSetConnectAttr ODBC 3.x compliance with connection/statement attribute classification and string-length validation (HY090)
+18. Improved SQLColAttribute to allow NULL output pointers per spec
+19. Added proper SQLSTATE diagnostics to SQLDriverConnect (08002, HY110, HY090, 01004) and SQLBrowseConnect (08002, HY090), replacing generic HY000 errors.
+20. Added statement cursor-state validation to the metadata APIs so they return SQLSTATE 24000 (invalid cursor state) when called with an open cursor
+21. Improved descriptor handling: corrected returned length/width for descriptor attributes on 64-bit systems, synchronized interdependent descriptor fields (TYPE, CONCISE_TYPE, DATETIME_INTERVAL_CODE) with HY021/HY016 validation, and added NULL length-indicator handling in numeric conversion.
+22. Fixed SQLGetCursorName to lazily generate an implicit cursor name and return SQL_SUCCESS in ODBC 3.x mode instead of HY015
+23. Fixed SQLGetInfo to return HY096 for unrecognized information types
+24. Fixed SQLSetCursorName to stop returning incorrect invalid-cursor errors after SQLPrepare and to reject application names using the reserved SQLCUR prefix (34000)
+25. Fixed SQLSpecialColumns to return an empty result set with SQL_SUCCESS for the rowversion identifier type (unsupported by Redshift), resolving Microsoft Access linked-table setup failures.
+26. Fixed a format-string vulnerability in the trace logging subsystem where user-controlled data could crash the driver or leak process memory to the log, and hardened logging macros tree-wide to prevent regressions.
+27. Fixed a 4-byte stack overwrite in SQLGetDiagField caused by a type size mismatch
+28. Added backslash escaping in the metadata filter condition to prevent SQL injection through catalog, schema, and table-name parameters
+29. Fixed a heap buffer overflow by increasing the ODBC escape-clause replacement buffer from 20 to 256 bytes
+30. Fixed a crash with SQL Server Linked Server parameterized JOIN queries
+31. Fixed an out-of-bounds read in numeric string conversion that produced incorrect results on aarch64/ARM platforms
+32. Fixed a segfault in SQLDescribeColW when the length output pointer was NULL
+33. Fixed per-row return-code reporting in SQLFetchScroll so the row status is correctly derived from each column's result
+34. Fixed the DSN setup dialog to show endpoint fields for the AWS Profile and JWT IAM authentication plugins
+35. Fixed RPM installation on FIPS-enabled systems
+
 v2.1.17 (2026-04-28)
 ---------------------
 1. Added support for pg_catalog internal data types in the SQLProcedureColumns and SQLProcedureColumnsW metadata APIs
