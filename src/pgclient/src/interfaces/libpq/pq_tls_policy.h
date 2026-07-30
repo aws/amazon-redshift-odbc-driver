@@ -39,6 +39,46 @@ pq_should_prefer_pq(const char *user_value)
     return 1;
 }
 
+/**
+ * @brief Minimum TLS protocol version the driver should negotiate.
+ *
+ * Kept independent of the crypto library's TLS1_x_VERSION constants so
+ * this header stays openssl-free and unit-testable. The caller maps
+ * these to the library's protocol constants.
+ */
+typedef enum
+{
+    RS_MIN_TLS_1_1,
+    RS_MIN_TLS_1_2,
+    RS_MIN_TLS_1_3
+} rs_min_tls_version;
+
+/**
+ * @brief Resolve the effective minimum TLS version from the min_tls
+ *        connection property.
+ *
+ * @param user_value  Value of the min_tls connection property.
+ *                    NULL → default (1.2).
+ *                    "1.1" / "1.2" / "1.3" → the matching version.
+ *                    Any other value (invalid input) → 1.2, failing
+ *                    secure rather than weakening the floor.
+ * @return the resolved rs_min_tls_version.
+ */
+static inline rs_min_tls_version
+pq_resolve_min_tls(const char *user_value)
+{
+    if (user_value == NULL)
+        return RS_MIN_TLS_1_2;
+    if (strcmp(user_value, "1.3") == 0)
+        return RS_MIN_TLS_1_3;
+    if (strcmp(user_value, "1.2") == 0)
+        return RS_MIN_TLS_1_2;
+    if (strcmp(user_value, "1.1") == 0)
+        return RS_MIN_TLS_1_1;
+    /* Invalid value: fail secure to TLS 1.2. */
+    return RS_MIN_TLS_1_2;
+}
+
 /*
  * TLS 1.3 named-groups string offered in the ClientHello when
  * prefer_pq is on. Format is the colon-separated string accepted by

@@ -60,6 +60,40 @@ TEST(TlsPolicyPreferPQ, TypoIsTreatedAsOn) {
 }
 
 /*
+ * pq_resolve_min_tls -- min_tls property mapping + fail-secure default
+ */
+
+TEST(TlsPolicyMinTls, NullDefaultsTo12) {
+    EXPECT_EQ(RS_MIN_TLS_1_2, pq_resolve_min_tls(nullptr));
+}
+
+TEST(TlsPolicyMinTls, ValidVersionsMapDirectly) {
+    EXPECT_EQ(RS_MIN_TLS_1_1, pq_resolve_min_tls("1.1"));
+    EXPECT_EQ(RS_MIN_TLS_1_2, pq_resolve_min_tls("1.2"));
+    EXPECT_EQ(RS_MIN_TLS_1_3, pq_resolve_min_tls("1.3"));
+}
+
+TEST(TlsPolicyMinTls, InvalidValueFailsSecureTo12) {
+    // The behavior connection_string_tls_invalid_defaults_to_12 asserted:
+    // any unrecognized value clamps to TLS 1.2 rather than weakening it.
+    EXPECT_EQ(RS_MIN_TLS_1_2, pq_resolve_min_tls("garbage"));
+    EXPECT_EQ(RS_MIN_TLS_1_2, pq_resolve_min_tls(""));
+    EXPECT_EQ(RS_MIN_TLS_1_2, pq_resolve_min_tls("1.0"));
+    EXPECT_EQ(RS_MIN_TLS_1_2, pq_resolve_min_tls("1"));
+    EXPECT_EQ(RS_MIN_TLS_1_2, pq_resolve_min_tls("TLSv1.3"));
+}
+
+TEST(TlsPolicyMinTls, NeverReturnsBelow12ForUnknownInput) {
+    // Fail-secure invariant: unknown input must never resolve below 1.2.
+    const char *inputs[] = {"0.9", "2.0", "ssl3", "1.4", "abc", " 1.2"};
+    for (const char *in : inputs) {
+        rs_min_tls_version v = pq_resolve_min_tls(in);
+        EXPECT_TRUE(v == RS_MIN_TLS_1_2 || v == RS_MIN_TLS_1_3)
+            << "input \"" << in << "\" must not weaken the TLS floor below 1.2";
+    }
+}
+
+/*
  * PQ_HYBRID_GROUPS_LIST invariants
  */
 

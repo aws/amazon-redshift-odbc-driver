@@ -956,28 +956,41 @@ init_ssl_system(PGconn *conn)
 			return -1;
 		}
 
-		if (conn->min_tls != NULL)
 		{
-			RS_LOG_DEBUG("FESEC", "Min TLS version=%s\n", conn->min_tls);
-			if (strcmp(conn->min_tls, "1.3") == 0)
-				SSL_CTX_set_min_proto_version(SSL_context, TLS1_3_VERSION);
-			else if (strcmp(conn->min_tls, "1.2") == 0)
-				SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
-			else if (strcmp(conn->min_tls, "1.1") == 0)
-				SSL_CTX_set_min_proto_version(SSL_context, TLS1_1_VERSION);
-			else
+			/*
+			 * Resolve the effective minimum TLS version. Invalid values
+			 * fail secure to TLS 1.2 (see pq_resolve_min_tls). The mapping
+			 * is factored into pq_tls_policy.h so it can be unit-tested.
+			 */
+			rs_min_tls_version min_tls = pq_resolve_min_tls(conn->min_tls);
+
+			if (conn->min_tls != NULL &&
+				min_tls == RS_MIN_TLS_1_2 &&
+				strcmp(conn->min_tls, "1.2") != 0)
 			{
 				RS_LOG_WARN("FESEC",
 					"Invalid min_tls value \"%s\"; valid values are "
 					"1.1, 1.2, 1.3. Defaulting to TLS 1.2.\n",
 					conn->min_tls);
-				SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
 			}
-		}
-		else
-		{
-			/* Default to TLS 1.2 minimum when not explicitly configured */
-			SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
+
+			switch (min_tls)
+			{
+				case RS_MIN_TLS_1_3:
+					SSL_CTX_set_min_proto_version(SSL_context, TLS1_3_VERSION);
+					break;
+				case RS_MIN_TLS_1_1:
+					SSL_CTX_set_min_proto_version(SSL_context, TLS1_1_VERSION);
+					break;
+				case RS_MIN_TLS_1_2:
+				default:
+					SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
+					break;
+			}
+
+			RS_LOG_DEBUG("FESEC", "Min TLS version=%s\n",
+				min_tls == RS_MIN_TLS_1_3 ? "1.3" :
+				min_tls == RS_MIN_TLS_1_1 ? "1.1" : "1.2");
 		}
 
 		/*
