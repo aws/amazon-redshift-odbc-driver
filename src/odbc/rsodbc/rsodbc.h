@@ -1177,8 +1177,11 @@ struct SHOWPROCEDURESFUNCTIONSResult {
 #define RS_KEEP_ALIVE_IDLE "KeepAliveIdle"  
 #define RS_KEEP_ALIVE_INTERVAL "KeepAliveInterval" 
 
-// Min TLS 1.1/1.2
-#define RS_MIN_TLS "Min_TLS" // Default is 1.0
+#define RS_MIN_TLS "Min_TLS" // Default is 1.2 (enforced in fe-secure.c)
+
+// Prefer post-quantum hybrid TLS groups (on by default;
+// set to "0" or "false" to disable PQ advertising per-connection)
+#define RS_PREFER_PQ "Prefer_PQ"
 
 
 // IAM connection options
@@ -1367,6 +1370,7 @@ public:
 	  szKeepAliveInterval[0] = '\0';
 
 	  szMinTLS[0] = '\0';
+	  szPreferPQ[0] = '\0';
 
       pConnectStr = NULL;
       cbConnectStr = 0;
@@ -1553,6 +1557,11 @@ public:
 
 	// Min TLS
 	char szMinTLS[MAX_NUMBER_BUF_LEN] = {0};
+
+	// Prefer post-quantum hybrid groups in TLS 1.3 ClientHello.
+	// Default true; "0" or "false" disables per-connection.
+	// TLS 1.3 only; no effect on TLS 1.2 connections.
+	char szPreferPQ[MAX_NUMBER_BUF_LEN] = {0};
 
 	// Redshift native auth
 	char szIdpType[MAX_IDEN_LEN] = {0};

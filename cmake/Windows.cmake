@@ -122,8 +122,8 @@ function(target_link_libraries_rsodbc TARGET_NAME)
     PRIVATE ${RS_STATIC_LIBS}
            shell32
            odbccp32
-           libcrypto
-           libssl
+           crypto
+           ssl
            ws2_32
            comdlg32
            wldap32

@@ -303,7 +303,10 @@ static const PQconninfoOption PQconninfoOptions[] = {
 		"Proxy-credentials", "", 40 },
 
 	{ "min_tls", NULL, NULL, NULL,
-		"Minimum TLS", "", 10 },	/* default is 1.1 */
+		"Minimum TLS", "", 10 },	/* default is 1.2 (enforced in fe-secure.c) */
+
+	{ "prefer_pq", NULL, NULL, NULL,
+		"Prefer post-quantum groups", "", 5 },	/* default is on; set "0" or "false" to disable PQ advertising */
 
 	{"idp_type", NULL, NULL, NULL,
 	  "Redshift Native Auth IDP Type", "", 64},
@@ -924,6 +927,8 @@ fillPGconn(PGconn *conn, PQconninfoOption *connOptions)
 	conn->sslcrl = tmp ? strdup(tmp) : NULL;
 	tmp = conninfo_getval(connOptions, "min_tls");
 	conn->min_tls = tmp ? strdup(tmp) : NULL;
+	tmp = conninfo_getval(connOptions, "prefer_pq");
+	conn->prefer_pq = tmp ? strdup(tmp) : NULL;
 	tmp = conninfo_getval(connOptions, "compression");
 	conn->compression = tmp ? strdup(tmp) : NULL;
 
@@ -3495,6 +3500,8 @@ freePGconn(PGconn *conn)
 	// Min TLS
 	if (conn->min_tls)
 		free(conn->min_tls);
+	if (conn->prefer_pq)
+		free(conn->prefer_pq);
 
 	// Redshift Native Auth
 	if (conn->idp_type)

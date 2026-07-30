@@ -492,6 +492,7 @@ struct pg_conn
 
 	// Min TLS
 	char	   *min_tls;			/* min TLS */
+	char	   *prefer_pq;		/* advertise PQ hybrid groups in TLS 1.3 ClientHello */
 
 	// Redshift Native Auth
 	char	   *idp_type;			

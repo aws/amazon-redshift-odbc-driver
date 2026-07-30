@@ -17,7 +17,7 @@ function(configure_file_pgclient)
 endfunction()
 
 function(include_directories_libpq)
-  # noop
+  target_include_directories(pq PRIVATE ${CMAKE_INCLUDE_PATH})
 endfunction()
 
 function(include_directories_libpqport)

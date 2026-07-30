@@ -64,9 +64,8 @@
 #if (SSLEAY_VERSION_NUMBER >= 0x00907000L)
 #include <openssl/conf.h>
 #endif
-#ifdef USE_SSL_ENGINE
-#include <openssl/engine.h>
-#endif
+
+#include "pq_tls_policy.h"
 
 
 #ifndef WIN32
@@ -269,6 +268,36 @@ pqsecure_open_client(PGconn *conn)
 			SSLerrfree(err);
 			close_SSL(conn);
 			return PGRES_POLLING_FAILED;
+		}
+
+		/* Apply per-connection PQ group preference.
+		 * Failures are logged but do not abort the handshake -- the
+		 * connection proceeds with the library's built-in default groups. */
+		if (pq_should_prefer_pq(conn->prefer_pq))
+		{
+			if (SSL_set1_groups_list(conn->ssl, PQ_HYBRID_GROUPS_LIST))
+			{
+				RS_LOG_DEBUG("FESEC", "prefer_pq=on; advertising PQ groups\n");
+			}
+			else
+			{
+				RS_LOG_ERROR("FESEC",
+					"SSL_set1_groups_list failed for PQ groups; "
+					"proceeding with library default groups\n");
+			}
+		}
+		else
+		{
+			if (SSL_set1_groups_list(conn->ssl, PQ_CLASSICAL_GROUPS_LIST))
+			{
+				RS_LOG_DEBUG("FESEC", "prefer_pq=off; using classical groups only\n");
+			}
+			else
+			{
+				RS_LOG_ERROR("FESEC",
+					"SSL_set1_groups_list failed for classical groups; "
+					"proceeding with library default groups\n");
+			}
 		}
 
 		/*
@@ -913,20 +942,6 @@ init_ssl_system(PGconn *conn)
 		}
 
 		SSL_context = SSL_CTX_new(TLS_method());
-		if (conn->min_tls != NULL)
-		{
-			RS_LOG_DEBUG("FESEC", "Min TLS version=%s\n", conn->min_tls);
-			if (strcmp(conn->min_tls, "1.2") == 0)
-				SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
-			else
-			if (strcmp(conn->min_tls, "1.1") == 0)
-				SSL_CTX_set_min_proto_version(SSL_context, TLS1_1_VERSION);
-			else
-				SSL_CTX_set_min_proto_version(SSL_context, TLS1_VERSION);
-		}
-		else
-			SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
-
 		if (!SSL_context)
 		{
 			char	   *err = SSLerrmessage();
@@ -939,6 +954,30 @@ init_ssl_system(PGconn *conn)
 			pthread_mutex_unlock(&ssl_config_mutex);
 #endif
 			return -1;
+		}
+
+		if (conn->min_tls != NULL)
+		{
+			RS_LOG_DEBUG("FESEC", "Min TLS version=%s\n", conn->min_tls);
+			if (strcmp(conn->min_tls, "1.3") == 0)
+				SSL_CTX_set_min_proto_version(SSL_context, TLS1_3_VERSION);
+			else if (strcmp(conn->min_tls, "1.2") == 0)
+				SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
+			else if (strcmp(conn->min_tls, "1.1") == 0)
+				SSL_CTX_set_min_proto_version(SSL_context, TLS1_1_VERSION);
+			else
+			{
+				RS_LOG_WARN("FESEC",
+					"Invalid min_tls value \"%s\"; valid values are "
+					"1.1, 1.2, 1.3. Defaulting to TLS 1.2.\n",
+					conn->min_tls);
+				SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
+			}
+		}
+		else
+		{
+			/* Default to TLS 1.2 minimum when not explicitly configured */
+			SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
 		}
 
 		/*

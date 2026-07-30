@@ -34,7 +34,7 @@ target_link_libraries(
           uuid
           winmm
           comctl32
-          libcrypto
+          crypto
           legacy_stdio_definitions)
 
 include_and_link_openssl(rsodbcsetup)

@@ -2486,6 +2486,11 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
 							strncpy(pConnectProps->szMinTLS, pval, MAX_NUMBER_BUF_LEN - 1);
 							pConnectProps->szMinTLS[MAX_NUMBER_BUF_LEN - 1] = '\0';
 						}
+        } else if (_stricmp(pname, RS_PREFER_PQ) == 0) {
+          if (pval) {
+							strncpy(pConnectProps->szPreferPQ, pval, MAX_NUMBER_BUF_LEN - 1);
+							pConnectProps->szPreferPQ[MAX_NUMBER_BUF_LEN - 1] = '\0';
+						}
         } else if (_stricmp(pname, RS_IAM) == 0) {
                         pConnectProps->isIAMAuth = convertToBoolVal(pval);
         } else if (_stricmp(pname, RS_HTTPS_PROXY_HOST) == 0) {
@@ -3396,6 +3401,9 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
 
 	  // Min TLS
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_MIN_TLS, "", pConnectProps->szMinTLS, MAX_NUMBER_BUF_LEN, ODBC_INI);
+
+	  // Prefer post-quantum hybrid TLS groups (default true)
+	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_PREFER_PQ, "", pConnectProps->szPreferPQ, MAX_NUMBER_BUF_LEN, ODBC_INI);
 
       char pluginName[MAX_IDEN_LEN];
       RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_PLUGIN_NAME, "", pluginName, MAX_IDEN_LEN, ODBC_INI);

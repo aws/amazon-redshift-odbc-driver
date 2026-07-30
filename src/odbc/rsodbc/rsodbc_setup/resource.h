@@ -252,6 +252,7 @@
 #define IDC_IDC_CLIENT_DISPLAY_NAME_STATIC  1232
 #define IDC_MANAGED_VPC_STATIC          1233
 #define IDC_MANAGED_VPC                 1234
+#define IDC_PREFER_PQ                   1235
 
 // IdpToken-specific duplicate control IDs (1240–1255)
 #define IDC_IDP_CID_STATIC              1240

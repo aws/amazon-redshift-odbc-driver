@@ -11,15 +11,18 @@ configure_file(${CMAKE_SOURCE_DIR}/version.txt ${CMAKE_CURRENT_BINARY_DIR}/versi
 add_executable(${EXECUTABLE_NAME} ${TEST_SOURCES})
 
 if (WIN32)
-    target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} ${CMAKE_FIND_LIBRARY_PREFIXES}rsodbc64-test pq ${RS_STATIC_LIBS})
+    target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} ${CMAKE_FIND_LIBRARY_PREFIXES}rsodbc64-test pq ${RS_STATIC_LIBS} crypto ssl)
     add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
             $<TARGET_FILE:rsodbc64-test>  # Adjust this if necessary
             ${CMAKE_CURRENT_BINARY_DIR}
     )
     else()
-    target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} rsodbc64-test pq)
-    target_link_libraries(${EXECUTABLE_NAME} pthread)
+    target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} rsodbc64-test pq ${RS_STATIC_LIBS})
+    if(NOT APPLE)
+        # AWS-LC is statically linked; its transitive system deps must be explicit.
+        target_link_libraries(${EXECUTABLE_NAME} pthread dl rt resolv keyutils)
+    endif()
 endif()
 
 target_link_directories(${EXECUTABLE_NAME} PRIVATE "${CMAKE_INSTALL_PREFIX}")

@@ -95,6 +95,7 @@
 #define RS_SERVERLESS				"Serverless"
 #define RS_WORKGROUP				"Workgroup"
 #define RS_MIN_TLS                "Min_TLS"
+#define RS_PREFER_PQ              "Prefer_PQ"
 #define RS_VPC_ENDPOINT_URL        "vpc_endpoint_url"
 
  // Connection options value
@@ -234,6 +235,7 @@
 #define DFLT_IDP_HOST ""
 #define DFLT_IDP_PORT ""
 #define DFLT_SSL_INSECURE  "0"
+#define DFLT_PREFER_PQ     "1"
 #define DFLT_LOGIN_TO_RP  ""
 #define DFLT_IDP_TENANT ""
 #define DFLT_CLIENT_ID  ""
@@ -305,7 +307,7 @@
  * number of elements in rs_dsn_attrs[]. Increment it by one whenever an attribute
  * is added to rs_dsn_attrs[]. The compile-time check after that table enforces it.
  */
-#define DD_DSN_ATTR_COUNT 111
+#define DD_DSN_ATTR_COUNT 112
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -514,6 +516,7 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_VPC_ENDPOINT_URL , DFLT_VPC_ENDPOINT_URL },
 { RS_MAX_VARCHAR_SIZE , DFLT_MAX_VARCHAR_SIZE },
 { RS_MAX_LONGVARCHAR_SIZE , DFLT_MAX_LONGVARCHAR_SIZE },
+{ RS_PREFER_PQ, DFLT_PREFER_PQ },
 { "", "" }
 };
 
@@ -659,6 +662,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { RS_VPC_ENDPOINT_URL , RS_VPC_ENDPOINT_URL },
 { RS_MAX_VARCHAR_SIZE , RS_MAX_VARCHAR_SIZE },
 { RS_MAX_LONGVARCHAR_SIZE , RS_MAX_LONGVARCHAR_SIZE },
+{ RS_PREFER_PQ , RS_PREFER_PQ },
 { "", "" }
 };
 
@@ -2440,6 +2444,7 @@ static LRESULT CALLBACK rs_dsn_ssl_sheet(HWND hwndDlg, UINT message, WPARAM wPar
 			lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_TLS),TLS_VERSION_11);
 			lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_TLS), TLS_VERSION_12);
 			ComboBox_SetCurSel(GetDlgItem(hwndDlg, IDC_COMBO_TLS), rs_dsn_int_attr(rs_dsn_setup_ctxt, "TLSMethod"));
+			CheckDlgButton(hwndDlg, IDC_PREFER_PQ, rs_dsn_bool_attr(rs_dsn_setup_ctxt, RS_PREFER_PQ));
 			SetWindowLongPtr(hwndDlg, DWLP_USER, sheet->lParam);
 			rs_dsn_setup_ctxt->ssl_inited = TRUE;
 			break;
@@ -3597,6 +3602,7 @@ rs_dsn_read_ssl_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 			tlsVersion = TLS_VERSION_12;
 
 		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_MIN_TLS, tlsVersion);
+		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_PREFER_PQ, RS_PREFER_PQ);
 	}
 }
 

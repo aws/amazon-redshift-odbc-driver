@@ -367,6 +367,13 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 			ppValues[iCount++] = pConnectProps->szMinTLS;
 		}
 
+		// Prefer post-quantum hybrid TLS groups (default on)
+		if (pConnectProps->szPreferPQ[0] != '\0')
+		{
+			ppKeywords[iCount] = "prefer_pq";
+			ppValues[iCount++] = pConnectProps->szPreferPQ;
+		}
+
 		if (pConnectProps->szIdpType[0] != '\0')
 		{
 			ppKeywords[iCount] = "idp_type";
