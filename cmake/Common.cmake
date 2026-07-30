@@ -14,6 +14,26 @@ macro(configure_asan)
   endif()
 endmacro()
 
+macro(configure_coverage)
+  if(ENABLE_COVERAGE AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU"))
+    message(STATUS "Code coverage enabled")
+    set(COVERAGE_FLAGS "--coverage")
+    # basic_build_settings (the caller) is a function, so a plain set() would be
+    # function-local and would not reach the targets; the flags must go through
+    # the cache to apply globally. Guard against flag accumulation on reconfigure
+    # (re-reading the cached value and re-appending --coverage) by only adding
+    # the flag when it is not already present.
+    if(NOT CMAKE_CXX_FLAGS MATCHES "--coverage")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COVERAGE_FLAGS}" CACHE STRING "" FORCE)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COVERAGE_FLAGS}" CACHE STRING "" FORCE)
+      set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${COVERAGE_FLAGS}" CACHE STRING "" FORCE)
+      set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${COVERAGE_FLAGS}" CACHE STRING "" FORCE)
+    endif()
+  else()
+    message(STATUS "Code coverage not enabled")
+  endif()
+endmacro()
+
 function(set_output_directory EXECUTABLE_NAME)
   
   set_target_properties(${EXECUTABLE_NAME} PROPERTIES

@@ -46,6 +46,9 @@ echo "INSTALL_DIR $INSTALL_DIR"
 PUBLIC_DIR=$PWD/public                  # Public artifacts directory
 echo "PUBLIC_DIR: $PUBLIC_DIR"
 
+ENABLE_COVERAGE=${ENABLE_COVERAGE:=OFF}
+echo "ENABLE_COVERAGE: $ENABLE_COVERAGE"
+
 # Initialize optional parameters
 RS_VERSION=""                           # ODBC driver version
 RS_BUILD_TYPE=""                        # Build type (Release, Debug, etc.)
@@ -123,6 +126,11 @@ fi
 # Add testing option if specified
 if [ -n "${ENABLE_TESTING}" ]; then
     cmake_command="${cmake_command} -DENABLE_TESTING=${ENABLE_TESTING}"
+fi
+
+# Add coverage option if specified
+if [ "${ENABLE_COVERAGE}" = "ON" ]; then
+    cmake_command="${cmake_command} -DENABLE_COVERAGE=ON"
 fi
 
 # Add iODBC option if specified (macOS only)
