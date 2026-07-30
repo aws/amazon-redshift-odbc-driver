@@ -130,6 +130,7 @@
 #define RS_DATABASE_METADATA_CURRENT_DB_ONLY    "DatabaseMetadataCurrentDbOnly"
 #define RS_READ_ONLY							"ReadOnly"
 #define RS_USE_UNICODE							"UseUnicode"
+#define RS_ENABLE_TABLE_TYPES					"EnableTableTypes"
 
 #define RS_TCP_PROXY_HOST       "ProxyHost"
 #define RS_TCP_PROXY_PORT       "ProxyPort"
@@ -262,6 +263,7 @@
 #define DFLT_DATABASE_METADATA_CURRENT_DB_ONLY "1"
 #define DFLT_READ_ONLY "0"
 #define DFLT_USE_UNICODE "0"
+#define DFLT_ENABLE_TABLE_TYPES "1"
 
 #define DFLT_PROXY_HOST ""
 #define DFLT_PROXY_PORT ""
@@ -294,7 +296,14 @@
 /* 1 Workgroup*/
 /* 1 Compression */
 
-#define DD_DSN_ATTR_COUNT 109
+/*
+ * Size of the per-DSN attribute array (rs_dsn_setup_t::attrs). The rs_dsn_attrs[]
+ * template, including its trailing { "", "" } sentinel, is copied into this array
+ * with memcpy(sizeof(rs_dsn_attrs)), so DD_DSN_ATTR_COUNT must be at least the
+ * number of elements in rs_dsn_attrs[]. Increment it by one whenever an attribute
+ * is added to rs_dsn_attrs[]. The compile-time check after that table enforces it.
+ */
+#define DD_DSN_ATTR_COUNT 110
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -476,6 +485,7 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_DATABASE_METADATA_CURRENT_DB_ONLY, DFLT_DATABASE_METADATA_CURRENT_DB_ONLY },
 { RS_READ_ONLY, DFLT_READ_ONLY },
 { RS_USE_UNICODE, DFLT_USE_UNICODE },
+{ RS_ENABLE_TABLE_TYPES, DFLT_ENABLE_TABLE_TYPES },
 { RS_TCP_PROXY_HOST, DFLT_PROXY_HOST },
 { RS_TCP_PROXY_PORT, DFLT_PROXY_PORT },
 { RS_TCP_PROXY_USER_NAME, DFLT_PROXY_UID },
@@ -503,6 +513,16 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_MAX_LONGVARCHAR_SIZE , DFLT_MAX_LONGVARCHAR_SIZE },
 { "", "" }
 };
+
+/*
+ * Compile-time check that DD_DSN_ATTR_COUNT can hold every rs_dsn_attrs[] entry
+ * plus its terminating sentinel. If it is too small the array size below becomes
+ * negative and the build fails. A negative-array-size check is used instead of
+ * C11 _Static_assert for compatibility with the C dialect this component is
+ * compiled with.
+ */
+typedef char rs_dsn_attr_count_fits[
+	(sizeof(rs_dsn_attrs) / sizeof(rs_dsn_attrs[0]) <= DD_DSN_ATTR_COUNT) ? 1 : -1];
 
 static char*g_setOfKSA[] = {"SSPI","GSS"};
 
@@ -609,6 +629,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { RS_DATABASE_METADATA_CURRENT_DB_ONLY, RS_DATABASE_METADATA_CURRENT_DB_ONLY},
 { RS_READ_ONLY, RS_READ_ONLY },
 { RS_USE_UNICODE, RS_USE_UNICODE },
+{ RS_ENABLE_TABLE_TYPES, RS_ENABLE_TABLE_TYPES },
 { RS_TCP_PROXY_HOST, RS_TCP_PROXY_HOST },
 { RS_TCP_PROXY_PORT, RS_TCP_PROXY_PORT },
 { RS_TCP_PROXY_USER_NAME, RS_TCP_PROXY_USER_NAME },
@@ -2234,6 +2255,7 @@ static LRESULT CALLBACK rs_dsn_advanced_sheet(HWND hwndDlg, UINT message, WPARAM
 			CheckDlgButton(hwndDlg, IDC_CURRENT_DB_ONLY, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_DATABASE_METADATA_CURRENT_DB_ONLY, TRUE));
 			CheckDlgButton(hwndDlg, IDC_READ_ONLY, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_READ_ONLY, FALSE));
 			CheckDlgButton(hwndDlg, IDC_USE_UNICODE, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_USE_UNICODE, FALSE));
+			CheckDlgButton(hwndDlg, IDC_ENABLE_TABLE_TYPES, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_ENABLE_TABLE_TYPES, TRUE));
 			SetDlgItemText(hwndDlg, IDC_MAX_VARCHAR_SIZE, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_MAX_VARCHAR_SIZE));
 			SetDlgItemText(hwndDlg, IDC_MAX_LONGVARCHAR_SIZE, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_MAX_LONGVARCHAR_SIZE));
  			// Already read from reg into local cache(rs_dsn_setup_ctxt); and now update the page
@@ -3471,6 +3493,7 @@ rs_dsn_read_advanced_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_CURRENT_DB_ONLY, RS_DATABASE_METADATA_CURRENT_DB_ONLY);
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_READ_ONLY, RS_READ_ONLY);
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_USE_UNICODE, RS_USE_UNICODE);
+		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_ENABLE_TABLE_TYPES, RS_ENABLE_TABLE_TYPES);
 		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_MAX_VARCHAR_SIZE, RS_MAX_VARCHAR_SIZE);
 		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_MAX_LONGVARCHAR_SIZE, RS_MAX_LONGVARCHAR_SIZE);
 		// read from page into local cache

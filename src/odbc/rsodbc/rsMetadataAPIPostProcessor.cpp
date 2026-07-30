@@ -173,9 +173,17 @@ RsMetadataAPIPostProcessor::sqlTableTypesPostProcessing(SQLHSTMT phstmt) {
         return rc;
     }
 
-    // Apply post-processing
+    // Apply post-processing.
+    // When EnableTableTypes is disabled, the table enumeration collapses every
+    // type to TABLE/VIEW, so the advertised list of table types must match;
+    // otherwise a client populating a type filter from this list would offer
+    // types (EXTERNAL TABLE, SYSTEM TABLE, ...) that then match zero rows.
+    const std::vector<std::string> &typeList =
+        RsMetadataAPIHelper::isEnableTableTypes(pStmt)
+            ? RsMetadataAPIHelper::tableTypeList
+            : RsMetadataAPIHelper::generalizedTableTypeList;
     rc = libpqCreateSQLTableTypesCustomizedResultSet(
-        pStmt, kTablesColNum, RsMetadataAPIHelper::tableTypeList);
+        pStmt, kTablesColNum, typeList);
     if (!SQL_SUCCEEDED(rc)) {
         RS_LOG_ERROR("sqlTableTypesPostProcessing", "%s",
                      PostProcessorLoggings::RESULTSET_CREATION_FAILED);

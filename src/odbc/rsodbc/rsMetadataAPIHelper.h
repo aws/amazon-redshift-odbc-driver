@@ -429,6 +429,53 @@ class RsMetadataAPIHelper {
     // Define the list of table type Redshift support
     static const std::vector<std::string> tableTypeList;
 
+    /**
+     * @brief Generalized table type list returned for the SQL_ALL_TABLE_TYPES
+     *        special call when EnableTableTypes is disabled.
+     */
+    static const std::vector<std::string> generalizedTableTypeList;
+
+    /**
+     * @brief Returns the generalized table type list (TABLE, VIEW) reported for
+     *        the SQL_ALL_TABLE_TYPES special call when EnableTableTypes is
+     *        disabled.
+     *
+     * Callers outside this module obtain the list through this accessor instead
+     * of referencing the static data member directly, so access stays portable
+     * across a shared library boundary.
+     *
+     * @return A const reference to the generalized table type list.
+     */
+    static const std::vector<std::string> &getGeneralizedTableTypeList();
+
+    /**
+     * @brief Reports whether EnableTableTypes is enabled (the default) for the
+     *        statement's connection.
+     *
+     * Null safe: returns true when the connection property pointer chain is not
+     * fully established.
+     *
+     * @param pStmt The statement handle whose connection is inspected.
+     * @return true when EnableTableTypes is enabled or the pointer chain is
+     *         incomplete; false only when the property is explicitly disabled.
+     */
+    static bool isEnableTableTypes(RS_STMT_INFO *pStmt);
+
+    /**
+     * @brief Collapses a detailed SHOW TABLES table type into the generic
+     *        bucket TABLE or VIEW.
+     *
+     * Any value containing TABLE becomes TABLE, any value containing VIEW
+     * becomes VIEW, otherwise the value is returned unchanged. Used when
+     * EnableTableTypes is disabled so detailed server types map to TABLE or
+     * VIEW.
+     *
+     * @param tableType The detailed table type returned by SHOW TABLES.
+     * @return The generalized table type (TABLE or VIEW), or the original value
+     *         when it matches neither keyword.
+     */
+    static std::string generalizeTableType(const std::string &tableType);
+
     struct DataTypeName {
         const std::string ksmallint = "smallint";
         const std::string kinteger = "integer";

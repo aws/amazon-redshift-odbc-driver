@@ -2440,6 +2440,9 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
         } else if (_stricmp(pname, RS_USE_UNICODE) == 0) {
 						bool bVal = convertToBoolVal(pval);
 						pConnectProps->iUseUnicode = (bVal) ? 1 : 0;
+        } else if (_stricmp(pname, RS_ENABLE_TABLE_TYPES) == 0) {
+						bool bVal = convertToBoolVal(pval);
+						pConnectProps->iEnableTableTypes = (bVal) ? 1 : 0;
         } else if (_stricmp(pname, RS_KEEP_ALIVE) == 0) {
           if (pval) {
 							strncpy(pConnectProps->szKeepAlive, pval, MAX_NUMBER_BUF_LEN - 1);
@@ -3352,6 +3355,17 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
             pConnectProps->iUseUnicode = (bVal) ? 1 : 0;
         }
 
+        // Read EnableTableTypes
+        // If user didn't include EnableTableTypes flag in dsn, use default value
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_ENABLE_TABLE_TYPES,
+                                    "", temp, MAX_IAM_BUF_VAL, ODBC_INI);
+        if (temp[0] != '\0') {
+            bVal = (pConnectProps->iEnableTableTypes == 1);
+            RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN,
+                                            RS_ENABLE_TABLE_TYPES, &bVal);
+            pConnectProps->iEnableTableTypes = (bVal) ? 1 : 0;
+        }
+
 	  // Read Application name
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_APPLICATION_NAME, "", pConnAttr->szApplicationName, sizeof(pConnAttr->szApplicationName), ODBC_INI);
 
@@ -3434,7 +3448,7 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
           "TransactionErrorBehavior=%d, ConnectionRetryCount=%d, "
           "ConnectionRetryDelay=%d, ClientProtocolVersion=%d, "
           "StreamingCursorRows=%d, CscEnable=%d, "
-          "DatabaseMetadataCurrentDbOnly=%d, ReadOnly=%d, "
+          "DatabaseMetadataCurrentDbOnly=%d, ReadOnly=%d, EnableTableTypes=%d, "
           "MultiInsertCmdConvertEnable=%d, MaxVarcharSize=%d, MaxLongVarcharSize=%d, StringType=%s, "
           "KerberosServiceName=%s, Compression=%s, "
           "KeepAlive=%s, KeepAliveCount=%s, KeepAliveIdle=%s, "
@@ -3452,6 +3466,7 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
           pConnectProps->iCscEnable,
           pConnectProps->iDatabaseMetadataCurrentDbOnly,
           pConnectProps->iReadOnly,
+          pConnectProps->iEnableTableTypes,
           pConnectProps->iMultiInsertCmdConvertEnable,
           pConnectProps->iMaxVarcharSize,
           pConnectProps->iMaxLongVarcharSize,

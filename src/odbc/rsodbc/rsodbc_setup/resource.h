@@ -274,6 +274,7 @@
 #define IDC_MAX_VARCHAR_SIZE            1257
 
 #define IDC_USE_UNICODE                 1258
+#define IDC_ENABLE_TABLE_TYPES          1300
 #define IDC_MAX_LONGVARCHAR_SIZE_STATIC 1259
 #define IDC_MAX_LONGVARCHAR_SIZE        1260
 
@@ -283,7 +284,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        121
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1217
+#define _APS_NEXT_CONTROL_VALUE         1301
 #define _APS_NEXT_SYMED_VALUE           104
 #endif
 #endif

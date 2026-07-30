@@ -1137,6 +1137,7 @@ struct SHOWPROCEDURESFUNCTIONSResult {
 #define RS_DATABASE_METADATA_CURRENT_DB_ONLY     "DatabaseMetadataCurrentDbOnly"
 #define RS_READ_ONLY							"ReadOnly"
 #define RS_USE_UNICODE                          "UseUnicode"
+#define RS_ENABLE_TABLE_TYPES                   "EnableTableTypes"
 #define RS_CLIENT_PROTOCOL_VERSION              "client_protocol_version"
 #define RS_STRING_TYPE							"StringType"
 #define RS_MAX_VARCHAR_SIZE						"MaxVarcharSize"
@@ -1341,6 +1342,7 @@ public:
 	  iDatabaseMetadataCurrentDbOnly = 1;
 	  iReadOnly = 0;
 	  iUseUnicode = 0;
+	  iEnableTableTypes = 1;
 
 	  szKeepAlive[0] = '\0';
 	  szKeepAliveIdle[0] = '\0';
@@ -1510,6 +1512,7 @@ public:
 	int iDatabaseMetadataCurrentDbOnly; // Default is 1. 0 means datashare i.e. across multiple databases.
 	int iReadOnly; // Default is 0. 1 means READ ONLY session.
 	int iUseUnicode; // Default is 0. 1 means report wide SQL types for character columns.
+	int iEnableTableTypes; // Default is 1. 0 means generalize table types to TABLE/VIEW.
 
     char *pConnectStr;                // Rest of connection option store in this one.
     size_t cbConnectStr;

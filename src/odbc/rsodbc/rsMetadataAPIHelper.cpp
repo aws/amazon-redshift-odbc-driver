@@ -124,8 +124,51 @@ const std::string RsMetadataAPIHelper::kSHOW_PARAMETERS_numeric_scale = "numeric
 
 
 const std::vector<std::string> RsMetadataAPIHelper::tableTypeList = {
-    "EXTERNAL TABLE", "SYSTEM TABLE",    "SYSTEM VIEW",    "TABLE",
-    "TEMPORARY TABLE", "TEMPORARY VIEW", "VIEW"};
+    "EXTERNAL TABLE", "LOCAL TEMPORARY", "SYSTEM TABLE", "SYSTEM VIEW",
+    "TABLE",          "VIEW"};
+
+// Ordered by TABLE_TYPE as the ODBC spec requires for the SQL_ALL_TABLE_TYPES
+// result set. Returned when EnableTableTypes is disabled.
+const std::vector<std::string> RsMetadataAPIHelper::generalizedTableTypeList = {
+    "TABLE", "VIEW"};
+
+const std::vector<std::string> &
+RsMetadataAPIHelper::getGeneralizedTableTypeList() {
+    return generalizedTableTypeList;
+}
+
+bool RsMetadataAPIHelper::isEnableTableTypes(RS_STMT_INFO *pStmt) {
+    // Default to enabled (pass through server types) when the connection
+    // property chain is not fully established.
+    if (pStmt == NULL || pStmt->phdbc == NULL ||
+        pStmt->phdbc->pConnectProps == NULL) {
+        return true;
+    }
+    return pStmt->phdbc->pConnectProps->iEnableTableTypes != 0;
+}
+
+std::string
+RsMetadataAPIHelper::generalizeTableType(const std::string &tableType) {
+    std::string upper;
+    upper.reserve(tableType.size());
+    for (unsigned char ch : tableType) {
+        upper.push_back(static_cast<char>(::toupper(ch)));
+    }
+    if (upper.find("TABLE") != std::string::npos) {
+        return "TABLE";
+    }
+    if (upper.find("VIEW") != std::string::npos) {
+        return "VIEW";
+    }
+    // Temporary objects report a table type containing neither TABLE nor VIEW
+    // (for example LOCAL TEMPORARY or GLOBAL TEMPORARY). Treat them as TABLE so
+    // the generic filter still matches them when types are generalized.
+    if (upper.find("TEMPORARY") != std::string::npos) {
+        return "TABLE";
+    }
+    // Unknown type: leave it unchanged rather than guessing.
+    return tableType;
+}
 
 const std::string RsMetadataAPIHelper::SQL_EMPTY = "";
 

@@ -7,6 +7,7 @@
  */
 
 #include "rsMetadataServerProxyHelper.h"
+#include <algorithm>
 #include <limits>
 
 namespace RsMetadataServerProxyHelpers {
@@ -500,6 +501,17 @@ namespace RsMetadataServerProxyHelpers {
                 cur.schema_name      = extractStringField(buf_schema_name, sizeof(buf_schema_name), len_schema_name, RsMetadataAPIHelper::kSHOW_TABLES_schema_name);
                 cur.table_name       = extractStringField(buf_table_name, sizeof(buf_table_name), len_table_name, RsMetadataAPIHelper::kSHOW_TABLES_table_name);
                 cur.table_type       = extractStringField(buf_table_type, sizeof(buf_table_type), len_table_type, RsMetadataAPIHelper::kSHOW_TABLES_table_type);
+
+                // When EnableTableTypes is disabled, collapse detailed server
+                // types (EXTERNAL TABLE, SYSTEM TABLE, MATERIALIZED VIEW, ...)
+                // to the generic TABLE/VIEW buckets so the post-processing type
+                // filter matches them.
+                if (!RsMetadataAPIHelper::isEnableTableTypes(m_pStmt) &&
+                    cur.table_type.has_value()) {
+                    cur.table_type = RsMetadataAPIHelper::generalizeTableType(
+                        cur.table_type.value());
+                }
+
                 cur.remarks          = extractStringField(buf_remarks, sizeof(buf_remarks), len_remarks, RsMetadataAPIHelper::kSHOW_TABLES_remarks);
                 cur.owner            = extractStringField(buf_owner, sizeof(buf_owner), len_owner, RsMetadataAPIHelper::kSHOW_TABLES_owner);
                 cur.last_altered_time = extractStringField(buf_last_altered, sizeof(buf_last_altered), len_last_altered, RsMetadataAPIHelper::kSHOW_TABLES_last_altered_time);

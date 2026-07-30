@@ -20,6 +20,7 @@ SSLMode=verify-ca
 StreamingCursorRows=100
 #LoginTimeout=15
 #DatabaseMetadataCurrentDbOnly=
+#EnableTableTypes=
 
 
 

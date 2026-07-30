@@ -1352,3 +1352,54 @@ TEST(PgCatalogTypesTest, test_quoted_char_type_valid) {
 TEST(PgCatalogTypesTest, test_standalone_interval_valid) {
     EXPECT_TRUE(RsMetadataAPIHelper::isValidType("interval"));
 }
+
+// Tests for generalizeTableType: used when EnableTableTypes is disabled to
+// collapse detailed SHOW TABLES table types into the generic TABLE/VIEW buckets.
+TEST(GeneralizeTableTypeTest, table_like_types_become_table) {
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("TABLE"), "TABLE");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("EXTERNAL TABLE"), "TABLE");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("SYSTEM TABLE"), "TABLE");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("SYSTEM TOAST TABLE"), "TABLE");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("TEMPORARY TABLE"), "TABLE");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("FOREIGN TABLE"), "TABLE");
+}
+
+TEST(GeneralizeTableTypeTest, view_like_types_become_view) {
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("VIEW"), "VIEW");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("SYSTEM VIEW"), "VIEW");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("MATERIALIZED VIEW"), "VIEW");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("TEMPORARY VIEW"), "VIEW");
+}
+
+TEST(GeneralizeTableTypeTest, temporary_types_become_table) {
+    // Temporary tables report table_type LOCAL TEMPORARY, which contains
+    // neither TABLE nor VIEW; it must still generalize to the TABLE bucket.
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("LOCAL TEMPORARY"), "TABLE");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("GLOBAL TEMPORARY"), "TABLE");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("local temporary"), "TABLE");
+}
+
+TEST(GeneralizeTableTypeTest, is_case_insensitive) {
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("external table"), "TABLE");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("Materialized View"), "VIEW");
+}
+
+TEST(GeneralizeTableTypeTest, table_takes_precedence_when_both_present) {
+    // Defensive: a hypothetical value mentioning both keeps TABLE (checked first).
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("TABLE OF VIEWS"), "TABLE");
+}
+
+TEST(GeneralizeTableTypeTest, unknown_type_is_unchanged) {
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType("SEQUENCE"), "SEQUENCE");
+    EXPECT_EQ(RsMetadataAPIHelper::generalizeTableType(""), "");
+}
+
+// The generalized list advertised by SQL_ALL_TABLE_TYPES when disabled must be
+// exactly the generic buckets, in ascending TABLE_TYPE order per the ODBC spec.
+TEST(GeneralizeTableTypeTest, generalized_list_is_table_view) {
+    const std::vector<std::string> &list =
+        RsMetadataAPIHelper::getGeneralizedTableTypeList();
+    ASSERT_EQ(list.size(), 2u);
+    EXPECT_EQ(list[0], "TABLE");
+    EXPECT_EQ(list[1], "VIEW");
+}
