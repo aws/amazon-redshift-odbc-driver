@@ -26,10 +26,10 @@ Amazon Redshift recommends downloading and using the prebuilt driver installer f
 
 If you choose to build from source, please note that the Redshift ODBC driver does not include pre-built binaries or complementary build script for building driver dependencies.
 Building Redshift ODBC driver from source requires pre-built binaries for following dependencies (last tested versions shown):
-* OpenSSL 1.1.1x latest version (requires OpenSSL Premium support)
-* AWS SDK for CPP (1.11.819)
+* AWS-LC (5.1.0) - set `RS_OPENSSL_DIR` to the AWS-LC install directory
+* AWS SDK for CPP (1.11.839)
 * C-ares (1.34.5)
-* GoogleTest (1.17.0)
+* GoogleTest (1.16.0)
 * Curl (Linux only)
 
 ### Prerequisites
