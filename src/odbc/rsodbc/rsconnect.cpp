@@ -2443,6 +2443,9 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
         } else if (_stricmp(pname, RS_ENABLE_TABLE_TYPES) == 0) {
 						bool bVal = convertToBoolVal(pval);
 						pConnectProps->iEnableTableTypes = (bVal) ? 1 : 0;
+        } else if (_stricmp(pname, RS_BOOLS_AS_CHAR) == 0) {
+						bool bVal = convertToBoolVal(pval);
+						pConnectProps->iBoolsAsChar = (bVal) ? 1 : 0;
         } else if (_stricmp(pname, RS_KEEP_ALIVE) == 0) {
           if (pval) {
 							strncpy(pConnectProps->szKeepAlive, pval, MAX_NUMBER_BUF_LEN - 1);
@@ -3365,6 +3368,19 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
                                             RS_ENABLE_TABLE_TYPES, &bVal);
             pConnectProps->iEnableTableTypes = (bVal) ? 1 : 0;
         }
+
+        // Read BoolsAsChar
+        // If user didn't include BoolsAsChar flag in dsn, use default value
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_BOOLS_AS_CHAR,
+                                    "", temp, MAX_IAM_BUF_VAL, ODBC_INI);
+        if (temp[0] != '\0') {
+            bVal = (pConnectProps->iBoolsAsChar == 1);
+            RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN,
+                                            RS_BOOLS_AS_CHAR, &bVal);
+            pConnectProps->iBoolsAsChar = (bVal) ? 1 : 0;
+        }
+        RS_LOG_TRACE("RSCNN", "BoolsAsChar after DSN read: %d (DSN key present: %s)",
+                     pConnectProps->iBoolsAsChar, (temp[0] != '\0') ? "yes" : "no");
 
 	  // Read Application name
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_APPLICATION_NAME, "", pConnAttr->szApplicationName, sizeof(pConnAttr->szApplicationName), ODBC_INI);

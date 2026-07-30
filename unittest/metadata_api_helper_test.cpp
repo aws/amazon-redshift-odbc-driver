@@ -184,9 +184,10 @@ protected:
 
         // Verify data type
         int useUnicode = 1;
+        int boolAsChar = 0;
         short RsSpecialType;
-        short sqlType = mapPgTypeToSqlType(colDataTypes[column_index], &RsSpecialType, useUnicode);
-        short expectedSqlType = mapPgTypeToSqlType(expectedDataTypes[column_index], &RsSpecialType, useUnicode);
+        short sqlType = mapPgTypeToSqlType(colDataTypes[column_index], &RsSpecialType, useUnicode, boolAsChar);
+        short expectedSqlType = mapPgTypeToSqlType(expectedDataTypes[column_index], &RsSpecialType, useUnicode, boolAsChar);
 
         EXPECT_EQ(sqlType, expectedSqlType)
             << "metadata API " << apiName << " Column index: " << column_index
@@ -194,8 +195,8 @@ protected:
             << " (Expect: " << sqlTypeNameMap(expectedSqlType) << ")";
 
         useUnicode = 0;
-        sqlType = mapPgTypeToSqlType(colDataTypes[column_index], &RsSpecialType, useUnicode);
-        expectedSqlType = mapPgTypeToSqlType(expectedDataTypes[column_index], &RsSpecialType, useUnicode);
+        sqlType = mapPgTypeToSqlType(colDataTypes[column_index], &RsSpecialType, useUnicode, boolAsChar);
+        expectedSqlType = mapPgTypeToSqlType(expectedDataTypes[column_index], &RsSpecialType, useUnicode, boolAsChar);
 
         EXPECT_EQ(sqlType, expectedSqlType)
             << "metadata API " << apiName << " Column index: " << column_index
@@ -1402,4 +1403,41 @@ TEST(GeneralizeTableTypeTest, generalized_list_is_table_view) {
     ASSERT_EQ(list.size(), 2u);
     EXPECT_EQ(list[0], "TABLE");
     EXPECT_EQ(list[1], "VIEW");
+}
+
+/*====================================================================================================================================================*/
+// processDataTypeInfo tests for BoolsAsChar
+/*====================================================================================================================================================*/
+
+TEST(ProcessDataTypeInfoBoolsAsChar, bool_with_boolAsChar_enabled_returns_varchar) {
+    std::string dataType = "boolean";
+    ProcessedTypeInfo result = RsMetadataAPIHelper::processDataTypeInfo(dataType, SQL_OV_ODBC3, 0, 1);
+    ASSERT_TRUE(result.typeInfoResult.found);
+    EXPECT_EQ(result.typeInfoResult.typeInfo.sqlType, SQL_VARCHAR);
+    EXPECT_EQ(result.typeInfoResult.typeInfo.sqlDataType, SQL_VARCHAR);
+    EXPECT_EQ(result.typeInfoResult.typeInfo.typeName, "bool");
+}
+
+TEST(ProcessDataTypeInfoBoolsAsChar, bool_with_boolAsChar_disabled_returns_bit) {
+    std::string dataType = "boolean";
+    ProcessedTypeInfo result = RsMetadataAPIHelper::processDataTypeInfo(dataType, SQL_OV_ODBC3, 0, 0);
+    ASSERT_TRUE(result.typeInfoResult.found);
+    EXPECT_EQ(result.typeInfoResult.typeInfo.sqlType, SQL_BIT);
+    EXPECT_EQ(result.typeInfoResult.typeInfo.sqlDataType, SQL_BIT);
+}
+
+TEST(ProcessDataTypeInfoBoolsAsChar, bool_with_boolAsChar_and_useUnicode_returns_wvarchar) {
+    std::string dataType = "boolean";
+    ProcessedTypeInfo result = RsMetadataAPIHelper::processDataTypeInfo(dataType, SQL_OV_ODBC3, 1, 1);
+    ASSERT_TRUE(result.typeInfoResult.found);
+    EXPECT_EQ(result.typeInfoResult.typeInfo.sqlType, SQL_WVARCHAR);
+    EXPECT_EQ(result.typeInfoResult.typeInfo.sqlDataType, SQL_WVARCHAR);
+    EXPECT_EQ(result.typeInfoResult.typeInfo.typeName, "bool");
+}
+
+TEST(ProcessDataTypeInfoBoolsAsChar, non_bool_type_unaffected_by_boolAsChar) {
+    std::string dataType = "integer";
+    ProcessedTypeInfo result = RsMetadataAPIHelper::processDataTypeInfo(dataType, SQL_OV_ODBC3, 0, 1);
+    ASSERT_TRUE(result.typeInfoResult.found);
+    EXPECT_EQ(result.typeInfoResult.typeInfo.sqlType, SQL_INTEGER);
 }

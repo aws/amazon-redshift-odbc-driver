@@ -1138,6 +1138,22 @@ struct SHOWPROCEDURESFUNCTIONSResult {
 #define RS_READ_ONLY							"ReadOnly"
 #define RS_USE_UNICODE                          "UseUnicode"
 #define RS_ENABLE_TABLE_TYPES                   "EnableTableTypes"
+#define RS_BOOLS_AS_CHAR                       "BoolsAsChar"
+
+// Helper macros to retrieve BoolsAsChar and UseUnicode options from connection props.
+// Safe to use from both C (.c) and C++ (.cpp) files.
+#define RS_GET_BOOLS_AS_CHAR(pConnectProps) \
+    ((pConnectProps) ? (pConnectProps)->iBoolsAsChar : 0)
+#define RS_GET_USE_UNICODE(pConnectProps) \
+    ((pConnectProps) ? (pConnectProps)->iUseUnicode : 0)
+
+// Retrieve from a statement handle (null-safe through the phdbc chain).
+#define RS_STMT_BOOLS_AS_CHAR(pStmt) \
+    (((pStmt) && (pStmt)->phdbc && (pStmt)->phdbc->pConnectProps) \
+        ? (pStmt)->phdbc->pConnectProps->iBoolsAsChar : 0)
+#define RS_STMT_USE_UNICODE(pStmt) \
+    (((pStmt) && (pStmt)->phdbc && (pStmt)->phdbc->pConnectProps) \
+        ? (pStmt)->phdbc->pConnectProps->iUseUnicode : 0)
 #define RS_CLIENT_PROTOCOL_VERSION              "client_protocol_version"
 #define RS_STRING_TYPE							"StringType"
 #define RS_MAX_VARCHAR_SIZE						"MaxVarcharSize"
@@ -1343,6 +1359,7 @@ public:
 	  iReadOnly = 0;
 	  iUseUnicode = 0;
 	  iEnableTableTypes = 1;
+	  iBoolsAsChar = 0;
 
 	  szKeepAlive[0] = '\0';
 	  szKeepAliveIdle[0] = '\0';
@@ -1513,6 +1530,7 @@ public:
 	int iReadOnly; // Default is 0. 1 means READ ONLY session.
 	int iUseUnicode; // Default is 0. 1 means report wide SQL types for character columns.
 	int iEnableTableTypes; // Default is 1. 0 means generalize table types to TABLE/VIEW.
+	int iBoolsAsChar; // Default is 0. 1 means report BOOLEAN as SQL_VARCHAR instead of SQL_BIT.
 
     char *pConnectStr;                // Rest of connection option store in this one.
     size_t cbConnectStr;
@@ -1840,7 +1858,7 @@ void *
 libpqExecuteDirectOrPreparedThreadProc(void *pArg);
 
 void libpqCloseResult(RS_RESULT_INFO *pResult);
-short mapPgTypeToSqlType(Oid pgType,short *phPaSpecialType, int useUnicode);
+short mapPgTypeToSqlType(Oid pgType,short *phPaSpecialType, int useUnicode, int boolAsChar);
 void applyVarcharPromotion(RS_DESC_REC *pDescRec, RS_CONNECT_PROPS_INFO *pConnectProps);
 char *libpqGetData(RS_RESULT_INFO *pResult, short hCol, int *piLenInd, int *piFormat);
 

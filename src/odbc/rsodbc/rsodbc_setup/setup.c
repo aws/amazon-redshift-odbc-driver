@@ -131,6 +131,7 @@
 #define RS_READ_ONLY							"ReadOnly"
 #define RS_USE_UNICODE							"UseUnicode"
 #define RS_ENABLE_TABLE_TYPES					"EnableTableTypes"
+#define RS_BOOLS_AS_CHAR						"BoolsAsChar"
 
 #define RS_TCP_PROXY_HOST       "ProxyHost"
 #define RS_TCP_PROXY_PORT       "ProxyPort"
@@ -264,6 +265,7 @@
 #define DFLT_READ_ONLY "0"
 #define DFLT_USE_UNICODE "0"
 #define DFLT_ENABLE_TABLE_TYPES "1"
+#define DFLT_BOOL_AS_CHAR "0"
 
 #define DFLT_PROXY_HOST ""
 #define DFLT_PROXY_PORT ""
@@ -303,7 +305,7 @@
  * number of elements in rs_dsn_attrs[]. Increment it by one whenever an attribute
  * is added to rs_dsn_attrs[]. The compile-time check after that table enforces it.
  */
-#define DD_DSN_ATTR_COUNT 110
+#define DD_DSN_ATTR_COUNT 111
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -486,6 +488,7 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 { RS_READ_ONLY, DFLT_READ_ONLY },
 { RS_USE_UNICODE, DFLT_USE_UNICODE },
 { RS_ENABLE_TABLE_TYPES, DFLT_ENABLE_TABLE_TYPES },
+{ RS_BOOLS_AS_CHAR, DFLT_BOOL_AS_CHAR },
 { RS_TCP_PROXY_HOST, DFLT_PROXY_HOST },
 { RS_TCP_PROXY_PORT, DFLT_PROXY_PORT },
 { RS_TCP_PROXY_USER_NAME, DFLT_PROXY_UID },
@@ -630,6 +633,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 { RS_READ_ONLY, RS_READ_ONLY },
 { RS_USE_UNICODE, RS_USE_UNICODE },
 { RS_ENABLE_TABLE_TYPES, RS_ENABLE_TABLE_TYPES },
+{ RS_BOOLS_AS_CHAR, RS_BOOLS_AS_CHAR },
 { RS_TCP_PROXY_HOST, RS_TCP_PROXY_HOST },
 { RS_TCP_PROXY_PORT, RS_TCP_PROXY_PORT },
 { RS_TCP_PROXY_USER_NAME, RS_TCP_PROXY_USER_NAME },
@@ -2256,6 +2260,7 @@ static LRESULT CALLBACK rs_dsn_advanced_sheet(HWND hwndDlg, UINT message, WPARAM
 			CheckDlgButton(hwndDlg, IDC_READ_ONLY, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_READ_ONLY, FALSE));
 			CheckDlgButton(hwndDlg, IDC_USE_UNICODE, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_USE_UNICODE, FALSE));
 			CheckDlgButton(hwndDlg, IDC_ENABLE_TABLE_TYPES, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_ENABLE_TABLE_TYPES, TRUE));
+			CheckDlgButton(hwndDlg, IDC_BOOL_AS_CHAR, rs_dsn_bool_attr_with_default(rs_dsn_setup_ctxt, RS_BOOLS_AS_CHAR, FALSE));
 			SetDlgItemText(hwndDlg, IDC_MAX_VARCHAR_SIZE, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_MAX_VARCHAR_SIZE));
 			SetDlgItemText(hwndDlg, IDC_MAX_LONGVARCHAR_SIZE, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_MAX_LONGVARCHAR_SIZE));
  			// Already read from reg into local cache(rs_dsn_setup_ctxt); and now update the page
@@ -3494,6 +3499,7 @@ rs_dsn_read_advanced_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_READ_ONLY, RS_READ_ONLY);
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_USE_UNICODE, RS_USE_UNICODE);
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_ENABLE_TABLE_TYPES, RS_ENABLE_TABLE_TYPES);
+		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_BOOL_AS_CHAR, RS_BOOLS_AS_CHAR);
 		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_MAX_VARCHAR_SIZE, RS_MAX_VARCHAR_SIZE);
 		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_MAX_LONGVARCHAR_SIZE, RS_MAX_LONGVARCHAR_SIZE);
 		// read from page into local cache

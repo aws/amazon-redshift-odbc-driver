@@ -1433,7 +1433,7 @@ void libpqCloseResult(RS_RESULT_INFO *pResult)
 //---------------------------------------------------------------------------------------------------------igarish
 // Map Pg type to SQL type.
 //
-short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType, int useUnicode)
+short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType, int useUnicode, int boolAsChar)
 {
     short sqlType;
 
@@ -1444,7 +1444,13 @@ short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType, int useUnicode)
     {
         case BOOLOID:
         {
-            sqlType = SQL_BIT;
+            if (boolAsChar) {
+                sqlType = useUnicode ? SQL_WVARCHAR : SQL_VARCHAR;
+                if (phRsSpecialType)
+                    *phRsSpecialType = BOOLOID;
+            } else {
+                sqlType = SQL_BIT;
+            }
             break;
         }
 
@@ -2045,7 +2051,8 @@ SQLRETURN libpqDescribeParams(RS_STMT_INFO *pStmt, RS_PREPARE_INFO *pPrepare, PG
                     pgType = PQparamtype(pgResult, iParam);
 
                     int useUnicode = pConn->pConnectProps ? pConn->pConnectProps->iUseUnicode : 0;
-                    SQLSMALLINT conciseType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode);
+                    // BoolsAsChar is result-set only; don't remap input parameter types.
+                    SQLSMALLINT conciseType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode, 0);
                     syncFieldsFromConciseType(pDescRec, conciseType);
                     pDescRec->iSize = getParamSize(conciseType);
                     pDescRec->hScale = getParamScale(conciseType);
@@ -2192,11 +2199,11 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
         pResult->columnNameIndexMap[pName] = col + 1;
 
         pgType = PQftype(pgResult, col);
-        int useUnicode = (pResult->phstmt && pResult->phstmt->phdbc && pResult->phstmt->phdbc->pConnectProps)
-            ? pResult->phstmt->phdbc->pConnectProps->iUseUnicode : 0;
-        SQLSMALLINT conciseType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode);
-        syncFieldsFromConciseType(pDescRec, conciseType);
+        int useUnicode = RS_GET_USE_UNICODE(pResult->phstmt ? (pResult->phstmt->phdbc ? pResult->phstmt->phdbc->pConnectProps : NULL) : NULL);
+        int boolAsChar = RS_GET_BOOLS_AS_CHAR(pResult->phstmt ? (pResult->phstmt->phdbc ? pResult->phstmt->phdbc->pConnectProps : NULL) : NULL);
+        SQLSMALLINT conciseType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode, boolAsChar);
 
+        syncFieldsFromConciseType(pDescRec, conciseType);
 
         if(iFetchRefCursor && (pgType == REFCURSOROID))
         {
@@ -2237,8 +2244,11 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
 			else
 			if (pgType == GEOGRAPHY)
 				pDescRec->iSize = MAX_GEOGRAPHY_SIZE;
-			else
+            else if (pgType == BOOLOID && boolAsChar) {
+                pDescRec->iSize = 1;
+            } else {
                 pDescRec->iSize = 0; // Unknown
+            }
         }
         else
         {
@@ -3222,9 +3232,9 @@ bool initializeIRDRecord(RS_STMT_INFO *pStmt, RS_RESULT_INFO *pResult,
     copyStrDataSmallLen(pName, SQL_NTS, pDescRec->szName, MAX_IDEN_LEN, NULL, &pStmt->pErrorList);
 
     // Map Data type OID to SQL type
-    int useUnicode = (pStmt->phdbc && pStmt->phdbc->pConnectProps)
-        ? pStmt->phdbc->pConnectProps->iUseUnicode : 0;
-    SQLSMALLINT conciseType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode);
+    int useUnicode = RS_STMT_USE_UNICODE(pStmt);
+    int boolAsChar = RS_STMT_BOOLS_AS_CHAR(pStmt);
+    SQLSMALLINT conciseType = mapPgTypeToSqlType(pgType,&(pDescRec->hRsSpecialType), useUnicode, boolAsChar);
 
     if (conciseType == SQL_UNKNOWN_TYPE) {
         handleIRDInitializationError(pStmt,
@@ -3256,9 +3266,13 @@ void setDescRecAttributes(RS_STMT_INFO *pStmt, RS_DESC_REC *pDescRec,
     }
 
     // Set size and case sensitivity based on Data type OID
+    int boolsAsChar = RS_STMT_BOOLS_AS_CHAR(pStmt);
     if (pgType == INT2OID || pgType == INT4OID || pgType == INT8OID) {
-        pDescRec->iSize = (pgType == INT2OID) ? INT2_LEN : 
+        pDescRec->iSize = (pgType == INT2OID) ? INT2_LEN :
                           (pgType == INT4OID) ? INT4_LEN : INT8_LEN;
+        pDescRec->cCaseSensitive = SQL_FALSE;
+    } else if (pgType == BOOLOID && boolsAsChar) {
+        pDescRec->iSize = 1;
         pDescRec->cCaseSensitive = SQL_FALSE;
     } else {
         // Set size for special column names or use default
@@ -3807,8 +3821,8 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
     SQLINTEGER ODBCVer = pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion;
     RS_LOG_DEBUG("RSLIBPQ", "ODBC spec version: %d", ODBCVer);
 
-    int useUnicode = (pStmt->phdbc && pStmt->phdbc->pConnectProps)
-                         ? pStmt->phdbc->pConnectProps->iUseUnicode : 0;
+    int useUnicode = RS_STMT_USE_UNICODE(pStmt);
+    int boolAsChar = RS_STMT_BOOLS_AS_CHAR(pStmt);
 
     int columnSize = 0, bufferLen = 0, charOctetLen = 0;
     short sqlType = 0, sqlDataType = 0, sqlDateSub = 0, precisions = 0,
@@ -3836,7 +3850,8 @@ SQLRETURN libpqCreateSQLColumnsCustomizedResultSet(
         ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
             dataType,
             ODBCVer,
-            useUnicode
+            useUnicode,
+            boolAsChar
         );
 
         if (processedType.typeInfoResult.found) {
@@ -4214,8 +4229,8 @@ SQLRETURN libpqCreateSQLSpecialColumnsCustomizedResultSet(
     SQLINTEGER ODBCVer = pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion;
     RS_LOG_DEBUG("RSLIBPQ", "ODBC spec version: %d", ODBCVer);
 
-    int useUnicode = (pStmt->phdbc && pStmt->phdbc->pConnectProps)
-                         ? pStmt->phdbc->pConnectProps->iUseUnicode : 0;
+    int useUnicode = RS_STMT_USE_UNICODE(pStmt);
+    int boolAsChar = RS_STMT_BOOLS_AS_CHAR(pStmt);
 
     int columnSize = 0, bufferLen = 0, charOctetLen = 0;
     short sqlType = 0, sqlDataType = 0, sqlDateSub = 0, precisions = 0,
@@ -4239,7 +4254,8 @@ SQLRETURN libpqCreateSQLSpecialColumnsCustomizedResultSet(
         ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
             dataType,
             ODBCVer,
-            useUnicode
+            useUnicode,
+            boolAsChar
         );
 
         if (processedType.typeInfoResult.found) {
@@ -4593,8 +4609,8 @@ SQLRETURN libpqCreateSQLProcedureColumnsCustomizedResultSet(
     SQLINTEGER ODBCVer = pStmt->phdbc->phenv->pEnvAttr->iOdbcVersion;
     RS_LOG_DEBUG("RSLIBPQ", "ODBC spec version: %d", ODBCVer);
 
-    int useUnicode = (pStmt->phdbc && pStmt->phdbc->pConnectProps)
-                         ? pStmt->phdbc->pConnectProps->iUseUnicode : 0;
+    int useUnicode = RS_STMT_USE_UNICODE(pStmt);
+    int boolAsChar = RS_STMT_BOOLS_AS_CHAR(pStmt);
 
     int columnSize = 0, bufferLen = 0, charOctetLen = 0;
     short sqlType = 0, sqlDataType = 0, sqlDateSub = 0, precisions = 0,
@@ -4622,7 +4638,8 @@ SQLRETURN libpqCreateSQLProcedureColumnsCustomizedResultSet(
         ProcessedTypeInfo processedType = RsMetadataAPIHelper::processDataTypeInfo(
             dataType,
             ODBCVer,
-            useUnicode
+            useUnicode,
+            boolAsChar
         );
 
         if (processedType.typeInfoResult.found) {

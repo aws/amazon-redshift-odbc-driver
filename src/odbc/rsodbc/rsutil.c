@@ -2354,6 +2354,17 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
     else
         hType = hCType;
 
+    // BoolsAsChar: Normalize BOOLOID raw data to "1"/"0" so all C-type conversions
+    // work uniformly. hRsSpecialType==BOOLOID is only set when BoolsAsChar is enabled.
+    // Must happen before getRsVal so all paths see normalized data.
+    if (hRsSpecialType == BOOLOID && pColData && iColDataLen > 0) {
+        int boolVal = IS_TEXT_FORMAT(format)
+            ? (pColData[0] == 't' || pColData[0] == 'T' || pColData[0] == '1')
+            : (pColData[0] == 1);
+        pColData = (char *)(boolVal ? "1" : "0");
+        iColDataLen = 1;
+    }
+
     int iConversion =
         getRsVal(pColData, iColDataLen, hSQLType, &rsVal, hType, format,
                     pDescRec, hRsSpecialType, FALSE);
@@ -8580,6 +8591,8 @@ void getTypeName(short hType, char *pBuf, int bufLen, short hRsSpecialType)
         {
             if (hRsSpecialType == SUPER)
                 rs_strncpy(pBuf, "SUPER", bufLen);
+            else if (hRsSpecialType == BOOLOID)
+                rs_strncpy(pBuf, "bool", bufLen);
             else
                 rs_strncpy(pBuf, "CHARACTER VARYING",
                     bufLen);

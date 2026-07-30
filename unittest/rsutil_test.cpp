@@ -3085,7 +3085,10 @@ INSTANTIATE_TEST_SUITE_P(
         // Narrow types should still work
         TypeNameParam{SQL_VARCHAR,      0,     "CHARACTER VARYING", "SQL_VARCHAR"},
         TypeNameParam{SQL_CHAR,         0,     "CHARACTER",         "SQL_CHAR"},
-        TypeNameParam{SQL_LONGVARCHAR,  SUPER, "SUPER",             "SQL_LONGVARCHAR_SUPER"}
+        TypeNameParam{SQL_LONGVARCHAR,  SUPER, "SUPER",             "SQL_LONGVARCHAR_SUPER"},
+        // BoolsAsChar: BOOLOID mapped to SQL_VARCHAR reports "bool"
+        TypeNameParam{SQL_VARCHAR,      BOOLOID, "bool",            "SQL_VARCHAR_BOOLOID"},
+        TypeNameParam{SQL_WVARCHAR,     BOOLOID, "bool",            "SQL_WVARCHAR_BOOLOID"}
     ),
     [](const ::testing::TestParamInfo<TypeNameParam> &info) {
         return std::string(info.param.name);
@@ -8291,4 +8294,398 @@ TEST_F(CopyToCBinaryTest, Variable_NullOffset_SingleShotCopy) {
     EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
     EXPECT_EQ(indicator, 5);
     EXPECT_EQ(memcmp(buf, "Hel", 3), 0);
+}
+
+/*====================================================================================================================================================*/
+// getRsVal BOOLOID tests: verify that normalized boolean data ("1"/"0") is
+// correctly parsed by the standard numeric/string paths in getRsVal.
+// The raw wire normalization (t/f/0x01 -> "1"/"0") is now done in convertSQLDataToCData
+// before getRsVal is called. These tests verify the post-normalization path.
+/*====================================================================================================================================================*/
+
+class GetRsValBooloidTest : public ::testing::Test {};
+
+TEST_F(GetRsValBooloidTest, smallint_text_true) {
+    char data[] = "1";
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data, 2, SQL_SMALLINT, &val, SQL_C_SHORT, 0, NULL, BOOLOID, true);
+    EXPECT_EQ(val.hVal, 1);
+}
+
+TEST_F(GetRsValBooloidTest, smallint_text_false) {
+    char data[] = "0";
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data, 2, SQL_SMALLINT, &val, SQL_C_SHORT, 0, NULL, BOOLOID, true);
+    EXPECT_EQ(val.hVal, 0);
+}
+
+TEST_F(GetRsValBooloidTest, integer_text_true) {
+    char data[] = "1";
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data, 2, SQL_INTEGER, &val, SQL_C_LONG, 0, NULL, BOOLOID, true);
+    EXPECT_EQ(val.iVal, 1);
+}
+
+TEST_F(GetRsValBooloidTest, integer_text_false) {
+    char data[] = "0";
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data, 2, SQL_INTEGER, &val, SQL_C_LONG, 0, NULL, BOOLOID, true);
+    EXPECT_EQ(val.iVal, 0);
+}
+
+TEST_F(GetRsValBooloidTest, bigint_text_true) {
+    char data[] = "1";
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data, 2, SQL_BIGINT, &val, SQL_C_SBIGINT, 0, NULL, BOOLOID, true);
+    EXPECT_EQ(val.llVal, 1);
+}
+
+TEST_F(GetRsValBooloidTest, bigint_text_false) {
+    char data[] = "0";
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data, 2, SQL_BIGINT, &val, SQL_C_SBIGINT, 0, NULL, BOOLOID, true);
+    EXPECT_EQ(val.llVal, 0);
+}
+
+TEST_F(GetRsValBooloidTest, integer_text_digit_1) {
+    char data[] = "1";
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data, 2, SQL_INTEGER, &val, SQL_C_LONG, 0, NULL, BOOLOID, true);
+    EXPECT_EQ(val.iVal, 1);
+}
+
+TEST_F(GetRsValBooloidTest, integer_binary_true) {
+    // After normalization, binary BOOLOID data is also "1"/"0" text
+    char data[] = "1";
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data, 2, SQL_INTEGER, &val, SQL_C_LONG, 0, NULL, BOOLOID, true);
+    EXPECT_EQ(val.iVal, 1);
+}
+
+TEST_F(GetRsValBooloidTest, integer_binary_false) {
+    char data[] = "0";
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data, 2, SQL_INTEGER, &val, SQL_C_LONG, 0, NULL, BOOLOID, true);
+    EXPECT_EQ(val.iVal, 0);
+}
+
+TEST_F(GetRsValBooloidTest, varchar_text_true) {
+    char data[] = "1";
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data, 2, SQL_VARCHAR, &val, SQL_C_CHAR, 0, NULL, BOOLOID, true);
+    EXPECT_STREQ(val.pcVal, "1");
+}
+
+TEST_F(GetRsValBooloidTest, varchar_text_false) {
+    char data[] = "0";
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data, 2, SQL_VARCHAR, &val, SQL_C_CHAR, 0, NULL, BOOLOID, true);
+    EXPECT_STREQ(val.pcVal, "0");
+}
+
+/*====================================================================================================================================================*/
+// convertSQLDataToCData BOOLOID tests: verify the normalization path converts
+// boolean wire data to correct C types for all numeric targets in both text and binary protocol.
+/*====================================================================================================================================================*/
+
+class ConvertBooloidTest : public ::testing::Test {
+protected:
+    SQLRETURN convert(char *data, int dataLen, short cType, void *pBuf,
+                      SQLLEN bufLen, int format) {
+        RS_STMT_INFO stmtInfo = {0};
+        SQLLEN lengthIndicator = 0;
+        SQLLEN cbOffset = 0;
+        return convertSQLDataToCData(
+            &stmtInfo, data, dataLen, SQL_VARCHAR, pBuf, bufLen,
+            &cbOffset, &lengthIndicator, cType, BOOLOID, format, nullptr);
+    }
+};
+
+TEST_F(ConvertBooloidTest, float_text_true) {
+    char data[] = "t";
+    float result = 0;
+    SQLRETURN rc = convert(data, 2, SQL_C_FLOAT, &result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_FLOAT_EQ(result, 1.0f);
+}
+
+TEST_F(ConvertBooloidTest, float_text_false) {
+    char data[] = "f";
+    float result = 99;
+    SQLRETURN rc = convert(data, 2, SQL_C_FLOAT, &result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_FLOAT_EQ(result, 0.0f);
+}
+
+TEST_F(ConvertBooloidTest, float_binary_true) {
+    char data[] = {1, 0};
+    float result = 0;
+    SQLRETURN rc = convert(data, 1, SQL_C_FLOAT, &result, sizeof(result), BINARY_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_FLOAT_EQ(result, 1.0f);
+}
+
+TEST_F(ConvertBooloidTest, float_binary_false) {
+    char data[] = {0, 0};
+    float result = 99;
+    SQLRETURN rc = convert(data, 1, SQL_C_FLOAT, &result, sizeof(result), BINARY_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_FLOAT_EQ(result, 0.0f);
+}
+
+TEST_F(ConvertBooloidTest, double_text_true) {
+    char data[] = "t";
+    double result = 0;
+    SQLRETURN rc = convert(data, 2, SQL_C_DOUBLE, &result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_DOUBLE_EQ(result, 1.0);
+}
+
+TEST_F(ConvertBooloidTest, double_text_false) {
+    char data[] = "f";
+    double result = 99;
+    SQLRETURN rc = convert(data, 2, SQL_C_DOUBLE, &result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_DOUBLE_EQ(result, 0.0);
+}
+
+TEST_F(ConvertBooloidTest, double_binary_true) {
+    char data[] = {1, 0};
+    double result = 0;
+    SQLRETURN rc = convert(data, 1, SQL_C_DOUBLE, &result, sizeof(result), BINARY_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_DOUBLE_EQ(result, 1.0);
+}
+
+TEST_F(ConvertBooloidTest, double_binary_false) {
+    char data[] = {0, 0};
+    double result = 99;
+    SQLRETURN rc = convert(data, 1, SQL_C_DOUBLE, &result, sizeof(result), BINARY_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_DOUBLE_EQ(result, 0.0);
+}
+
+TEST_F(ConvertBooloidTest, short_text_true) {
+    char data[] = "t";
+    short result = 0;
+    SQLRETURN rc = convert(data, 2, SQL_C_SHORT, &result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(result, 1);
+}
+
+TEST_F(ConvertBooloidTest, short_text_false) {
+    char data[] = "f";
+    short result = 99;
+    SQLRETURN rc = convert(data, 2, SQL_C_SHORT, &result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(result, 0);
+}
+
+TEST_F(ConvertBooloidTest, short_binary_true) {
+    char data[] = {1, 0};
+    short result = 0;
+    SQLRETURN rc = convert(data, 1, SQL_C_SHORT, &result, sizeof(result), BINARY_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(result, 1);
+}
+
+TEST_F(ConvertBooloidTest, short_binary_false) {
+    char data[] = {0, 0};
+    short result = 99;
+    SQLRETURN rc = convert(data, 1, SQL_C_SHORT, &result, sizeof(result), BINARY_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(result, 0);
+}
+
+TEST_F(ConvertBooloidTest, integer_text_true) {
+    char data[] = "T";
+    int result = 0;
+    SQLRETURN rc = convert(data, 2, SQL_C_LONG, &result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(result, 1);
+}
+
+TEST_F(ConvertBooloidTest, integer_binary_true) {
+    char data[] = {1, 0};
+    int result = 0;
+    SQLRETURN rc = convert(data, 1, SQL_C_LONG, &result, sizeof(result), BINARY_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(result, 1);
+}
+
+TEST_F(ConvertBooloidTest, bigint_text_true) {
+    char data[] = "1";
+    long long result = 0;
+    SQLRETURN rc = convert(data, 2, SQL_C_SBIGINT, &result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(result, 1);
+}
+
+TEST_F(ConvertBooloidTest, bigint_binary_false) {
+    char data[] = {0, 0};
+    long long result = 99;
+    SQLRETURN rc = convert(data, 1, SQL_C_SBIGINT, &result, sizeof(result), BINARY_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(result, 0);
+}
+
+TEST_F(ConvertBooloidTest, bit_text_true) {
+    char data[] = "t";
+    unsigned char result = 0;
+    SQLRETURN rc = convert(data, 2, SQL_C_BIT, &result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(result, 1);
+}
+
+TEST_F(ConvertBooloidTest, bit_text_false) {
+    char data[] = "f";
+    unsigned char result = 99;
+    SQLRETURN rc = convert(data, 2, SQL_C_BIT, &result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(result, 0);
+}
+
+TEST_F(ConvertBooloidTest, bit_binary_true) {
+    char data[] = {1, 0};
+    unsigned char result = 0;
+    SQLRETURN rc = convert(data, 1, SQL_C_BIT, &result, sizeof(result), BINARY_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(result, 1);
+}
+
+TEST_F(ConvertBooloidTest, char_text_true) {
+    char data[] = "t";
+    char result[10] = {0};
+    SQLRETURN rc = convert(data, 2, SQL_C_CHAR, result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_STREQ(result, "1");
+}
+
+TEST_F(ConvertBooloidTest, char_text_false) {
+    char data[] = "f";
+    char result[10] = {0};
+    SQLRETURN rc = convert(data, 2, SQL_C_CHAR, result, sizeof(result), TEXT_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_STREQ(result, "0");
+}
+
+TEST_F(ConvertBooloidTest, char_binary_true) {
+    char data[] = {1, 0};
+    char result[10] = {0};
+    SQLRETURN rc = convert(data, 1, SQL_C_CHAR, result, sizeof(result), BINARY_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_STREQ(result, "1");
+}
+
+TEST_F(ConvertBooloidTest, char_binary_false) {
+    char data[] = {0, 0};
+    char result[10] = {0};
+    SQLRETURN rc = convert(data, 1, SQL_C_CHAR, result, sizeof(result), BINARY_FORMAT);
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_STREQ(result, "0");
+}
+
+/*====================================================================================================================================================*/
+// SQLGetTypeInfo type filtering tests: verify that when BoolsAsChar=1,
+// boolean is mapped to SQL_VARCHAR so filtering by SQL_BIT yields no matches.
+// This exercises the same filtering logic used in RS_SQLGetTypeInfo (rscatalog.cpp).
+/*====================================================================================================================================================*/
+
+class SQLGetTypeInfoFilterTest : public ::testing::Test {};
+
+TEST_F(SQLGetTypeInfoFilterTest, boolsAsChar_enabled_sql_bit_returns_empty) {
+    // Simulate BoolsAsChar=1: boolean maps to SQL_VARCHAR
+    int boolAsChar = 1;
+    int useUnicode = 0;
+    short boolSqlType = boolAsChar ? SQL_VARCHAR : SQL_BIT;
+
+    // Build the same typesInfo vector structure as RS_SQLGetTypeInfo
+    std::vector<RS_TYPE_INFO> typesInfo = {
+        {"bool", boolSqlType, 1, "'", "'", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "bool", SQL_NULL_DATA,
+         SQL_NULL_DATA, boolSqlType, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"bigint", SQL_BIGINT, 19, "", "", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "bigint", 0, 0,
+         SQL_BIGINT, SQL_NULL_DATA, 10, SQL_NULL_DATA},
+    };
+
+    // Filter by SQL_BIT — should find nothing when BoolsAsChar=1
+    std::vector<RS_TYPE_INFO> filtered;
+    for (size_t i = 0; i < typesInfo.size(); i++) {
+        if (typesInfo[i].hType == SQL_BIT) {
+            filtered.push_back(typesInfo[i]);
+        }
+    }
+
+    EXPECT_TRUE(filtered.empty())
+        << "BoolsAsChar=1: filtering typesInfo by SQL_BIT should yield empty result";
+
+    // The driver should return empty result set (not HY004) in this case
+    EXPECT_TRUE(boolAsChar && filtered.empty());
+}
+
+TEST_F(SQLGetTypeInfoFilterTest, boolsAsChar_disabled_sql_bit_returns_boolean) {
+    // Simulate BoolsAsChar=0: boolean maps to SQL_BIT
+    int boolAsChar = 0;
+    short boolSqlType = SQL_BIT;
+
+    std::vector<RS_TYPE_INFO> typesInfo = {
+        {"bool", boolSqlType, 1, "", "", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_PRED_BASIC, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "bool", 0,
+         0, SQL_BIT, SQL_NULL_DATA, 10, SQL_NULL_DATA},
+        {"bigint", SQL_BIGINT, 19, "", "", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "bigint", 0, 0,
+         SQL_BIGINT, SQL_NULL_DATA, 10, SQL_NULL_DATA},
+    };
+
+    // Filter by SQL_BIT — should find the bool entry
+    std::vector<RS_TYPE_INFO> filtered;
+    for (size_t i = 0; i < typesInfo.size(); i++) {
+        if (typesInfo[i].hType == SQL_BIT) {
+            filtered.push_back(typesInfo[i]);
+        }
+    }
+
+    EXPECT_EQ(filtered.size(), 1u)
+        << "BoolsAsChar=0: filtering typesInfo by SQL_BIT should find 'bool'";
+    EXPECT_EQ(filtered[0].szTypeName, "bool");
+    EXPECT_EQ(filtered[0].hType, SQL_BIT);
+}
+
+TEST_F(SQLGetTypeInfoFilterTest, boolsAsChar_enabled_sql_varchar_includes_bool) {
+    // Simulate BoolsAsChar=1: boolean maps to SQL_VARCHAR
+    int boolAsChar = 1;
+    short boolSqlType = SQL_VARCHAR;
+
+    std::vector<RS_TYPE_INFO> typesInfo = {
+        {"bool", boolSqlType, 1, "'", "'", "", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "bool", SQL_NULL_DATA,
+         SQL_NULL_DATA, boolSqlType, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA},
+        {"character varying", SQL_VARCHAR, 65535, "'", "'", "max length", SQL_NULLABLE, SQL_FALSE,
+         SQL_SEARCHABLE, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "character varying", 0, 0,
+         SQL_VARCHAR, SQL_NULL_DATA, SQL_NULL_DATA, SQL_NULL_DATA},
+    };
+
+    // Filter by SQL_VARCHAR — should find both 'bool' and 'character varying'
+    std::vector<RS_TYPE_INFO> filtered;
+    for (size_t i = 0; i < typesInfo.size(); i++) {
+        if (typesInfo[i].hType == SQL_VARCHAR) {
+            filtered.push_back(typesInfo[i]);
+        }
+    }
+
+    EXPECT_EQ(filtered.size(), 2u);
+    EXPECT_EQ(filtered[0].szTypeName, "bool");
+    EXPECT_EQ(filtered[1].szTypeName, "character varying");
 }

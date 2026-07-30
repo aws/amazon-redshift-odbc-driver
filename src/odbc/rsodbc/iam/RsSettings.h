@@ -49,7 +49,6 @@ struct RsSettings
     bool          m_exposeByteaAsLongVarBinary;
     bool          m_exposeMoneyAsDecimal;
     bool          m_useSingleRowMode;
-    bool          m_exposeBoolAsChar;
     bool          m_useDeclareFetch;
     bool          m_useMultipleStatements;
     bool          m_useSystemTrustStore;

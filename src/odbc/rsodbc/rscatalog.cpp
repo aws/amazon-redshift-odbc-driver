@@ -3134,10 +3134,25 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
     // Clear error list
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
+    int boolAsChar = RS_STMT_BOOLS_AS_CHAR(pStmt);
+    int useUnicode = RS_STMT_USE_UNICODE(pStmt);
+
+    short boolSqlType = boolAsChar ? (useUnicode ? SQL_WVARCHAR : SQL_VARCHAR) : SQL_BIT;
+    int boolColumnSize = 1;
+    // "bool" is PostgreSQL's pg_type.typname for the boolean type.
+    // The name stays the same regardless of BoolsAsChar — only the SQL type mapping changes.
+    std::string boolTypeName = "bool";
+    std::string boolLiteralPrefix = boolAsChar ? "'" : "";
+    std::string boolLiteralSuffix = boolAsChar ? "'" : "";
+    short boolSearchable = boolAsChar ? SQL_SEARCHABLE : SQL_PRED_BASIC;
+    int boolNumPrecRadix = boolAsChar ? SQL_NULL_DATA : 10;
+    short boolMinScale = boolAsChar ? SQL_NULL_DATA : 0;
+    short boolMaxScale = boolAsChar ? SQL_NULL_DATA : 0;
+
     std::vector<RS_TYPE_INFO> typesInfo = {
-        {"boolean", SQL_BIT, 1, "", "", "", SQL_NULLABLE, SQL_FALSE,
-         SQL_PRED_BASIC, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, "boolean", 0,
-         0, SQL_BIT, SQL_NULL_DATA, 10, SQL_NULL_DATA},
+        {boolTypeName, boolSqlType, boolColumnSize, boolLiteralPrefix, boolLiteralSuffix, "", SQL_NULLABLE, SQL_FALSE,
+         boolSearchable, SQL_NULL_DATA, SQL_FALSE, SQL_NULL_DATA, boolTypeName, boolMinScale,
+         boolMaxScale, boolSqlType, SQL_NULL_DATA, boolNumPrecRadix, SQL_NULL_DATA},
         {"bigint", SQL_BIGINT, 19, "", "", "", SQL_NULLABLE, SQL_FALSE,
          SQL_SEARCHABLE, SQL_FALSE, SQL_FALSE, SQL_FALSE, "bigint", 0, 0,
          SQL_BIGINT, SQL_NULL_DATA, 10, SQL_NULL_DATA},
@@ -3239,24 +3254,30 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
         rc = RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
             phstmt, typesInfo);
     } else {
-        int found = false;
-
         std::vector<RS_TYPE_INFO> tempTypeInfo = {};
         for (int i = 0; i < typesInfo.size(); i++) {
             if (typesInfo[i].hType == hType) {
                 tempTypeInfo.emplace_back(typesInfo[i]);
-                found = true;
             }
         }
 
-        if (!found) {
-            rc = SQL_ERROR;
-            addError(&pStmt->pErrorList, "HY004", "Invalid SQL data type", 0,
-                     NULL);
-            return rc;
+        if (tempTypeInfo.empty()) {
+            // When BoolsAsChar remaps boolean away from SQL_BIT, return empty
+            // result set for SQL_BIT (ODBC spec: unsupported type = no rows).
+            // For all other unmatched types, preserve existing SQL_ERROR behavior.
+            if (boolAsChar && hType == SQL_BIT) {
+                rc = RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
+                    phstmt, tempTypeInfo);
+            } else {
+                rc = SQL_ERROR;
+                addError(&pStmt->pErrorList, "HY004", "Invalid SQL data type", 0,
+                         NULL);
+                return rc;
+            }
+        } else {
+            rc = RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
+                phstmt, tempTypeInfo);
         }
-        rc = RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
-            phstmt, tempTypeInfo);
     }
 
     if (!SQL_SUCCEEDED(rc)) {

@@ -10,3 +10,10 @@ TEST(DEFAULT_VALUE_TEST_SUITE, test_DatabaseMetadataCurrentDbOnly) {
     EXPECT_TRUE(obj.iDatabaseMetadataCurrentDbOnly == 1);
 
 }
+
+TEST(DEFAULT_VALUE_TEST_SUITE, test_BoolsAsChar) {
+
+    RS_CONNECT_PROPS_INFO obj;
+    EXPECT_TRUE(obj.iBoolsAsChar == 0);
+
+}
