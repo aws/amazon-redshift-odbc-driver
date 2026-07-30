@@ -1821,6 +1821,7 @@ char *libpqParameterStatus(RS_CONN_INFO *pConn, const char *paramName);
 char *libpqGetNativeSqlState(RS_CONN_INFO *pConn);
 char *libpqErrorMsg(RS_CONN_INFO *pConn);
 int libpqIsTransactionIdle(RS_CONN_INFO *pConn);
+int libpqIsCommandInFlight(RS_CONN_INFO *pConn);
 SQLRETURN libpqExecuteTransactionCommand(RS_CONN_INFO *pConn, char *cmd, int iLockRequired);
 SQLRETURN libpqCancelQuery(RS_STMT_INFO *pStmt);
 

@@ -618,11 +618,16 @@ SQLRETURN  SQL_API SQLCancel(SQLHSTMT phstmt)
     pStmt->pErrorList = clearErrorList(pStmt->pErrorList);
 
     // Determine if statement is actively executing
-    // RS_EXECUTE_STMT: Statement is executed and cursor is opened
-    // pResultHead: the head of result set to determine if query execution is finished
-    // RS_EXECUTE_STMT_NEED_DATA: Statement is waiting for data-at-execution parameters
+    // pExecThread->rc == SQL_STILL_EXECUTING: async thread has not yet completed
+    // libpqIsCommandInFlight: PQtransactionStatus == PQTRANS_ACTIVE, meaning a
+    // command is in-flight on the wire (covers sync execute, sync prepare, and
+    // transaction commands for cross-thread cancel).
+    // pResultHead == NULL: no results available yet (avoids cancelling idle
+    // statements with unconsumed result data).
+    // RS_EXECUTE_STMT_NEED_DATA: waiting for data-at-execution parameters
     if (pStmt &&
-        ((pStmt->iStatus == RS_EXECUTE_STMT && pStmt->pResultHead == NULL) ||
+        ((pStmt->pExecThread != NULL && pStmt->pExecThread->rc == SQL_STILL_EXECUTING) ||
+         (libpqIsCommandInFlight(pStmt->phdbc) && pStmt->pResultHead == NULL) ||
          pStmt->iStatus == RS_EXECUTE_STMT_NEED_DATA)) {
         bWasExecuting = true;
     }

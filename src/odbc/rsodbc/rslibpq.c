@@ -616,6 +616,33 @@ int libpqIsTransactionIdle(RS_CONN_INFO *pConn)
 
 /*====================================================================================================================================================*/
 
+/**
+ * @brief Returns TRUE if a command is actively in-flight on the connection.
+ *
+ * Uses PQtransactionStatus to check PQTRANS_ACTIVE, which libpq sets whenever
+ * a command has been sent and the server has not yet returned all results.
+ * This covers sync execute, sync prepare, async execute, and transaction
+ * commands (BEGIN/COMMIT/ROLLBACK) uniformly.
+ *
+ * Used by SQLCancel to distinguish "command in-flight" from "idle after
+ * SQLMoreResults drained all results" — both states have pResultHead == NULL
+ * but only the former should trigger a server-side cancel.
+ *
+ * @param pConn  Connection info; returns FALSE if NULL or not connected.
+ * @return TRUE if PQTRANS_ACTIVE, FALSE otherwise.
+ */
+int libpqIsCommandInFlight(RS_CONN_INFO *pConn)
+{
+    if (!pConn || !pConn->pgConn)
+        return FALSE;
+
+    PGTransactionStatusType pgTxnStatus = PQtransactionStatus(pConn->pgConn);
+
+    return(pgTxnStatus == PQTRANS_ACTIVE);
+}
+
+/*====================================================================================================================================================*/
+
 //---------------------------------------------------------------------------------------------------------igarish
 // Execute BEGIN, END, COMMIT or ROLLBACK kind of transaction command.
 //
