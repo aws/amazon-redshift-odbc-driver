@@ -257,6 +257,18 @@ if %ERRORLEVEL% neq 0 (
 ) else (
     echo Build completed successfully.
 )
+
+@REM Run the unit tests to gate the build. all_unit_tests is self contained and
+@REM needs no live cluster, so it is safe to run here. A test failure fails the
+@REM build (and therefore the Dry Run Build), catching runtime regressions that
+@REM a compile only step would miss. The ctest exit code is checked inline with
+@REM "|| exit /b 1" so the build stops immediately on a unit test failure.
+if "%ENABLE_TESTING%"=="1" (
+    echo Running unit tests to gate the build...
+    ctest --test-dir "%RS_BUILD_DIR%\unittest" -C %RS_BUILD_TYPE% --output-on-failure || exit /b 1
+    echo Unit tests passed.
+)
+
 @REM "%CMAKE%" --install  %RS_BUILD_DIR% --config %RS_BUILD_TYPE%
 msbuild %RS_BUILD_DIR%\INSTALL.vcxproj /p:Configuration=%RS_BUILD_TYPE% /m  /verbosity:normal
 if %ERRORLEVEL% neq 0 (
