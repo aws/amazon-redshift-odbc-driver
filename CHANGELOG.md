@@ -3,11 +3,10 @@ Changelog
 
 v2.2.1 (2026-07-30)
 ---------------------
-1. Behavior Change: Migrated the driver's TLS implementation from OpenSSL 1.1.x to AWS-LC. Building from source no longer requires OpenSSL Premium support.
-2. Behavior Change: The driver now advertises hybrid post-quantum key exchange groups (X25519MLKEM768 and SecP256r1MLKEM768) in the TLS 1.3 ClientHello by default, offering the classical groups (X25519, P-256, P-384) as a fallback for peers that do not support post-quantum groups. Set the new Prefer_PQ connection option to 0 to advertise only the classical groups.
-3. Added the EnableTableTypes connection option to control how table types are reported. When enabled (the default), the driver reports the detailed types TABLE, VIEW, SYSTEM TABLE, SYSTEM VIEW, EXTERNAL TABLE, and LOCAL TEMPORARY; when set to 0, these are normalized to the generic TABLE and VIEW types.
-4. Added the BoolsAsChar connection option to report BOOLEAN columns as SQL_VARCHAR (or SQL_WVARCHAR when UseUnicode is enabled) instead of SQL_BIT, with the value converted to "1" or "0" at fetch time. Disabled by default, and exposed in the Windows DSN setup dialog as "Show Boolean Column As String". This addresses compatibility with tools such as Power BI that do not handle SQL_BIT correctly over ODBC.
-5. Fixed SQLCancel to stop sending a server-side cancel after a result set had already been fully drained via SQLMoreResults. The stray cancel could be delivered to the next statement on the same connection, surfacing as SQLSTATE 57014.
+1. Migrated the TLS and cryptographic provider from OpenSSL to AWS-LC
+2. Fixed SQLCancel to no-op when result set has already been fully drained via SQLMoreResults
+3. Added EnableTableTypes connection option to generalize SQLTables table types to TABLE/VIEW when disabled
+4. Added BoolsAsChar connection option to report BOOLEAN as SQL_VARCHAR instead of SQL_BIT for BI tool compatibility
 
 v2.2.0 (2026-06-16)
 ---------------------
