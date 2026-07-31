@@ -395,6 +395,9 @@ int ODBCEscapeClauseProcessor::replaceODBCEscapeClause(
         int iScalarFunction = FALSE;
         int iCallEscapeClause = FALSE;
         int iParenthesis = FALSE;
+        // Gates "ym"/"ds" -> YEAR TO MONTH / DAY TO SECOND substitution to
+        // {ivl ...} clauses, leaving those sequences intact elsewhere.
+        int iIntervalClause = FALSE;
         int occupied = (pDest - pDestStart);
         char *pDestBegin = pDest;
 
@@ -444,6 +447,8 @@ int ODBCEscapeClauseProcessor::replaceODBCEscapeClause(
                 iTemp =
                     snprintf(pDest, iDestBufLen - occupied, "%s", "INTERVAL");
                 pDest += iTemp;
+                // Enable "ym"/"ds" qualifier substitution for this clause only.
+                iIntervalClause = TRUE;
             } else if (iTokenLen == strlen("ym") &&
                        _strnicmp(pToken, "ym", iTokenLen) == 0) {
                 iTemp = snprintf(pDest, iDestBufLen - occupied, "%s",
@@ -618,24 +623,38 @@ int ODBCEscapeClauseProcessor::replaceODBCEscapeClause(
                     }
 
                     case 'y': {
-                        if (*(pSrc + 1) == 'm') {
+                        // "ym" -> YEAR TO MONTH, only inside an {ivl ...}
+                        // clause and outside string/quote/comment context.
+                        if (iIntervalClause && !iQuote && !iDoubleQuote &&
+                            !iComment && !iSingleLineComment &&
+                            (srcPos + 1) < (int)cbLen && *(pSrc + 1) == 'm') { // bounds-check before peek
                             iTemp = snprintf(pDest, iDestBufLen - occupied,
                                              "%s", "YEAR TO MONTH");
                             pDest += iTemp;
                             pSrc += 2;
+                            srcPos++; // align srcPos with 2-char advance
                             break;
                         }
-                        // Fallthrough
+                        // Not "ym": copy verbatim. Must not fall through to
+                        // case 'd', which would misread "ys" as "ds".
+                        *pDest++ = *pSrc++;
+                        break;
                     }
                     case 'd': {
-                        if (*(pSrc + 1) == 's') {
+                        // "ds" -> DAY TO SECOND, gated like "ym" above.
+                        if (iIntervalClause && !iQuote && !iDoubleQuote &&
+                            !iComment && !iSingleLineComment &&
+                            (srcPos + 1) < (int)cbLen && *(pSrc + 1) == 's') { // bounds-check before peek
                             iTemp = snprintf(pDest, iDestBufLen - occupied,
                                              "%s", "DAY TO SECOND");
                             pDest += iTemp;
                             pSrc += 2;
+                            srcPos++; // align srcPos with 2-char advance
                             break;
                         }
-                        // Fallthrough
+                        // Not "ds": copy verbatim.
+                        *pDest++ = *pSrc++;
+                        break;
                     }
 
                     default: {

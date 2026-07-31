@@ -2399,3 +2399,186 @@ TEST(LookupIntervalToken, AllTokensReturnNonNull) {
             << "Token '" << token << "' should not map to empty string";
     }
 }
+
+// ---------------------------------------------------------------------------
+// Interval-qualifier substitution ("ym" -> YEAR TO MONTH, "ds" -> DAY TO
+// SECOND) fires only inside an {ivl ...} clause and outside
+// string/quote/comment context. These tests guard that "ym"/"ds" substrings
+// in identifiers or comments within other escape clauses (e.g. {oj ...}) are
+// left intact.
+
+// Regression: schema/table identifier containing "ds" inside {oj ...} must be
+// preserved verbatim (only the {oj} wrapper is stripped).
+TEST(IntervalQualifierGating, OuterJoinPreservesDsInQuotedSchema) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "select * from {oj qadb.\"ads_uacc\".dim_hcp}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_THAT((char *)result, testing::HasSubstr("\"ads_uacc\""))
+        << "Quoted schema name containing 'ds' must not be rewritten";
+    EXPECT_THAT((char *)result,
+                testing::Not(testing::HasSubstr("DAY TO SECOND")))
+        << "'ds' inside an identifier must never become DAY TO SECOND";
+    EXPECT_THAT((char *)result, testing::Not(testing::HasSubstr("{oj")))
+        << "The {oj} wrapper should still be removed";
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Regression: unquoted identifier containing "ds" inside {oj ...}.
+TEST(IntervalQualifierGating, OuterJoinPreservesDsInUnquotedIdentifier) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "select * from {oj dds_uacc.t join maps on dds_uacc.id=maps.id}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_THAT((char *)result, testing::HasSubstr("dds_uacc"))
+        << "Unquoted identifier containing 'ds' must be preserved";
+    EXPECT_THAT((char *)result,
+                testing::Not(testing::HasSubstr("DAY TO SECOND")));
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Regression: identifier containing "ym" inside {oj ...} must be preserved.
+TEST(IntervalQualifierGating, OuterJoinPreservesYmInIdentifier) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "select paymt from {oj payments p left outer join x on p.id=x.id}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_THAT((char *)result, testing::HasSubstr("paymt"))
+        << "Column name containing 'ym' must be preserved";
+    EXPECT_THAT((char *)result, testing::HasSubstr("payments"))
+        << "Table name containing 'ym' must be preserved";
+    EXPECT_THAT((char *)result,
+                testing::Not(testing::HasSubstr("YEAR TO MONTH")));
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Regression: "ds"/"ym" inside a comment within an escape clause must be
+// preserved.
+TEST(IntervalQualifierGating, CommentInsideEscapeClausePreserved) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "select * from {oj a /* holds records */ left outer join b on a.i=b.i}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_THAT((char *)result, testing::HasSubstr("/* holds records */"))
+        << "Comment text containing 'ds' must be preserved verbatim";
+    EXPECT_THAT((char *)result,
+                testing::Not(testing::HasSubstr("DAY TO SECOND")));
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Positive: the legitimate {ivl '...' ds} / {ivl '...' ym} transformation must
+// STILL work after the gating fix.
+TEST(IntervalQualifierGating, IvlDsStillTransforms) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "SELECT {ivl '1 day 1:1:1.11' ds}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_THAT((char *)result, testing::HasSubstr("INTERVAL '1 day 1:1:1.11'"))
+        << "ivl key must become INTERVAL";
+    EXPECT_THAT((char *)result, testing::HasSubstr("DAY TO SECOND"))
+        << "'ds' qualifier inside {ivl ...} must still become DAY TO SECOND";
+    EXPECT_THAT((char *)result, testing::Not(testing::HasSubstr("{ivl")));
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+TEST(IntervalQualifierGating, IvlYmStillTransforms) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "SELECT {ivl '15 months' ym}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_THAT((char *)result, testing::HasSubstr("INTERVAL '15 months'"));
+    EXPECT_THAT((char *)result, testing::HasSubstr("YEAR TO MONTH"))
+        << "'ym' qualifier inside {ivl ...} must still become YEAR TO MONTH";
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Regression: inside an {ivl ...} clause, a 'y' NOT followed by 'm' must not
+// fall through to the 'd' case. With "ys", case 'y' fails the "ym" test and
+// falls through to case 'd', which then checks *(pSrc + 1) == 's' while pSrc
+// still points at 'y' -- so "ys" is wrongly rewritten to DAY TO SECOND.
+TEST(IntervalQualifierGating, IvlYNotFollowedByMDoesNotFallThroughToDs) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "SELECT {ivl '1 day' ys}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_THAT((char *)result, testing::HasSubstr("ys"))
+        << "'ys' is neither 'ym' nor 'ds' and must be copied verbatim";
+    EXPECT_THAT((char *)result, testing::Not(testing::HasSubstr("DAY TO SECOND")))
+        << "case 'y' must not fall through to case 'd' and rewrite 'ys'";
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Regression: the full realistic MSDASQL-shaped query (parameterized + {oj} +
+// schema with 'ds' + inequality) must reach the server with the schema intact.
+TEST(IntervalQualifierGating, RealisticMsdasqlQueryPreservesSchema) {
+    RS_STR_BUF paStrBuf;
+    char input[] =
+        "SELECT distinct hcp_num FROM {oj qadb.\"ads_uacc\".dim_hcp} "
+        "WHERE src_sys_key <> ?";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 1);
+
+    ASSERT_NE(result, nullptr);
+    std::string out((char *)result);
+    EXPECT_THAT(out, testing::HasSubstr("\"ads_uacc\""))
+        << "Schema name must survive intact";
+    EXPECT_THAT(out, testing::Not(testing::HasSubstr("DAY TO SECOND")));
+    EXPECT_THAT(out, testing::HasSubstr("<>"))
+        << "Inequality operator must be preserved";
+    EXPECT_THAT(out, testing::HasSubstr("$1"))
+        << "Parameter marker must still be replaced";
+
+    releasePaStrBuf(&paStrBuf);
+}
+// Regression test: replaceODBCEscapeClause() must not read past the caller-
+// specified input length when matching multi-character qualifiers like "ds".
+// This test supplies a buffer whose closing '}' sits just beyond the specified
+// length; a correct implementation must NOT recognise the "ds}" sequence and
+// must therefore leave the text unchanged.
+TEST(IntervalQualifierGating, DsMatchMustNotReadPastSpecifiedLength) {
+    // Physical buffer: the '}' sits at index 15, one past the specified length.
+    char buf[] = "{ivl '1 day' ds}";
+    const size_t specifiedLen = 15;          // length of "{ivl '1 day' ds" (no '}')
+    ASSERT_EQ(buf[specifiedLen], '}')
+        << "test setup: byte past the specified length must be '}'";
+
+    RS_STR_BUF paStrBuf;
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, buf, specifiedLen, &paStrBuf, /*iReplaceParamMarker=*/0);
+    ASSERT_NE(result, nullptr);
+
+    EXPECT_THAT((char *)result, testing::Not(testing::HasSubstr("DAY TO SECOND")))
+        << "Processor read past cbLen=" << specifiedLen
+        << " and consumed the out-of-range '}'. Output: " << (char *)result;
+
+    releasePaStrBuf(&paStrBuf);
+}
