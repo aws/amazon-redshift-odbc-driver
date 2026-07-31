@@ -516,12 +516,12 @@ void addError(RS_ERROR_INFO **ppErrorList, char *pSqlState, char *pMsg, long nat
     char *pNativeSqlState = libpqGetNativeSqlState(pConn);
 
     if(pNativeSqlState != NULL && *pNativeSqlState != '\0')
-        strncpy(pError->szSqlState,pNativeSqlState,MAX_SQL_STATE_LEN - 1);
+        rs_strncpy_safe(pError->szSqlState,pNativeSqlState,MAX_SQL_STATE_LEN);
     else
     if(pSqlState != NULL)
-        strncpy(pError->szSqlState,pSqlState,MAX_SQL_STATE_LEN - 1);
-
-    pError->szSqlState[MAX_SQL_STATE_LEN - 1] = '\0';
+        rs_strncpy_safe(pError->szSqlState,pSqlState,MAX_SQL_STATE_LEN);
+    else
+        pError->szSqlState[0] = '\0';
 
     if(pMsg != NULL)
     {
@@ -12751,8 +12751,10 @@ RS_DATA_AT_EXEC *appendDataAtExec(RS_DATA_AT_EXEC *pDataAtExec, char *pDataPtr, 
         pDataAtExec->pValue = (char *)rs_malloc(cbLen + lStrLenOrInd + 1);
         if(pDataAtExec->pValue)
         {
-            strncpy(pDataAtExec->pValue, pVal, cbLen);
-            strncpy(pDataAtExec->pValue + cbLen, pDataPtr, lStrLenOrInd);
+            if(pVal && cbLen > 0)
+                memcpy(pDataAtExec->pValue, pVal, cbLen);
+            if(lStrLenOrInd > 0)
+                memcpy(pDataAtExec->pValue + cbLen, pDataPtr, lStrLenOrInd);
             pDataAtExec->cbLen = cbLen + lStrLenOrInd;
             pDataAtExec->pValue[pDataAtExec->cbLen] = '\0';
         }
@@ -14031,10 +14033,14 @@ char *getDriverPath()
     Dl_info info;
     int result = dladdr((void *) getDriverPath, &info);
 
-    if (result)
+    if (result && info.dli_fname)
     {
-        strncpy(moduleName,info.dli_fname,MAX_PATH);
+        if(rs_strncpy_safe(moduleName, info.dli_fname, MAX_PATH) == NULL)
+        {
+            moduleName[0] = '\0';
+        }
     }
+
 #endif
 
     char *lastPathSeparator = strrchr(moduleName, PATH_SEPARATOR_CHAR);
@@ -15638,8 +15644,7 @@ void readCscOptionsForDsnlessConnection(RS_CONNECT_PROPS_INFO *pConnectProps)
 	readOptions = readDriverOptionFromIniFile("CscPath", optionVal, sizeof(optionVal));
     if(readOptions && optionVal[0] != '\0')
     {
-        strncpy(pConnectProps->szCscPath, optionVal,MAX_PATH - 1);
-        pConnectProps->szCscPath[MAX_PATH - 1] = '\0';
+        rs_strncpy_safe(pConnectProps->szCscPath, optionVal, MAX_PATH);
     }
 
 	optionVal[0] = '\0';
