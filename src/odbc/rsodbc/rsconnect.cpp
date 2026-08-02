@@ -2326,9 +2326,17 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
                         : SHORT_NAME_KEYWORD;
                 if (CAN_OVERRIDE_DSN ||
                     pConnectProps->szPassword[0] == '\0') {
+                    // Use the actual size of szPassword (PADB_MAX_PARAMETERS,
+                    // see RS_CONNECT_PROPS_INFO in rsodbc.h) instead of
+                    // MAX_IDEN_LEN, which is intended for identifier fields
+                    // (host/port/DSN/user) and is far smaller than IAM
+                    // temporary passwords returned by get-credentials
+                    // (up to ~2000+ chars). This matches the limit already
+                    // used by the SQLConnect path (RS_SQLConnect, above),
+                    // which does not truncate the same password.
                     strncpy(pConnectProps->szPassword, pval,
-                            MAX_IDEN_LEN - 1);
-                    pConnectProps->szPassword[MAX_IDEN_LEN - 1] = '\0';
+                            sizeof(pConnectProps->szPassword) - 1);
+                    pConnectProps->szPassword[sizeof(pConnectProps->szPassword) - 1] = '\0';
                 }
             } else if (_stricmp(pname, RS_DSN) == 0) {
                 if (CAN_OVERRIDE_DSN || pConnectProps->szDSN[0] == '\0') {
@@ -3209,7 +3217,11 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
             }
 
             if(pConnectProps->szPassword[0] == '\0') {
-              RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_PASSWORD, "", pConnectProps->szPassword, MAX_IDEN_LEN, ODBC_INI);
+              // Use sizeof(szPassword) instead of MAX_IDEN_LEN here too, for
+              // the same reason as the SQLDriverConnect connect-string path
+              // above: MAX_IDEN_LEN is sized for identifiers, not for long
+              // IAM temporary passwords read from a DSN in odbc.ini.
+              RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_PASSWORD, "", pConnectProps->szPassword, sizeof(pConnectProps->szPassword), ODBC_INI);
 #ifdef WIN32
 			  if (pConnectProps->szPassword[0] != '\0')
 			  {
@@ -3224,7 +3236,7 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
 			  }
 #endif
               if(pConnectProps->szPassword[0] == '\0') {
-                RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_PWD, "", pConnectProps->szPassword, MAX_IDEN_LEN, ODBC_INI);
+                RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_PWD, "", pConnectProps->szPassword, sizeof(pConnectProps->szPassword), ODBC_INI);
               }
             }
         }
