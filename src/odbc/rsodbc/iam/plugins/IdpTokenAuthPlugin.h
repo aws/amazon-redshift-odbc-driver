@@ -40,6 +40,9 @@ namespace Redshift
             /// @return true if AWS credentials (AccessKeyID, SecretAccessKey, SessionToken) are provided
             bool IsUsingIdentityEnhancedCredentials() const;
 
+            /// @brief Check if DefaultCredentialsProvider should be used (no explicit creds, no direct token)
+            bool IsUsingDefaultCredentials() const;
+
             /// @brief Get subject token via GetIdentityCenterAuthToken API
             /// @return The subject token obtained from the API
             rs_string GetSubjectToken();
@@ -47,14 +50,22 @@ namespace Redshift
             /// @brief Call GetIdentityCenterAuthToken API for provisioned clusters
             /// @param clusterId The cluster identifier
             /// @param region The AWS region
+            /// @param accessKeyId AWS access key ID
+            /// @param secretAccessKey AWS secret access key
+            /// @param sessionToken AWS session token
             /// @return The subject token from the API response
-            rs_string GetProvisionedAuthToken(const rs_string& clusterId, const rs_string& region);
+            rs_string GetProvisionedAuthToken(const rs_string& clusterId, const rs_string& region,
+                const rs_string& accessKeyId, const rs_string& secretAccessKey, const rs_string& sessionToken);
 
             /// @brief Call GetIdentityCenterAuthToken API for serverless workgroups
             /// @param workgroup The workgroup name
             /// @param region The AWS region
+            /// @param accessKeyId AWS access key ID
+            /// @param secretAccessKey AWS secret access key
+            /// @param sessionToken AWS session token
             /// @return The subject token from the API response
-            rs_string GetServerlessAuthToken(const rs_string& workgroup, const rs_string& region);
+            rs_string GetServerlessAuthToken(const rs_string& workgroup, const rs_string& region,
+                const rs_string& accessKeyId, const rs_string& secretAccessKey, const rs_string& sessionToken);
 
         protected:
             // ============================================================

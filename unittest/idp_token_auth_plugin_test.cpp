@@ -12,7 +12,27 @@
 #include "iam/core/IAMConfiguration.h"
 #include "iam/RsErrorException.h"
 
+#include <cstdlib>
+
 using namespace Redshift::IamSupport;
+
+// Cross-platform environment variable helpers
+namespace {
+    void setEnvVar(const char* name, const char* value) {
+#ifdef _WIN32
+        _putenv_s(name, value);
+#else
+        setenv(name, value, 1);
+#endif
+    }
+    void unsetEnvVar(const char* name) {
+#ifdef _WIN32
+        _putenv_s(name, "");
+#else
+        unsetenv(name);
+#endif
+    }
+}
 
 // Test suite name
 #define IDP_TOKEN_AUTH_TEST_SUITE IdpTokenAuthPluginTest
@@ -1281,4 +1301,210 @@ TEST(IDP_TOKEN_AUTH_TEST_SUITE, ValidateArgumentsMap_IdentityEnhanced_MissingSes
     EXPECT_THROW({
         plugin.GetAuthToken();
     }, RsErrorException);
+}
+
+
+// ============================================================
+// DefaultCredentialsProvider Flow Tests
+//
+// These tests verify the default credentials path validation:
+// - Host is required when using default credentials
+// - Host is required when using explicit IAM credentials
+// - Incomplete credentials from the chain (missing session token) are rejected
+// - Direct token flow bypasses the default credentials path
+// - Conflicting token + IAM params are rejected
+// - Invalid hostname is caught at cluster resolution
+//
+// End-to-end tests (actual API calls with default chain) are covered
+// separately in the integration test suite.
+// ============================================================
+
+// Helper to set/unset env vars safely with RAII
+class EnvVarGuard {
+public:
+    EnvVarGuard(const char* name, const char* value) : m_name(name) {
+        const char* old = getenv(name);
+        m_hadOldValue = (old != nullptr);
+        if (m_hadOldValue) m_oldValue = old;
+        setEnvVar(name, value);
+    }
+    ~EnvVarGuard() {
+        if (m_hadOldValue) setEnvVar(m_name.c_str(), m_oldValue.c_str());
+        else unsetEnvVar(m_name.c_str());
+    }
+private:
+    std::string m_name, m_oldValue;
+    bool m_hadOldValue;
+};
+
+// Test: Default credentials path without Host throws validation error
+TEST(IDP_TOKEN_AUTH_TEST_SUITE, DefaultCredentials_NoHost_ThrowsHostRequiredError) {
+    IAMConfiguration config;
+
+    std::map<rs_string, rs_string> argsMap;
+    IdpTokenAuthPlugin plugin(config, argsMap);
+
+    try {
+        plugin.GetAuthToken();
+        FAIL() << "Expected RsErrorException to be thrown";
+    } catch (const RsErrorException& e) {
+        std::string errorMsg = e.what();
+        EXPECT_NE(errorMsg.find(
+            "IdC authentication failed: Host URL must be provided "
+            "to extract cluster identifier and region for identity-enhanced credentials."),
+            std::string::npos) << "Got: " << errorMsg;
+    }
+}
+
+// Test: Explicit IAM credentials + empty Host throws Host required error
+TEST(IDP_TOKEN_AUTH_TEST_SUITE, ExplicitIam_NoHost_ThrowsHostRequiredError) {
+    IAMConfiguration config;
+    config.SetAccessId("dummy-access-key");
+    config.SetSecretKey("dummy-secret-key");
+    config.SetSessionToken("dummy-session-token");
+    // No Host set
+
+    std::map<rs_string, rs_string> argsMap;
+    IdpTokenAuthPlugin plugin(config, argsMap);
+
+    try {
+        plugin.GetAuthToken();
+        FAIL() << "Expected RsErrorException to be thrown";
+    } catch (const RsErrorException& e) {
+        std::string errorMsg = e.what();
+        EXPECT_NE(errorMsg.find(
+            "IdC authentication failed: Host URL must be provided "
+            "to extract cluster identifier and region for identity-enhanced credentials."),
+            std::string::npos) << "Got: " << errorMsg;
+    }
+}
+
+// Test: Default chain resolves access key + secret but no session token → incomplete error
+// Test: Default chain resolves access key + secret but no session token → error
+// On Linux: SDK returns creds with empty session token → "Incomplete credentials" error
+// On Windows: _putenv_s("AWS_SESSION_TOKEN", "") removes the variable entirely
+//   (rather than setting to empty), so the SDK's EnvironmentCredentialsProvider
+//   skips the env source and falls through to IMDS which times out (~12s).
+//   Both produce "IdC authentication failed" — the connection is rejected either way.
+TEST(IDP_TOKEN_AUTH_TEST_SUITE, DefaultCredentials_MissingSessionToken_ThrowsError) {
+    EnvVarGuard g1("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE");
+    EnvVarGuard g2("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY");
+    EnvVarGuard g3("AWS_SESSION_TOKEN", "");
+    EnvVarGuard g4("AWS_SHARED_CREDENTIALS_FILE", "/dev/null");
+    EnvVarGuard g5("AWS_CONFIG_FILE", "/dev/null");
+    EnvVarGuard g6("AWS_EC2_METADATA_DISABLED", "true");
+    EnvVarGuard g7("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "");
+    EnvVarGuard g8("AWS_CONTAINER_CREDENTIALS_FULL_URI", "");
+    EnvVarGuard g9("AWS_WEB_IDENTITY_TOKEN_FILE", "");
+
+    IAMConfiguration config;
+    config.SetHost("my-cluster.123456789012.us-west-2.redshift.amazonaws.com");
+
+    std::map<rs_string, rs_string> argsMap;
+    IdpTokenAuthPlugin plugin(config, argsMap);
+
+    try {
+        plugin.GetAuthToken();
+        FAIL() << "Expected RsErrorException to be thrown";
+    } catch (const RsErrorException& e) {
+        std::string errorMsg = e.what();
+#ifdef _WIN32
+        // On Windows: _putenv_s("AWS_SESSION_TOKEN", "") removes the variable entirely
+        // (rather than setting to empty), so the SDK's EnvironmentCredentialsProvider
+        // skips the env source. The chain either fails with a network error (IMDS timeout)
+        // or resolves partial credentials that fail at the API call.
+        EXPECT_NE(errorMsg.find("IdC authentication failed"),
+            std::string::npos) << "Got: " << errorMsg;
+#else
+        // On Linux/Mac: env var exists with empty value, SDK returns creds with
+        // empty session token, our check catches the incomplete credentials.
+        EXPECT_NE(errorMsg.find("IdC authentication failed: Incomplete credentials resolved from "
+            "the default credentials provider chain."),
+            std::string::npos) << "Got: " << errorMsg;
+#endif
+    }
+}
+
+// Test: Direct token flow does NOT use default credentials
+TEST(IDP_TOKEN_AUTH_TEST_SUITE, DefaultCredentials_NotUsedWhenTokenParamsPresent) {
+    EnvVarGuard g1("AWS_ACCESS_KEY_ID", "SHOULD_NOT_BE_USED");
+    EnvVarGuard g2("AWS_SECRET_ACCESS_KEY", "SHOULD_NOT_BE_USED");
+    EnvVarGuard g3("AWS_SESSION_TOKEN", "SHOULD_NOT_BE_USED");
+
+    IAMConfiguration config;
+    config.SetIdpAuthToken("test-token");
+    config.SetIdpAuthTokenType("ACCESS_TOKEN");
+    config.SetHost("my-cluster.123456789012.us-west-2.redshift.amazonaws.com");
+
+    std::map<rs_string, rs_string> argsMap;
+    IdpTokenAuthPlugin plugin(config, argsMap);
+
+    rs_string token = plugin.GetAuthToken();
+    EXPECT_EQ(token, "test-token");
+}
+
+// Test: Conflicting - complete token + partial IAM throws error
+TEST(IDP_TOKEN_AUTH_TEST_SUITE, Conflict_CompleteTokenWithPartialIam_ThrowsError) {
+    IAMConfiguration config;
+    config.SetIdpAuthToken("test-token");
+    config.SetIdpAuthTokenType("ACCESS_TOKEN");
+    config.SetAccessId("dummy-access-key");
+
+    std::map<rs_string, rs_string> argsMap;
+    IdpTokenAuthPlugin plugin(config, argsMap);
+
+    try {
+        plugin.GetAuthToken();
+        FAIL() << "Expected RsErrorException to be thrown";
+    } catch (const RsErrorException& e) {
+        std::string errorMsg = e.what();
+        EXPECT_NE(errorMsg.find(
+            "IdC authentication failed: Cannot provide both token parameters "
+            "(token, token_type) and IAM credential parameters (AccessKeyID, SecretAccessKey, SessionToken) "
+            "at the same time. Please use only one authentication method."),
+            std::string::npos) << "Got: " << errorMsg;
+    }
+}
+
+// Test: Conflicting - partial token + partial IAM throws error
+TEST(IDP_TOKEN_AUTH_TEST_SUITE, Conflict_PartialTokenWithPartialIam_ThrowsError) {
+    IAMConfiguration config;
+    config.SetIdpAuthToken("test-token");
+    config.SetAccessId("dummy-access-key");
+
+    std::map<rs_string, rs_string> argsMap;
+    IdpTokenAuthPlugin plugin(config, argsMap);
+
+    try {
+        plugin.GetAuthToken();
+        FAIL() << "Expected RsErrorException to be thrown";
+    } catch (const RsErrorException& e) {
+        std::string errorMsg = e.what();
+        EXPECT_NE(errorMsg.find(
+            "IdC authentication failed: Cannot provide both token parameters "
+            "(token, token_type) and IAM credential parameters (AccessKeyID, SecretAccessKey, SessionToken) "
+            "at the same time. Please use only one authentication method."),
+            std::string::npos) << "Got: " << errorMsg;
+    }
+}
+
+// Test: Default credentials with invalid hostname fails at cluster resolution
+TEST(IDP_TOKEN_AUTH_TEST_SUITE, DefaultCredentials_InvalidHostname_ThrowsClusterResolutionError) {
+    IAMConfiguration config;
+    config.SetHost("invalid-hostname.example.com");
+
+    std::map<rs_string, rs_string> argsMap;
+    IdpTokenAuthPlugin plugin(config, argsMap);
+
+    try {
+        plugin.GetAuthToken();
+        FAIL() << "Expected RsErrorException to be thrown";
+    } catch (const RsErrorException& e) {
+        std::string errorMsg = e.what();
+        EXPECT_NE(errorMsg.find(
+            "IdC authentication failed: Cluster identifier must be provided via "
+            "ClusterId connection parameter or resolvable from hostname. "
+            "Expected hostname format: cluster.account.region.redshift.amazonaws.com"),
+            std::string::npos) << "Got: " << errorMsg;
+    }
 }

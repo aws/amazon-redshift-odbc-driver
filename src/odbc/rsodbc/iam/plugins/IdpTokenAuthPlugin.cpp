@@ -6,6 +6,7 @@
 #include <aws/redshift-serverless/RedshiftServerlessClient.h>
 #include <aws/redshift-serverless/model/GetIdentityCenterAuthTokenRequest.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
+#include <aws/core/auth/AWSCredentialsProviderChain.h>
 
 using namespace Redshift::IamSupport;
 
@@ -24,13 +25,26 @@ IdpTokenAuthPlugin::~IdpTokenAuthPlugin() {
 rs_string IdpTokenAuthPlugin::GetAuthToken() {
     RS_LOG_DEBUG("IAMIDP", "IdpTokenAuthPlugin::GetAuthToken");
     
+    // Clear plugin-injected token_type from any previous invocation so that
+    // validation and flow-selection logic see only user-supplied params.
+    // Only erase if the user did not originally provide token_type.
+    if (IAMUtils::rs_trim(m_config.GetIdpAuthTokenType()).empty()) {
+        m_argsMap.erase(KEY_IDP_AUTH_TOKEN_TYPE);
+    }
+
     // Step 1: Validate the arguments map to ensure proper parameters are provided
     ValidateArgumentsMap();
     
     // Step 2: Determine which authentication flow to use
-    if (IsUsingIdentityEnhancedCredentials()) {
-        // Identity-enhanced credentials flow: exchange AWS credentials for subject token
-        RS_LOG_DEBUG("IAMIDP", "Using identity-enhanced credentials flow");
+    // Three valid flows:
+    //   1. Identity-enhanced credentials (all 3 explicit AWS creds provided)
+    //   2. DefaultCredentialsProvider (no explicit creds, no direct token — added for
+    //      DefaultCredentialsProvider support)
+    //   3. Direct token flow (token and token_type provided)
+    if (IsUsingIdentityEnhancedCredentials() || IsUsingDefaultCredentials()) {
+        // Exchange AWS credentials for a subject token via GetIdentityCenterAuthToken API.
+        // Credentials come from either explicit params or DefaultAWSCredentialsProviderChain.
+        RS_LOG_DEBUG("IAMIDP", "Using IdC token exchange flow (GetIdentityCenterAuthToken)");
         return GetSubjectToken();
     }
     
@@ -73,53 +87,88 @@ bool IdpTokenAuthPlugin::IsUsingIdentityEnhancedCredentials() const {
     return !m_accessKeyId.empty() && !m_secretAccessKey.empty() && !m_sessionToken.empty();
 }
 
+/**
+ * Check if this plugin should use DefaultCredentialsProvider.
+ * Returns true only when no explicit IAM credentials AND no direct token params are provided.
+ * If any credential or token parameter is set (even partially), returns false.
+ * Added for DefaultCredentialsProvider support.
+ * @return true if no credential parameters are provided and default chain should be used
+ */
+bool IdpTokenAuthPlugin::IsUsingDefaultCredentials() const {
+    return m_argsMap.count(KEY_IDP_AUTH_TOKEN) == 0 &&
+           m_argsMap.count(KEY_IDP_AUTH_TOKEN_TYPE) == 0 &&
+           m_accessKeyId.empty() &&
+           m_secretAccessKey.empty() &&
+           m_sessionToken.empty();
+}
+
+/**
+ * Validates parameter combinations. There are three valid states:
+ * 1. token and token_type (direct token flow)
+ * 2. All three IAM credentials (identity-enhanced flow with explicit creds)
+ * 3. No credential parameters at all (DefaultCredentialsProvider fallback)
+ *
+ * This validation logic:
+ * - Any mix of token params + IAM params → conflict error
+ * - Partial IAM credentials (1 or 2 of 3) → incomplete error (NOT fallback)
+ * - Partial token params (token without token_type or vice versa) → incomplete error
+ * - For credential-based flows (explicit or default chain), Host is required
+ */
 void IdpTokenAuthPlugin::ValidateArgumentsMap() {
     RS_LOG_DEBUG("IAMIDP", "IdpTokenAuthPlugin::ValidateArgumentsMap");
 
-    // Check if direct token flow parameters are provided
-    bool hasDirectToken = m_argsMap.count(KEY_IDP_AUTH_TOKEN) > 0 ||
-                          m_argsMap.count(KEY_IDP_AUTH_TOKEN_TYPE) > 0;
-    
-    // Check if identity-enhanced credentials flow parameters are provided
-    bool hasIdentityEnhanced = IsUsingIdentityEnhancedCredentials();
+    bool hasAllTokenParams = m_argsMap.count(KEY_IDP_AUTH_TOKEN) > 0 &&
+                             m_argsMap.count(KEY_IDP_AUTH_TOKEN_TYPE) > 0;
+    bool hasAllIamParams = IsUsingIdentityEnhancedCredentials();
+    bool hasAnyIamParam = !m_accessKeyId.empty() ||
+                          !m_secretAccessKey.empty() ||
+                          !m_sessionToken.empty();
+    bool hasAnyTokenParam = m_argsMap.count(KEY_IDP_AUTH_TOKEN) > 0 ||
+                            m_argsMap.count(KEY_IDP_AUTH_TOKEN_TYPE) > 0;
 
-    // Check for conflicting parameters - both flows cannot be used simultaneously
-    if (hasDirectToken && hasIdentityEnhanced) {
+    // Reject conflicting auth methods — any mix of token and IAM params
+    if (hasAnyTokenParam && hasAnyIamParam) {
         RS_LOG_ERROR("IAMIDP", 
-            "IdC authentication failed: conflicting parameters - both direct token and identity-enhanced credentials provided");
+            "IdC authentication failed: conflicting parameters - both token and IAM credential parameters provided");
         IAMUtils::ThrowConnectionExceptionWithInfo(
-            "IdC authentication failed: Cannot provide both direct token parameters "
-            "(token, token_type) and identity-enhanced credentials "
-            "(AccessKeyID, SecretAccessKey, SessionToken).");
+            "IdC authentication failed: Cannot provide both token parameters "
+            "(token, token_type) and IAM credential parameters (AccessKeyID, SecretAccessKey, SessionToken) "
+            "at the same time. Please use only one authentication method.");
     }
 
-    if (!hasDirectToken && !hasIdentityEnhanced){
-        RS_LOG_ERROR("IAMIDP", 
-            "IdC authentication failed: neither direct token or identity-enhanced credentials provided");
+    // Reject partial IAM credentials
+    if (hasAnyIamParam && !hasAllIamParams) {
+        RS_LOG_ERROR("IAMIDP",
+            "IdC authentication failed: partial IAM credentials provided");
         IAMUtils::ThrowConnectionExceptionWithInfo(
-            "IdC authentication failed: Must provide either direct token parameters "
-            "(token, token_type) or identity-enhanced credentials "
-            "(AccessKeyID, SecretAccessKey, SessionToken).");
+            "IdC authentication failed: Incomplete IAM credentials. "
+            "When providing explicit credentials, all three parameters "
+            "(AccessKeyID, SecretAccessKey, SessionToken) must be specified together.");
     }
 
-    // Validate direct token flow
-    if (hasDirectToken) {
-        if (!m_argsMap.count(KEY_IDP_AUTH_TOKEN)) {
-            RS_LOG_ERROR("IAMIDP",
-                "IdC authentication failed: token needs to be provided in connection params");
-            IAMUtils::ThrowConnectionExceptionWithInfo(
-                "IdC authentication failed: The token must be included in the "
-                "connection parameters.");
-        }
-        if (!m_argsMap.count(KEY_IDP_AUTH_TOKEN_TYPE)) {
-            RS_LOG_ERROR("IAMIDP",
-                "IdC authentication failed: token type needs to be provided in connection params");
-            IAMUtils::ThrowConnectionExceptionWithInfo(
-                "IdC authentication failed: The token type must be included in the "
-                "connection parameters.");
-        }
+    // Reject partial token params
+    if (hasAnyTokenParam && !hasAllTokenParams) {
+        RS_LOG_ERROR("IAMIDP",
+            "IdC authentication failed: partial token parameters provided");
+        IAMUtils::ThrowConnectionExceptionWithInfo(
+            "IdC authentication failed: Incomplete token credentials. "
+            "When providing token parameters, both token and token_type must be specified together.");
     }
 
+    // For credential-based flows (explicit IAM or default chain), require Host.
+    // Reaching here means: hasAllTokenParams=true (direct token flow, no Host needed),
+    // OR hasAllIamParams=true (all 3 IAM creds provided), OR neither token nor IAM params
+    // are set (DefaultCredentialsProvider fallback). The latter two need Host.
+    if (!hasAllTokenParams) {
+        const rs_string host = m_config.GetHost();
+        if (host.empty()) {
+            RS_LOG_ERROR("IAMIDP",
+                "IdC authentication failed: Host is required to resolve cluster information");
+            IAMUtils::ThrowConnectionExceptionWithInfo(
+                "IdC authentication failed: Host URL must be provided "
+                "to extract cluster identifier and region for identity-enhanced credentials.");
+        }
+    }
 }
 
 // ============================================================
@@ -328,19 +377,21 @@ Aws::Client::ClientConfiguration IdpTokenAuthPlugin::CreateClientConfiguration(c
 // GetIdentityCenterAuthToken API Calls
 // ============================================================
 
-rs_string IdpTokenAuthPlugin::GetProvisionedAuthToken(const rs_string& clusterId, const rs_string& region) {
+rs_string IdpTokenAuthPlugin::GetProvisionedAuthToken(const rs_string& clusterId, const rs_string& region,
+    const rs_string& accessKeyId, const rs_string& secretAccessKey, const rs_string& sessionToken) {
     RS_LOG_DEBUG("IAMIDP", "IdpTokenAuthPlugin::GetProvisionedAuthToken for cluster: %s, region: %s",
         clusterId.c_str(), region.c_str());
     
     // Create client configuration using the helper method
     Aws::Client::ClientConfiguration config = CreateClientConfiguration(region);
     
-    // Create credentials provider with the user-provided AWS credentials
+    // Create credentials provider with AWS credentials
+    // (explicit or resolved from DefaultCredentialsProviderChain)
     // This follows the same pattern as RsIamClient::SendClusterCredentialsRequest
     auto credentialsProvider = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-        m_accessKeyId,
-        m_secretAccessKey,
-        m_sessionToken);
+        accessKeyId,
+        secretAccessKey,
+        sessionToken);
     
     // Create Redshift client with credentials provider and config
     Aws::Redshift::RedshiftClient client(credentialsProvider, config);
@@ -387,19 +438,21 @@ rs_string IdpTokenAuthPlugin::GetProvisionedAuthToken(const rs_string& clusterId
 }
 
 
-rs_string IdpTokenAuthPlugin::GetServerlessAuthToken(const rs_string& workgroup, const rs_string& region) {
+rs_string IdpTokenAuthPlugin::GetServerlessAuthToken(const rs_string& workgroup, const rs_string& region,
+    const rs_string& accessKeyId, const rs_string& secretAccessKey, const rs_string& sessionToken) {
     RS_LOG_DEBUG("IAMIDP", "IdpTokenAuthPlugin::GetServerlessAuthToken for workgroup: %s, region: %s",
         workgroup.c_str(), region.c_str());
     
     // Create client configuration using the helper method
     Aws::Client::ClientConfiguration config = CreateClientConfiguration(region);
     
-    // Create credentials provider with the user-provided AWS credentials
+    // Create credentials provider with AWS credentials
+    // (explicit or resolved from DefaultCredentialsProviderChain)
     // This follows the same pattern as RsIamClient::SendCredentialsRequest
     auto credentialsProvider = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
-        m_accessKeyId,
-        m_secretAccessKey,
-        m_sessionToken);
+        accessKeyId,
+        secretAccessKey,
+        sessionToken);
     
     // Create Redshift Serverless client with credentials provider and config
     Aws::RedshiftServerless::RedshiftServerlessClient client(credentialsProvider, config);
@@ -452,22 +505,63 @@ rs_string IdpTokenAuthPlugin::GetServerlessAuthToken(const rs_string& workgroup,
 rs_string IdpTokenAuthPlugin::GetSubjectToken() {    
     // Resolve cluster/workgroup information from hostname or explicit parameters
     ResolveClusterInfo();
-    
+
+    // Resolve credentials into local variables.
+    rs_string accessKey = m_accessKeyId;
+    rs_string secretKey = m_secretAccessKey;
+    rs_string sessionTok = m_sessionToken;
+
+    if (IsUsingDefaultCredentials()) {
+        RS_LOG_DEBUG("IAMIDP", "Using DefaultCredentialsProvider for GetIdentityCenterAuthToken");
+        Aws::Auth::DefaultAWSCredentialsProviderChain defaultCredentialsChain;
+
+        try {
+            auto creds = defaultCredentialsChain.GetAWSCredentials();
+            accessKey = creds.GetAWSAccessKeyId();
+            secretKey = creds.GetAWSSecretKey();
+            sessionTok = creds.GetSessionToken();
+        } catch (const std::exception& e) {
+            RS_LOG_ERROR("IAMIDP", "DefaultCredentialsProvider threw exception: %s", e.what());
+            IAMUtils::ThrowConnectionExceptionWithInfo(
+                "IdC authentication failed: DefaultCredentialsProvider threw an exception: "
+                + rs_string(e.what()));
+        }
+
+        // All three credential components are required, matching the explicit path policy.
+        // Long-term IAM user credentials (no session token) lack the identity context
+        // needed for GetIdentityCenterAuthToken and would fail at the API level anyway.
+        if (accessKey.empty() || secretKey.empty() || sessionTok.empty()) {
+            RS_LOG_ERROR("IAMIDP",
+                "DefaultCredentialsProvider resolved incomplete credentials. "
+                "Ensure AWS credentials (including session token) are available via "
+                "environment variables, config files, or instance metadata.");
+            IAMUtils::ThrowConnectionExceptionWithInfo(
+                "IdC authentication failed: Incomplete credentials resolved from "
+                "the default credentials provider chain. Ensure AWS_ACCESS_KEY_ID, "
+                "AWS_SECRET_ACCESS_KEY, and AWS_SESSION_TOKEN are set, "
+                "or that the instance has an IAM role attached.");
+        }
+
+        RS_LOG_DEBUG("IAMIDP", "Successfully resolved credentials from default chain");
+    } else {
+        RS_LOG_DEBUG("IAMIDP", "Using explicit IAM credentials for GetIdentityCenterAuthToken");
+    }
+
     rs_string subjectToken;
     
     // Call the appropriate API based on cluster type (serverless vs provisioned)
     if (m_isServerless) {
         RS_LOG_DEBUG("IAMIDP", "Calling serverless GetIdentityCenterAuthToken for workgroup: %s, region: %s",
             m_resolvedWorkgroup.c_str(), m_resolvedRegion.c_str());
-        subjectToken = GetServerlessAuthToken(m_resolvedWorkgroup, m_resolvedRegion);
+        subjectToken = GetServerlessAuthToken(m_resolvedWorkgroup, m_resolvedRegion, accessKey, secretKey, sessionTok);
     } else {
         RS_LOG_DEBUG("IAMIDP", "Calling provisioned GetIdentityCenterAuthToken for cluster: %s, region: %s",
             m_resolvedClusterId.c_str(), m_resolvedRegion.c_str());
-        subjectToken = GetProvisionedAuthToken(m_resolvedClusterId, m_resolvedRegion);
+        subjectToken = GetProvisionedAuthToken(m_resolvedClusterId, m_resolvedRegion, accessKey, secretKey, sessionTok);
     }
     
     // Set token_type to "SUBJECT_TOKEN" in m_argsMap for identity-enhanced flow
-    // This is required per Requirement 6.1: identity-enhanced credentials flow SHALL set token_type to "SUBJECT_TOKEN"
+    // The IdC token exchange always produces a SUBJECT_TOKEN type regardless of credential source.
     m_argsMap[KEY_IDP_AUTH_TOKEN_TYPE] = "SUBJECT_TOKEN";
     RS_LOG_DEBUG("IAMIDP", "Set token_type to SUBJECT_TOKEN for identity-enhanced credentials flow");
     
