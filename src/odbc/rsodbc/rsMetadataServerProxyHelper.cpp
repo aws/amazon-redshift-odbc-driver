@@ -663,7 +663,12 @@ namespace RsMetadataServerProxyHelpers {
                 cur.column_default = extractStringField(buf_column_default, sizeof(buf_column_default), len_column_default, RsMetadataAPIHelper::kSHOW_COLUMNS_column_default);
                 cur.is_nullable = extractStringField(buf_is_nullable, sizeof(buf_is_nullable), len_is_nullable, RsMetadataAPIHelper::kSHOW_COLUMNS_is_nullable);
                 cur.data_type = extractStringField(buf_data_type, sizeof(buf_data_type), len_data_type, RsMetadataAPIHelper::kSHOW_COLUMNS_data_type);
-                cur.character_maximum_length = character_maximum_length_Len == SQL_NULL_DATA ? 0 : character_maximum_length;
+                // text carries no length modifier; resolve the driver
+                // supplied size here so every consumer of this row reports
+                // the same value.
+                cur.character_maximum_length = RsMetadataAPIHelper::resolveTextCharMaxLength(
+                    cur.data_type.value_or(""),
+                    character_maximum_length_Len == SQL_NULL_DATA ? 0 : character_maximum_length);
                 cur.character_maximum_length_Len = character_maximum_length_Len;
                 cur.numeric_precision = numeric_precision_Len == SQL_NULL_DATA ? 0 : numeric_precision;
                 cur.numeric_precision_Len = numeric_precision_Len;
@@ -1366,7 +1371,12 @@ namespace RsMetadataServerProxyHelpers {
                 cur.ordinal_position = ordinal_position_Len == SQL_NULL_DATA ? 0 : ordinal_position;
                 cur.ordinal_position_Len = ordinal_position_Len;
                 cur.data_type = extractStringField(buf_data_type, sizeof(buf_data_type), len_data_type, RsMetadataAPIHelper::kSHOW_PARAMETERS_data_type);
-                cur.character_maximum_length = character_maximum_length_Len == SQL_NULL_DATA ? 0 : character_maximum_length;
+                // text carries no length modifier; resolve the driver
+                // supplied size here so every consumer of this row reports
+                // the same value.
+                cur.character_maximum_length = RsMetadataAPIHelper::resolveTextCharMaxLength(
+                    cur.data_type.value_or(""),
+                    character_maximum_length_Len == SQL_NULL_DATA ? 0 : character_maximum_length);
                 cur.character_maximum_length_Len = character_maximum_length_Len;
                 cur.numeric_precision = numeric_precision_Len == SQL_NULL_DATA ? 0 : numeric_precision;
                 cur.numeric_precision_Len = numeric_precision_Len;

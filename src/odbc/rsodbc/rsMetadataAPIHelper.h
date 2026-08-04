@@ -206,6 +206,10 @@
 
 #define kUnknownColumnSize 2147483647
 
+// Reported size for a server text column, per the documented Redshift
+// TEXT to VARCHAR(256) conversion.
+#define kTextColumnSize 256
+
 #define kODBC2DiffColumnNum 14
 
 /*----------------
@@ -662,6 +666,28 @@ class RsMetadataAPIHelper {
     static int getColumnSize(const std::string &rsType,
                              int character_maximum_length,
                              short numeric_precision);
+
+    /* ----------------
+     * resolveTextCharMaxLength
+     *
+     * helper function to resolve the effective character maximum length for
+     * a column. A server text column carries no length modifier, so the
+     * documented Redshift TEXT to VARCHAR(256) conversion size is used in
+     * place of the missing length. All other types keep the server reported
+     * length unchanged.
+     *
+     * Parameters:
+     *   dataType (const std::string &): server reported data type name,
+     *      normalized to lowercase
+     *   character_maximum_length (int): char max length received from SHOW
+     *      COLUMNS
+     *
+     * Return:
+     *   effective character maximum length (int)
+     * ----------------
+     */
+    static int resolveTextCharMaxLength(const std::string &dataType,
+                                        int character_maximum_length);
 
     /* ----------------
      * getBufferLen

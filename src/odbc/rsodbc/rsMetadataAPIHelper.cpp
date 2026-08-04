@@ -620,6 +620,11 @@ const std::unordered_map<std::string, DATA_TYPE_INFO>
         {"\"char\"", {SQL_CHAR, SQL_CHAR, kNotApplicable, "char"}},
         {"bpchar", {SQL_CHAR, SQL_CHAR, kNotApplicable, "char"}},
         {"varchar", {SQL_VARCHAR, SQL_VARCHAR, kNotApplicable, "varchar"}},
+        // text carries no length modifier; it is reported as varchar sized
+        // at kTextColumnSize, matching the documented Redshift TEXT to
+        // VARCHAR(256) conversion. Retained as defense in depth once the
+        // server types these columns as varchar directly.
+        {"text", {SQL_VARCHAR, SQL_VARCHAR, kNotApplicable, "varchar"}},
         {"smallint", {SQL_SMALLINT, SQL_SMALLINT, kNotApplicable, "int2"}},
         {"integer", {SQL_INTEGER, SQL_INTEGER, kNotApplicable, "int4"}},
         {"bigint", {SQL_BIGINT, SQL_BIGINT, kNotApplicable, "int8"}},
@@ -879,6 +884,18 @@ const std::unordered_set<std::string> RsMetadataAPIHelper::charOctetLenSet = {
     "char", "varchar", "string",   // "string" is a Glue character type alias
     "varbyte", "binary",           // "binary" is a Glue type equivalent to native "varbyte"
     "geography", "hllsketch"};
+
+//
+// A text column carries no length modifier; substitute the documented
+// Redshift TEXT to VARCHAR(256) conversion size for the missing length.
+//
+int RsMetadataAPIHelper::resolveTextCharMaxLength(const std::string &dataType,
+                                                  int character_maximum_length) {
+    if (dataType == "text" && character_maximum_length <= 0) {
+        return kTextColumnSize;
+    }
+    return character_maximum_length;
+}
 
 //
 // Helper function to get column size by Redshift type name

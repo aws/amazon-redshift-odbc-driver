@@ -1441,3 +1441,57 @@ TEST(ProcessDataTypeInfoBoolsAsChar, non_bool_type_unaffected_by_boolAsChar) {
     ASSERT_TRUE(result.typeInfoResult.found);
     EXPECT_EQ(result.typeInfoResult.typeInfo.sqlType, SQL_INTEGER);
 }
+
+/*
+ * text type recognition on the SQLColumns metadata path.
+ * A server text column is reported as varchar with the documented
+ * TEXT to VARCHAR(256) conversion size instead of SQL_UNKNOWN_TYPE
+ * with the unknown size sentinel.
+ */
+TEST(TextTypeTest, test_text_recognized_as_varchar) {
+    TypeInfoResult r = RsMetadataAPIHelper::getTypeInfo("text", false);
+    ASSERT_TRUE(r.found);
+    EXPECT_EQ(r.typeInfo.sqlType, SQL_VARCHAR);
+    EXPECT_EQ(r.typeInfo.sqlDataType, SQL_VARCHAR);
+    EXPECT_EQ(r.typeInfo.sqlDateSub, kNotApplicable);
+    EXPECT_EQ(std::string(r.typeInfo.typeName), "varchar");
+}
+
+TEST(TextTypeTest, test_text_missing_length_defaults_to_256) {
+    // text carries no server length; NULL arrives as 0
+    EXPECT_EQ(RsMetadataAPIHelper::resolveTextCharMaxLength("text", 0),
+              kTextColumnSize);
+}
+
+TEST(TextTypeTest, test_text_negative_length_defaults_to_256) {
+    EXPECT_EQ(RsMetadataAPIHelper::resolveTextCharMaxLength("text", -1),
+              kTextColumnSize);
+}
+
+TEST(TextTypeTest, test_text_positive_length_kept) {
+    // If the server ever reports a length for text, it is honored
+    EXPECT_EQ(RsMetadataAPIHelper::resolveTextCharMaxLength("text", 42), 42);
+}
+
+TEST(TextTypeTest, test_non_text_length_unchanged) {
+    EXPECT_EQ(RsMetadataAPIHelper::resolveTextCharMaxLength("varchar", 100),
+              100);
+    EXPECT_EQ(RsMetadataAPIHelper::resolveTextCharMaxLength("varchar", 0), 0);
+    EXPECT_EQ(RsMetadataAPIHelper::resolveTextCharMaxLength("char", 0), 0);
+}
+
+TEST(TextTypeTest, test_text_end_to_end_column_size_256) {
+    // Full path: recognized type name + resolved length through the size
+    // helpers, as the SQLColumns assembler computes them.
+    TypeInfoResult r = RsMetadataAPIHelper::getTypeInfo("text", false);
+    ASSERT_TRUE(r.found);
+    std::string rsType = r.typeInfo.typeName;
+    int effectiveLen =
+        RsMetadataAPIHelper::resolveTextCharMaxLength("text", 0);
+    EXPECT_EQ(RsMetadataAPIHelper::getColumnSize(rsType, effectiveLen, 0),
+              kTextColumnSize);
+    EXPECT_EQ(RsMetadataAPIHelper::getBufferLen(rsType, effectiveLen, 0),
+              kTextColumnSize);
+    EXPECT_EQ(RsMetadataAPIHelper::getCharOctetLen(rsType, effectiveLen),
+              kTextColumnSize);
+}
