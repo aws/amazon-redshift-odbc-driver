@@ -659,7 +659,7 @@ const std::unordered_map<std::string, DATA_TYPE_INFO>
         {"geography",
          {SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, "geography"}},
         {"hllsketch",
-         {SQL_UNKNOWN_TYPE, SQL_UNKNOWN_TYPE, kNotApplicable, "hllsketch"}},
+         {SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, "hllsketch"}},
         
         // Additional Glue data types
         // Glue catalogs may return these type names instead of native Redshift
@@ -912,7 +912,8 @@ int RsMetadataAPIHelper::getColumnSize(const std::string &rsType,
         } else if (rsType == "char" || rsType == "varchar" || rsType == "string") {
             return character_maximum_length > 0 ? character_maximum_length : 0;
         } else if (rsType == "super" || rsType == "geometry" ||
-                   rsType == "geography" || rsType == "varbyte" || rsType == "binary") {
+                   rsType == "geography" || rsType == "varbyte" ||
+                   rsType == "hllsketch" || rsType == "binary") {
             return kNotApplicable;
         } else if (std::regex_match(rsType, RsMetadataAPIHelper::glueSuperTypeRegex)){
             return kNotApplicable;
@@ -1015,7 +1016,7 @@ int RsMetadataAPIHelper::getCharOctetLen(const std::string &rsType,
         } else if (rsType == "varbyte" || rsType == "binary") {
             // "binary" is a Glue type equivalent to native "varbyte"
             return kUnknownColumnSize;
-        } else if (rsType == "geography") {
+        } else if (rsType == "geography" || rsType == "hllsketch") {
             return kNotApplicable;
         } else {
             return kUnknownColumnSize;

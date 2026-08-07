@@ -703,6 +703,7 @@ void TestGetRsType::SetUpTestSuite() {
         {dataTypeName.ksuper, redshiftTypeName.ksuper},
         {dataTypeName.kgeometry, redshiftTypeName.kgeometry},
         {dataTypeName.kgeography, redshiftTypeName.kgeography},
+        {dataTypeName.khllsketch, redshiftTypeName.khllsketch},
         {dataTypeName.kstring, dataTypeName.kstring},
         {dataTypeName.kbinary, dataTypeName.kbinary},
         {dataTypeName.karray, dataTypeName.karray},
@@ -738,7 +739,8 @@ void TestGetRsType::SetUpTestSuite() {
         {dataTypeName.kmap, {SQL_LONGVARCHAR, SQL_LONGVARCHAR, SQL_LONGVARCHAR, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}},
         {dataTypeName.kstruct, {SQL_LONGVARCHAR, SQL_LONGVARCHAR, SQL_LONGVARCHAR, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}},
         {dataTypeName.kgeometry, {SQL_LONGVARBINARY, SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}},
-        {dataTypeName.kgeography, {SQL_LONGVARBINARY, SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}}
+        {dataTypeName.kgeography, {SQL_LONGVARBINARY, SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}},
+        {dataTypeName.khllsketch, {SQL_LONGVARBINARY, SQL_LONGVARBINARY, SQL_LONGVARBINARY, kNotApplicable, kNotApplicable, kNotApplicable, kNotApplicable}}
     };
 }
 
@@ -899,7 +901,8 @@ INSTANTIATE_TEST_SUITE_P(METADATA_API_HELPER_TEST_SUITE, TestGetRsType,
             RsMetadataAPIHelper::getDataTypeNameStruct().kmap,
             RsMetadataAPIHelper::getDataTypeNameStruct().kstruct,
             RsMetadataAPIHelper::getDataTypeNameStruct().kgeometry,
-            RsMetadataAPIHelper::getDataTypeNameStruct().kgeography
+            RsMetadataAPIHelper::getDataTypeNameStruct().kgeography,
+            RsMetadataAPIHelper::getDataTypeNameStruct().khllsketch
         ),
         ::testing::Values(true, false)
     ));

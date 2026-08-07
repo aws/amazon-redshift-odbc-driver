@@ -184,6 +184,7 @@
 #define GEOMETRYHEX		   3999
 #define SUPER			   4000
 #define VARBYTE			   6551
+#define HLLSKETCH		   2935
 #define UNSPECIFIEDOID     0
 
 // PG catalog OID
@@ -218,6 +219,8 @@
 #define MAX_VARBYTE_SIZE		1024000 
 #define MAX_GEOMETRY_SIZE		1024000 
 #define MAX_GEOGRAPHY_SIZE		1048316
+// HLLSKETCH max size: 2^18 * 0.75 + 4 (see RedshiftPADB type_sizes.h)
+#define MAX_HLLSKETCH_SIZE		196612
 
 // Classes forward reference
 class RS_ENV_INFO;

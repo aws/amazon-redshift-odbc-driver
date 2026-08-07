@@ -40,6 +40,8 @@ TEST_P(OidMappingTest, MapsToExpectedSqlType) {
         EXPECT_EQ(rsSpecialType, TIMESTAMPTZOID);
     } else if (p.oid == SUPER) {
         EXPECT_EQ(rsSpecialType, SUPER);
+    } else if (p.oid == HLLSKETCH) {
+        EXPECT_EQ(rsSpecialType, HLLSKETCH);
     } else if (p.oid == BOOLOID && p.boolAsChar) {
         EXPECT_EQ(rsSpecialType, BOOLOID);
     } else {
@@ -143,6 +145,19 @@ INSTANTIATE_TEST_SUITE_P(
         OidMappingParam{BOOLOID, 0, 1, SQL_VARCHAR,  "BOOLOID_BoolsAsChar_noUnicode"},
         // boolAsChar=1, useUnicode=1 → BOOLOID maps to SQL_WVARCHAR
         OidMappingParam{BOOLOID, 1, 1, SQL_WVARCHAR, "BOOLOID_BoolsAsChar_Unicode"}
+    ),
+    [](const ::testing::TestParamInfo<OidMappingParam> &info) {
+        return std::string(info.param.name);
+    });
+
+INSTANTIATE_TEST_SUITE_P(
+    SpecialBinaryOids,
+    OidMappingTest,
+    ::testing::Values(
+        // hllsketch maps to SQL_LONGVARBINARY regardless of useUnicode, the same
+        // way geometry/geography/varbyte are handled.
+        OidMappingParam{HLLSKETCH, 1, 0, SQL_LONGVARBINARY, "HLLSKETCH_u1"},
+        OidMappingParam{HLLSKETCH, 0, 0, SQL_LONGVARBINARY, "HLLSKETCH_u0"}
     ),
     [](const ::testing::TestParamInfo<OidMappingParam> &info) {
         return std::string(info.param.name);

@@ -3088,7 +3088,13 @@ INSTANTIATE_TEST_SUITE_P(
         TypeNameParam{SQL_LONGVARCHAR,  SUPER, "SUPER",             "SQL_LONGVARCHAR_SUPER"},
         // BoolsAsChar: BOOLOID mapped to SQL_VARCHAR reports "bool"
         TypeNameParam{SQL_VARCHAR,      BOOLOID, "bool",            "SQL_VARCHAR_BOOLOID"},
-        TypeNameParam{SQL_WVARCHAR,     BOOLOID, "bool",            "SQL_WVARCHAR_BOOLOID"}
+        TypeNameParam{SQL_WVARCHAR,     BOOLOID, "bool",            "SQL_WVARCHAR_BOOLOID"},
+        // SQL_LONGVARBINARY special types (RedshiftDP-124799 adds HLLSKETCH)
+        TypeNameParam{SQL_LONGVARBINARY, VARBYTE,   "VARBYTE",   "SQL_LONGVARBINARY_VARBYTE"},
+        TypeNameParam{SQL_LONGVARBINARY, GEOGRAPHY, "GEOGRAPHY", "SQL_LONGVARBINARY_GEOGRAPHY"},
+        TypeNameParam{SQL_LONGVARBINARY, GEOMETRY,  "GEOMETRY",  "SQL_LONGVARBINARY_GEOMETRY"},
+        TypeNameParam{SQL_LONGVARBINARY, HLLSKETCH, "HLLSKETCH", "SQL_LONGVARBINARY_HLLSKETCH"},
+        TypeNameParam{SQL_LONGVARBINARY, 0,         "BINARY",    "SQL_LONGVARBINARY_BINARY"}
     ),
     [](const ::testing::TestParamInfo<TypeNameParam> &info) {
         return std::string(info.param.name);

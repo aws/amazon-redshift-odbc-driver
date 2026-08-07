@@ -506,6 +506,7 @@ class RsMetadataAPIHelper {
         const std::string ksuper = "super";
         const std::string kgeometry = "geometry";
         const std::string kgeography = "geography";
+        const std::string khllsketch = "hllsketch";
         const std::string karray = "array";
         const std::string kmap = "map";
         const std::string kstruct = "struct";
@@ -533,6 +534,7 @@ class RsMetadataAPIHelper {
         const std::string ksuper = "super";
         const std::string kgeometry = "geometry";
         const std::string kgeography = "geography";
+        const std::string khllsketch = "hllsketch";
     };
     static const RedshiftTypeName getRedshiftTypeNameStruct();
 

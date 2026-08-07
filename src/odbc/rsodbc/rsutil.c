@@ -8611,6 +8611,9 @@ void getTypeName(short hType, char *pBuf, int bufLen, short hRsSpecialType)
 				|| hRsSpecialType == GEOMETRYHEX)
 				rs_strncpy(pBuf, "GEOMETRY", bufLen);
 			else
+			if (hRsSpecialType == HLLSKETCH)
+				rs_strncpy(pBuf, "HLLSKETCH", bufLen);
+			else
 				rs_strncpy(pBuf, "BINARY", bufLen);
 			break;
 		}

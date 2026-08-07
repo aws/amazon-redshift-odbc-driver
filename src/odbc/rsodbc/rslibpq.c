@@ -1601,6 +1601,15 @@ short mapPgTypeToSqlType(Oid pgType, short *phRsSpecialType, int useUnicode, int
 			break;
 		}
 
+		case HLLSKETCH:
+		{
+			if (phRsSpecialType)
+				*phRsSpecialType = HLLSKETCH;
+
+			sqlType = SQL_LONGVARBINARY;
+			break;
+		}
+
 		case GEOGRAPHY:
 		{
 			if (phRsSpecialType)
@@ -2251,6 +2260,9 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
 			else
 			if (pgType == GEOGRAPHY)
 				pDescRec->iSize = MAX_GEOGRAPHY_SIZE;
+			else
+			if (pgType == HLLSKETCH)
+				pDescRec->iSize = MAX_HLLSKETCH_SIZE;
             else if (pgType == BOOLOID && boolAsChar) {
                 pDescRec->iSize = 1;
             } else {
@@ -2273,6 +2285,9 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
             }
             else if(pgType == GEOGRAPHY) {
                 pDescRec->iSize = MAX_GEOGRAPHY_SIZE;
+            }
+            else if(pgType == HLLSKETCH) {
+                pDescRec->iSize = MAX_HLLSKETCH_SIZE;
             }
             else {
                 pDescRec->iSize = pgMod - 4; // 4 for sizeof(int) itself.
