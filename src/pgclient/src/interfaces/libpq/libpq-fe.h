@@ -631,6 +631,8 @@ extern PGresult *pqGetResult(PGconn *conn, struct _CscStatementContext *pCscStat
 extern void pqReadNextBatchOfStreamingRows(void *_pCscStatementContext, PGresult *pgResult, PGconn *conn,int *piError);
 extern short pqReadNextResultOfStreamingCursor(void *_pCscStatementContext, PGconn *conn);
 extern void pqResetConnectionResult(PGconn *conn);
+extern void pqClearAsyncResult(PGconn *conn);
+extern int pqIsConnectionResultReplaced(PGconn *conn, PGresult *pgResult);
 extern int pqSkipCurrentResultOfStreamingCursor(void *_pCscStatementContext, PGresult *pgResult, PGconn *conn);
 extern void pqSkipAllResultsOfStreamingCursor(void *_pCscStatementContext, PGconn *conn);
 extern int  pqIsIdle(PGconn *conn);

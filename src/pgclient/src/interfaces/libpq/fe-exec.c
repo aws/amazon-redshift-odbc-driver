@@ -3672,6 +3672,27 @@ void pqResetConnectionResult(PGconn *conn)
 }
 
 // IHG
+/**
+ * @brief Report whether the connection level result no longer matches the
+ *        result object a caller holds. In streaming cursor mode the fetch
+ *        layer and the connection share one PGresult; any libpq error path
+ *        (socket failure, server error message, protocol sync loss) frees
+ *        that object and installs a replacement error result, leaving the
+ *        caller's pointer dangling. A NULL conn->result is NOT a
+ *        replacement: at a clean end of stream libpq detaches the result
+ *        (resetAfterOneResultReadFromServerFinishForStreamingCursor)
+ *        without freeing it, and the caller's pointer stays live.
+ * @param conn Connection to inspect. NULL is treated as replaced.
+ * @param pgResult The result pointer the caller holds.
+ * @return 1 when the caller's pointer no longer matches conn's result.
+ */
+int pqIsConnectionResultReplaced(PGconn *conn, PGresult *pgResult)
+{
+	return (conn == NULL) ||
+	       (conn->result != NULL && conn->result != pgResult);
+}
+
+// IHG
 int pqSkipCurrentResultOfStreamingCursor(void *_pCscStatementContext, PGresult *pgResult, PGconn *conn)
 {
 	struct _CscStatementContext *pCscStatementContext = (struct _CscStatementContext *)_pCscStatementContext;

@@ -1565,7 +1565,8 @@ SQLRETURN  SQL_API SQLFetchScroll(SQLHSTMT phstmt,
 // Helper: format and report a cursor I/O error with optional libpq detail.
 //
 static void addCursorIOError(RS_STMT_INFO *pStmt, RS_RESULT_INFO *pResult,
-                             const char *cursorKind, const char *logPrefix)
+                             const char *cursorKind, const char *logPrefix,
+                             const char *sqlState)
 {
     char *connErr = (pStmt->phdbc) ? libpqErrorMsg(pStmt->phdbc) : NULL;
     char errBuf[1024];
@@ -1592,9 +1593,11 @@ static void addCursorIOError(RS_STMT_INFO *pStmt, RS_RESULT_INFO *pResult,
             "An I/O error occurred while reading %s.", cursorKind);
     }
 
-    RS_LOG_ERROR("STRIO", "%s at rowOffset=%lld curRow=%d rowsInMem=%d: %s",
-        logPrefix, (long long)pResult->iRowOffset, pResult->iCurRow, pResult->iNumberOfRowsInMem, errBuf);
-    addError(&pStmt->pErrorList, "24000", errBuf, 0, NULL);
+    // The row position stays out of the application facing message; the
+    // driver log below records it for failure forensics.
+    RS_LOG_ERROR("STRIO", "%s at rowOffset=%d curRow=%d rowsInMem=%d: %s",
+        logPrefix, pResult->iRowOffset, pResult->iCurRow, pResult->iNumberOfRowsInMem, errBuf);
+    addError(&pStmt->pErrorList, (char *)sqlState, errBuf, 0, NULL);
 }
 
 //---------------------------------------------------------------------------------------------------------igarish
@@ -1680,7 +1683,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                                 if(iCscError)
                                 {
                                     rc = SQL_ERROR;
-                                    addCursorIOError(pStmt, pResult, "client side cursor", "CSC read error");
+                                    addCursorIOError(pStmt, pResult, "client side cursor", "CSC read error", "HY000");
                                     goto error; 
                                 }
                             }
@@ -1696,11 +1699,47 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
 								// Read more rows from socket
 								libpqReadNextBatchOfStreamingRows(pStmt, pStmt->pCscStatementContext, pResult->pgResult, pStmt->phdbc->pgConn,&iError, FALSE);
 
+                                if(iError
+                                    || pqIsConnectionResultReplaced(pStmt->phdbc->pgConn, pResult->pgResult))
+                                {
+                                    // Any libpq error during the batch read (socket
+                                    // failure, server error message, protocol sync
+                                    // loss) frees the shared PGresult
+                                    // (pqSaveErrorResult -> pqClearAsyncResult ->
+                                    // PQclear(conn->result)) and installs a
+                                    // replacement error result. pResult->pgResult is
+                                    // dangling here, so it must not be dereferenced
+                                    // or freed again. A socket failure sets iError;
+                                    // a server error only replaces the result, which
+                                    // pqIsConnectionResultReplaced detects.
+                                    //
+                                    // SQLSTATE: a server error carries its own state
+                                    // (e.g. 22012), captured before the replacement
+                                    // result is released. Socket failures, and the
+                                    // remaining replacement causes (protocol sync
+                                    // loss, truncated stream) with no server state,
+                                    // are link level failures: 08S01.
+                                    char szSqlState[6] = "08S01";
+                                    if(!iError)
+                                    {
+                                        char *pNativeState = libpqGetNativeSqlState(pStmt->phdbc);
+                                        if(pNativeState && pNativeState[0])
+                                            rs_strncpy(szSqlState, pNativeState, sizeof(szSqlState));
+                                    }
+
+                                    pResult->pgResult = NULL;
+                                    pResult->iNumberOfRowsInMem = 0;
+                                    pqClearAsyncResult(pStmt->phdbc->pgConn);
+                                    rc = SQL_ERROR;
+                                    addCursorIOError(pStmt, pResult, "streaming cursor", "Streaming cursor read error", szSqlState);
+                                    goto error;
+                                }
+
 								// Set pResult parameters
                                 // New #of rows in memory
                                 pResult->iNumberOfRowsInMem = PQntuples(pResult->pgResult);
 
-                                if(pResult->iNumberOfRowsInMem == 0 && !iError) {
+                                if(pResult->iNumberOfRowsInMem == 0) {
                                     RS_LOG_WARN("STRIO", "Streaming cursor: batch read returned 0 rows, rowOffset=%lld",
                                         (long long)pResult->iRowOffset);
                                 }
@@ -1710,13 +1749,6 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                                     pResult->iRowOffset += iNumberOfRowsInMem; // We are discarding some data.
                                     pResult->iCurRow = -1; // We increment below
 								}
-
-                                if(iError)
-                                {
-                                    rc = SQL_ERROR;
-                                    addCursorIOError(pStmt, pResult, "streaming cursor", "Streaming cursor read error");
-                                    goto error; 
-                                }
 							}
                         } // !Max limit
                     } // !Last row in memory
