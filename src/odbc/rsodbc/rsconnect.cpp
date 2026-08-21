@@ -2240,6 +2240,7 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
     if(!pConnectProps->pIamProps){
       pConnectProps->pIamProps = (RS_IAM_CONN_PROPS_INFO *)rs_calloc(1, sizeof(RS_IAM_CONN_PROPS_INFO));
       pIamProps = pConnectProps->pIamProps;
+      pIamProps->isAutoCreate = true;
     }
     if(!pConnectProps->pHttpsProps){
       pConnectProps->pHttpsProps = (RS_PROXY_CONN_PROPS_INFO *)rs_calloc(1,sizeof(RS_PROXY_CONN_PROPS_INFO));
@@ -3523,6 +3524,7 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
       if(pConnectProps->pIamProps)
       {
         RS_IAM_CONN_PROPS_INFO *pIamProps = pConnectProps->pIamProps;
+        pIamProps->isAutoCreate = true;
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_AUTH_TYPE, "", pIamProps->szAuthType, MAX_IDEN_LEN, ODBC_INI);
 
         // Common properties

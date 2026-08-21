@@ -148,7 +148,7 @@ struct RsSettings
         m_iamAuth(false),
 		m_disableCache(false),
         m_forceLowercase(false),
-        m_userAutoCreate(false),
+        m_userAutoCreate(true),
         m_sslInsecure(false),
         m_useInstanceProfile(false),
 //        m_hasNewSchemaView(false),
@@ -170,4 +170,3 @@ struct RsSettings
 };
 
 #endif
-
