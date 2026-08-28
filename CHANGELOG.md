@@ -1,6 +1,16 @@
 Changelog
 =========
 
+v2.2.2 (2026-08-28)
+---------------------
+1. Behavior Change: Mapped the TEXT type to SQL_VARCHAR with a column size of 256 by default in metadata APIs
+2. Behavior Change: Mapped HLLSKETCH columns to binary (SQL_LONGVARBINARY), allowing applications to read and bind them as binary data
+3. Added support for Identity Enhanced Credentials authentication via IdpTokenAuthPlugin
+4. Hardened string handling in the utility path by replacing legacy strncpy with rs_strncpy_safe
+5. Improved the Windows build to run the unit test suite and fail on any unit test failure
+6. Fixed ODBC interval qualifier substitution so it applies only within {ivl} escape clauses
+7. Fixed a use-after-free crash on mid-stream batch refill failure in streaming cursor mode
+
 v2.2.1 (2026-07-30)
 ---------------------
 1. Migrated the TLS and cryptographic provider from OpenSSL to AWS-LC
