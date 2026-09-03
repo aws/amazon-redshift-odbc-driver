@@ -179,7 +179,7 @@ namespace IamSupport
             m_sslInsecure(false),
             m_enableDbUserDbGroups(false),
             m_forceLowercase(false),
-            m_userAutoCreate(false),
+            m_userAutoCreate(true),
             m_useProxyForIdpAuth(false)
         {
             ; // Do nothing.
