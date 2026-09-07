@@ -3846,6 +3846,13 @@ static SQLRETURN handleFederatedNonIamConnection(RS_CONN_INFO* pConn) {
             return SQL_ERROR;
         }
     }
+
+    // Not a federated (IdC) plugin connection: nothing to do here.
+    // Falling off the end of a non-void function is undefined behavior and,
+    // under -O2, made the compiler drop the plugin-name check above, forcing
+    // every non-IAM (username/password) connection into the federated auth
+    // path (resulting in IAMConnectionError: MissingAuthenticationToken).
+    return SQL_SUCCESS;
 }
 
 /*====================================================================================================================================================*/
