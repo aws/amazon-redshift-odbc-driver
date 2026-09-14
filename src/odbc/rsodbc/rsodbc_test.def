@@ -1,6 +1,8 @@
 LIBRARY         rsodbc64-test
 
 EXPORTS
+	RS_appendSuppliedCredentialsToConnStr
+	?resetConnectProps@RS_CONN_INFO@@QEAAXXZ
 	SQLAllocConnect 
 	SQLAllocEnv 
 	SQLAllocStmt

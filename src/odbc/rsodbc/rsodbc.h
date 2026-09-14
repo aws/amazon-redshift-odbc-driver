@@ -233,6 +233,18 @@ class RS_ERROR_INFO;
 
 class RS_CONNECT_PROPS_INFO;
 
+/**
+ * @brief Appends UID and PWD from the pre-authentication credentials to a
+ *        completed connection string; auth-resolved credentials are omitted.
+ * @param pConnectProps Connection properties holding the pre-authentication
+ *                      user and password.
+ * @param szConnStrOut  Output buffer to append to; NULL for length-only.
+ * @param cbConnStrOut  Size of the output buffer in bytes.
+ * @return Number of characters accounted for, regardless of buffer room.
+ */
+size_t RS_appendSuppliedCredentialsToConnStr(
+    RS_CONNECT_PROPS_INFO *pConnectProps, char *szConnStrOut, size_t cbConnStrOut);
+
 class RS_DESC_INFO;
 class RS_DESC_HEADER;
 
@@ -1318,6 +1330,19 @@ struct RS_TCP_PROXY_CONN_PROPS_INFO {
     char szPassword[MAX_IDEN_LEN] = {0};
 };
 
+// explicit memory clearing using a secure zeroing
+// function that won't be optimized away by the compiler:
+static inline void rs_secure_zero(void *ptr, size_t len) {
+#ifdef _WIN32
+    SecureZeroMemory(ptr, len);
+#else
+    volatile unsigned char *p = (volatile unsigned char *)ptr;
+    while (len--) {
+        *p++ = 0;
+    }
+#endif
+}
+
 /*
  * Connect props info.
  * Note: Login Timeout–Maximum number of seconds for PADB to respond to a connection request before
@@ -1341,6 +1366,8 @@ public:
       iPasswordKeyWordType = 0;
       szDSN[0] = '\0';
       szDriver[0] = '\0';
+      szOrigUser[0] = '\0';
+      szOrigPassword[0] = '\0';
 
 //      iEnableDescribeParam = 0;
 //      iExtendedColumnMetaData = 0;
@@ -1406,6 +1433,13 @@ public:
 	  strncpy(szStringType, "varchar", sizeof(szStringType)); // "unspecified"
     }
 
+    /** @brief Securely zeroes the credential buffers on destruction. */
+    ~RS_CONNECT_PROPS_INFO() {
+      rs_secure_zero(szPassword, sizeof(szPassword));
+      rs_secure_zero(szOrigUser, sizeof(szOrigUser));
+      rs_secure_zero(szOrigPassword, sizeof(szOrigPassword));
+    }
+
     char szHost[MAX_IDEN_LEN] = {0};
     int  iHostNameKeyWordType; // SHORT_NAME or LONG_NAME?
     char szPort[MAX_IDEN_LEN] = {0};
@@ -1418,6 +1452,9 @@ public:
     int  iPasswordKeyWordType;
     char szDSN[MAX_IDEN_LEN] = {0};
     char szDriver[MAX_IDEN_LEN] = {0};
+    // Pre-authentication credentials echoed in the completed connection string.
+    char szOrigUser[MAX_IDEN_LEN] = {0};
+    char szOrigPassword[PADB_MAX_PARAMETERS] = {0};
 
 /*  If checked, retrieves parameter metadata from the PADB server when a query
     contains parameters (for use with the SQLDescribeParam() ODBC API function). Note that returned

@@ -1337,19 +1337,6 @@ DriverManagerInfo detectDriverManager();
  *         iODBC family; false otherwise.
  */
 bool isIODBC();
-// explicit memory clearing using a secure zeroing
-// function that won't be optimized away by the compiler:
-static inline void rs_secure_zero(void *ptr, size_t len) {
-#ifdef _WIN32
-    SecureZeroMemory(ptr, len);
-#else
-    volatile unsigned char *p = (volatile unsigned char *)ptr;
-    while (len--) {
-        *p++ = 0;
-    }
-#endif
-}
-
 // Template function for safe numeric range checking
 // Validates if a value can be safely converted from SourceType to TargetType without overflow.
 // Handles all combinations: float->int, int->int, int->float, float->float

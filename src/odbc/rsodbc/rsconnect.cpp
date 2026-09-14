@@ -848,37 +848,9 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
             actualOutputLen += strlen(";");
         }
 
-        if(pConnectProps->szUser[0])
-        {
-            pKeyword = (char *)((pConnectProps->iUserKeyWordType == SHORT_NAME_KEYWORD) ? "UID=" : "LogonID=");
-
-            if(szConnStrOut && (cbConnStrOut > 0))
-            {
-                strncat( (char *)szConnStrOut, pKeyword, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat( (char *)szConnStrOut, pConnectProps->szUser, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat( (char *)szConnStrOut, ";", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-            }
-
-            actualOutputLen += strlen(pKeyword);
-            actualOutputLen += strlen(pConnectProps->szUser);
-            actualOutputLen += strlen(";");
-        }
-
-        if(pConnectProps->szPassword[0])
-        {
-            pKeyword = (char *)((pConnectProps->iPasswordKeyWordType == SHORT_NAME_KEYWORD) ? "PWD=" : "Password=");
-
-            if(szConnStrOut && (cbConnStrOut > 0))
-            {
-                strncat( (char *)szConnStrOut, pKeyword, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat( (char *)szConnStrOut, pConnectProps->szPassword, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat( (char *)szConnStrOut, ";", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-            }
-
-            actualOutputLen += strlen(pKeyword);
-            actualOutputLen += strlen(pConnectProps->szPassword);
-            actualOutputLen += strlen(";");
-        }
+        // Emit the pre-authentication UID/PWD; auth-resolved credentials are omitted.
+        actualOutputLen += RS_appendSuppliedCredentialsToConnStr(
+            pConnectProps, (char *)szConnStrOut, (size_t)cbConnStrOut);
 
         if(pConnectProps->szHost[0])
         {
@@ -2791,9 +2763,6 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
     return valid;
 }
 
-/*====================================================================================================================================================*/
-
-//---------------------------------------------------------------------------------------------------------igarish
 // Reset connection properties to reuse for next connection.
 //
 void RS_CONN_INFO::resetConnectProps()
@@ -2809,10 +2778,15 @@ void RS_CONN_INFO::resetConnectProps()
     pConnectProps->iDatabaseKeyWordType = SHORT_NAME_KEYWORD;
     pConnectProps->szUser[0] = '\0';
     pConnectProps->iUserKeyWordType = SHORT_NAME_KEYWORD;
-    pConnectProps->szPassword[0] = '\0';
+    rs_secure_zero(pConnectProps->szPassword,
+                   sizeof(pConnectProps->szPassword));
     pConnectProps->iPasswordKeyWordType = SHORT_NAME_KEYWORD;
     pConnectProps->szDSN[0] = '\0';
     pConnectProps->szDriver[0] = '\0';
+    rs_secure_zero(pConnectProps->szOrigUser,
+                   sizeof(pConnectProps->szOrigUser));
+    rs_secure_zero(pConnectProps->szOrigPassword,
+                   sizeof(pConnectProps->szOrigPassword));
 
     if(pConnectProps->pConnectStr)
     {
@@ -3940,6 +3914,13 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
   RS_CONNECT_PROPS_INFO *pConnectProps = pConn->pConnectProps;
   bool isNativeAuth = false;
 
+  // Capture pre-authentication credentials before auth may overwrite them;
+  // the completed connection string echoes these values.
+  rs_strncpy(pConnectProps->szOrigUser, pConnectProps->szUser,
+             sizeof(pConnectProps->szOrigUser));
+  rs_strncpy(pConnectProps->szOrigPassword, pConnectProps->szPassword,
+             sizeof(pConnectProps->szOrigPassword));
+
   // Check for IAM connection
   if(pConnectProps->isIAMAuth) {
 
@@ -4085,4 +4066,38 @@ int RS_GetPrivateProfileString(const char *pSectionName, const char *pKey, const
 #if defined LINUX 
 	return RsIni::getPrivateProfileStringWithFullPath(pSectionName, pKey, pDflt, pReturn, iSize, pFile);
 #endif
+}
+
+// See rsodbc.h for the documented contract of this function.
+size_t RS_appendSuppliedCredentialsToConnStr(
+    RS_CONNECT_PROPS_INFO *pConnectProps, char *szConnStrOut, size_t cbConnStrOut)
+{
+    size_t addedLen = 0;
+    const char *pKeyword = NULL;
+
+    if (pConnectProps->szOrigUser[0])
+    {
+        pKeyword = (pConnectProps->iUserKeyWordType == SHORT_NAME_KEYWORD) ? "UID=" : "LogonID=";
+        if (szConnStrOut && (cbConnStrOut > 0))
+        {
+            strncat(szConnStrOut, pKeyword, (cbConnStrOut - strlen(szConnStrOut) - 1));
+            strncat(szConnStrOut, pConnectProps->szOrigUser, (cbConnStrOut - strlen(szConnStrOut) - 1));
+            strncat(szConnStrOut, ";", (cbConnStrOut - strlen(szConnStrOut) - 1));
+        }
+        addedLen += strlen(pKeyword) + strlen(pConnectProps->szOrigUser) + strlen(";");
+    }
+
+    if (pConnectProps->szOrigPassword[0])
+    {
+        pKeyword = (pConnectProps->iPasswordKeyWordType == SHORT_NAME_KEYWORD) ? "PWD=" : "Password=";
+        if (szConnStrOut && (cbConnStrOut > 0))
+        {
+            strncat(szConnStrOut, pKeyword, (cbConnStrOut - strlen(szConnStrOut) - 1));
+            strncat(szConnStrOut, pConnectProps->szOrigPassword, (cbConnStrOut - strlen(szConnStrOut) - 1));
+            strncat(szConnStrOut, ";", (cbConnStrOut - strlen(szConnStrOut) - 1));
+        }
+        addedLen += strlen(pKeyword) + strlen(pConnectProps->szOrigPassword) + strlen(";");
+    }
+
+    return addedLen;
 }

@@ -4,6 +4,8 @@
 #include <rsutil.h>
 #include <sql.h>
 #include <cstring>
+#include <new>
+#include <string>
 
 // Unit tests for connection property default values and parsing.
 // This unit test is for testing the default value when databaseMetadataCurrentDbOnly flag is not included in DSN.
@@ -248,4 +250,115 @@ TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_UDF_disabled_does_not_af
     applyUseDeclareFetchExclusivity(pConn->pConnectProps);
     EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 0);
     EXPECT_EQ(pConn->pConnectProps->iFetchRefCursor, 1);
+}
+
+// RS_appendSuppliedCredentialsToConnStr emits only pre-authentication credentials.
+
+TEST(SuppliedCredentialsConnStr, OmitsCredentialsResolvedDuringConnect) {
+    RS_CONNECT_PROPS_INFO props;
+    props.iUserKeyWordType = SHORT_NAME_KEYWORD;
+    props.iPasswordKeyWordType = SHORT_NAME_KEYWORD;
+
+    // Auth resolved the credentials; the application supplied none.
+    strncpy(props.szUser, "IAMA:resolved_user", sizeof(props.szUser) - 1);
+    strncpy(props.szPassword, "temporary-secret", sizeof(props.szPassword) - 1);
+    props.szOrigUser[0] = '\0';
+    props.szOrigPassword[0] = '\0';
+
+    char out[1024];
+    out[0] = '\0';
+    RS_appendSuppliedCredentialsToConnStr(&props, out, sizeof(out));
+
+    std::string result(out);
+    EXPECT_EQ(result.find("UID="), std::string::npos);
+    EXPECT_EQ(result.find("PWD="), std::string::npos);
+    EXPECT_EQ(result.find("resolved_user"), std::string::npos);
+    EXPECT_EQ(result.find("temporary-secret"), std::string::npos);
+}
+
+TEST(SuppliedCredentialsConnStr, EchoesCredentialsSuppliedByApplication) {
+    RS_CONNECT_PROPS_INFO props;
+    props.iUserKeyWordType = SHORT_NAME_KEYWORD;
+    props.iPasswordKeyWordType = SHORT_NAME_KEYWORD;
+
+    // Supplied and resolved values differ; only supplied ones are echoed.
+    strncpy(props.szUser, "IAMA:resolved_user", sizeof(props.szUser) - 1);
+    strncpy(props.szOrigUser, "appuser", sizeof(props.szOrigUser) - 1);
+    strncpy(props.szPassword, "resolved-temp-secret", sizeof(props.szPassword) - 1);
+    strncpy(props.szOrigPassword, "apppw", sizeof(props.szOrigPassword) - 1);
+
+    char out[1024];
+    out[0] = '\0';
+    RS_appendSuppliedCredentialsToConnStr(&props, out, sizeof(out));
+
+    std::string result(out);
+    EXPECT_STREQ(out, "UID=appuser;PWD=apppw;");
+    EXPECT_EQ(result.find("resolved_user"), std::string::npos);
+    EXPECT_EQ(result.find("resolved-temp-secret"), std::string::npos);
+}
+
+TEST(SuppliedCredentialsConnStr, UsesLongKeywordFormWhenConfigured) {
+    RS_CONNECT_PROPS_INFO props;
+    props.iUserKeyWordType = SHORT_NAME_KEYWORD + 1;      // long-name form
+    props.iPasswordKeyWordType = SHORT_NAME_KEYWORD + 1;  // long-name form
+
+    strncpy(props.szOrigUser, "appuser", sizeof(props.szOrigUser) - 1);
+    strncpy(props.szOrigPassword, "apppw", sizeof(props.szOrigPassword) - 1);
+
+    char out[1024];
+    out[0] = '\0';
+    RS_appendSuppliedCredentialsToConnStr(&props, out, sizeof(out));
+
+    EXPECT_STREQ(out, "LogonID=appuser;Password=apppw;");
+}
+
+TEST(SuppliedCredentialsConnStr, ResetScrubsRetainedCredentials) {
+    RS_ENV_INFO env;
+    RS_CONN_INFO conn(&env);
+    RS_CONNECT_PROPS_INFO props;
+    conn.pConnectProps = &props;
+
+    const char user[] = "appuser";
+    const char password[] = "app-durable-secret";
+    strncpy(props.szOrigUser, user, sizeof(props.szOrigUser) - 1);
+    strncpy(props.szOrigPassword, password, sizeof(props.szOrigPassword) - 1);
+    strncpy(props.szPassword, password, sizeof(props.szPassword) - 1);
+
+    conn.resetConnectProps();
+
+    // Full buffers must be scrubbed, not just the first byte.
+    for (size_t i = 0; i < sizeof(user); i++) {
+        EXPECT_EQ('\0', props.szOrigUser[i]) << "szOrigUser byte " << i;
+    }
+    for (size_t i = 0; i < sizeof(password); i++) {
+        EXPECT_EQ('\0', props.szOrigPassword[i]) << "szOrigPassword byte " << i;
+        EXPECT_EQ('\0', props.szPassword[i]) << "szPassword byte " << i;
+    }
+
+    // props is stack-owned; detach it before conn goes out of scope.
+    conn.pConnectProps = NULL;
+}
+
+TEST(SuppliedCredentialsConnStr, DestructorScrubsCredentials) {
+    const char password[] = "app-durable-secret";
+    alignas(RS_CONNECT_PROPS_INFO) unsigned char
+        storage[sizeof(RS_CONNECT_PROPS_INFO)];
+
+    RS_CONNECT_PROPS_INFO *props = new (storage) RS_CONNECT_PROPS_INFO();
+    strncpy(props->szOrigPassword, password, sizeof(props->szOrigPassword) - 1);
+    strncpy(props->szPassword, password, sizeof(props->szPassword) - 1);
+
+    // Record the buffer offsets so the raw storage can be inspected afterwards.
+    size_t origOffset =
+        reinterpret_cast<unsigned char *>(props->szOrigPassword) - storage;
+    size_t passwordOffset =
+        reinterpret_cast<unsigned char *>(props->szPassword) - storage;
+
+    props->~RS_CONNECT_PROPS_INFO();
+
+    // The destructor must scrub the buffers on every teardown path.
+    for (size_t i = 0; i < sizeof(password); i++) {
+        EXPECT_EQ(0, storage[origOffset + i]) << "szOrigPassword byte " << i;
+        EXPECT_EQ(0, storage[passwordOffset + i]) << "szPassword byte " << i;
+    }
 }
