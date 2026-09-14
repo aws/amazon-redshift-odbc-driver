@@ -156,9 +156,8 @@ void IAMJwtPluginCredentialsProvider::RetrieveDbUserField(const JWTAssertion& jw
             "DbUser is missing in the JWT assertion.");
     }
 
-    /* Replace dbuser and autocreate. */
+    /* Replace dbuser. AutoCreate remains the connection-level setting. */
     m_argsMap[IAM_KEY_DBUSER] = dbuser;
-    m_argsMap[IAM_KEY_AUTOCREATE] = "1";
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

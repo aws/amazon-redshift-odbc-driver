@@ -353,6 +353,20 @@ EXPORTS
 	?ExtractRegionFromHost@IdpTokenAuthPlugin@IamSupport@Redshift@@IEBA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@AEBV45@@Z
 	?ResolveClusterInfo@IdpTokenAuthPlugin@IamSupport@Redshift@@IEAAXXZ
 
+	; === JWT autocreate test exports (iam_jwt_autocreate_test.cpp) ===
+	; IAMJwtPluginCredentialsProvider::IAMJwtPluginCredentialsProvider(const IAMConfiguration&, const std::map<rs_string,rs_string>&) - constructor
+	??0IAMJwtPluginCredentialsProvider@IamSupport@Redshift@@QEAA@AEBVIAMConfiguration@12@AEBV?$map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@U?$less@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@@std@@@2@@std@@@Z
+	; IAMJwtPluginCredentialsProvider::~IAMJwtPluginCredentialsProvider() - virtual destructor
+	??1IAMJwtPluginCredentialsProvider@IamSupport@Redshift@@UEAA@XZ
+	; IAMJwtPluginCredentialsProvider::RetrieveDbUserField(const JWTAssertion&)
+	?RetrieveDbUserField@IAMJwtPluginCredentialsProvider@IamSupport@Redshift@@QEAAXAEBUJWTAssertion@23@@Z
+	; Virtual methods pulled into the vtable when the test subclass is instantiated
+	?InitArgumentsMap@IAMPluginCredentialsProvider@IamSupport@Redshift@@MEAAXXZ
+	?GetAWSCredentials@IAMJwtPluginCredentialsProvider@IamSupport@Redshift@@UEAA?AVAWSCredentials@Auth@Aws@@XZ
+	?ValidateArgumentsMap@IAMJwtPluginCredentialsProvider@IamSupport@Redshift@@UEAAXXZ
+	?GetAWSCredentialsWithJwt@IAMJwtPluginCredentialsProvider@IamSupport@Redshift@@UEAA?AVAWSCredentials@Auth@Aws@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@Z
+	?AssumeRoleWithJwtRequest@IAMJwtPluginCredentialsProvider@IamSupport@Redshift@@UEAA?AVAWSCredentials@Auth@Aws@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@00@Z
+
 	; === Instance profile / credential_source test exports ===
 	; IAMFactory::CreateInstanceProfileCredentialsProvider() - static, no params, returns shared_ptr
 	?CreateInstanceProfileCredentialsProvider@IAMFactory@IamSupport@Redshift@@SA?AV?$shared_ptr@VAWSCredentialsProvider@Auth@Aws@@@std@@XZ
