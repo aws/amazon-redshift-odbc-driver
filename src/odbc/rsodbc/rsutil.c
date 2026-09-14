@@ -12852,6 +12852,12 @@ int isCharDiagIdentifier(SQLSMALLINT     hDiagIdentifier)
 //
 void makeItReadyForNewQueryExecution(RS_STMT_INFO *pStmt, int executePrepared, int iReprepareForMultiInsert, int iResetMultiInsert)
 {
+	// Close any open portal before re-execution
+	if (pStmt->iPortalActive)
+	{
+		libpqPortalClose(pStmt, TRUE);
+	}
+
 	// Skip all results of streaming cursor
 	libpqCheckAndSkipAllResultsOfStreamingCursor(pStmt, TRUE);
 
@@ -15668,6 +15674,13 @@ void readCscOptionsForDsnlessConnection(RS_CONNECT_PROPS_INFO *pConnectProps)
 	else
 	if(pConnectProps->iStreamingCursorRows < 0)
 		pConnectProps->iStreamingCursorRows = 0;
+
+	optionVal[0] = '\0';
+	readOptions = readDriverOptionFromIniFile("FetchRefCursor", optionVal, sizeof(optionVal));
+	if(readOptions && optionVal[0] != '\0')
+	{
+		sscanf(optionVal,"%d",&pConnectProps->iFetchRefCursor);
+	}
 
 	optionVal[0] = '\0';
 	readOptions = readDriverOptionFromIniFile("UseDeclareFetch", optionVal, sizeof(optionVal));

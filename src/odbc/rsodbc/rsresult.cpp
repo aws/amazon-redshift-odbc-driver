@@ -944,6 +944,9 @@ SQLRETURN  SQL_API SQLRowCount(SQLHSTMT phstmt, SQLLEN* pRowCount)
 	else
 	if (pResult && (pResult->iNumberOfCols > 0))
 	{
+		if (pStmt->iPortalActive) {
+			*pRowCount = -1; // Portal fetch: total row count unknown until all batches consumed
+		} else
 		if (pStmt->pCscStatementContext
 			&& isStreamingCursorMode(pStmt)
 			&& (libpqIsEndOfStreamingCursor(pStmt))
@@ -1687,6 +1690,26 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                                     goto error; 
                                 }
                             }
+							else
+							if(pStmt->iPortalActive && pStmt->iPortalSuspended)
+							{
+								int iNumberOfRowsInMem = pResult->iNumberOfRowsInMem;
+
+								// Fetch next batch from the open portal
+								long nNewRows = libpqPortalFetchNextBatch(pStmt);
+
+								if(nNewRows > 0)
+								{
+									pResult->iRowOffset += iNumberOfRowsInMem;
+									pResult->iCurRow = -1;
+									pResult->iNumberOfRowsInMem = (int)nNewRows;
+								}
+								else if(nNewRows < 0)
+								{
+									rc = SQL_ERROR;
+									goto error;
+								}
+							}
 							else
 							if(pStmt->pCscStatementContext 
 								&& isStreamingCursorMode(pStmt)

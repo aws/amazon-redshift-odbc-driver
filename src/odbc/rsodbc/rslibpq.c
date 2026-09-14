@@ -14,7 +14,19 @@
 #include "rslock.h"
 #include "rsdrvinfo.h"
 #include "rsMetadataAPIPostProcessor.h"
+
 #include <regex>
+
+/* Buffer size for portal/statement name strings.
+ * Format is "_rs_portal_%p" or "_rs_stmt_%p" which with a 64-bit pointer
+ * is at most: 12 prefix + 18 hex digits + NUL = 31 chars. 64 is generous. */
+#define RS_PORTAL_NAME_BUF_SIZE 64
+
+/* A suspended portal returning zero rows on a batch re-fetch is a protocol
+ * contradiction (suspended means the server stopped only because it hit
+ * the row limit, not because it ran out of data). Retry immediately, up
+ * to this many attempts, before treating it as an error. */
+#define RS_PORTAL_SUSPENDED_EMPTY_RETRY_LIMIT 5
 
 #ifdef LINUX
 #include <sys/utsname.h>
@@ -886,6 +898,44 @@ libpqExecuteDirectOrPreparedThreadProc(void *pArg)
 
 /*====================================================================================================================================================*/
 
+/**
+ * @brief Close any open portal belonging to another statement on this connection.
+ *
+ * Ensures only one portal is active per connection at a time.
+ *
+ * @warning Caller MUST call rsLockSem(pConn->hSemMultiStmt) before calling
+ * this function, and rsUnlockSem(pConn->hSemMultiStmt) after it returns.
+ * This function does not lock or check locking itself, and passes FALSE
+ * through to the inner libpqPortalClose so it doesn't try to re-acquire
+ * the lock.
+ *
+ * Why this matters: hSemMultiStmt is a plain binary semaphore, not
+ * reentrant. The execution path that reaches this function can itself be
+ * entered recursively on the same thread (e.g. refcursor auto-fetch calling
+ * back into the same execute function while the outer call still holds the
+ * lock). If this function, or the caller wrapping it, tried to lock
+ * hSemMultiStmt again while that same thread already holds it, the lock
+ * attempt would block forever: only that same thread could release it, but
+ * it can't, since it is stuck waiting on this call to return. That is why
+ * locking is the caller's responsibility, gated on whether the caller
+ * itself is the one that originally acquired the lock, rather than done
+ * unconditionally inside this function.
+ *
+ * @param pConn  The connection to scan
+ * @param pSelf  The statement about to execute/open its own portal (skipped)
+ */
+static void closeOtherPortalsOnConnection(RS_CONN_INFO *pConn, RS_STMT_INFO *pSelf)
+{
+    RS_STMT_INFO *pCur = pConn->phstmtHead;
+
+    while (pCur) {
+        if (pCur != pSelf && pCur->iPortalActive) {
+            libpqPortalClose(pCur, FALSE);  // FALSE: caller already holds the lock
+        }
+        pCur = pCur->pNext;
+    }
+}
+
 //---------------------------------------------------------------------------------------------------------igarish
 // Execute direct or prepare on a separate thread.
 //
@@ -909,6 +959,16 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
         return paramTypes.empty() ? nullptr : paramTypes.data();
     };
 
+    // Close any other statement's open portal on this connection before executing.
+    // Ensures one portal per connection — DML from this handle won't accidentally
+    // run inside another statement's hidden transaction. Done inside the same
+    // lock acquisition as the rest of this function's execution (below), with
+    // no unlock in between, so no other statement can open its own portal in
+    // the gap between this check and this statement opening its own portal.
+    // Gated on iLockRequired: when FALSE, this is a nested/recursive call
+    // (e.g. refcursor auto-fetch) and an ancestor frame on this same thread
+    // already holds hSemMultiStmt and already did this check for its own
+    // execution.
     if(iLockRequired)
     {
         // Lock connection sem to protect multiple stmt execution at same time.
@@ -916,6 +976,11 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
 
         // Wait for current csc thread to finish, if any.
         pgWaitForCscThreadToFinish(pConn->pgConn, FALSE);
+
+        if (pConn->pConnectProps->iUseDeclareFetch)
+        {
+            closeOtherPortalsOnConnection(pConn, pStmt);
+        }
     }
 
     if((pszCmd && !executePrepared) || executePrepared)
@@ -1183,6 +1248,27 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                         }
                         else
                             nParams = iNumBindParams;
+
+                        // Extended Query Protocol: use portal for eligible SELECT queries
+                        // Only when UseDeclareFetch=1, no bind params, not prepared, not catalog/function call
+                        // Portal Execute is forward-only, so exclude scrollable cursors.
+                        // Excluded when FetchRefCursor=1: checkAndAutoFetchRefCursor below expands
+                        // refcursor columns into real rows, and the portal path returns directly
+                        // without going through that step.
+                        if (pConn->pConnectProps->iUseDeclareFetch
+                            && !executePrepared
+                            && !pStmt->iFunctionCall
+                            && !pStmt->iCatalogQuery
+                            && !pConn->pConnectProps->iFetchRefCursor
+                            && nParams == 0
+                            && pszCmd
+                            && pStmt->pStmtAttr->iCursorType == SQL_CURSOR_FORWARD_ONLY
+                            && isQueryEligibleForPortalFetch(pszCmd))
+                        {
+                            // Lock is already held by this function, pass FALSE to avoid deadlock.
+                            rc = libpqExecuteWithPortal(pStmt, pszCmd, FALSE);
+                            goto error;
+                        }
 
                         // Look for whether to execute BEGIN or not
                         if((pConn->pConnAttr->iAutoCommit == SQL_AUTOCOMMIT_OFF || pStmt->iFunctionCall == TRUE)
@@ -4809,4 +4895,985 @@ SQLRETURN libpqCreateSQLProcedureColumnsCustomizedResultSet(
     }
 
     return SQL_SUCCESS;
+}
+
+/*====================================================================================================================================================*/
+
+//---------------------------------------------------------------------------------------------------------
+// Extended Query Protocol portal management for batched DECLARE/FETCH.
+// Uses protocol-level portals (Parse/Bind/Execute) instead of SQL-level
+// DECLARE CURSOR statements. Only used for user SELECT queries when
+// UseDeclareFetch=1 and the result set needs batching.
+//
+
+/**
+ * @brief Skip a single-quoted SQL string literal.
+ *
+ * Supports SQL-standard doubled quotes and, for E'...' escape strings,
+ * backslash-escaped characters. An unterminated literal consumes the
+ * remainder of the command so its contents cannot be misread as SQL tokens.
+ *
+ * @example skipSingleQuotedString("'hello' world", 0) -> " world"
+ * @example skipSingleQuotedString("'it''s fine' x", 0) -> " x"
+ * @example skipSingleQuotedString("'esc\\'d' x", 1) -> " x"
+ *
+ * @param s              Pointer to the opening single quote
+ * @param isEscapeString Whether backslash escapes apply inside this literal
+ * @return Position immediately after the literal, or the command terminator
+ */
+static const char *skipSingleQuotedString(const char *s, int isEscapeString)
+{
+    s++;
+    while (*s)
+    {
+        if (*s == '\\') {
+            if (isEscapeString && s[1]) {
+                s += 2;
+                continue;
+            }
+        } else if (*s == '\'') {
+            if (s[1] == '\'') {
+                s += 2;
+                continue;
+            }
+            return s + 1;
+        }
+        s++;
+    }
+    return s;
+}
+
+/**
+ * @brief Skip a double-quoted SQL identifier.
+ *
+ * @example skipDoubleQuotedIdentifier("\"col\" FROM t") -> " FROM t"
+ * @example skipDoubleQuotedIdentifier("\"has\"\"quote\" x") -> " x"
+ *
+ * @param s Pointer to the opening double quote
+ * @return Position immediately after the identifier, or the command terminator
+ */
+static const char *skipDoubleQuotedIdentifier(const char *s)
+{
+    s++;
+    while (*s)
+    {
+        if (*s == '"') {
+            if (s[1] == '"') {
+                s += 2;
+                continue;
+            }
+            return s + 1;
+        }
+        s++;
+    }
+    return s;
+}
+
+/**
+ * @brief Check whether c is valid in a PostgreSQL dollar-quote tag.
+ *
+ * PostgreSQL supports dollar-quoted string literals: $$body$$ or $tag$body$tag$.
+ * The tag (between the two $ delimiters) may contain letters, digits, and
+ * underscores, but must not start with a digit. This function validates a
+ * single character within such a tag.
+ *
+ * @param c  Character to test
+ * @return Non-zero if c is valid in a dollar-quote tag, 0 otherwise
+ */
+static int isDollarQuoteTagChar(char c)
+{
+    return (c == '_' || (c >= 'a' && c <= 'z') ||
+            (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'));
+}
+
+/**
+ * @brief Skip a PostgreSQL dollar-quoted string literal, if present.
+ *
+ * Recognizes both $$...$$ and $tag$...$tag$. A nonmatching dollar sign is
+ * left for the caller to inspect normally.
+ *
+ * @example skipDollarQuotedString("$$body$$ rest") -> " rest"
+ * @example skipDollarQuotedString("$fn$body$fn$ rest") -> " rest"
+ * @example skipDollarQuotedString("$1 not a tag") -> "$1 not a tag" (unchanged)
+ *
+ * @param s Pointer to a possible opening dollar delimiter
+ * @return Position after the literal, or s when no opening delimiter exists
+ */
+static const char *skipDollarQuotedString(const char *s)
+{
+    const char *tagEnd;
+    const char *content;
+    size_t delimiterLength;
+
+    if (*s != '$') {
+        return s;
+    }
+
+    tagEnd = s + 1;
+    if (*tagEnd != '$') {
+        if (!((*tagEnd == '_') || (*tagEnd >= 'a' && *tagEnd <= 'z') ||
+              (*tagEnd >= 'A' && *tagEnd <= 'Z'))) {
+            return s;
+        }
+        while (isDollarQuoteTagChar(*tagEnd)) {
+            tagEnd++;
+        }
+        if (*tagEnd != '$') {
+            return s;
+        }
+    }
+
+    delimiterLength = (size_t)(tagEnd - s + 1);
+    content = tagEnd + 1;
+    while (*content)
+    {
+        if (*content == '$' && strncmp(content, s, delimiterLength) == 0) {
+            return content + delimiterLength;
+        }
+        content++;
+    }
+    return content;
+}
+
+/**
+ * @brief Skip a complete SQL comment or quoted literal at the scan position.
+ *
+ * Recognizes line and block comments, standard and escape single-quoted
+ * strings, double-quoted identifiers, and PostgreSQL dollar-quoted strings.
+ * The callers can therefore safely inspect only positions returned unchanged.
+ *
+ * @example skipQuotedOrCommented("-- comment\nSELECT", ...) -> "SELECT"
+ * @example skipQuotedOrCommented("'str' x", ...) -> " x"
+ * @example skipQuotedOrCommented("x ...", ...) -> "x ..." (unchanged, not a literal)
+ *
+ * @param s     Current scan position
+ * @param pInSingleQuote Legacy single-quote state retained for scanner call sites
+ * @param pInDoubleQuote Legacy double-quote state retained for scanner call sites
+ * @return Updated scan position, or s when no comment or literal starts here
+ */
+static const char *skipQuotedOrCommented(const char *s, int *pInSingleQuote, int *pInDoubleQuote)
+{
+    if (!*pInSingleQuote && !*pInDoubleQuote)
+    {
+        if (s[0] == '-' && s[1] == '-')
+        {
+            s += 2;
+            while (*s && *s != '\n') {
+                s++;
+            }
+            if (*s) {
+                s++;
+            }
+            return s;
+        }
+        if (s[0] == '/' && s[1] == '*')
+        {
+            s += 2;
+            while (*s && !(s[0] == '*' && s[1] == '/')) {
+                s++;
+            }
+            if (*s) {
+                s += 2;
+            }
+            return s;
+        }
+        if ((*s == 'E' || *s == 'e') && s[1] == '\'') {
+            return skipSingleQuotedString(s + 1, 1);
+        }
+        {
+            const char *next = skipDollarQuotedString(s);
+            if (next != s) {
+                return next;
+            }
+        }
+    }
+    if (*s == '\'' && !*pInDoubleQuote) {
+        return skipSingleQuotedString(s, 0);
+    }
+    if (*s == '"' && !*pInSingleQuote) {
+        return skipDoubleQuotedIdentifier(s);
+    }
+    return s;
+}
+
+/**
+ * @brief Check if a character is SQL whitespace.
+ */
+static int isSqlWhitespace(char c)
+{
+    return (c == ' ' || c == '\t' || c == '\n' || c == '\r');
+}
+
+/**
+ * @brief Check if position s is at a word boundary on the left side.
+ *
+ * Returns true if s is at the start of the string (s == start), or the
+ * character immediately before s is whitespace or a grouping delimiter.
+ */
+static int isWordBoundaryLeft(const char *s, const char *start)
+{
+    if (s == start) {
+        return 1;
+    }
+    char prev = s[-1];
+    return (prev == ' ' || prev == '\t' || prev == '\n' || prev == '\r'
+            || prev == ')' || prev == '(');
+}
+
+/**
+ * @brief Check if a WITH query contains a data-modifying CTE or a top-level INTO.
+ *
+ * Scans for UPDATE/DELETE/INSERT at any paren depth (data-modifying CTEs place
+ * the DML keyword inside their own parens), and for INTO at top level only.
+ *
+ * @example hasDataModifyingCTEOrInto("WITH x AS (DELETE FROM t ...) SELECT ...") -> 1
+ * @example hasDataModifyingCTEOrInto("WITH x AS (SELECT 1) SELECT * INTO y ...") -> 1
+ * @example hasDataModifyingCTEOrInto("WITH x AS (SELECT 1) SELECT * FROM x") -> 0
+ *
+ * @param queryStart  Pointer to the start of the WITH query (after leading whitespace)
+ * @return 1 if ineligible (DML CTE or INTO found), 0 if eligible
+ */
+static int hasDataModifyingCTEOrInto(const char *queryStart)
+{
+    const char *s = queryStart;
+    int inSingleQuote = 0, inDoubleQuote = 0;
+    int parenDepth = 0;
+
+    while (*s)
+    {
+        const char *next = skipQuotedOrCommented(s, &inSingleQuote, &inDoubleQuote);
+        if (next != s) {
+            s = next;
+            continue;
+        }
+        if (inSingleQuote || inDoubleQuote) {
+            s++;
+            continue;
+        }
+
+        if (*s == '(') {
+            parenDepth++;
+            s++;
+            continue;
+        }
+        if (*s == ')') {
+            parenDepth--;
+            s++;
+            continue;
+        }
+
+        // Data-modifying CTE: UPDATE/DELETE/INSERT at any depth
+        if ((*s == 'u' || *s == 'U') && _strnicmp(s, "update", 6) == 0
+            && isWordBoundaryLeft(s, queryStart)
+            && isSqlWhitespace(s[6]))
+        {
+            return 1;
+        }
+        if ((*s == 'd' || *s == 'D') && _strnicmp(s, "delete", 6) == 0
+            && isWordBoundaryLeft(s, queryStart)
+            && isSqlWhitespace(s[6]))
+        {
+            return 1;
+        }
+        if ((*s == 'i' || *s == 'I') && _strnicmp(s, "insert", 6) == 0
+            && isWordBoundaryLeft(s, queryStart)
+            && isSqlWhitespace(s[6]))
+        {
+            return 1;
+        }
+
+        if (parenDepth > 0) {
+            s++;
+            continue;
+        }
+
+        // Top-level INTO
+        if ((*s == 'i' || *s == 'I')
+            && _strnicmp(s, "into", 4) == 0
+            && isWordBoundaryLeft(s, queryStart)
+            && isSqlWhitespace(s[4]))
+        {
+            return 1;
+        }
+        s++;
+    }
+    return 0;
+}
+
+/**
+ * @brief Check if a SELECT query contains a top-level INTO keyword before FROM.
+ *
+ * Detects both "SELECT INTO tab ..." and "SELECT a, b INTO tab FROM ..."
+ * while ignoring INTO inside subqueries, quotes, or comments.
+ *
+ * @example hasSelectInto(" INTO newtab FROM t") -> 1
+ * @example hasSelectInto(" a, b INTO tmp FROM t") -> 1
+ * @example hasSelectInto(" * FROM into_table") -> 0 (INTO is after FROM)
+ * @example hasSelectInto(" (SELECT 1) FROM t") -> 0 (no INTO)
+ *
+ * @param selectStart  Pointer to the first character after "SELECT"
+ * @return 1 if SELECT INTO detected, 0 otherwise
+ */
+static int hasSelectInto(const char *selectStart)
+{
+    const char *s = selectStart;
+    int inSingleQuote = 0, inDoubleQuote = 0;
+    int parenDepth = 0;
+
+    while (*s)
+    {
+        const char *next = skipQuotedOrCommented(s, &inSingleQuote, &inDoubleQuote);
+        if (next != s) {
+            s = next;
+            continue;
+        }
+        if (inSingleQuote || inDoubleQuote) {
+            s++;
+            continue;
+        }
+
+        if (*s == '(') {
+            parenDepth++;
+            s++;
+            continue;
+        }
+        if (*s == ')') {
+            parenDepth--;
+            s++;
+            continue;
+        }
+
+        // Stop scanning at top-level FROM (depth 0)
+        if (parenDepth == 0
+            && (*s == 'f' || *s == 'F')
+            && _strnicmp(s, "from", 4) == 0
+            && (s == selectStart || isSqlWhitespace(s[-1]))
+            && (s[4] == ' ' || s[4] == '\t' || s[4] == '\n' || s[4] == '\r' || s[4] == '\0'))
+        {
+            break;
+        }
+
+        // Check for INTO keyword at top level (word boundary on both sides)
+        if (parenDepth == 0
+            && (*s == 'i' || *s == 'I')
+            && _strnicmp(s, "into", 4) == 0
+            && (s == selectStart || s[-1] == ' ' || s[-1] == '\t' || s[-1] == '\n' || s[-1] == '\r' || s[-1] == ',' || s[-1] == '/')
+            && (isSqlWhitespace(s[4]) || s[4] == '"'))
+        {
+            return 1;
+        }
+        s++;
+    }
+    return 0;
+}
+
+/**
+ * @brief Check if a query contains only a single SQL statement.
+ *
+ * Scans for unquoted semicolons with meaningful content after them.
+ * A trailing semicolon followed only by whitespace or comments is allowed.
+ *
+ * @example isSingleStatement("SELECT 1") -> 1
+ * @example isSingleStatement("SELECT 1;") -> 1 (trailing semicolon OK)
+ * @example isSingleStatement("SELECT 1; SELECT 2") -> 0
+ * @example isSingleStatement("SELECT 'a;b'") -> 1 (semicolon inside quotes)
+ *
+ * @param pszCmd  Query string to check
+ * @return 1 if single statement, 0 if multi-statement
+ */
+static int isSingleStatement(const char *pszCmd)
+{
+    const char *pos = pszCmd;
+    int inSingleQuote = 0, inDoubleQuote = 0;
+
+    while (*pos) {
+        const char *next = skipQuotedOrCommented(pos, &inSingleQuote, &inDoubleQuote);
+        if (next != pos) {
+            pos = next;
+            continue;
+        }
+        if (*pos == ';' && !inSingleQuote && !inDoubleQuote) {
+            // Check if there's anything meaningful after the semicolon
+            const char *after = pos + 1;
+            while (*after) {
+                while (*after == ' ' || *after == '\t' || *after == '\n' || *after == '\r') {
+                    after++;
+                }
+                if (*after == '-' && after[1] == '-') {
+                    after += 2;
+                    while (*after && *after != '\n') {
+                        after++;
+                    }
+                    if (*after) {
+                        after++;
+                    }
+                    continue;
+                }
+                if (*after == '/' && after[1] == '*') {
+                    after += 2;
+                    while (*after && !(after[0] == '*' && after[1] == '/')) {
+                        after++;
+                    }
+                    if (*after) {
+                        after += 2;
+                    }
+                    continue;
+                }
+                break;  // Found non-whitespace, non-comment content
+            }
+            if (*after != '\0') {
+                return 0;  // Multi-statement
+            }
+            break;  // Trailing semicolon (possibly with comments) is OK
+        }
+        pos++;
+    }
+    return 1;
+}
+
+/**
+ * @brief Determine if a query is eligible for portal-based batched fetch.
+ *
+ * Eligible queries must:
+ * - Start with SELECT or WITH (case-insensitive, after leading whitespace only)
+ * - Not contain an unquoted INTO keyword before FROM (SELECT INTO exclusion)
+ * - Not be a multi-statement query (no unquoted semicolons with trailing SQL)
+ *
+ * NOT eligible: DML, DDL, SHOW, SET, SELECT INTO, multi-statement batches,
+ * empty input, or queries with leading comments (e.g., "/ * hint * / SELECT ...").
+ *
+ * Note: Leading comments before SELECT/WITH are NOT stripped — they cause the
+ * function to return 0 (fall back to Simple Query). Comment-skipping is
+ * only used internally when scanning for the INTO keyword and semicolons.
+ *
+ * @param pszCmd  SQL query string to evaluate (NULL-safe)
+ * @return 1 if eligible for portal fetch, 0 if not (falls back to Simple Query)
+ */
+int isQueryEligibleForPortalFetch(const char *pszCmd)
+{
+    const char *cmd;
+
+    if (!pszCmd || !*pszCmd) {
+        RS_LOG_DEBUG("PORTAL", "Query not eligible: NULL or empty command");
+        return 0;
+    }
+
+    // Skip leading whitespace
+    cmd = pszCmd;
+    while (*cmd == ' ' || *cmd == '\t' || *cmd == '\n' || *cmd == '\r') {
+        cmd++;
+    }
+
+    // Must start with SELECT or WITH (CTE) — case-insensitive
+    int isSelect = (_strnicmp(cmd, "select", 6) == 0
+        && (cmd[6] == ' ' || cmd[6] == '\t' || cmd[6] == '\n' || cmd[6] == '\r' || cmd[6] == '('));
+    int isWithCTE = (_strnicmp(cmd, "with", 4) == 0
+        && isSqlWhitespace(cmd[4]));
+
+    if (!isSelect && !isWithCTE) {
+        RS_LOG_DEBUG("PORTAL", "Query not eligible: does not start with SELECT or WITH");
+        return 0;
+    }
+
+    if (isWithCTE) {
+        if (hasDataModifyingCTEOrInto(cmd)) {
+            RS_LOG_DEBUG("PORTAL", "Query not eligible: WITH clause contains data-modifying CTE or INTO");
+            return 0;
+        }
+        if (!isSingleStatement(pszCmd)) {
+            RS_LOG_DEBUG("PORTAL", "Query not eligible: WITH query is multi-statement");
+            return 0;
+        }
+        return 1;
+    }
+
+    // Route SELECT INTO to the fast, one-round-trip Simple Query path on
+    // purpose: SELECT INTO creates a table and returns no rows, so batching
+    // gives it nothing. The portal path costs an extra round trip (PQprepare
+    // is a separate synchronous call before Bind/Describe/Execute are
+    // pipelined) for zero benefit on a statement that can't be batched anyway.
+    if (isSelect) {
+        if (hasSelectInto(cmd + 6)) {
+            RS_LOG_DEBUG("PORTAL", "Query not eligible: SELECT INTO detected");
+            return 0;
+        }
+    }
+
+    if (!isSingleStatement(pszCmd)) {
+        RS_LOG_DEBUG("PORTAL", "Query not eligible: multi-statement query");
+        return 0;
+    }
+    return 1;
+}
+
+/* --- Portal management helpers --- */
+
+static void makePortalName(char *buf, size_t bufSize, RS_STMT_INFO *pStmt)
+{
+    snprintf(buf, bufSize, "_rs_portal_%p", (void*)pStmt);
+}
+
+static void makeStmtName(char *buf, size_t bufSize, RS_STMT_INFO *pStmt)
+{
+    snprintf(buf, bufSize, "_rs_stmt_%p", (void*)pStmt);
+}
+
+static void addPortalError(RS_STMT_INFO *pStmt, RS_CONN_INFO *pConn, const char *fallback)
+{
+    char *pError = libpqErrorMsg(pConn);
+    addError(&pStmt->pErrorList, "HY000",
+             (pError && *pError) ? pError : (char*)fallback, 0, pConn);
+}
+
+/**
+ * @brief Common bailout for portal re-fetch failures.
+ *
+ * Marks the portal as no longer suspended, closes it (committing if needed),
+ * and returns the error sentinel. Called from each error path in
+ * libpqPortalFetchNextBatch to avoid repeating the same three lines.
+ *
+ * @param pStmt  Statement handle with the failing portal
+ * @return Always returns -1 (error sentinel for libpqPortalFetchNextBatch)
+ */
+static long portalFetchFail(RS_STMT_INFO *pStmt)
+{
+    pStmt->iPortalSuspended = 0;
+    libpqPortalClose(pStmt, TRUE);
+    return -1;
+}
+
+/**
+ * @brief Drain and discard all pending results from the connection.
+ *
+ * Repeatedly calls PQgetResult() until it returns NULL, clearing each
+ * result. Used after sending a Close/Execute message (and its implicit
+ * trailing NULL terminator) to leave the connection in IDLE state.
+ *
+ * @param pgConn Connection to drain
+ */
+static void drainPortalResults(PGconn *pgConn)
+{
+    PGresult *pgResult;
+
+    while ((pgResult = PQgetResult(pgConn)) != NULL) {
+        PQclear(pgResult);
+    }
+}
+
+/**
+ * @brief Execute a SELECT query using Extended Query Protocol with a named portal.
+ *
+ * Flow: BEGIN (if autocommit) -> Parse -> Bind + Describe + Execute(fetchSize) -> Sync
+ * If result is PGRES_PORTAL_SUSPENDED, more rows are available via
+ * libpqPortalFetchNextBatch().
+ *
+ * Redshift requires an explicit transaction for portals to survive between
+ * Execute calls. We issue BEGIN if not already in a transaction.
+ *
+ * Only called when UseDeclareFetch=1 and query passes eligibility check.
+ *
+ * @param pStmt         Statement info handle
+ * @param pszCmd        SQL query string
+ * @param iLockRequired Whether to acquire the connection semaphore
+ * @return SQL_SUCCESS or SQL_ERROR
+ */
+SQLRETURN libpqExecuteWithPortal(RS_STMT_INFO *pStmt, char *pszCmd, int iLockRequired)
+{
+    SQLRETURN rc = SQL_SUCCESS;
+    RS_CONN_INFO *pConn = pStmt->phdbc;
+    PGconn *pgConn = pConn->pgConn;
+    PGresult *pgResult = NULL;
+    ExecStatusType pqRc;
+    int fetchSize;
+    char portalName[RS_PORTAL_NAME_BUF_SIZE];
+    char stmtName[RS_PORTAL_NAME_BUF_SIZE];
+    int sendStatus;
+    int needsBegin = 0;
+    int prepareSucceeded = 0;
+
+    fetchSize = pConn->pConnectProps->iFetchSize;
+    if (fetchSize <= 0) {
+        fetchSize = RS_DEFAULT_FETCH_SIZE;
+    }
+
+    // Generate unique portal/statement names derived from statement handle address.
+    // Uniqueness is guaranteed because no two active statement handles share the
+    // same memory address, and only one portal is active per statement at a time
+    // (single-threaded-per-pStmt contract enforced by hSemMultiStmt).
+    makePortalName(portalName, sizeof(portalName), pStmt);
+    makeStmtName(stmtName, sizeof(stmtName), pStmt);
+
+    RS_LOG_DEBUG("PORTAL", "Executing with portal: stmt=%s portal=%s fetchSize=%d",
+                 stmtName, portalName, fetchSize);
+
+    // NOTE: closing other portals on this connection is handled by the
+    // caller (libpqExecuteDirectOrPreparedOnThread, line ~928) BEFORE
+    // it acquires hSemMultiStmt.  We must NOT do it here because our
+    // only caller passes iLockRequired=FALSE (lock already held), and
+    // libpqPortalClose(TRUE) would deadlock trying to re-acquire it.
+
+    if (iLockRequired) {
+        rsLockSem(pConn->hSemMultiStmt);
+        pgWaitForCscThreadToFinish(pgConn, FALSE);
+    }
+
+    // Skip any pending streaming cursor results
+    skipAllResultsOfStreamingRowsUsingConnection(pConn);
+
+    // Step 1: BEGIN if not already in a transaction.
+    // Redshift requires explicit transactions for portals to survive between Executes.
+    // Always BEGIN when idle — even under autocommit OFF the connection may be idle
+    // (e.g., right after connect or after user commits). Without BEGIN, Sync destroys
+    // the named portal. Only auto-COMMIT on close when autocommit is ON.
+    if (libpqIsTransactionIdle(pConn)) {
+        pgResult = PQexec(pgConn, "BEGIN");
+        if (PQresultStatus(pgResult) != PGRES_COMMAND_OK) {
+            addPortalError(pStmt, pConn, "BEGIN failed for portal");
+            PQclear(pgResult);
+            rc = SQL_ERROR;
+            goto error;
+        }
+        PQclear(pgResult);
+        pgResult = NULL;
+        needsBegin = 1;
+    }
+
+    // Step 2: Parse - create a named prepared statement (synchronous)
+    pgResult = PQprepare(pgConn, stmtName, pszCmd, 0, NULL);
+    if (PQresultStatus(pgResult) != PGRES_COMMAND_OK) {
+        addPortalError(pStmt, pConn, "Parse failed for portal execution");
+        PQclear(pgResult);
+        rc = SQL_ERROR;
+        goto error;
+    }
+    PQclear(pgResult);
+    pgResult = NULL;
+    prepareSucceeded = 1;
+
+    // Step 3: Bind (constructs Bind message in output buffer, no flush)
+    sendStatus = PQsendBindPortal(pgConn, stmtName, portalName, 0, NULL, NULL, NULL, 0);
+    if (!sendStatus) {
+        addPortalError(pStmt, pConn, "Bind portal failed");
+        rc = SQL_ERROR;
+        goto error;
+    }
+
+    // Step 3b: Describe Portal (needed so server sends RowDescription before DataRows)
+    if (!PQqueueDescribePortal(pgConn, portalName)) {
+        addPortalError(pStmt, pConn, "Failed to construct Describe Portal message");
+        rc = SQL_ERROR;
+        goto error;
+    }
+
+    // Step 4: Execute with row limit (sends Execute+Sync+Flush)
+    sendStatus = PQsendExecutePortal(pgConn, portalName, fetchSize);
+    if (!sendStatus) {
+        addPortalError(pStmt, pConn, "Execute portal failed");
+        rc = SQL_ERROR;
+        goto error;
+    }
+
+    // Step 5: Get result (PQgetResult returns one PGresult with the rows)
+    pgResult = PQgetResult(pgConn);
+    if (!pgResult) {
+        addError(&pStmt->pErrorList, "HY000", "No result from portal execute", 0, NULL);
+        rc = SQL_ERROR;
+        goto error;
+    }
+
+    pqRc = PQresultStatus(pgResult);
+    if (pqRc != PGRES_TUPLES_OK && pqRc != PGRES_PORTAL_SUSPENDED) {
+        addPortalError(pStmt, pConn, "Execute portal returned unexpected status");
+        PQclear(pgResult);
+        rc = SQL_ERROR;
+        goto error;
+    }
+
+    // Consume any trailing NULL result from PQgetResult
+    drainPortalResults(pgConn);
+
+    // Set portal state
+    pStmt->iPortalActive = 1;
+    pStmt->iPortalSuspended = (pqRc == PGRES_PORTAL_SUSPENDED) ? 1 : 0;
+    // Only auto-COMMIT on portal close when autocommit is ON.
+    // Under autocommit OFF, the user manages COMMIT/ROLLBACK — standard ODBC
+    // behavior where every statement implicitly starts a transaction and the user
+    // must commit explicitly. Our existing non-portal path (line ~1219) does the
+    // same lazy BEGIN without auto-COMMIT under autocommit OFF.
+    // Error path ROLLBACKs because the query failed (unusable transaction).
+    pStmt->iPortalNeedsCommit = (pConn->pConnAttr->iAutoCommit != SQL_AUTOCOMMIT_OFF) ? needsBegin : 0;
+
+    // Normalize result status: downstream code expects PGRES_TUPLES_OK for valid row data.
+    // We've already captured the suspended state in iPortalSuspended above.
+    // setResultInStmt is called with PGRES_TUPLES_OK explicitly (readStatusFlag=FALSE),
+    // so it treats this result as valid tuples regardless of the internal status field.
+
+    RS_LOG_DEBUG("PORTAL", "First batch: %d rows, suspended=%d, needsCommit=%d",
+                 PQntuples(pgResult), pStmt->iPortalSuspended, needsBegin);
+
+    // Store result using the existing result infrastructure
+    {
+        int iStopFlag = FALSE;
+        rc = setResultInStmt(rc, pStmt, pgResult, FALSE, PGRES_TUPLES_OK, &iStopFlag, FALSE);
+    }
+
+    if (rc == SQL_ERROR) {
+        goto error;
+    }
+
+    pStmt->iStatus = RS_EXECUTE_STMT;
+
+    if (iLockRequired) {
+        rsUnlockSem(pConn->hSemMultiStmt);
+    }
+
+    return rc;
+
+error:
+    // Drain any pending responses so the connection is back in IDLE state
+    drainPortalResults(pgConn);
+
+    // Close the portal and deallocate the prepared statement, but only if
+    // Parse succeeded (i.e. there's actually something server-side to clean up).
+    if (prepareSucceeded) {
+        int closeStatus = PQsendClosePortal(pgConn, portalName);
+        if (closeStatus) {
+            drainPortalResults(pgConn);
+        }
+
+        int closeStmtStatus = PQsendCloseStatement(pgConn, stmtName);
+        if (closeStmtStatus) {
+            drainPortalResults(pgConn);
+        }
+    }
+
+    // Rollback if we started a transaction
+    if (needsBegin) {
+        PGresult *rbResult = PQexec(pgConn, "ROLLBACK");
+        if (rbResult) {
+            PQclear(rbResult);
+        }
+    }
+
+    pStmt->iPortalActive = 0;
+    pStmt->iPortalSuspended = 0;
+    pStmt->iPortalNeedsCommit = 0;
+
+    if (iLockRequired) {
+        rsUnlockSem(pConn->hSemMultiStmt);
+    }
+
+    return rc;
+}
+
+/**
+ * @brief Fetch the next batch from an open portal.
+ *
+ * Called when all rows in the current batch are consumed and
+ * iPortalSuspended == 1 (more rows available). Sends Execute+Sync
+ * and pre-populates column metadata via PQprepareResultForResume.
+ *
+ * @param pStmt     Statement info handle with active portal
+ * @return >0 number of rows in new batch, 0 if no more rows, -1 on error
+ */
+long libpqPortalFetchNextBatch(RS_STMT_INFO *pStmt)
+{
+    RS_CONN_INFO *pConn = pStmt->phdbc;
+    PGconn *pgConn = pConn->pgConn;
+    PGresult *pgResult = NULL;
+    ExecStatusType pqRc;
+    int fetchSize;
+    int sendStatus;
+    char portalName[RS_PORTAL_NAME_BUF_SIZE];
+    long ntuples;
+    int iRetry;
+
+    if (!pStmt->iPortalActive || !pStmt->iPortalSuspended) {
+        return 0;
+    }
+
+    fetchSize = pConn->pConnectProps->iFetchSize;
+    if (fetchSize <= 0) {
+        fetchSize = RS_DEFAULT_FETCH_SIZE;
+    }
+
+    makePortalName(portalName, sizeof(portalName), pStmt);
+
+    // "Suspended" means the server stopped only because it hit the row
+    // limit, not because it ran out of rows. Suspended + 0 rows is a
+    // contradiction; retry instead of silently reporting "no more data"
+    // and truncating the result set. Bounded so a persistent contradiction
+    // becomes an error instead of an infinite loop.
+    for (iRetry = 0; iRetry < RS_PORTAL_SUSPENDED_EMPTY_RETRY_LIMIT; iRetry++)
+    {
+        rsLockSem(pConn->hSemMultiStmt);
+
+        // Validate before sending so a missing prior result cannot leave an
+        // unread Execute response on the connection. The actual preparation
+        // must happen after the send: PQsendQueryStart clears conn->result.
+        PGresult *prevResult = pStmt->pResultHead ? pStmt->pResultHead->pgResult : NULL;
+        if (!prevResult) {
+            addError(&pStmt->pErrorList, "HY000",
+                     "No previous batch result to resume portal fetch from", 0, NULL);
+            rsUnlockSem(pConn->hSemMultiStmt);
+            return portalFetchFail(pStmt);
+        }
+
+        // Resume skips Describe because the server rejects Describe while a
+        // portal is suspended; its normal send path still requires IDLE.
+        sendStatus = PQsendExecutePortalResume(pgConn, portalName, fetchSize);
+        if (!sendStatus) {
+            addPortalError(pStmt, pConn, "Execute portal failed on re-fetch");
+            rsUnlockSem(pConn->hSemMultiStmt);
+            return portalFetchFail(pStmt);
+        }
+
+        // The server does not resend RowDescription for a resumed portal.
+        // Prepare metadata after the send path has reset conn->result, but
+        // before PQgetResult parses the incoming DataRow messages.
+        PQprepareResultForResume(pgConn, prevResult);
+
+        pgResult = PQgetResult(pgConn);
+
+        // Consume trailing NULL
+        drainPortalResults(pgConn);
+
+        rsUnlockSem(pConn->hSemMultiStmt);
+
+        if (!pgResult) {
+            addError(&pStmt->pErrorList, "HY000", "No result from portal re-fetch", 0, NULL);
+            return portalFetchFail(pStmt);
+        }
+
+        pqRc = PQresultStatus(pgResult);
+        if (pqRc != PGRES_TUPLES_OK && pqRc != PGRES_PORTAL_SUSPENDED) {
+            addPortalError(pStmt, pConn, "FETCH failed");
+            PQclear(pgResult);
+            return portalFetchFail(pStmt);
+        }
+
+        ntuples = PQntuples(pgResult);
+        pStmt->iPortalSuspended = (pqRc == PGRES_PORTAL_SUSPENDED) ? 1 : 0;
+
+        if (ntuples > 0 || pqRc == PGRES_TUPLES_OK) {
+            break;
+        }
+
+        // pqRc == PGRES_PORTAL_SUSPENDED && ntuples == 0: contradiction, retry.
+        RS_LOG_WARN("PORTAL", "Portal suspended with 0 rows on re-fetch, retrying (attempt %d of %d)",
+                    iRetry + 1, RS_PORTAL_SUSPENDED_EMPTY_RETRY_LIMIT);
+        PQclear(pgResult);
+        pgResult = NULL;
+    }
+
+    if (!pgResult) {
+        addError(&pStmt->pErrorList, "HY000",
+                 "Portal repeatedly suspended with 0 rows on re-fetch", 0, NULL);
+        return portalFetchFail(pStmt);
+    }
+
+    // Note: pgResult->resultStatus may be PGRES_PORTAL_SUSPENDED internally,
+    // but the only downstream PQresultStatus check (rsutil.c:13736) is guarded
+    // by isStreamingCursorMode which is mutually exclusive with portal fetch.
+
+    RS_LOG_DEBUG("PORTAL", "Next batch: %ld rows, suspended=%d", ntuples, pStmt->iPortalSuspended);
+
+    if (ntuples == 0) {
+        PQclear(pgResult);
+        return 0;
+    }
+
+    // Replace the current PGresult in the result chain
+    if (pStmt->pResultHead && pStmt->pResultHead->pgResult) {
+        PQclear(pStmt->pResultHead->pgResult);
+        pStmt->pResultHead->pgResult = pgResult;
+        pStmt->pResultHead->iNumberOfRowsInMem = (int)ntuples;
+    } else {
+        PQclear(pgResult);
+        return portalFetchFail(pStmt);
+    }
+
+    return ntuples;
+}
+
+/**
+ * @brief Close an open portal and deallocate the prepared statement.
+ *
+ * Sends Close Portal + DEALLOCATE + COMMIT (if we started the transaction).
+ * Called from SQLFreeStmt(SQL_CLOSE) / SQLCloseCursor.
+ *
+ * @param pStmt         Statement info handle with active portal
+ * @param iLockRequired Whether to acquire the connection semaphore
+ */
+void libpqPortalClose(RS_STMT_INFO *pStmt, int iLockRequired)
+{
+    RS_CONN_INFO *pConn;
+    PGconn *pgConn;
+    char portalName[RS_PORTAL_NAME_BUF_SIZE];
+    char stmtName[RS_PORTAL_NAME_BUF_SIZE];
+    int sendStatus;
+    PGresult *pgResult;
+
+    if (!pStmt || !pStmt->iPortalActive) {
+        return;
+    }
+
+    pConn = pStmt->phdbc;
+    if (!pConn) {
+        return;
+    }
+
+    pgConn = pConn->pgConn;
+    if (!pgConn || PQstatus(pgConn) != CONNECTION_OK) {
+        goto cleanup_state;
+    }
+
+    makePortalName(portalName, sizeof(portalName), pStmt);
+    makeStmtName(stmtName, sizeof(stmtName), pStmt);
+
+    RS_LOG_DEBUG("PORTAL", "Closing portal=%s stmt=%s needsCommit=%d",
+                 portalName, stmtName, pStmt->iPortalNeedsCommit);
+
+    if (iLockRequired) {
+        rsLockSem(pConn->hSemMultiStmt);
+    }
+
+    // Close the portal
+    sendStatus = PQsendClosePortal(pgConn, portalName);
+    if (sendStatus) {
+        drainPortalResults(pgConn);
+    } else {
+        RS_LOG_ERROR("PORTAL", "Failed to send Close Portal for portal=%s: %s",
+                     portalName, libpqErrorMsg(pConn));
+    }
+
+    // Deallocate the prepared statement using protocol Close('S') message
+    sendStatus = PQsendCloseStatement(pgConn, stmtName);
+    if (sendStatus) {
+        drainPortalResults(pgConn);
+    } else {
+        RS_LOG_ERROR("PORTAL", "Failed to send Close Statement for stmt=%s: %s",
+                     stmtName, libpqErrorMsg(pConn));
+    }
+
+    // COMMIT if we started a transaction for this portal
+    if (pStmt->iPortalNeedsCommit && !libpqIsTransactionIdle(pConn)) {
+        pgResult = PQexec(pgConn, "COMMIT");
+        if (pgResult) {
+            if (PQresultStatus(pgResult) != PGRES_COMMAND_OK) {
+                RS_LOG_ERROR("PORTAL", "COMMIT failed while closing portal=%s: %s",
+                             portalName, libpqErrorMsg(pConn));
+            }
+            PQclear(pgResult);
+        }
+    }
+
+    if (iLockRequired) {
+        rsUnlockSem(pConn->hSemMultiStmt);
+    }
+
+cleanup_state:
+    pStmt->iPortalActive = 0;
+    pStmt->iPortalSuspended = 0;
+    pStmt->iPortalNeedsCommit = 0;
 }

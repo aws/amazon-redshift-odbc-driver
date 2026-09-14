@@ -480,6 +480,9 @@ class RS_STMT_INFO
 
       pExecThread = NULL;
       pCscStatementContext = NULL;
+      iPortalActive = 0;
+      iPortalSuspended = 0;
+      iPortalNeedsCommit = 0;
       iMultiInsert = 0;
       iLastBatchMultiInsert = 0;
       pszLastBatchMultiInsertCmd = NULL;
@@ -543,6 +546,11 @@ class RS_STMT_INFO
 
     // Statement context for CSC in libpq
     struct _CscStatementContext *pCscStatementContext;
+
+    // Extended Query Protocol portal state for batched DECLARE/FETCH
+    int iPortalActive;              // 1 = portal is open on this stmt
+    int iPortalSuspended;           // 1 = last Execute returned PortalSuspended (more rows)
+    int iPortalNeedsCommit;         // 1 = we issued BEGIN for portal, need COMMIT on close
 
     // > 0 means INSERT converted to multi INSERT. It shows mutlipier factor.
     int iMultiInsert;
@@ -1927,6 +1935,12 @@ void uninitLibpq();
 void *libpqFreemem(void *ptr);
 
 ConnStatusType libpqConnectionStatus(RS_CONN_INFO *pConn);
+
+// Extended Query Protocol portal management for batched fetch
+int isQueryEligibleForPortalFetch(const char *pszCmd);
+SQLRETURN libpqExecuteWithPortal(RS_STMT_INFO *pStmt, char *pszCmd, int iLockRequired);
+long libpqPortalFetchNextBatch(RS_STMT_INFO *pStmt);
+void libpqPortalClose(RS_STMT_INFO *pStmt, int iLockRequired);
 
 void libpqSetStreamingCursorRows(RS_STMT_INFO *pStmt);
 void libpqSetEndOfStreamingCursorQuery(RS_STMT_INFO *pStmt, int flag);

@@ -418,8 +418,8 @@ SQLRETURN  SQL_API RS_CONN_INFO::RS_SQLConnect(SQLHDBC phdbc,
         }
 
         // Read properties using DSN
-        if(!pConn->iInternal) {
-          pConn->readMoreConnectPropsFromRegistry(FALSE);
+        if (!pConn->iInternal) {
+            pConn->readMoreConnectPropsFromRegistry(FALSE);
         }
 
 		// Check for AuthProfile
@@ -428,6 +428,8 @@ SQLRETURN  SQL_API RS_CONN_INFO::RS_SQLConnect(SQLHDBC phdbc,
 		{
 			return freeAndReturn();
 		}
+
+        applyUseDeclareFetchExclusivity(pConnectProps);
 
         // Check for mandatory values
         if(!pConnectProps->isIAMAuth && !pConnectProps->isNativeAuth && pConnectProps->szUser[0] == '\0') {
@@ -569,6 +571,37 @@ SQLRETURN SQL_API SQLDriverConnect(SQLHDBC            phdbc,
     endApiMutex(NULL, phdbc);
 
     return rc;
+}
+
+/*====================================================================================================================================================*/
+
+/**
+ * @brief Enforce mutual exclusivity of UseDeclareFetch with StreamingCursorRows and CSC.
+ *
+ * When UseDeclareFetch=1, forces StreamingCursorRows=0 and CscEnable=0, and
+ * applies the default fetch size if none is set. Called from all three connect
+ * paths (DriverConnect, BrowseConnect, and DSN-based readMoreConnectPropsFromRegistry)
+ * after connection properties are fully parsed.
+ *
+ * Declared in rsutil.h (not static) so it can be exercised directly by unit tests.
+ *
+ * @param pConnectProps  Connection properties struct to enforce exclusivity on
+ */
+void applyUseDeclareFetchExclusivity(RS_CONNECT_PROPS_INFO *pConnectProps)
+{
+    if (pConnectProps->iUseDeclareFetch) {
+        if (pConnectProps->iStreamingCursorRows > 0 || pConnectProps->iCscEnable) {
+            RS_LOG_TRACE("RSCNN",
+                "UseDeclareFetch=1 overriding StreamingCursorRows=%d -> 0, CscEnable=%d -> 0",
+                pConnectProps->iStreamingCursorRows, pConnectProps->iCscEnable);
+        }
+        pConnectProps->iStreamingCursorRows = 0;
+        pConnectProps->iCscEnable = 0;
+
+        if (pConnectProps->iFetchSize <= 0) {
+            pConnectProps->iFetchSize = RS_DEFAULT_FETCH_SIZE;
+        }
+    }
 }
 
 /*====================================================================================================================================================*/
@@ -720,6 +753,7 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
 					goto error;
 				}
 
+                applyUseDeclareFetchExclusivity(pConnectProps);
 
                 /* DSN less connection
                 */
@@ -1171,6 +1205,8 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLBrowseConnect(SQLHDBC          phdbc,
         {
             return rc;
         }
+
+        applyUseDeclareFetchExclusivity(pConnectProps);
 
         if(pConnectProps->szHost[0] == '\0'
             || pConnectProps->szPort[0] == '\0'
@@ -3356,18 +3392,10 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
       if(pConnectProps->iStreamingCursorRows < 0)
         pConnectProps->iStreamingCursorRows = 0;
 
-      // TODO: Uncomment when DECLARE/FETCH execution path is implemented.
-      // UseDeclareFetch is mutually exclusive with StreamingCursorRows and CSC.
-      // if (pConnectProps->iUseDeclareFetch) {
-      //     pConnectProps->iStreamingCursorRows = 0;
-      //     pConnectProps->iCscEnable = 0;
-      // }
-
-      // Default batch size when UseDeclareFetch is enabled but Fetch is not specified.
-      // TODO: Uncomment when execution path is implemented.
-      // if (pConnectProps->iUseDeclareFetch && pConnectProps->iFetchSize == 0) {
-      //     pConnectProps->iFetchSize = RS_DEFAULT_FETCH_SIZE;
-      // }
+      // NOTE: UseDeclareFetch mutual-exclusivity enforcement is applied at the
+      // end of this function (after all DSN .ini reads of UseDeclareFetch/Fetch),
+      // so it is intentionally NOT done here where iUseDeclareFetch may not yet
+      // be populated from the DSN.
 
 	  // Read current db only or multiple db
 	  // If user didn't include DatabaseMetadataCurrentDbOnly flag in dsn, RS_SQLGetPrivateProfileString would return empty string, which will cause readBoolValFromDsn returning false to bVal

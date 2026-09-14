@@ -31,6 +31,11 @@
 #include "MessageLoopState.h"
 #include <rslog.h>
 
+/* PostgreSQL/Redshift's hard column limit per table/result (see pg_config_manual.h).
+ * Used to sanity-bound server-derived column counts before allocation. */
+#define PG_MAX_COLUMNS_LIMIT 1600
+
+
 /* keep this in same order as ExecStatusType in libpq-fe.h */
 char	   *const pgresStatus[] = {
 	"PGRES_EMPTY_QUERY",
@@ -2285,6 +2290,56 @@ PQsendDescribePortal(PGconn *conn, const char *portal)
 }
 
 /*
+ * pqPutDescribeMsg
+ *	 Construct a Describe message ('D' + desc_type + desc_target) in the
+ *	 output buffer. Shared by PQsendDescribe (which follows it with a Sync
+ *	 and a Flush) and PQqueueDescribePortal (which queues only this, for
+ *	 pipelining alongside Bind and Execute).
+ *
+ * Returns 0 on success, -1 on failure.
+ */
+static int
+pqPutDescribeMsg(PGconn *conn, char desc_type, const char *desc_target)
+{
+	if (pqPutMsgStart('D', false, conn) < 0 ||
+		pqPutc(desc_type, conn) < 0 ||
+		pqPuts(desc_target, conn) < 0 ||
+		pqPutMsgEnd(conn) < 0) {
+		return -1;
+	}
+	return 0;
+}
+
+/*
+ * PQqueueDescribePortal
+ *	 Queue a Describe Portal message in the output buffer, without a
+ *	 Sync and without flushing, so it can be pipelined alongside Bind
+ *	 and Execute in one round trip. PQsendDescribePortal can't be used
+ *	 for this: it calls PQsendQueryStart (which requires IDLE and would
+ *	 reject an already-in-progress pipeline), appends its own Sync, and
+ *	 flushes immediately, none of which are wanted mid-pipeline here.
+ *
+ * Returns: 1 if successfully queued
+ *			0 if error (conn->errorMessage is set, pqHandleSendFailure
+ *			already called)
+ */
+int
+PQqueueDescribePortal(PGconn *conn, const char *portal)
+{
+	if (!portal)
+	{
+		portal = "";
+	}
+
+	if (pqPutDescribeMsg(conn, 'P', portal) < 0)
+	{
+		pqHandleSendFailure(conn);
+		return 0;
+	}
+	return 1;
+}
+
+/*
  * PQsendDescribe
  *	 Common code to send a Describe command
  *
@@ -2312,10 +2367,7 @@ PQsendDescribe(PGconn *conn, char desc_type, const char *desc_target)
 	}
 
 	/* construct the Describe message */
-	if (pqPutMsgStart('D', false, conn) < 0 ||
-		pqPutc(desc_type, conn) < 0 ||
-		pqPuts(desc_target, conn) < 0 ||
-		pqPutMsgEnd(conn) < 0)
+	if (pqPutDescribeMsg(conn, desc_type, desc_target) < 0)
 		goto sendFailed;
 
 	/* construct the Sync message */
@@ -2555,6 +2607,88 @@ sendExecuteSync(PGconn *conn, const char *portalName, int maxRows)
 sendFailed:
 	pqHandleSendFailure(conn);
 	return 0;
+}
+
+/**
+ * @brief Send Execute+Sync for re-fetching from a suspended portal.
+ *
+ * Like PQsendExecutePortal but for subsequent batch fetches from a
+ * suspended portal. Uses PQsendQueryStart for the standard IDLE and
+ * connection guards.
+ * Does NOT send Describe because the server rejects it in PortalSuspended
+ * state (RowDescription was already sent on the first batch).
+ *
+ * @param conn          Connection object
+ * @param portalName    Name of the suspended portal
+ * @param maxRows       Maximum rows to fetch in this batch
+ * @return 1 if successfully submitted, 0 if error
+ */
+int
+PQsendExecutePortalResume(PGconn *conn, const char *portalName, int maxRows)
+{
+	if (!PQsendQueryStart(conn)) {
+		return 0;
+	}
+
+	if (!portalName) {
+		portalName = "";
+	}
+
+	return sendExecuteSync(conn, portalName, maxRows);
+}
+
+/**
+ * @brief Pre-create conn->result with column metadata from a previous batch.
+ *
+ * Needed before reading responses from PQsendExecutePortalResume because
+ * no Describe is sent (server rejects it in PortalSuspended state), so the
+ * server won't send RowDescription before DataRows. The protocol handler
+ * requires conn->result to be non-NULL with PGRES_TUPLES_OK to accept 'D'
+ * messages.
+ *
+ * Call this after PQsendExecutePortalResume and before PQgetResult.
+ *
+ * @param conn          Connection object
+ * @param srcResult     Previous batch's PGresult to copy column metadata from
+ */
+void
+PQprepareResultForResume(PGconn *conn, const PGresult *srcResult)
+{
+	PGresult *newResult;
+	int nfields;
+
+	if (!conn || !srcResult) {
+		return;
+	}
+
+	nfields = srcResult->numAttributes;
+	if (nfields <= 0) {
+		return;
+	}
+
+	/* Sanity bound on nfields to prevent integer overflow in the
+	 * nfields * sizeof(PGresAttDesc) allocation below. numAttributes is
+	 * derived from the server's RowDescription (network input); a
+	 * corrupted/malicious value could otherwise overflow on 32-bit builds. */
+	if (nfields > PG_MAX_COLUMNS_LIMIT) {
+		return;
+	}
+
+	/* Clear any existing result */
+	pqClearAsyncResult(conn);
+
+	/* Create fresh result with TUPLES_OK status */
+	newResult = PQmakeEmptyPGresult(conn, PGRES_TUPLES_OK);
+	if (!newResult) {
+		return;
+	}
+
+	if (!PQsetResultAttrs(newResult, nfields, srcResult->attDescs)) {
+		PQclear(newResult);
+		return;
+	}
+
+	conn->result = newResult;
 }
 
 /**

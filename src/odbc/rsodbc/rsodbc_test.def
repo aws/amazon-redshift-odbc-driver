@@ -411,3 +411,8 @@ EXPORTS
 	PQsendCloseStatement
 	PQresultStatus
 	PQresStatus
+	; Execution path helpers
+	isQueryEligibleForPortalFetch
+	PQsendExecutePortalResume
+	PQprepareResultForResume
+	applyUseDeclareFetchExclusivity

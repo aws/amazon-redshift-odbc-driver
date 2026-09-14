@@ -814,6 +814,10 @@ int fileExists(const char * pFileName);
 int readTraceOptionsFromIniFile(char  *pszTraceLevel,int iTraceLevelBufLen, char *pszTraceFile, int iTraceFileBufLen);
 int readDriverOptionFromIniFile(const char  *pszOptionName,char *pszOptionValBuf, int iOptionValBufLen);
 void readCscOptionsForDsnlessConnection(RS_CONNECT_PROPS_INFO *pConnectProps);
+// extern "C" so this keeps a plain (unmangled) exported symbol name, matching
+// the entry in rsodbc_test.def that lets unit tests call it directly across
+// the rsodbc64-test DLL boundary on Windows.
+extern "C" void applyUseDeclareFetchExclusivity(RS_CONNECT_PROPS_INFO *pConnectProps);
 
 #if defined LINUX 
 char *strlwr(char *str);

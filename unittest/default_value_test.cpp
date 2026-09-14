@@ -148,31 +148,54 @@ TEST_F(UseDeclareFetchConnStringTest, Fetch_combined_with_other_properties) {
 
 // ===========================================================================
 // Mutual exclusivity tests: UseDeclareFetch disables SCR and CSC.
-// The enforcement code is currently commented out pending the execution path
-// implementation . These tests document the intended
-// behavior and will pass once the code is uncommented.
 // ===========================================================================
 
-TEST_F(UseDeclareFetchConnStringTest, DISABLED_MutualExclusivity_UseDeclareFetch_disables_StreamingCursorRows) {
-    // When UseDeclareFetch=1, StreamingCursorRows should be forced to 0
-    // TODO: Enable when mutual exclusivity code is uncommented
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_UseDeclareFetch_disables_StreamingCursorRows) {
     parseConnStr("UseDeclareFetch=1;StreamingCursorRows=5000;");
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
     EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 1);
     EXPECT_EQ(pConn->pConnectProps->iStreamingCursorRows, 0);
 }
 
-TEST_F(UseDeclareFetchConnStringTest, DISABLED_MutualExclusivity_UseDeclareFetch_disables_CscEnable) {
-    // When UseDeclareFetch=1, CscEnable should be forced to 0
-    // TODO: Enable when mutual exclusivity code is uncommented
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_UseDeclareFetch_disables_CscEnable) {
     parseConnStr("UseDeclareFetch=1;CscEnable=1;");
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
     EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 1);
     EXPECT_EQ(pConn->pConnectProps->iCscEnable, 0);
 }
 
-TEST_F(UseDeclareFetchConnStringTest, DISABLED_MutualExclusivity_default_fetch_size_applied) {
-    // When UseDeclareFetch=1 and Fetch=0, the driver should apply the default batch size
-    // TODO: Enable when mutual exclusivity code is uncommented
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_default_fetch_size_applied) {
     parseConnStr("UseDeclareFetch=1;");
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
     EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 1);
     EXPECT_EQ(pConn->pConnectProps->iFetchSize, RS_DEFAULT_FETCH_SIZE);
+}
+
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_order_independent_SCR_before_UDF) {
+    parseConnStr("StreamingCursorRows=5000;UseDeclareFetch=1;");
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
+    EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 1);
+    EXPECT_EQ(pConn->pConnectProps->iStreamingCursorRows, 0);
+}
+
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_order_independent_CSC_before_UDF) {
+    parseConnStr("CscEnable=1;UseDeclareFetch=1;Fetch=1000;");
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
+    EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 1);
+    EXPECT_EQ(pConn->pConnectProps->iCscEnable, 0);
+    EXPECT_EQ(pConn->pConnectProps->iFetchSize, 1000);
+}
+
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_negative_fetch_gets_default) {
+    parseConnStr("UseDeclareFetch=1;Fetch=-50;");
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
+    EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 1);
+    EXPECT_EQ(pConn->pConnectProps->iFetchSize, RS_DEFAULT_FETCH_SIZE);
+}
+
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_UDF_disabled_does_not_affect_SCR) {
+    parseConnStr("UseDeclareFetch=0;StreamingCursorRows=5000;");
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
+    EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 0);
+    EXPECT_EQ(pConn->pConnectProps->iStreamingCursorRows, 5000);
 }

@@ -591,6 +591,11 @@ SQLRETURN  SQL_API RsPrepare::RS_SQLCloseCursor(RS_STMT_INFO *pStmt)
 {
     SQLRETURN  rc = SQL_SUCCESS;
 
+    // Close Extended Query Protocol portal if active
+    if (pStmt->iPortalActive) {
+        libpqPortalClose(pStmt, TRUE);
+    }
+
     releaseResults(pStmt);
     pStmt->iStatus = RS_CLOSE_STMT;
 

@@ -500,6 +500,7 @@ extern PGresult *PQdescribePrepared(PGconn *conn, const char *stmt);
 extern PGresult *PQdescribePortal(PGconn *conn, const char *portal);
 extern int	PQsendDescribePrepared(PGconn *conn, const char *stmt);
 extern int	PQsendDescribePortal(PGconn *conn, const char *portal);
+extern int	PQqueueDescribePortal(PGconn *conn, const char *portal);
 
 /* Portal management for batched fetch (Extended Query Protocol) */
 extern int	PQsendBindPortal(PGconn *conn, const char *stmtName,
@@ -507,6 +508,8 @@ extern int	PQsendBindPortal(PGconn *conn, const char *stmtName,
 			const char *const *paramValues, const int *paramLengths,
 			const int *paramFormats, int resultFormat);
 extern int	PQsendExecutePortal(PGconn *conn, const char *portalName, int maxRows);
+extern int	PQsendExecutePortalResume(PGconn *conn, const char *portalName, int maxRows);
+extern void	PQprepareResultForResume(PGconn *conn, const PGresult *srcResult);
 extern int	PQsendClosePortal(PGconn *conn, const char *portalName);
 extern int	PQsendCloseStatement(PGconn *conn, const char *stmtName);
 
