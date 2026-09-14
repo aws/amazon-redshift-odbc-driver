@@ -1,16 +1,25 @@
+#include <atomic>
 #include <cstdarg>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <typeinfo>
+
+#include <cerrno>
+#include <cstring>
+#include <string>
+
 #include "rslog.h"
 
 #include <aws/core/Aws.h>
+#include <aws/core/platform/FileSystem.h>  // CreateDirectoryIfNotExists
 #include <aws/core/utils/FileSystemUtils.h>
 #include <aws/core/utils/logging/AWSLogging.h>
 #include <aws/core/utils/logging/DefaultLogSystem.h>
 #include <aws/core/utils/logging/LogMacros.h>
+#include <aws/core/utils/logging/LogSystemInterface.h>
 #include <aws/core/utils/memory/stl/AWSString.h>
 
 namespace AwsLogging = Aws::Utils::Logging;
@@ -38,12 +47,72 @@ RS_LOG_VARS *getGlobalLogVars() {
     return gRslogSettingsPtr;
 }
 
+// Creates `dir` and any missing parents, one level at a time. Both separators
+// count on Windows, where a LogPath may use either.
+static void CreateLogDirTree(const Aws::String &dir) {
+    for (size_t end = 1; end <= dir.size(); ++end) {
+        if (end != dir.size() && dir[end] != '/'
+#ifdef _WIN32
+            && dir[end] != '\\'
+#endif
+        ) {
+            continue;
+        }
+        const Aws::String sub = dir.substr(0, end);
+#ifdef _WIN32
+        // Skip a bare drive root such as "C:".
+        if (sub.size() == 2 && sub[1] == ':') {
+            continue;
+        }
+#endif
+        // Mode follows the host umask.
+        (void)Aws::FileSystem::CreateDirectoryIfNotExists(sub.c_str());
+    }
+}
+
+// Thread-safe strerror: std::strerror returns a pointer into a static buffer
+// shared by the whole process, so each branch below formats into its own.
+static std::string safeStrerror(int err) {
+    char buf[256] = {0};
+#ifdef _WIN32
+    return strerror_s(buf, sizeof(buf), err) == 0 ? std::string(buf)
+                                                  : std::string("unknown error");
+#elif defined(_GNU_SOURCE)
+    // GNU strerror_r returns the text, which may not be `buf`.
+    const char *msg = strerror_r(err, buf, sizeof(buf));
+    return msg ? std::string(msg) : std::string("unknown error");
+#else
+    // XSI strerror_r returns 0 on success and fills `buf`.
+    return strerror_r(err, buf, sizeof(buf)) == 0 ? std::string(buf)
+                                                  : std::string("unknown error");
+#endif
+}
+
+// No-op log system for level OFF and for an unusable path. DefaultLogSystem
+// would start a writer thread for lines it then discards.
+class NullLogSystem : public AwsLogging::LogSystemInterface {
+  public:
+    AwsLogging::LogLevel GetLogLevel() const override {
+        return AwsLogging::LogLevel::Off;
+    }
+    void Log(AwsLogging::LogLevel, const char *, const char *, ...) override {}
+    void vaLog(AwsLogging::LogLevel, const char *, const char *,
+               va_list) override {}
+    void LogStream(AwsLogging::LogLevel, const char *,
+                   const Aws::OStringStream &) override {}
+    void Flush() override {}
+};
+
 // Logger system manager. Its scope is local to ODBC log lines only.
 struct RsLogManager {
     typedef std::shared_ptr<AwsLogging::LogSystemInterface> LogInterfacePtr;
 
   private:
     LogInterfacePtr logSystem = nullptr;
+    // Guards logSystem. Held only for a pointer copy or swap, never file I/O.
+    std::mutex logMtx;
+    // Lock-free level for the hot gate, so RS_LOG_* takes no lock per row.
+    std::atomic<int> cachedLevel{(int)LOG_LEVEL_OFF};
 
   protected:
     RS_LOG_VARS *rsLogVars = nullptr;
@@ -52,65 +121,109 @@ struct RsLogManager {
     std::shared_ptr<Aws::OFStream>
     MakeDefaultLogFile(const Aws::String &filename) {
 
-        auto createOFStream =
-            [&](const Aws::String &filename) -> std::shared_ptr<Aws::OFStream> {
-            auto res = Aws::MakeShared<Aws::OFStream>(
-                "DefaultLogSystem", filename.c_str(),
-                Aws::OFStream::out | Aws::OFStream::app);
-            if (false == (res && res->good())) {
-                std::cerr << "Attempt to create file stream from " << filename
-                          << " failed." << std::endl;
-            }
-            return res;
+        // Directory part of <LogPath>/redshift_odbc.log; empty if none.
+        // Backslash counts only on Windows; on POSIX it is a filename byte.
+        auto parentDirOf = [](const Aws::String &path) -> Aws::String {
+            auto const pos{path.find_last_of(
+#ifdef _WIN32
+                "/\\"
+#else
+                "/"
+#endif
+                )};
+            return (pos == Aws::String::npos) ? Aws::String{}
+                                              : path.substr(0, pos);
         };
 
-        auto findFileFromPath =
-            [&](const Aws::String &path) -> const Aws::String {
-            auto res =
-                Aws::Utils::PathUtils::GetFileNameFromPathWithExt(filename);
-            if (res.empty()) {
-                std::cerr << "Attempt to extract file name from path "
-                          << filename << " failed." << std::endl;
-            }
-            return res;
-        };
+        // Create the LogPath dir; the open below reports any real failure.
+        const Aws::String parentDir{parentDirOf(filename)};
+        if (!parentDir.empty()) {
+            CreateLogDirTree(parentDir);
+        }
 
-        auto getTempPath = [&]() -> const Aws::String {
-            const char *pPath = std::getenv("TMPDIR");
-            return std::string((!pPath || *pPath == '\0') ? "/tmp" : pPath);
-        };
-
-        // begin
-        auto res = createOFStream(filename);
-
+        // Clear errno so the diagnostic reports the open, not the mkdir.
+        errno = 0;
+        auto res = Aws::MakeShared<Aws::OFStream>(
+            "DefaultLogSystem", filename.c_str(),
+            Aws::OFStream::out | Aws::OFStream::app);
         if (res && res->good()) {
             return res;
         }
-        // retry
-        auto newFilename = getTempPath() + findFileFromPath(filename);
-        return createOFStream(newFilename);
+        // ofstream need not set errno, so only append strerror when it did.
+        const int openErrno = errno;
+        std::cerr << "Failed to open log file '" << filename << "'";
+        if (openErrno != 0) {
+            std::cerr << " (" << safeStrerror(openErrno) << ")";
+        }
+        std::cerr << ". Logging is disabled." << std::endl;
+        return res;
     }
+    // OFF yields a no-op logger; nullptr if there is no usable path.
     LogInterfacePtr initLogInterface(int iTraceLevel, const char *szTraceFile) {
+        if (iTraceLevel <= LOG_LEVEL_OFF) {
+            return Aws::MakeShared<NullLogSystem>("ODBC2LOG");
+        }
+        const Aws::String file(szTraceFile ? szTraceFile : "");
+        if (file.empty()) {
+            // Name the real problem rather than failing to open "".
+            std::cerr << "Logging is enabled but no LogPath is configured. "
+                         "Logging is disabled."
+                      << std::endl;
+            return nullptr;
+        }
+        auto stream = MakeDefaultLogFile(file);
+        if (!(stream && stream->good())) {
+            return nullptr;
+        }
         return Aws::MakeShared<AwsLogging::DefaultLogSystem>(
-            "ODBC2LOG", (AwsLogging::LogLevel)(iTraceLevel),
-            MakeDefaultLogFile(Aws::String(szTraceFile ? szTraceFile : "")));
+            "ODBC2LOG", (AwsLogging::LogLevel)(iTraceLevel), stream);
     }
 
   public:
     RsLogManager() { rsLogVars = getGlobalLogVars(); }
 
+    // (Re)initialize the logger: build outside the lock, swap under it, drop
+    // the old one after unlocking (its dtor joins a writer thread).
     virtual void initializeAWSLogging(RS_LOG_VARS *rsLogVars_ = nullptr) {
         rsLogVars_ = rsLogVars_ ? rsLogVars_ : rsLogVars;
         if (!rsLogVars_) {
             return;
         }
-        logSystem =
+        LogInterfacePtr next =
             initLogInterface(rsLogVars_->iTraceLevel, rsLogVars_->szTraceFile);
+        LogInterfacePtr old;
+        {
+            std::lock_guard<std::mutex> lk(logMtx);
+            if (next) {
+                old = std::move(logSystem);
+                logSystem = next;  // swap only on success
+            } else if (!logSystem) {
+                // Keep it non-null: callers get a logger that discards.
+                logSystem = Aws::MakeShared<NullLogSystem>("ODBC2LOG");
+            }
+            cachedLevel.store(logSystem ? (int)logSystem->GetLogLevel()
+                                        : (int)LOG_LEVEL_OFF,
+                              std::memory_order_relaxed);
+        }
     }
 
-    virtual void ShutdownAWSLogging() { logSystem.reset(); }
-    virtual AwsLogging::LogSystemInterface *GetLogSystem() {
-        return logSystem.get();
+    virtual void ShutdownAWSLogging() {
+        LogInterfacePtr old;
+        {
+            std::lock_guard<std::mutex> lk(logMtx);
+            old = std::move(logSystem);
+            logSystem.reset();
+            cachedLevel.store((int)LOG_LEVEL_OFF, std::memory_order_relaxed);
+        }
+    }
+    // Lock-free current level for the hot gate (RS_LOG_*/IS_TRACE_*).
+    int GetCachedLevel() const {
+        return cachedLevel.load(std::memory_order_relaxed);
+    }
+    // Shared owner, so a concurrent swap cannot free it mid-write.
+    LogInterfacePtr GetLogSystemShared() {
+        std::lock_guard<std::mutex> lk(logMtx);
+        return logSystem;
     }
 };
 
@@ -126,9 +239,6 @@ struct AwsLogManager : public RsLogManager {
     }
 
     virtual void ShutdownAWSLogging() { AwsLogging::ShutdownAWSLogging(); }
-    virtual AwsLogging::LogSystemInterface *GetLogSystem() {
-        return AwsLogging::GetLogSystem();
-    }
 };
 
 typedef RsLogManager LogManagerType;
@@ -140,9 +250,10 @@ completion of this command
 */
 void initializeAWSLogging() {
     rsLogManager.initializeAWSLogging();
-    auto* logSystem = rsLogManager.GetLogSystem();
+    auto logSystem = rsLogManager.GetLogSystemShared();  // hold a shared owner
     if (logSystem == nullptr) {
-        throw std::runtime_error("Failed to initialize logging system");
+        // Logging is disabled; there is no logger to inspect.
+        return;
     }
 
     // Check log level
@@ -188,17 +299,18 @@ step
 */
 void ShutdownAWSLogging() { rsLogManager.ShutdownAWSLogging(); }
 
-/*
-Returns the AWS Log system interface
-*/
-AwsLogging::LogSystemInterface *GetLogSystem() {
-    return rsLogManager.GetLogSystem();
+// Shared owner: hold across a log write so a re-init cannot free it.
+std::shared_ptr<AwsLogging::LogSystemInterface> GetLogSystemShared() {
+    return rsLogManager.GetLogSystemShared();
 }
+
+// Lock-free current level for the hot log-level gate.
+int GetCachedLevel() { return rsLogManager.GetCachedLevel(); }
 
 void processLogLine(AwsLogging::LogLevel level, const char *filename,
                     const int line, const char *func, const char *tag1,
                     const char *msg) {
-    AwsLogging::LogSystemInterface *logSystem = internal::GetLogSystem();
+    auto logSystem = GetLogSystemShared();
     if (!logSystem) {
         return; // Log system not initialized, silently return
     }
@@ -228,8 +340,7 @@ void processLogLine(AwsLogging::LogLevel level, const char *filename,
 } // namespace internal
 
 #define RS_LOG_MACRO(LEVEL)                                                    \
-    if (!internal::GetLogSystem() ||                                           \
-        internal::GetLogSystem()->GetLogLevel() < LEVEL)                       \
+    if (internal::GetCachedLevel() < (int)(LEVEL))                             \
         return;                                                                \
     va_list args;                                                              \
     va_start(args, fmt);                                                       \
@@ -279,7 +390,7 @@ void RS_STREAM_LOG_TRACE_(const char *file, const int line, const char *func,
     if (typeid(internal::rsLogManager) == typeid(internal::RsLogManager)) {
         return;
     }
-    AwsLogging::LogSystemInterface *logSystem = internal::GetLogSystem();
+    auto logSystem = internal::GetLogSystemShared();
     if (logSystem && logSystem->GetLogLevel() >= AwsLogging::LogLevel::Trace) {
         Aws::OStringStream logStream;
         if (len < 0) {
@@ -307,7 +418,5 @@ void shutdownLogging() { internal::ShutdownAWSLogging(); }
 
 // Legacy mapping
 int getRsLoglevel() {
-    return internal::GetLogSystem()
-               ? (int)internal::GetLogSystem()->GetLogLevel()
-               : (int)LOG_LEVEL_OFF;
+    return internal::GetCachedLevel();
 }
