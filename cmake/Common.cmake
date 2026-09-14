@@ -6,11 +6,36 @@ macro(configure_asan)
   if(ENABLE_ASAN AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU"))
     message(STATUS "AddressSanitizer enabled")
     set(ASAN_FLAGS "-fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls -O1 -g")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ASAN_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ASAN_FLAGS}")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address")
+    # basic_build_settings (the caller) is a function, so a plain set() would be
+    # function-local and would not reach the targets; the flags must go through
+    # the cache to apply globally. Guard against flag accumulation on reconfigure.
+    if(NOT CMAKE_CXX_FLAGS MATCHES "-fsanitize=address")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ASAN_FLAGS}" CACHE STRING "" FORCE)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ASAN_FLAGS}" CACHE STRING "" FORCE)
+      set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address" CACHE STRING "" FORCE)
+      set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address" CACHE STRING "" FORCE)
+    endif()
     add_compile_definitions(ENABLE_ASAN=1)
+  endif()
+endmacro()
+
+macro(configure_tsan)
+  if(ENABLE_TSAN AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU"))
+    if(ENABLE_ASAN)
+      message(FATAL_ERROR "ENABLE_ASAN and ENABLE_TSAN cannot be enabled together")
+    endif()
+    message(STATUS "ThreadSanitizer enabled")
+    set(TSAN_FLAGS "-fsanitize=thread -fno-omit-frame-pointer -O1 -g")
+    # basic_build_settings (the caller) is a function, so a plain set() would be
+    # function-local and would not reach the targets; the flags must go through
+    # the cache to apply globally. Guard against flag accumulation on reconfigure.
+    if(NOT CMAKE_CXX_FLAGS MATCHES "-fsanitize=thread")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${TSAN_FLAGS}" CACHE STRING "" FORCE)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TSAN_FLAGS}" CACHE STRING "" FORCE)
+      set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=thread" CACHE STRING "" FORCE)
+      set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=thread" CACHE STRING "" FORCE)
+    endif()
+    add_compile_definitions(ENABLE_TSAN=1)
   endif()
 endmacro()
 

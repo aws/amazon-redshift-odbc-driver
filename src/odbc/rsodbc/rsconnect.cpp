@@ -590,13 +590,19 @@ SQLRETURN SQL_API SQLDriverConnect(SQLHDBC            phdbc,
 void applyUseDeclareFetchExclusivity(RS_CONNECT_PROPS_INFO *pConnectProps)
 {
     if (pConnectProps->iUseDeclareFetch) {
+        // Only warn when the user actually supplied a conflicting cursor mode.
         if (pConnectProps->iStreamingCursorRows > 0 || pConnectProps->iCscEnable) {
-            RS_LOG_TRACE("RSCNN",
+            RS_LOG_WARN("RSCNN",
                 "UseDeclareFetch=1 overriding StreamingCursorRows=%d -> 0, CscEnable=%d -> 0",
                 pConnectProps->iStreamingCursorRows, pConnectProps->iCscEnable);
         }
         pConnectProps->iStreamingCursorRows = 0;
         pConnectProps->iCscEnable = 0;
+        // FetchRefCursor is intentionally left untouched so refcursor CALLs on
+        // this connection keep their normal auto-expansion behavior. Portal
+        // eligibility is decided per statement in the execution path (the portal
+        // gate no longer depends on the connection-wide FetchRefCursor flag), so
+        // UseDeclareFetch=1 activates on its own without changing refcursor handling.
 
         if (pConnectProps->iFetchSize <= 0) {
             pConnectProps->iFetchSize = RS_DEFAULT_FETCH_SIZE;

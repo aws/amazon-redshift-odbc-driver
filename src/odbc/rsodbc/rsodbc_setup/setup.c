@@ -208,7 +208,7 @@
 //#define DFLT_KSA "SSPI"  // Kerberos API
 #define DFLT_SC_ROWS "100"
 #define DFLT_USE_DECLARE_FETCH "0"
-#define DFLT_FETCH_SIZE "0"
+#define DFLT_FETCH_SIZE "100"
 #define DFLT_SSL_MODE "verify-ca"
 #define DFTL_TLS_VERSION "1.2" // Default TLS version is 1.2
 

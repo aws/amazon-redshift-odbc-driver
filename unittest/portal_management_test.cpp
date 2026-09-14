@@ -238,6 +238,12 @@ TEST(PortalEligibilityTest, WithCTE_Eligible) {
     EXPECT_EQ(isQueryEligibleForPortalFetch("  WITH a AS (SELECT 1), b AS (SELECT 2) SELECT * FROM a, b"), 1);
 }
 
+/// INTO followed immediately by a quoted destination identifier is SELECT INTO.
+TEST(PortalEligibilityTest, SelectInto_QuotedDestination_NotEligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch(
+        "SELECT id INTO\"portal_select_into_dest\" FROM source"), 0);
+}
+
 TEST(PortalEligibilityTest, WithCTE_MultiStatement_NotEligible) {
     EXPECT_EQ(isQueryEligibleForPortalFetch("WITH cte AS (SELECT 1) SELECT * FROM cte; SELECT 2"), 0);
 }
@@ -388,4 +394,87 @@ TEST(PQsendExecutePortalResumeTest, NullConn_ReturnsZero) {
 TEST_F(PortalAPITest, Resume_BadConnection_ReturnsZero) {
     int result = PQsendExecutePortalResume(conn, "portal", 100);
     EXPECT_EQ(result, 0);
+}
+
+// ============================================================================
+// Skip function coverage: paths only exercised indirectly through eligibility
+// ============================================================================
+
+/// Doubled single-quote inside a literal does not end the string early.
+TEST(PortalEligibilityTest, DoubledSingleQuote_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch("SELECT 'it''s' AS val FROM t"), 1);
+}
+
+/// Unterminated single-quoted literal consumes to end — no false semicolon.
+TEST(PortalEligibilityTest, UnterminatedSingleQuote_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch("SELECT 'unterminated FROM t"), 1);
+}
+
+/// Doubled double-quote inside an identifier does not end the identifier early.
+TEST(PortalEligibilityTest, DoubledDoubleQuote_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch("SELECT \"col\"\"name\" FROM t"), 1);
+}
+
+/// Unterminated double-quoted identifier consumes to end — no false semicolon.
+TEST(PortalEligibilityTest, UnterminatedDoubleQuote_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch("SELECT \"unterminated FROM t"), 1);
+}
+
+/// Backslash inside a non-escape (standard) single-quoted string is literal.
+TEST(PortalEligibilityTest, BackslashInStandardString_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch("SELECT 'path\\;to' FROM t"), 1);
+}
+
+/// Dollar-quoted string with digits in the tag is handled.
+TEST(PortalEligibilityTest, DollarQuotedTagWithDigits_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch(
+        "SELECT $a1$; INTO UPDATE$a1$ AS value FROM t"), 1);
+}
+
+/// Unterminated dollar-quoted string consumes to end.
+TEST(PortalEligibilityTest, UnterminatedDollarQuoted_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch(
+        "SELECT $$unterminated; INTO FROM t"), 1);
+}
+
+/// A lone $ that is not a valid dollar-quote opener is not consumed.
+TEST(PortalEligibilityTest, LoneDollarSign_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch("SELECT $1 FROM t"), 1);
+}
+
+/// E-string backslash at end of string does not read past buffer.
+TEST(PortalEligibilityTest, EscapeStringBackslashAtEnd_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch("SELECT E'trailing\\' FROM t"), 1);
+}
+
+/// Dollar sign followed by invalid tag start char is not a dollar-quote.
+TEST(PortalEligibilityTest, DollarSignInvalidTagStart_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch("SELECT $!foo FROM t"), 1);
+}
+
+/// Dollar-quoted tag that doesn't close (e.g. $abc without second $) is not a dollar-quote.
+TEST(PortalEligibilityTest, DollarTagNeverClosed_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch("SELECT $abc FROM t"), 1);
+}
+
+/// Line comment at EOF (no trailing newline) is consumed correctly.
+TEST(PortalEligibilityTest, LineCommentAtEOF_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch("SELECT 1 -- comment"), 1);
+}
+
+/// Unterminated block comment consumes to end — no false semicolon.
+TEST(PortalEligibilityTest, UnterminatedBlockComment_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch("SELECT 1 /* unterminated"), 1);
+}
+
+/// WITH query stops scanning at FROM when checking for top-level INTO.
+TEST(PortalEligibilityTest, WithCTE_IntoAfterFrom_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch(
+        "WITH cte AS (SELECT 1) SELECT * FROM into_table"), 1);
+}
+
+/// SELECT with INTO keyword appearing only after FROM is eligible.
+TEST(PortalEligibilityTest, SelectIntoAfterFrom_Eligible) {
+    EXPECT_EQ(isQueryEligibleForPortalFetch(
+        "SELECT * FROM into_results WHERE id > 0"), 1);
 }

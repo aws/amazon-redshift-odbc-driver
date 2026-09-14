@@ -192,5 +192,6 @@ endfunction()
 
 function(basic_build_settings)
   configure_asan()
+  configure_tsan()
   configure_coverage()
 endfunction()

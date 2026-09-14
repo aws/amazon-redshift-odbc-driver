@@ -1250,22 +1250,31 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                             nParams = iNumBindParams;
 
                         // Extended Query Protocol: use portal for eligible SELECT queries
+                        // Extended Query Protocol: use portal for eligible SELECT queries
                         // Only when UseDeclareFetch=1, no bind params, not prepared, not catalog/function call
                         // Portal Execute is forward-only, so exclude scrollable cursors.
-                        // Excluded when FetchRefCursor=1: checkAndAutoFetchRefCursor below expands
-                        // refcursor columns into real rows, and the portal path returns directly
-                        // without going through that step.
+                        //
+                        // Refcursor handling is consistent with the StreamingCursorRows path:
+                        // neither batched-fetch mode auto-expands a refcursor. The streaming
+                        // path reaches the shared refcursor block below but skips it via
+                        // !iCscThreadCreated; the portal path returns before that block, so it
+                        // skips expansion the same way. A refcursor-returning SELECT therefore
+                        // yields the raw refcursor under either batched mode (see the shared
+                        // TODO on the refcursor block below). Procedure CALLs are excluded here
+                        // via iFunctionCall and keep their normal expansion on the Simple Query
+                        // path. Eligibility is decided per statement by isQueryEligibleForPortalFetch.
                         if (pConn->pConnectProps->iUseDeclareFetch
                             && !executePrepared
                             && !pStmt->iFunctionCall
                             && !pStmt->iCatalogQuery
-                            && !pConn->pConnectProps->iFetchRefCursor
                             && nParams == 0
                             && pszCmd
                             && pStmt->pStmtAttr->iCursorType == SQL_CURSOR_FORWARD_ONLY
                             && isQueryEligibleForPortalFetch(pszCmd))
                         {
                             // Lock is already held by this function, pass FALSE to avoid deadlock.
+                            // Like the streaming-cursor path, batched fetch does not auto-expand
+                            // refcursors, so we skip the shared refcursor block by returning here.
                             rc = libpqExecuteWithPortal(pStmt, pszCmd, FALSE);
                             goto error;
                         }
@@ -1444,6 +1453,11 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
     if(iCheckForRefCursor && rc == SQL_SUCCESS && pConn->pConnectProps->iFetchRefCursor)
     {
         // TODO: We have to do RefCursor processing after CSC thread is done or do it for one result at a time.
+        // Batched-fetch modes do not auto-expand refcursors: the streaming-cursor
+        // path skips this block via !iCscThreadCreated, and the portal fetch path
+        // (UseDeclareFetch) returns before reaching here. Both therefore return the
+        // raw refcursor rather than expanded rows. Resolving the TODO above would
+        // let both modes expand refcursors after the first batch.
         if(!iCscThreadCreated)
         {
             // Check for refcursor in result list, if exist execute fetch all and replce result node in-place.

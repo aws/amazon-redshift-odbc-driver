@@ -199,3 +199,53 @@ TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_UDF_disabled_does_not_af
     EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 0);
     EXPECT_EQ(pConn->pConnectProps->iStreamingCursorRows, 5000);
 }
+
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_disables_CSC_and_SCR_together) {
+    parseConnStr("CscEnable=1;StreamingCursorRows=5000;UseDeclareFetch=1;");
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
+    EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 1);
+    EXPECT_EQ(pConn->pConnectProps->iCscEnable, 0);
+    EXPECT_EQ(pConn->pConnectProps->iStreamingCursorRows, 0);
+}
+
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_UDFFirst_disables_CSC_and_SCR) {
+    parseConnStr("UseDeclareFetch=1;CscEnable=1;StreamingCursorRows=5000;");
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
+    EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 1);
+    EXPECT_EQ(pConn->pConnectProps->iCscEnable, 0);
+    EXPECT_EQ(pConn->pConnectProps->iStreamingCursorRows, 0);
+}
+
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_zero_fetch_gets_default) {
+    parseConnStr("UseDeclareFetch=1;Fetch=0;");
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
+    EXPECT_EQ(pConn->pConnectProps->iFetchSize, RS_DEFAULT_FETCH_SIZE);
+}
+
+// UseDeclareFetch must NOT change FetchRefCursor. Refcursor auto-expansion is a
+// connection-wide behavior that portal fetch leaves untouched; portal eligibility
+// is decided per statement in the execution path, not by this flag. So enabling
+// UseDeclareFetch preserves whatever FetchRefCursor the connection had.
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_UseDeclareFetch_preserves_default_FetchRefCursor) {
+    parseConnStr("UseDeclareFetch=1;");
+    // Simulate the runtime default of FetchRefCursor=1 (set in resetConnectProps).
+    pConn->pConnectProps->iFetchRefCursor = 1;
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
+    EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 1);
+    EXPECT_EQ(pConn->pConnectProps->iFetchRefCursor, 1);
+}
+
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_UseDeclareFetch_preserves_explicit_FetchRefCursor) {
+    parseConnStr("FetchRefCursor=1;UseDeclareFetch=1;");
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
+    EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 1);
+    EXPECT_EQ(pConn->pConnectProps->iFetchRefCursor, 1);
+}
+
+TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_UDF_disabled_does_not_affect_FetchRefCursor) {
+    parseConnStr("UseDeclareFetch=0;");
+    pConn->pConnectProps->iFetchRefCursor = 1;
+    applyUseDeclareFetchExclusivity(pConn->pConnectProps);
+    EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 0);
+    EXPECT_EQ(pConn->pConnectProps->iFetchRefCursor, 1);
+}
