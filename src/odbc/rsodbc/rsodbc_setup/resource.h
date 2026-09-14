@@ -279,6 +279,9 @@
 #define IDC_MAX_LONGVARCHAR_SIZE_STATIC 1259
 #define IDC_MAX_LONGVARCHAR_SIZE        1260
 #define IDC_BOOL_AS_CHAR               1261
+#define IDC_USE_DECLARE_FETCH           1301
+#define IDC_CACHE_SIZE_STATIC           1302
+#define IDC_EDIT_CACHE_SIZE             1303
 
 // Next default values for new objects
 //

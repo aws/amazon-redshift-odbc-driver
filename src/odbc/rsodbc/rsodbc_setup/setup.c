@@ -598,6 +598,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 // { "KSA", "KerberosAPI" },
 { "SCR", "StreamingCursorRows" },
 { "UDF", "UseDeclareFetch" },
+{ "Fetch", "Fetch" },
 { RS_SSL_MODE, RS_SSL_MODE },
 { RS_MIN_TLS, RS_MIN_TLS },
 { RS_IAM, RS_IAM },
@@ -2361,6 +2362,16 @@ static LRESULT CALLBACK rs_dsn_csc_sheet(HWND hwndDlg, UINT message, WPARAM wPar
 			SetDlgItemText(hwndDlg, IDC_EDIT_CSC_MAX_FILE_SIZE, rs_dsn_get_attr(rs_dsn_setup_ctxt, "CscMaxFileSize"));
 			SetDlgItemText(hwndDlg, IDC_EDIT_SC_ROWS, rs_dsn_get_attr(rs_dsn_setup_ctxt, "StreamingCursorRows"));
 
+			CheckDlgButton(hwndDlg, IDC_USE_DECLARE_FETCH, rs_dsn_bool_attr(rs_dsn_setup_ctxt, "UseDeclareFetch"));
+			SetDlgItemText(hwndDlg, IDC_EDIT_CACHE_SIZE, rs_dsn_get_attr(rs_dsn_setup_ctxt, "Fetch"));
+			EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_CACHE_SIZE),
+				IsDlgButtonChecked(hwndDlg, IDC_USE_DECLARE_FETCH));
+			if (IsDlgButtonChecked(hwndDlg, IDC_USE_DECLARE_FETCH)) {
+				CheckDlgButton(hwndDlg, IDC_CSC_ENABLE, BST_UNCHECKED);
+				SetDlgItemText(hwndDlg, IDC_EDIT_SC_ROWS, "0");
+				EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_SC_ROWS), FALSE);
+			}
+
 			SetWindowLongPtr(hwndDlg, DWLP_USER, sheet->lParam);
 			rs_dsn_setup_ctxt->csc_inited = TRUE;
 			break;
@@ -2407,10 +2418,28 @@ static LRESULT CALLBACK rs_dsn_csc_sheet(HWND hwndDlg, UINT message, WPARAM wPar
 					{
 						SetDlgItemText(hwndDlg, IDC_EDIT_SC_ROWS, "0");
 						EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_SC_ROWS), FALSE);
+						CheckDlgButton(hwndDlg, IDC_USE_DECLARE_FETCH, BST_UNCHECKED);
+						EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_CACHE_SIZE), FALSE);
 					}
 					else
+					{
 						EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_SC_ROWS), TRUE);
+					}
+           			break;
 
+            	case IDC_USE_DECLARE_FETCH:
+					if(IsDlgButtonChecked(hwndDlg, IDC_USE_DECLARE_FETCH))
+					{
+						EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_CACHE_SIZE), TRUE);
+						SetDlgItemText(hwndDlg, IDC_EDIT_SC_ROWS, "0");
+						EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_SC_ROWS), FALSE);
+						CheckDlgButton(hwndDlg, IDC_CSC_ENABLE, BST_UNCHECKED);
+					}
+					else
+					{
+						EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_CACHE_SIZE), FALSE);
+						EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_SC_ROWS), TRUE);
+					}
            			break;
 
 			}
@@ -3558,6 +3587,9 @@ rs_dsn_read_csc_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_CSC_ENABLE, "CscEnable");
 
 		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_EDIT_SC_ROWS, "StreamingCursorRows");
+
+		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_USE_DECLARE_FETCH, "UseDeclareFetch");
+		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_EDIT_CACHE_SIZE, "Fetch");
 	}
 }
 
