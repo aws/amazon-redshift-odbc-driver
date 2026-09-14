@@ -1730,6 +1730,17 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                                     pResult->pgResult = NULL;
                                     pResult->iNumberOfRowsInMem = 0;
                                     pqClearAsyncResult(pStmt->phdbc->pgConn);
+
+                                    // Retire the streaming cursor: the stream is
+                                    // dead, so this statement must stop counting as
+                                    // the connection's active streaming cursor
+                                    // (doesAnyOtherStreamingCursorOpen). Without
+                                    // this, every later statement on the connection
+                                    // is refused with "Invalid streaming cursor
+                                    // state" until the application closes this
+                                    // statement, which some applications never do.
+                                    libpqSetEndOfStreamingCursorQuery(pStmt, TRUE);
+
                                     rc = SQL_ERROR;
                                     addCursorIOError(pStmt, pResult, "streaming cursor", "Streaming cursor read error", szSqlState);
                                     goto error;
