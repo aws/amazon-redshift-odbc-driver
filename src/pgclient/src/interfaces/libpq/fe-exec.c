@@ -38,7 +38,8 @@ char	   *const pgresStatus[] = {
 	"PGRES_TUPLES_OK",
 	"PGRES_BAD_RESPONSE",
 	"PGRES_NONFATAL_ERROR",
-	"PGRES_FATAL_ERROR"
+	"PGRES_FATAL_ERROR",
+	"PGRES_PORTAL_SUSPENDED"
 };
 
 /*
@@ -51,6 +52,7 @@ static bool static_std_strings = false;
 
 static PGEvent *dupEvents(PGEvent *events, int count);
 static bool PQsendQueryStart(PGconn *conn);
+static int sendExecuteSync(PGconn *conn, const char *portalName, int maxRows);
 static int PQsendQueryGuts(PGconn *conn,
 				const char *command,
 				const char *stmtName,
@@ -193,6 +195,7 @@ PQmakeEmptyPGresult(PGconn *conn, ExecStatusType status)
 			case PGRES_EMPTY_QUERY:
 			case PGRES_COMMAND_OK:
 			case PGRES_TUPLES_OK:
+			case PGRES_PORTAL_SUSPENDED:
 				/* non-error cases */
 				break;
 			default:
@@ -2338,6 +2341,332 @@ PQsendDescribe(PGconn *conn, char desc_type, const char *desc_target)
 		goto sendFailed;
 
 	/* OK, it's launched! */
+	conn->asyncStatus = PGASYNC_BUSY;
+	return 1;
+
+sendFailed:
+	pqHandleSendFailure(conn);
+	return 0;
+}
+
+/**
+ * @brief Send Bind message to create a named portal from a prepared statement.
+ *
+ * Does NOT send Execute or Sync. Caller should follow with
+ * PQsendExecutePortal to execute the portal.
+ *
+ * @param conn          Connection object
+ * @param stmtName      Name of the prepared statement (empty string for unnamed)
+ * @param portalName    Name for the portal to create (empty string for unnamed)
+ * @param nParams       Number of bind parameters
+ * @param paramValues   Array of parameter value strings (NULL entry for NULL param)
+ * @param paramLengths  Array of parameter lengths (required for binary params)
+ * @param paramFormats  Array of format codes (0=text, 1=binary)
+ * @param resultFormat  Format code for result columns (0=text, 1=binary)
+ * @return 1 if successfully submitted, 0 if error (conn->errorMessage is set)
+ */
+int
+PQsendBindPortal(PGconn *conn, const char *stmtName, const char *portalName,
+				 int nParams, const char *const *paramValues,
+				 const int *paramLengths, const int *paramFormats,
+				 int resultFormat)
+{
+	int i;
+
+	if (!PQsendQueryStart(conn))
+	{
+		return 0;
+	}
+
+	if (!stmtName)
+	{
+		stmtName = "";
+	}
+	if (!portalName)
+	{
+		portalName = "";
+	}
+
+	/* Extended Query messages (Bind/Execute/Close) require protocol v3+.
+	 * Protocol version is negotiated during connection startup. */
+	if (PG_PROTOCOL_MAJOR(conn->pversion) < 3)
+	{
+		printfPQExpBuffer(&conn->errorMessage,
+		 libpq_gettext("function requires at least protocol version 3.0\n"));
+		return 0;
+	}
+
+	/* Parameter count is sent as Int16 — guard against overflow */
+	if (nParams < 0 || nParams > 65535)
+	{
+		printfPQExpBuffer(&conn->errorMessage,
+		 libpq_gettext("number of parameters must be between 0 and 65535\n"));
+		return 0;
+	}
+
+	/* Construct the Bind message: Bind portal to statement */
+	if (pqPutMsgStart('B', false, conn) < 0 ||
+		pqPuts(portalName, conn) < 0 ||
+		pqPuts(stmtName, conn) < 0)
+		goto sendFailed;
+
+	/* Send parameter formats */
+	if (nParams > 0 && paramFormats)
+	{
+		if (pqPutInt(nParams, 2, conn) < 0)
+			goto sendFailed;
+		for (i = 0; i < nParams; i++)
+		{
+			if (pqPutInt(paramFormats[i], 2, conn) < 0)
+				goto sendFailed;
+		}
+	}
+	else
+	{
+		if (pqPutInt(0, 2, conn) < 0)
+			goto sendFailed;
+	}
+
+	/* Send parameter values */
+	if (pqPutInt(nParams, 2, conn) < 0)
+		goto sendFailed;
+	for (i = 0; i < nParams; i++)
+	{
+		if (paramValues && paramValues[i])
+		{
+			int nbytes;
+			if (paramFormats && paramFormats[i] != 0)
+			{
+				/* binary parameter — paramLengths is required */
+				if (!paramLengths)
+				{
+					printfPQExpBuffer(&conn->errorMessage,
+						libpq_gettext("paramLengths required for binary parameter %d\n"), i);
+					goto sendFailed;
+				}
+				nbytes = paramLengths[i];
+			}
+			else
+			{
+				/* text parameter */
+				nbytes = strlen(paramValues[i]);
+			}
+			if (pqPutInt(nbytes, 4, conn) < 0 ||
+				pqPutnchar(paramValues[i], nbytes, conn) < 0)
+				goto sendFailed;
+		}
+		else
+		{
+			/* NULL parameter */
+			if (pqPutInt(-1, 4, conn) < 0)
+				goto sendFailed;
+		}
+	}
+
+	/* Result format codes (1 code applies to all columns) */
+	if (pqPutInt(1, 2, conn) < 0 ||
+		pqPutInt(resultFormat, 2, conn) < 0)
+		goto sendFailed;
+
+	if (pqPutMsgEnd(conn) < 0)
+		goto sendFailed;
+
+	return 1;
+
+sendFailed:
+	pqHandleSendFailure(conn);
+	return 0;
+}
+
+/**
+ * @brief Send Execute message on a named portal with a row limit, plus Sync.
+ *
+ * After calling this, use PQgetResult to retrieve rows. Check result status
+ * for PGRES_PORTAL_SUSPENDED (more rows available) vs PGRES_TUPLES_OK (done).
+ *
+ * @param conn          Connection object
+ * @param portalName    Name of the portal to execute (empty string for unnamed)
+ * @param maxRows       Maximum number of rows to return (0 = unlimited)
+ * @return 1 if successfully submitted, 0 if error (conn->errorMessage is set)
+ */
+int
+PQsendExecutePortal(PGconn *conn, const char *portalName, int maxRows)
+{
+	if (!PQsendQueryStart(conn))
+	{
+		return 0;
+	}
+
+	if (!portalName)
+	{
+		portalName = "";
+	}
+
+	/* Extended Query messages require protocol v3+ */
+	if (PG_PROTOCOL_MAJOR(conn->pversion) < 3)
+	{
+		printfPQExpBuffer(&conn->errorMessage,
+		 libpq_gettext("function requires at least protocol version 3.0\n"));
+		return 0;
+	}
+
+	return sendExecuteSync(conn, portalName, maxRows);
+}
+
+/**
+ * @brief Core: construct Execute + Sync + Flush.
+ *
+ * Shared by PQsendExecutePortal and PQsendExecutePortalResume.
+ * Caller is responsible for guards (IDLE check, protocol version, NULL portal).
+ *
+ * @param conn          Connection object (must be valid and ready)
+ * @param portalName    Name of the portal
+ * @param maxRows       Maximum rows (0 = unlimited)
+ * @return 1 if successfully submitted, 0 if error
+ */
+static int
+sendExecuteSync(PGconn *conn, const char *portalName, int maxRows)
+{
+	/* initialize async result-accumulation state */
+	pqClearAsyncResult(conn);
+
+	/* Construct the Execute message */
+	if (pqPutMsgStart('E', false, conn) < 0 ||
+		pqPuts(portalName, conn) < 0 ||
+		pqPutInt(maxRows, 4, conn) < 0 ||
+		pqPutMsgEnd(conn) < 0)
+		goto sendFailed;
+
+	/* Construct the Sync message */
+	if (pqPutMsgStart('S', false, conn) < 0 ||
+		pqPutMsgEnd(conn) < 0)
+		goto sendFailed;
+
+	/* We are using extended query protocol */
+	conn->queryclass = PGQUERY_EXTENDED;
+
+	/* Flush */
+	if (pqFlush(conn) < 0)
+		goto sendFailed;
+
+	conn->asyncStatus = PGASYNC_BUSY;
+	return 1;
+
+sendFailed:
+	pqHandleSendFailure(conn);
+	return 0;
+}
+
+/**
+ * @brief Send Close message for a named portal, plus Sync.
+ *
+ * Releases server-side resources for the portal. Named portals persist
+ * until explicitly closed (unlike the unnamed portal which is destroyed
+ * by each Sync).
+ *
+ * @param conn          Connection object
+ * @param portalName    Name of the portal to close
+ * @return 1 if successfully submitted, 0 if error (conn->errorMessage is set)
+ */
+int
+PQsendClosePortal(PGconn *conn, const char *portalName)
+{
+	if (!PQsendQueryStart(conn))
+	{
+		return 0;
+	}
+
+	if (!portalName)
+	{
+		portalName = "";
+	}
+
+	/* Extended Query messages require protocol v3+ */
+	if (PG_PROTOCOL_MAJOR(conn->pversion) < 3)
+	{
+		printfPQExpBuffer(&conn->errorMessage,
+		 libpq_gettext("function requires at least protocol version 3.0\n"));
+		return 0;
+	}
+
+	pqClearAsyncResult(conn);
+
+	/* Construct the Close Portal message */
+	if (pqPutMsgStart('C', false, conn) < 0 ||
+		pqPutc('P', conn) < 0 ||
+		pqPuts(portalName, conn) < 0 ||
+		pqPutMsgEnd(conn) < 0)
+		goto sendFailed;
+
+	/* Construct the Sync message */
+	if (pqPutMsgStart('S', false, conn) < 0 ||
+		pqPutMsgEnd(conn) < 0)
+		goto sendFailed;
+
+	conn->queryclass = PGQUERY_EXTENDED;
+
+	if (pqFlush(conn) < 0)
+		goto sendFailed;
+
+	conn->asyncStatus = PGASYNC_BUSY;
+	return 1;
+
+sendFailed:
+	pqHandleSendFailure(conn);
+	return 0;
+}
+
+/**
+ * @brief Send Close message for a named prepared statement, plus Sync.
+ *
+ * Uses the protocol Close('C') message with type 'S' (statement) instead
+ * of PQexec("DEALLOCATE"). Can be pipelined with PQsendClosePortal to
+ * save a round-trip.
+ *
+ * @param conn          Connection object
+ * @param stmtName      Name of the prepared statement to close
+ * @return 1 if successfully submitted, 0 if error (conn->errorMessage is set)
+ */
+int
+PQsendCloseStatement(PGconn *conn, const char *stmtName)
+{
+	if (!PQsendQueryStart(conn))
+	{
+		return 0;
+	}
+
+	if (!stmtName)
+	{
+		stmtName = "";
+	}
+
+	/* Extended Query messages require protocol v3+ */
+	if (PG_PROTOCOL_MAJOR(conn->pversion) < 3)
+	{
+		printfPQExpBuffer(&conn->errorMessage,
+		 libpq_gettext("function requires at least protocol version 3.0\n"));
+		return 0;
+	}
+
+	pqClearAsyncResult(conn);
+
+	/* Construct the Close Statement message: 'C' + len + 'S' + stmtName */
+	if (pqPutMsgStart('C', false, conn) < 0 ||
+		pqPutc('S', conn) < 0 ||
+		pqPuts(stmtName, conn) < 0 ||
+		pqPutMsgEnd(conn) < 0)
+		goto sendFailed;
+
+	/* Construct the Sync message */
+	if (pqPutMsgStart('S', false, conn) < 0 ||
+		pqPutMsgEnd(conn) < 0)
+		goto sendFailed;
+
+	conn->queryclass = PGQUERY_EXTENDED;
+
+	if (pqFlush(conn) < 0)
+		goto sendFailed;
+
 	conn->asyncStatus = PGASYNC_BUSY;
 	return 1;
 

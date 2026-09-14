@@ -380,6 +380,25 @@ void _pqParseInput3(void *_pCscStatementContext,int *piStop)
 				case '3':		/* Close Complete */
 					/* Nothing to do for these message types */
 					break;
+				case 's':		/* Portal Suspended (partial Execute result) */
+					/*
+					 * The server has returned rows up to the maxRows limit.
+					 * Mark the result as suspended so the caller knows
+					 * more rows are available via another Execute.
+					 */
+					if (conn->result == NULL)
+					{
+						conn->result = PQmakeEmptyPGresult(conn,
+														   PGRES_PORTAL_SUSPENDED);
+						if (!conn->result)
+							return;
+					}
+					else
+					{
+						conn->result->resultStatus = PGRES_PORTAL_SUSPENDED;
+					}
+					conn->asyncStatus = PGASYNC_READY;
+					break;
 				case 'S':		/* parameter status */
 					if (getParameterStatus(conn))
 						return;

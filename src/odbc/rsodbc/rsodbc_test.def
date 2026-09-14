@@ -404,3 +404,10 @@ EXPORTS
 	PQfinish
 	; RS_CONN_INFO::parseConnectString(char*, size_t, int, int) - public
 	?parseConnectString@RS_CONN_INFO@@QEAAHPEAD_KHH@Z
+	; Portal management API (libpq)
+	PQsendBindPortal
+	PQsendExecutePortal
+	PQsendClosePortal
+	PQsendCloseStatement
+	PQresultStatus
+	PQresStatus

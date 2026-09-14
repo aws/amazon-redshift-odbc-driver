@@ -86,7 +86,8 @@ typedef enum
 	PGRES_BAD_RESPONSE,			/* an unexpected response was recv'd from the
 								 * backend */
 	PGRES_NONFATAL_ERROR,		/* notice or warning message */
-	PGRES_FATAL_ERROR			/* query failed */
+	PGRES_FATAL_ERROR,			/* query failed */
+	PGRES_PORTAL_SUSPENDED		/* Execute returned partial results, portal still open */
 } ExecStatusType;
 
 typedef enum
@@ -499,6 +500,15 @@ extern PGresult *PQdescribePrepared(PGconn *conn, const char *stmt);
 extern PGresult *PQdescribePortal(PGconn *conn, const char *portal);
 extern int	PQsendDescribePrepared(PGconn *conn, const char *stmt);
 extern int	PQsendDescribePortal(PGconn *conn, const char *portal);
+
+/* Portal management for batched fetch (Extended Query Protocol) */
+extern int	PQsendBindPortal(PGconn *conn, const char *stmtName,
+			const char *portalName, int nParams,
+			const char *const *paramValues, const int *paramLengths,
+			const int *paramFormats, int resultFormat);
+extern int	PQsendExecutePortal(PGconn *conn, const char *portalName, int maxRows);
+extern int	PQsendClosePortal(PGconn *conn, const char *portalName);
+extern int	PQsendCloseStatement(PGconn *conn, const char *stmtName);
 
 /* Delete a PGresult */
 extern void PQclear(PGresult *res);

@@ -6,6 +6,7 @@
 #include <cstring>
 
 // Unit tests for connection property default values and parsing.
+// This unit test is for testing the default value when databaseMetadataCurrentDbOnly flag is not included in DSN.
 
 TEST(DEFAULT_VALUE_TEST_SUITE, test_DatabaseMetadataCurrentDbOnly) {
 
