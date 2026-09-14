@@ -590,9 +590,8 @@ SQLRETURN SQL_API SQLDriverConnect(SQLHDBC            phdbc,
 void applyUseDeclareFetchExclusivity(RS_CONNECT_PROPS_INFO *pConnectProps)
 {
     if (pConnectProps->iUseDeclareFetch) {
-        // Only warn when the user actually supplied a conflicting cursor mode.
         if (pConnectProps->iStreamingCursorRows > 0 || pConnectProps->iCscEnable) {
-            RS_LOG_WARN("RSCNN",
+            RS_LOG_TRACE("RSCNN",
                 "UseDeclareFetch=1 overriding StreamingCursorRows=%d -> 0, CscEnable=%d -> 0",
                 pConnectProps->iStreamingCursorRows, pConnectProps->iCscEnable);
         }

@@ -1250,7 +1250,6 @@ SQLRETURN libpqExecuteDirectOrPreparedOnThread(RS_STMT_INFO *pStmt, char *pszCmd
                             nParams = iNumBindParams;
 
                         // Extended Query Protocol: use portal for eligible SELECT queries
-                        // Extended Query Protocol: use portal for eligible SELECT queries
                         // Only when UseDeclareFetch=1, no bind params, not prepared, not catalog/function call
                         // Portal Execute is forward-only, so exclude scrollable cursors.
                         //
