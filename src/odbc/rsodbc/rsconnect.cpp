@@ -2326,9 +2326,18 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
                         : SHORT_NAME_KEYWORD;
                 if (CAN_OVERRIDE_DSN ||
                     pConnectProps->szPassword[0] == '\0') {
-                    strncpy(pConnectProps->szPassword, pval,
-                            MAX_IDEN_LEN - 1);
-                    pConnectProps->szPassword[MAX_IDEN_LEN - 1] = '\0';
+                    // szPassword is sized PADB_MAX_PARAMETERS (not MAX_IDEN_LEN)
+                    // to hold long IAM temporary passwords (~1900 chars), so copy
+                    // up to the full buffer size rather than the identifier
+                    // length used for the other properties here. Matches how the
+                    // SQLConnect path stores the password.
+                    if (NULL == rs_strncpy_safe(
+                                    pConnectProps->szPassword, pval,
+                                    sizeof(pConnectProps->szPassword))) {
+                        // Not an error. Password can be unspecified in some
+                        // authentication methods. Or DSN can already contain it.
+                        RS_LOG_DEBUG("RSCNN", "Did not process password.");
+                    }
                 }
             } else if (_stricmp(pname, RS_DSN) == 0) {
                 if (CAN_OVERRIDE_DSN || pConnectProps->szDSN[0] == '\0') {

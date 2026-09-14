@@ -160,6 +160,33 @@ function(target_link_libraries_rsodbc TARGET_NAME)
   target_link_directories(${TARGET_NAME} PRIVATE ${CMAKE_SYSTEM_LIBRARY_PATH})
 endfunction()
 
+function(target_link_aws_system_libraries TARGET_NAME)
+  # Windows system import libraries required by the statically linked AWS SDK /
+  # AWS-CRT / AWS-LC libraries in ${RS_STATIC_LIBS}: ws2_32 for sockets,
+  # winhttp/wininet for the HTTP clients, crypt32/secur32/bcrypt/ncrypt for TLS
+  # and certificate handling, userenv/version/shlwapi for platform lookups.
+  #
+  # The driver links these (within a larger set of Windows system libs) in
+  # target_link_libraries_rsodbc(). Test executables need this subset once a
+  # test references AWS SDK symbols, since the linker otherwise leaves those
+  # objects out of the static-library pull. Kept as a separate list rather than
+  # shared: the driver's is a superset and uses the PRIVATE keyword signature.
+  # If the SDK's system dependencies change, update both. Uses the plain
+  # target_link_libraries() signature to match callers.
+  target_link_libraries(
+    ${TARGET_NAME}
+    ws2_32
+    winhttp
+    WinInet
+    crypt32
+    secur32
+    bcrypt
+    Ncrypt
+    UserEnv
+    Version
+    shlwapi)
+endfunction()
+
 function(target_compile_options_rsodbc TARGET_NAME)
   target_compile_options(
     ${TARGET_NAME}

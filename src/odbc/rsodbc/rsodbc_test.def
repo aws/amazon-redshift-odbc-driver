@@ -388,3 +388,5 @@ EXPORTS
 	PQmakeEmptyPGresult
 	PQconnectStart
 	PQfinish
+	; RS_CONN_INFO::parseConnectString(char*, size_t, int, int) - public
+	?parseConnectString@RS_CONN_INFO@@QEAAHPEAD_KHH@Z
