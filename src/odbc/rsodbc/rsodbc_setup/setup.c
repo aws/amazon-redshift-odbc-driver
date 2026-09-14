@@ -207,6 +207,8 @@
 //#define DFLT_KSN ""  // Kerberos Service Name
 //#define DFLT_KSA "SSPI"  // Kerberos API
 #define DFLT_SC_ROWS "100"
+#define DFLT_USE_DECLARE_FETCH "0"
+#define DFLT_FETCH_SIZE "0"
 #define DFLT_SSL_MODE "verify-ca"
 #define DFTL_TLS_VERSION "1.2" // Default TLS version is 1.2
 
@@ -307,7 +309,7 @@
  * number of elements in rs_dsn_attrs[]. Increment it by one whenever an attribute
  * is added to rs_dsn_attrs[]. The compile-time check after that table enforces it.
  */
-#define DD_DSN_ATTR_COUNT 112
+#define DD_DSN_ATTR_COUNT 114
 
 #define ODBC_GLB_ATTR_COUNT (2 + 1) // LogLevel, LogPath
 
@@ -447,6 +449,8 @@ static const rs_dsn_attr_t rs_dsn_attrs[] =
 // { "KerberosServiceName", DFLT_KSN },
 // { "KerberosAPI", DFLT_KSA },
 { "StreamingCursorRows", DFLT_SC_ROWS },
+{ "UseDeclareFetch", DFLT_USE_DECLARE_FETCH },
+{ "Fetch", DFLT_FETCH_SIZE },
 { RS_SSL_MODE, DFLT_SSL_MODE },
 { RS_MIN_TLS, DFTL_TLS_VERSION },
 { RS_IAM, DFLT_IAM},
@@ -593,6 +597,7 @@ static const rs_dsn_attr_t rs_dsn_code2name[] =
 // { "KSN", "KerberosServiceName" },
 // { "KSA", "KerberosAPI" },
 { "SCR", "StreamingCursorRows" },
+{ "UDF", "UseDeclareFetch" },
 { RS_SSL_MODE, RS_SSL_MODE },
 { RS_MIN_TLS, RS_MIN_TLS },
 { RS_IAM, RS_IAM },

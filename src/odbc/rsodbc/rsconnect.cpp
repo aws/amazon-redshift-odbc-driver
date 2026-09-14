@@ -2455,6 +2455,16 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
         } else if (_stricmp(pname, RS_BOOLS_AS_CHAR) == 0) {
 						bool bVal = convertToBoolVal(pval);
 						pConnectProps->iBoolsAsChar = (bVal) ? 1 : 0;
+        } else if (_stricmp(pname, RS_USE_DECLARE_FETCH) == 0 ||
+                   _stricmp(pname, "UDF") == 0) {
+						bool bVal = convertToBoolVal(pval);
+						pConnectProps->iUseDeclareFetch = (bVal) ? 1 : 0;
+        } else if (_stricmp(pname, RS_FETCH_SIZE) == 0) {
+            if (pval) {
+                sscanf(pval, "%d", &pConnectProps->iFetchSize);
+                if (pConnectProps->iFetchSize < 0)
+                    pConnectProps->iFetchSize = 0;
+            }
         } else if (_stricmp(pname, RS_KEEP_ALIVE) == 0) {
           if (pval) {
 							strncpy(pConnectProps->szKeepAlive, pval, MAX_NUMBER_BUF_LEN - 1);
@@ -3346,6 +3356,19 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
       if(pConnectProps->iStreamingCursorRows < 0)
         pConnectProps->iStreamingCursorRows = 0;
 
+      // TODO: Uncomment when DECLARE/FETCH execution path is implemented.
+      // UseDeclareFetch is mutually exclusive with StreamingCursorRows and CSC.
+      // if (pConnectProps->iUseDeclareFetch) {
+      //     pConnectProps->iStreamingCursorRows = 0;
+      //     pConnectProps->iCscEnable = 0;
+      // }
+
+      // Default batch size when UseDeclareFetch is enabled but Fetch is not specified.
+      // TODO: Uncomment when execution path is implemented.
+      // if (pConnectProps->iUseDeclareFetch && pConnectProps->iFetchSize == 0) {
+      //     pConnectProps->iFetchSize = RS_DEFAULT_FETCH_SIZE;
+      // }
+
 	  // Read current db only or multiple db
 	  // If user didn't include DatabaseMetadataCurrentDbOnly flag in dsn, RS_SQLGetPrivateProfileString would return empty string, which will cause readBoolValFromDsn returning false to bVal
 	  // In this case, we would use default value in iDatabaseMetadataCurrentDbOnly instead of calling readBoolValFromDsn
@@ -3395,6 +3418,25 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
         }
         RS_LOG_TRACE("RSCNN", "BoolsAsChar after DSN read: %d (DSN key present: %s)",
                      pConnectProps->iBoolsAsChar, (temp[0] != '\0') ? "yes" : "no");
+
+        // Read UseDeclareFetch
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_USE_DECLARE_FETCH,
+                                    "", temp, MAX_IAM_BUF_VAL, ODBC_INI);
+        if (temp[0] != '\0') {
+            bVal = (pConnectProps->iUseDeclareFetch == 1);
+            RS_CONN_INFO::readBoolValFromDsn(pConnectProps->szDSN,
+                                            RS_USE_DECLARE_FETCH, &bVal);
+            pConnectProps->iUseDeclareFetch = (bVal) ? 1 : 0;
+        }
+
+        // Read Fetch (batch size for UseDeclareFetch)
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_FETCH_SIZE,
+                                    "", temp, MAX_IAM_BUF_VAL, ODBC_INI);
+        if (temp[0] != '\0') {
+            RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_FETCH_SIZE, &(pConnectProps->iFetchSize));
+            if (pConnectProps->iFetchSize < 0)
+                pConnectProps->iFetchSize = 0;
+        }
 
 	  // Read Application name
 	  RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_APPLICATION_NAME, "", pConnAttr->szApplicationName, sizeof(pConnAttr->szApplicationName), ODBC_INI);

@@ -15669,6 +15669,22 @@ void readCscOptionsForDsnlessConnection(RS_CONNECT_PROPS_INFO *pConnectProps)
 	if(pConnectProps->iStreamingCursorRows < 0)
 		pConnectProps->iStreamingCursorRows = 0;
 
+	optionVal[0] = '\0';
+	readOptions = readDriverOptionFromIniFile("UseDeclareFetch", optionVal, sizeof(optionVal));
+	if(readOptions && optionVal[0] != '\0')
+	{
+		pConnectProps->iUseDeclareFetch = atoi(optionVal) ? 1 : 0;
+	}
+
+	optionVal[0] = '\0';
+	readOptions = readDriverOptionFromIniFile("Fetch", optionVal, sizeof(optionVal));
+	if(readOptions && optionVal[0] != '\0')
+	{
+		sscanf(optionVal,"%d",&pConnectProps->iFetchSize);
+		if(pConnectProps->iFetchSize < 0)
+			pConnectProps->iFetchSize = 0;
+	}
+
 }
 
 

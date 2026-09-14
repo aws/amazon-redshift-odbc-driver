@@ -1142,6 +1142,11 @@ struct SHOWPROCEDURESFUNCTIONSResult {
 #define RS_USE_UNICODE                          "UseUnicode"
 #define RS_ENABLE_TABLE_TYPES                   "EnableTableTypes"
 #define RS_BOOLS_AS_CHAR                       "BoolsAsChar"
+#define RS_USE_DECLARE_FETCH                   "UseDeclareFetch"
+// Connection property key for batch size (the DSN/connection-string key is "Fetch",
+// matching the parameter name used in connection strings).
+#define RS_FETCH_SIZE                          "Fetch"
+#define RS_DEFAULT_FETCH_SIZE                  100
 
 // Helper macros to retrieve BoolsAsChar and UseUnicode options from connection props.
 // Safe to use from both C (.c) and C++ (.cpp) files.
@@ -1366,6 +1371,8 @@ public:
 	  iUseUnicode = 0;
 	  iEnableTableTypes = 1;
 	  iBoolsAsChar = 0;
+	  iUseDeclareFetch = 0;
+	  iFetchSize = 0;
 
 	  szKeepAlive[0] = '\0';
 	  szKeepAliveIdle[0] = '\0';
@@ -1538,6 +1545,9 @@ public:
 	int iUseUnicode; // Default is 0. 1 means report wide SQL types for character columns.
 	int iEnableTableTypes; // Default is 1. 0 means generalize table types to TABLE/VIEW.
 	int iBoolsAsChar; // Default is 0. 1 means report BOOLEAN as SQL_VARCHAR instead of SQL_BIT.
+	// TODO: Wire these into the execution path. Currently parsed and stored but unused (no-op).
+	int iUseDeclareFetch; // Default is 0. 1 means enable batched DECLARE/FETCH (server-side cursor).
+	int iFetchSize;       // Batch size for FETCH when UseDeclareFetch=1. Default is 0 (driver picks default).
 
     char *pConnectStr;                // Rest of connection option store in this one.
     size_t cbConnectStr;

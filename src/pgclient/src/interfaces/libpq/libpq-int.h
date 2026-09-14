@@ -476,6 +476,10 @@ struct pg_conn
 	// Streaming Cursor
 	int iStreamingCursorRows;
 
+	// Batched DECLARE/FETCH (server-side cursor)
+	int iUseDeclareFetch;
+	int iFetchSize;
+
 	// Added Redshift protocol options
 	int	   server_protocol_version;		/* Redshift server protocol version */
 	char *client_protocol_version;

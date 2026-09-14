@@ -274,6 +274,12 @@ static const PQconninfoOption PQconninfoOptions[] = {
 	{"StreamingCursorRows", NULL, NULL, NULL,
 	    "StreamingCursorRows", "", 10},
 
+	{"UseDeclareFetch", NULL, NULL, NULL,
+	    "UseDeclareFetch", "", 1},
+
+	{"Fetch", NULL, NULL, NULL,
+	    "Fetch", "", 10},
+
 	{ "client_protocol_version", NULL, NULL, NULL,
 		"Extended-Redshift-Protocol-Version", "", 60 },
 
@@ -988,6 +994,18 @@ fillPGconn(PGconn *conn, PQconninfoOption *connOptions)
 	    sscanf(tmp,"%d",&(conn->iStreamingCursorRows));
     else
         conn->iStreamingCursorRows = 0;
+
+	tmp = conninfo_getval(connOptions, "UseDeclareFetch");
+	if(tmp)
+		conn->iUseDeclareFetch = atoi(tmp) ? 1 : 0;
+	else
+		conn->iUseDeclareFetch = 0;
+
+	tmp = conninfo_getval(connOptions, "Fetch");
+	if(tmp)
+		sscanf(tmp,"%d",&(conn->iFetchSize));
+	else
+		conn->iFetchSize = 0;
 
 	// CSC will override Streaming Cursor
 	if(conn->iCscEnable)
