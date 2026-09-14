@@ -67,7 +67,7 @@ namespace RsMetadataServerProxyHelpers {
             std::string errorDetails = getErrorMessage(m_stmt);
             RS_LOG_ERROR("prepareBindAndExecuteQuery",
                         "Fail to prepare query \"%s\". Details: %s",
-                        query.c_str(),
+                        RsMetadataAPIHelper::redactDriverToken(query).c_str(),
                         errorDetails.c_str()); 
             return rc;
         }
@@ -405,9 +405,11 @@ namespace RsMetadataServerProxyHelpers {
     //-------------------------------------------------------------------------
     ShowTablesHelper::ShowTablesHelper(SQLHSTMT phstmt, const std::string &catalog,
                     const std::string &schema, const std::string &table,
-                    std::vector<SHOWTABLESResult> &intermediateRS)
+                    std::vector<SHOWTABLESResult> &intermediateRS,
+                    bool exactNames)
         : ShowDiscoveryBase(phstmt, "ShowTablesHelper"), m_catalog(catalog),
-            m_schema(schema), m_table(table), m_intermediateRS(intermediateRS) {}
+            m_schema(schema), m_table(table), m_intermediateRS(intermediateRS),
+            m_exactNames(exactNames) {}
 
     SQLRETURN ShowTablesHelper::execute() {
         RS_LOG_TRACE(m_operationName,
@@ -415,27 +417,65 @@ namespace RsMetadataServerProxyHelpers {
                         "schema = \"%s\", table = \"%s\"",
                         m_catalog.c_str(), m_schema.c_str(), m_table.c_str());
 
-        // Input parameter validation
-        if (m_catalog.empty() || m_schema.empty()) {
+        // Use the batch V5 command only when discovery is v5 AND the driver
+        // token is usable; otherwise emit the ungated per object command.
+        const bool isV5 = RsMetadataAPIHelper::shouldUseBatchShowV5(m_stmt);
+        std::string query;
+        std::vector<std::string> params;
+
+        // Input parameter validation. The V5 database level command requires
+        // only the catalog; the schema and table act as optional filters. The
+        // V4 per object command additionally requires the schema.
+        if (isV5 && m_catalog.empty()) {
+            RS_LOG_ERROR(m_operationName,
+                            "Required parameter catalog should not be empty");
+            return SQL_ERROR;
+        } else if (!isV5 && (m_catalog.empty() || m_schema.empty())) {
             RS_LOG_ERROR(m_operationName,
                             "Required parameters catalog/schema should not be empty");
             return SQL_ERROR;
         }
 
-        // Prepare and execute query
-        std::vector<std::string> params = {m_catalog, m_schema};
-        std::string query;
-        if (m_table.empty()) {
-            query = RsMetadataAPIHelper::kshowTablesQuery;
+        if (isV5) {
+            // V5: one SHOW TABLES FROM DATABASE command; schema and table
+            // patterns become WHERE clause filters. Only supplied filters are
+            // emitted; an omitted filter means match all. Literal names are
+            // escaped so LIKE metacharacters in them match themselves only.
+            std::vector<std::pair<std::string, std::string>> filters;
+            if (!m_schema.empty()) {
+                filters.push_back(
+                    {RsMetadataAPIHelper::kFilterSchemaName,
+                     RsMetadataAPIHelper::makeLikeFilterPattern(
+                         m_schema, m_exactNames)});
+            }
+            if (!m_table.empty()) {
+                filters.push_back(
+                    {RsMetadataAPIHelper::kFilterTableName,
+                     RsMetadataAPIHelper::makeLikeFilterPattern(
+                         m_table, m_exactNames)});
+            }
+            RsMetadataAPIHelper::V5ShowQuery q =
+                RsMetadataAPIHelper::buildV5ShowQuery(
+                    RsMetadataAPIHelper::kshowTablesFromDatabaseQuery,
+                    m_catalog, filters,
+                    RsMetadataAPIHelper::getDriverToken(m_stmt));
+            query = q.sql;
+            params = q.parameters;
         } else {
-            params.push_back(m_table);
-            query = RsMetadataAPIHelper::kshowTablesLikeQuery;
+            // Prepare and execute query
+            params = {m_catalog, m_schema};
+            if (m_table.empty()) {
+                query = RsMetadataAPIHelper::kshowTablesQuery;
+            } else {
+                params.push_back(m_table);
+                query = RsMetadataAPIHelper::kshowTablesLikeQuery;
+            }
         }
 
         SQLRETURN rc = prepareBindAndExecuteQuery(query, params);
         if (!SQL_SUCCEEDED(rc)) {
             RS_LOG_ERROR(m_operationName, "Failed to execute query: \"%s\".",
-                        query.c_str());
+                        RsMetadataAPIHelper::redactDriverToken(query).c_str());
             return rc;
         }
 
@@ -531,10 +571,11 @@ namespace RsMetadataServerProxyHelpers {
     ShowColumnsHelper::ShowColumnsHelper(SQLHSTMT phstmt, const std::string &catalog,
                     const std::string &schema, const std::string &table,
                     const std::string &column,
-                    std::vector<SHOWCOLUMNSResult> &intermediateRS)
+                    std::vector<SHOWCOLUMNSResult> &intermediateRS,
+                    bool exactNames)
         : ShowDiscoveryBase(phstmt, "ShowColumnsHelper"), m_catalog(catalog),
             m_schema(schema), m_table(table), m_column(column),
-            m_intermediateRS(intermediateRS) {}
+            m_intermediateRS(intermediateRS), m_exactNames(exactNames) {}
 
     SQLRETURN ShowColumnsHelper::execute() {
         RS_LOG_TRACE(m_operationName,
@@ -543,28 +584,73 @@ namespace RsMetadataServerProxyHelpers {
                         m_catalog.c_str(), m_schema.c_str(), m_table.c_str(),
                         m_column.c_str());
 
-        // Input parameter validation
-        if (m_catalog.empty() || m_schema.empty() || m_table.empty()) {
+        // Use the batch V5 command only when discovery is v5 AND the driver
+        // token is usable; otherwise emit the ungated per object command.
+        const bool isV5 = RsMetadataAPIHelper::shouldUseBatchShowV5(m_stmt);
+        std::string query;
+        std::vector<std::string> params;
+
+        // Input parameter validation. The V5 database level command requires
+        // only the catalog; the schema, table, and column act as optional
+        // filters. The V4 per object command additionally requires the schema
+        // and table.
+        if (isV5 && m_catalog.empty()) {
+            RS_LOG_ERROR(m_operationName,
+                            "Required parameter catalog should not be empty");
+            return SQL_ERROR;
+        } else if (!isV5 &&
+                   (m_catalog.empty() || m_schema.empty() || m_table.empty())) {
             RS_LOG_ERROR(m_operationName,
                             "Required parameters catalog/schema/table should "
                             "not be empty");
             return SQL_ERROR;
         }
 
-        // Prepare and execute query
-        std::vector<std::string> params = {m_catalog, m_schema, m_table};
-        std::string query;
-        if (m_column.empty()) {
-            query = RsMetadataAPIHelper::kshowColumnsQuery;
+        if (isV5) {
+            // V5: one SHOW COLUMNS FROM DATABASE command; schema, table, and
+            // column patterns become WHERE clause filters. Only supplied
+            // filters are emitted; an omitted filter means match all. Literal
+            // schema and table names are escaped so LIKE metacharacters in
+            // them match themselves only; the column keeps pattern semantics.
+            std::vector<std::pair<std::string, std::string>> filters;
+            if (!m_schema.empty()) {
+                filters.push_back(
+                    {RsMetadataAPIHelper::kFilterSchemaName,
+                     RsMetadataAPIHelper::makeLikeFilterPattern(
+                         m_schema, m_exactNames)});
+            }
+            if (!m_table.empty()) {
+                filters.push_back(
+                    {RsMetadataAPIHelper::kFilterTableName,
+                     RsMetadataAPIHelper::makeLikeFilterPattern(
+                         m_table, m_exactNames)});
+            }
+            if (!m_column.empty()) {
+                filters.push_back({RsMetadataAPIHelper::kFilterColumnName,
+                                   m_column});
+            }
+            RsMetadataAPIHelper::V5ShowQuery q =
+                RsMetadataAPIHelper::buildV5ShowQuery(
+                    RsMetadataAPIHelper::kshowColumnsFromDatabaseQuery,
+                    m_catalog, filters,
+                    RsMetadataAPIHelper::getDriverToken(m_stmt));
+            query = q.sql;
+            params = q.parameters;
         } else {
-            params.push_back(m_column);
-            query = RsMetadataAPIHelper::kshowColumnsLikeQuery;
+            // Prepare and execute query
+            params = {m_catalog, m_schema, m_table};
+            if (m_column.empty()) {
+                query = RsMetadataAPIHelper::kshowColumnsQuery;
+            } else {
+                params.push_back(m_column);
+                query = RsMetadataAPIHelper::kshowColumnsLikeQuery;
+            }
         }
 
         SQLRETURN rc = prepareBindAndExecuteQuery(query, params);
         if (!SQL_SUCCEEDED(rc)) {
             RS_LOG_ERROR(m_operationName, "Failed to execute query: \"%s\".",
-                        query.c_str());
+                        RsMetadataAPIHelper::redactDriverToken(query).c_str());
             return rc;
         }
 
@@ -720,7 +806,7 @@ namespace RsMetadataServerProxyHelpers {
         SQLRETURN rc = prepareBindAndExecuteQuery(query, params);
         if (!SQL_SUCCEEDED(rc)) {
             RS_LOG_ERROR(m_operationName, "Failed to execute query: \"%s\".",
-                        query.c_str());
+                        RsMetadataAPIHelper::redactDriverToken(query).c_str());
             return rc;
         }
 
@@ -814,7 +900,7 @@ namespace RsMetadataServerProxyHelpers {
         SQLRETURN rc = prepareBindAndExecuteQuery(query, params);
         if (!SQL_SUCCEEDED(rc)) {
             RS_LOG_ERROR(m_operationName, "Failed to execute query: \"%s\".",
-                        query.c_str());
+                        RsMetadataAPIHelper::redactDriverToken(query).c_str());
             return rc;
         }
 
@@ -951,7 +1037,7 @@ namespace RsMetadataServerProxyHelpers {
         SQLRETURN rc = prepareBindAndExecuteQuery(query, params);
         if (!SQL_SUCCEEDED(rc)) {
             RS_LOG_ERROR(m_operationName, "Failed to execute query: \"%s\".",
-                        query.c_str());
+                        RsMetadataAPIHelper::redactDriverToken(query).c_str());
             return rc;
         }
 
@@ -1054,22 +1140,57 @@ namespace RsMetadataServerProxyHelpers {
                         "schema = \"%s\", table = \"%s\"",
                         m_catalog.c_str(), m_schema.c_str(), m_table.c_str());
 
-        // Input parameter validation
-        if (m_catalog.empty() || m_schema.empty() || m_table.empty()) {
+        // Use the batch V5 command only when discovery is v5 AND the driver
+        // token is usable; otherwise emit the ungated per object command.
+        const bool isV5 = RsMetadataAPIHelper::shouldUseBatchShowV5(m_stmt);
+        std::string query;
+        std::vector<std::string> params;
+
+        // Input parameter validation. The V5 database level command requires
+        // only the catalog; the schema and table act as optional filters. The
+        // V4 per object command additionally requires the schema and table.
+        if (isV5 && m_catalog.empty()) {
+            RS_LOG_ERROR(m_operationName,
+                            "Required parameter catalog should not be empty");
+            return SQL_ERROR;
+        } else if (!isV5 &&
+                   (m_catalog.empty() || m_schema.empty() || m_table.empty())) {
             RS_LOG_ERROR(m_operationName,
                             "Required parameters catalog/schema/table should "
                             "not be empty");
             return SQL_ERROR;
         }
 
-        // Prepare and execute query
-        std::vector<std::string> params = {m_catalog, m_schema, m_table};
-        std::string query = RsMetadataAPIHelper::kshowGrantsTableQuery;
+        if (isV5) {
+            // V5: one SHOW GRANTS ON TABLES FROM DATABASE command; schema and
+            // table patterns become WHERE clause filters. Only supplied
+            // filters are emitted; an omitted filter means match all.
+            std::vector<std::pair<std::string, std::string>> filters;
+            if (!m_schema.empty()) {
+                filters.push_back({RsMetadataAPIHelper::kFilterSchemaName,
+                                   m_schema});
+            }
+            if (!m_table.empty()) {
+                filters.push_back({RsMetadataAPIHelper::kFilterTableName,
+                                   m_table});
+            }
+            RsMetadataAPIHelper::V5ShowQuery q =
+                RsMetadataAPIHelper::buildV5ShowQuery(
+                    RsMetadataAPIHelper::kshowGrantsOnTablesFromDatabaseQuery,
+                    m_catalog, filters,
+                    RsMetadataAPIHelper::getDriverToken(m_stmt));
+            query = q.sql;
+            params = q.parameters;
+        } else {
+            // Prepare and execute query
+            params = {m_catalog, m_schema, m_table};
+            query = RsMetadataAPIHelper::kshowGrantsTableQuery;
+        }
 
         SQLRETURN rc = prepareBindAndExecuteQuery(query, params);
         if (!SQL_SUCCEEDED(rc)) {
             RS_LOG_ERROR(m_operationName, "Failed to execute query: \"%s\".",
-                        query.c_str());
+                        RsMetadataAPIHelper::redactDriverToken(query).c_str());
             return rc;
         }
 
@@ -1187,7 +1308,7 @@ namespace RsMetadataServerProxyHelpers {
         SQLRETURN rc = prepareBindAndExecuteQuery(query, params);
         if (!SQL_SUCCEEDED(rc)) {
             RS_LOG_ERROR(m_operationName, "Failed to execute query: \"%s\".",
-                        query.c_str());
+                        RsMetadataAPIHelper::redactDriverToken(query).c_str());
             return rc;
         }
 

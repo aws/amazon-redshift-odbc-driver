@@ -958,9 +958,11 @@ pqSaveParameterStatus(PGconn *conn, const char *name, const char *value)
 	pgParameterStatus *pstatus;
 	pgParameterStatus *prev;
 
+	/* The driver_token value must not reach log files. */
 	if (conn->Pfdebug)
 		RS_LOG_DEBUG("ODBCPQ",  "pqSaveParameterStatus: '%s' = '%s'\n",
-				name, value);
+				name,
+				(strcmp(name, "driver_token") == 0) ? "[REDACTED]" : value);
 
 	/*
 	 * Forget any old information about the parameter

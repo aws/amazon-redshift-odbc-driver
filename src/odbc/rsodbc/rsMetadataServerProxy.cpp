@@ -12,6 +12,128 @@
 #include "rserror.h"
 
 //
+// V5 SHOW discovery support. V4 discovery walks the catalog with one SHOW
+// command per object (SHOW DATABASES -> SHOW SCHEMAS -> SHOW TABLES/COLUMNS/
+// GRANTS per object); V5 discovery issues a single database level SHOW
+// command per database (SHOW ... FROM DATABASE) and filters with a WHERE
+// clause. The V5 path is used when the server advertises discovery version 5
+// or higher; otherwise the V4 path runs unchanged.
+//
+
+/**
+ * @brief SQLTables V5 path: resolves catalogs once, then issues one
+ *        SHOW TABLES FROM DATABASE command per database.
+ *
+ * The TABLE_TYPE list is filtered client side in the post processor, so it is
+ * not pushed here. Failures are returned to the caller; there is no fallback.
+ */
+static SQLRETURN sqlTablesV5(
+    SQLHSTMT phstmt, const std::string &catalogName,
+    const std::string &schemaName, const std::string &tableName,
+    std::vector<SHOWTABLESResult> &intermediateRS,
+    bool isSingleDatabaseMetaData) {
+
+    std::vector<std::string> catalogs;
+    SQLRETURN rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                       phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                       .execute();
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlTables", "Error in ShowDatabasesHelper (V5)");
+        return rc;
+    }
+
+    for (const auto &curCatalog : catalogs) {
+        rc = RsMetadataServerProxyHelpers::ShowTablesHelper(
+                 phstmt, curCatalog, schemaName, tableName, intermediateRS)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlTables", "Error in ShowTablesHelper (V5)");
+            return rc;
+        }
+    }
+
+    RS_LOG_TRACE("sqlTables", "Total number of return rows (V5): %zu",
+                 intermediateRS.size());
+    return rc;
+}
+
+/**
+ * @brief SQLColumns V5 path: resolves catalogs once, then issues one
+ *        SHOW COLUMNS FROM DATABASE command per database.
+ *
+ * Failures are returned to the caller; there is no fallback.
+ */
+static SQLRETURN sqlColumnsV5(
+    SQLHSTMT phstmt, const std::string &catalogName,
+    const std::string &schemaName, const std::string &tableName,
+    const std::string &columnName,
+    std::vector<SHOWCOLUMNSResult> &intermediateRS,
+    bool isSingleDatabaseMetaData) {
+
+    std::vector<std::string> catalogs;
+    SQLRETURN rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                       phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                       .execute();
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlColumns", "Error in ShowDatabasesHelper (V5)");
+        return rc;
+    }
+
+    for (const auto &curCatalog : catalogs) {
+        rc = RsMetadataServerProxyHelpers::ShowColumnsHelper(
+                 phstmt, curCatalog, schemaName, tableName, columnName,
+                 intermediateRS)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlColumns", "Error in ShowColumnsHelper (V5)");
+            return rc;
+        }
+    }
+
+    RS_LOG_TRACE("sqlColumns", "Total number of return rows (V5): %zu",
+                 intermediateRS.size());
+    return rc;
+}
+
+/**
+ * @brief SQLTablePrivileges V5 path: resolves catalogs once, then issues one
+ *        SHOW GRANTS ON TABLES FROM DATABASE command per database.
+ *
+ * Failures are returned to the caller; there is no fallback.
+ */
+static SQLRETURN sqlTablePrivilegesV5(
+    SQLHSTMT phstmt, const std::string &catalogName,
+    const std::string &schemaName, const std::string &tableName,
+    std::vector<SHOWGRANTSTABLEResult> &intermediateRS,
+    bool isSingleDatabaseMetaData) {
+
+    std::vector<std::string> catalogs;
+    SQLRETURN rc = RsMetadataServerProxyHelpers::ShowDatabasesHelper(
+                       phstmt, catalogName, catalogs, isSingleDatabaseMetaData)
+                       .execute();
+    if (!SQL_SUCCEEDED(rc)) {
+        RS_LOG_ERROR("sqlTablePrivileges", "Error in ShowDatabasesHelper (V5)");
+        return rc;
+    }
+
+    for (const auto &curCatalog : catalogs) {
+        rc = RsMetadataServerProxyHelpers::ShowGrantsTableHelper(
+                 phstmt, curCatalog, schemaName, tableName, intermediateRS)
+                 .execute();
+        if (!SQL_SUCCEEDED(rc)) {
+            RS_LOG_ERROR("sqlTablePrivileges",
+                         "Error in ShowGrantsTableHelper (V5)");
+            return rc;
+        }
+    }
+
+    RS_LOG_TRACE("sqlTablePrivileges", "Total number of return rows (V5): %zu",
+                 intermediateRS.size());
+    return rc;
+}
+
+
+//
 // Helper function to return intermediate result set for SQLTables special call
 // to retrieve a list of catalog
 //
@@ -121,6 +243,21 @@ SQLRETURN RsMetadataServerProxy::sqlTables(
         return SQL_ERROR;
     }
 
+    // V5 servers take the database level SHOW path, but the batch SHOW ... FROM
+    // DATABASE commands are gated behind a driver token. shouldUseBatchShowV5 is
+    // true only when the token is usable (absent, so gating is off, or a valid
+    // UUID); a token this driver cannot validate drops to the ungated per object
+    // loop below.
+    if (RsMetadataAPIHelper::shouldUseBatchShowV5(phstmt)) {
+        return sqlTablesV5(phstmt, catalogName, schemaName, tableName,
+                           intermediateRS, isSingleDatabaseMetaData);
+    }
+    if (RsMetadataAPIHelper::isShowDiscoveryV5(phstmt)) {
+        RS_LOG_DEBUG("sqlTables",
+                     "Driver token is not a valid UUID; falling back to the "
+                     "per-object SHOW path");
+    }
+
     // Define variable to hold the result from Show command helper
     std::vector<std::string> catalogs;
     std::vector<SHOWSCHEMASResult> schemas;
@@ -193,6 +330,22 @@ SQLRETURN RsMetadataServerProxy::sqlColumns(
     if (!SQL_SUCCEEDED(validateNameLengths(validations))) {
         RS_LOG_ERROR("sqlColumns", "Invalid input parameters");
         return SQL_ERROR;
+    }
+
+    // V5 servers take the database level SHOW path, but the batch SHOW ... FROM
+    // DATABASE commands are gated behind a driver token. shouldUseBatchShowV5 is
+    // true only when the token is usable (absent, so gating is off, or a valid
+    // UUID); a token this driver cannot validate drops to the ungated per object
+    // loop below.
+    if (RsMetadataAPIHelper::shouldUseBatchShowV5(phstmt)) {
+        return sqlColumnsV5(phstmt, catalogName, schemaName, tableName,
+                            columnName, intermediateRS,
+                            isSingleDatabaseMetaData);
+    }
+    if (RsMetadataAPIHelper::isShowDiscoveryV5(phstmt)) {
+        RS_LOG_DEBUG("sqlColumns",
+                     "Driver token is not a valid UUID; falling back to the "
+                     "per-object SHOW path");
     }
 
     // Define variable to hold the result from Show command helper
@@ -321,7 +474,7 @@ SQLRETURN RsMetadataServerProxy::sqlPrimaryKeys(
             if (tableName.empty()) {
                 rc = RsMetadataServerProxyHelpers::ShowTablesHelper(phstmt, curCatalog,
                                     curSchema.schema_name.value_or(""), tableName,
-                                    tables).execute();
+                                    tables, true).execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     RS_LOG_ERROR("sqlPrimaryKeys", "Error in ShowTablesHelper");
                     return rc;
@@ -500,7 +653,7 @@ SQLRETURN RsMetadataServerProxy::processKeysCase(
             if (tableName.empty()) {
                 rc = RsMetadataServerProxyHelpers::ShowTablesHelper(phstmt, curCatalog,
                                     curSchema.schema_name.value_or(""), tableName,
-                                    tables).execute();
+                                    tables, true).execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     RS_LOG_ERROR("processKeysCase", "Error in ShowTablesHelper");
                     return rc;
@@ -598,7 +751,7 @@ SQLRETURN RsMetadataServerProxy::sqlSpecialColumns(
             if (tableName.empty()) {
                 rc = RsMetadataServerProxyHelpers::ShowTablesHelper(
                          phstmt, curCatalog, curSchema.schema_name.value_or(""),
-                         tableName, tables)
+                         tableName, tables, true)
                          .execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     RS_LOG_ERROR("sqlSpecialColumns", "Error in ShowTablesHelper");
@@ -636,7 +789,7 @@ SQLRETURN RsMetadataServerProxy::sqlSpecialColumns(
                                            curSchema.schema_name.value_or(""),
                                            curTable.table_name.value_or(""),
                                            RsMetadataAPIHelper::SQL_EMPTY,
-                                           allColumns).execute();
+                                           allColumns, true).execute();
 
                     if (!SQL_SUCCEEDED(rc)) {
                         RS_LOG_ERROR("sqlSpecialColumns", 
@@ -731,7 +884,7 @@ SQLRETURN RsMetadataServerProxy::sqlColumnPrivileges(
             if (tableName.empty()) {
                 rc = RsMetadataServerProxyHelpers::ShowTablesHelper(phstmt, curCatalog,
                                       curSchema.schema_name.value_or(""),
-                                      tableName, tables).execute();
+                                      tableName, tables, true).execute();
                 if (!SQL_SUCCEEDED(rc)) {
                     RS_LOG_ERROR("sqlColumnPrivileges", "Error in ShowTablesHelper");
                     return rc;
@@ -793,6 +946,21 @@ SQLRETURN RsMetadataServerProxy::sqlTablePrivileges(
     if (!SQL_SUCCEEDED(validateNameLengths(validations))) {
         RS_LOG_ERROR("sqlTablePrivileges", "Invalid input parameters");
         return SQL_ERROR;
+    }
+
+    // V5 servers take the database level SHOW path, but the batch SHOW ... FROM
+    // DATABASE commands are gated behind a driver token. shouldUseBatchShowV5 is
+    // true only when the token is usable (absent, so gating is off, or a valid
+    // UUID); a token this driver cannot validate drops to the ungated per object
+    // loop below.
+    if (RsMetadataAPIHelper::shouldUseBatchShowV5(phstmt)) {
+        return sqlTablePrivilegesV5(phstmt, catalogName, schemaName, tableName,
+                                    intermediateRS, isSingleDatabaseMetaData);
+    }
+    if (RsMetadataAPIHelper::isShowDiscoveryV5(phstmt)) {
+        RS_LOG_DEBUG("sqlTablePrivileges",
+                     "Driver token is not a valid UUID; falling back to the "
+                     "per-object SHOW path");
     }
 
     // Define variable to hold the result from Show command helper

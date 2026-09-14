@@ -1715,10 +1715,12 @@ static int getParameterStatus(PGconn *conn) {
     }
 
     /* And save it */
+    /* The driver_token value must not reach log files. */
     RS_LOG_DEBUG("getParameterStatus",
              "<=BE parameter_name='%s' parameter_value='%s' value_length=%zu",
              conn->workBuffer.data,
-             valueBuf.data,
+             (strcmp(conn->workBuffer.data, "driver_token") == 0)
+                 ? "[REDACTED]" : valueBuf.data,
              valueBuf.len);
     pqSaveParameterStatus(conn, conn->workBuffer.data, valueBuf.data);
     termPQExpBuffer(&valueBuf);

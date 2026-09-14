@@ -541,6 +541,8 @@ class RsMetadataAPIHelper {
     static const std::regex glueSuperTypeRegex;
     static const std::regex dateTimeRegex;
     static const std::regex intervalRegex;
+    // Driver token (8-4-4-4-12 lowercase hex UUID); compiled once and reused.
+    static const std::regex kDriverTokenRegex;
 
     static const std::set<std::string> VALID_TYPES;
     static const std::unordered_map<std::string, int> procedureFunctionColumnTypeMap;
@@ -627,6 +629,126 @@ class RsMetadataAPIHelper {
     static const std::string kshowParamsFuncQuery;
     static const std::string ksqlSemicolon;
     static const std::string ksqlLike;
+
+    /*
+     * V5 SHOW discovery grammar tokens (database level SHOW commands).
+     *
+     * V4 discovery issues one SHOW command per object (SHOW TABLES from
+     * schema ?.?); V5 discovery issues one SHOW command per database and
+     * filters with a WHERE clause. These constants are the only place the
+     * driver encodes the V5 grammar. The commands are:
+     *   SHOW TABLES            FROM DATABASE ? [WHERE <col> LIKE ? [AND ...]]
+     *   SHOW COLUMNS           FROM DATABASE ? [WHERE <col> LIKE ? [AND ...]]
+     *   SHOW GRANTS ON TABLES  FROM DATABASE ? [WHERE <col> LIKE ? [AND ...]]
+     * The database and every LIKE pattern are bound parameters. Filter
+     * columns are schema_name, table_name, and column_name. There is no
+     * table_type filter, so the SQLTables TABLE_TYPE list remains a client
+     * side filter.
+     */
+    static const std::string kshowTablesFromDatabaseQuery;        /* "SHOW TABLES FROM DATABASE ?" */
+    static const std::string kshowColumnsFromDatabaseQuery;       /* "SHOW COLUMNS FROM DATABASE ?" */
+    static const std::string kshowGrantsOnTablesFromDatabaseQuery;/* "SHOW GRANTS ON TABLES FROM DATABASE ?" */
+
+    /* WHERE clause filter keywords for the database level SHOW commands.
+       These are SQL grammar tokens, distinct from the result set column name
+       constants above, and can change independently of them. */
+    static const std::string kFilterSchemaName;                   /* "SCHEMA_NAME" */
+    static const std::string kFilterTableName;                    /* "TABLE_NAME" */
+    static const std::string kFilterColumnName;                   /* "COLUMN_NAME" */
+    static const std::string ksqlWhere;                           /* " WHERE " */
+    static const std::string ksqlAnd;                             /* " AND " */
+    static const std::string ksqlLikeParam;                       /* " LIKE ?" */
+
+    /**
+     * @brief True when the server advertises SHOW discovery version V5 or
+     *        above, enabling the database level SHOW commands.
+     *
+     * @param phstmt Statement handle used to read the server capability.
+     * @return true when the V5 discovery path applies.
+     */
+    static bool isShowDiscoveryV5(SQLHSTMT phstmt);
+
+    /**
+     * @brief Returns the session driver token negotiated at connection
+     *        startup, or an empty string when the server did not send one.
+     *
+     * When the startup packet identifies a first party driver, the server
+     * generates a per session token and returns it as the driver_token
+     * parameter status. The database level SHOW commands echo it back
+     * through the DRIVER_TOKEN clause.
+     *
+     * @param phstmt Statement handle used to reach the connection.
+     * @return The session token, or an empty string when absent.
+     */
+    static std::string getDriverToken(SQLHSTMT phstmt);
+
+    /**
+     * @brief Formats the DRIVER_TOKEN clause for the database level SHOW
+     *        commands.
+     *
+     * The clause is emitted whenever the server negotiated a token and
+     * omitted otherwise; the server validates a provided token even when
+     * gating is relaxed, so the token is echoed verbatim (single quotes
+     * doubled for the string literal). The grammar places the clause after
+     * the database and before any WHERE clause.
+     *
+     * @param token The session token from getDriverToken.
+     * @return " DRIVER_TOKEN '<token>'" or an empty string for an empty token.
+     */
+    static std::string formatDriverTokenClause(const std::string &token);
+
+    /**
+     * @brief Returns a copy of a SHOW command with the DRIVER_TOKEN literal
+     *        masked, for logging.
+     *
+     * The session token must not reach log files. Every log statement that
+     * prints a database level SHOW command routes the text through this
+     * function, which replaces the quoted token value (including doubled
+     * quotes) with [REDACTED]. Text without a DRIVER_TOKEN clause is
+     * returned unchanged.
+     *
+     * @param sql The command text to redact.
+     * @return The command text safe for logging.
+     */
+    static std::string redactDriverToken(const std::string &sql);
+
+    /**
+     * @brief Returns whether a token is a well formed lowercase UUID.
+     *
+     * The database level SHOW commands inline the token as a string literal,
+     * so only a validated UUID is trusted; any other value is rejected.
+     *
+     * @param token The session token from getDriverToken.
+     * @return true when token matches the 8-4-4-4-12 lowercase hex UUID form.
+     */
+    static bool isValidDriverToken(const std::string &token);
+
+    /**
+     * @brief Returns whether the batch SHOW ... FROM DATABASE path should be
+     *        used for this statement.
+     *
+     * True only when the server is on the V5 discovery path and the driver
+     * token is usable: either absent (the server did not negotiate gating, so
+     * the batch command is issued with no clause) or a well formed UUID. When
+     * the server negotiated a token this driver cannot validate, returns false
+     * so callers fall back to the ungated per object SHOW path.
+     *
+     * @param phstmt Statement handle used to reach the connection.
+     * @return true to use the batch V5 path, false for the per object path.
+     */
+    static bool shouldUseBatchShowV5(SQLHSTMT phstmt);
+
+    /**
+     * @brief A V5 SHOW command paired with its bound parameters, in order.
+     *
+     * The sql string is the full command with ? placeholders; parameters
+     * holds the values to bind in the same left to right order (the database
+     * first, then each LIKE pattern).
+     */
+    struct V5ShowQuery {
+        std::string sql;
+        std::vector<std::string> parameters;
+    };
 
     static ProcessedTypeInfo processDataTypeInfo(std::string& dataType, int ODBCVer, int useUnicode, int boolAsChar);
 
@@ -821,6 +943,55 @@ class RsMetadataAPIHelper {
         const std::string& argumentListStr,
         const std::string& sqlBase,
         const std::string& columnNamePattern);
+
+    /**
+     * @brief Builds a V5 SHOW discovery command from a query base and an
+     *        ordered list of (filter column, pattern) pairs.
+     *
+     * Starts from the given database level query (SHOW ... FROM DATABASE ?)
+     * and appends a "<WHERE|AND> <column> LIKE ?" clause per filter pair, in
+     * order. The database is the first bound parameter and each pattern is
+     * appended to the parameter vector in clause order. Callers pass only the
+     * filters they need; an omitted filter means match all, matching the V4
+     * per object path.
+     *
+     * @param queryBase The database level command, e.g. kshowTablesFromDatabaseQuery.
+     * @param catalog   The target database name, bound as the first parameter.
+     * @param filters   Ordered (filter column name, ODBC pattern) pairs.
+     * @param driverToken The session token from getDriverToken. When non-empty
+     *                  the DRIVER_TOKEN clause is emitted between the database
+     *                  and any WHERE clause; an empty token emits no clause.
+     * @return A V5ShowQuery with the command text and ordered bound parameters.
+     */
+    static V5ShowQuery buildV5ShowQuery(
+        const std::string &queryBase, const std::string &catalog,
+        const std::vector<std::pair<std::string, std::string>> &filters,
+        const std::string &driverToken = "");
+
+    /**
+     * @brief Returns the value to bind for a LIKE filter on a discovery
+     *        command.
+     *
+     * Search patterns pass through unchanged so their wildcards keep their
+     * meaning. Literal object names are escaped so they match only
+     * themselves: the percent sign, the underscore, and the backslash are
+     * each prefixed with a backslash, the LIKE escape character. Without
+     * this, an underscore in a name matches any character and a backslash
+     * in a name is consumed as an escape, so the pattern can match
+     * unrelated names or fail to match its own name.
+     *
+     * The discovery commands emit their LIKE filters without an ESCAPE
+     * clause, so the escaping relies on the backslash being the server's
+     * default LIKE escape character.
+     *
+     * @param name      The object name or search pattern supplied by the
+     *                  caller.
+     * @param exactName True when the name is a literal object name rather
+     *                  than a search pattern.
+     * @return The value to bind as the LIKE filter parameter.
+     */
+    static std::string makeLikeFilterPattern(const std::string &name,
+                                             bool exactName);
 
     /**
      * Maps string parameter type to ProcedureColumnType enum value

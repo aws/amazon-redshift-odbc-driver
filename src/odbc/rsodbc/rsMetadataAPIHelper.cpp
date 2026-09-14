@@ -10,6 +10,9 @@
 #include "rsexecute.h"
 #include "rsutil.h"
 
+// Minimum server SHOW discovery version for the database level (V5) commands.
+#define MIN_SHOW_DISCOVERY_VERSION_V5 5
+
 const std::string RsMetadataAPIHelper::kSHOW_DATABASES_database_name =
     "database_name";
 const std::string RsMetadataAPIHelper::kSHOW_SCHEMAS_database_name =
@@ -195,7 +198,95 @@ const std::string RsMetadataAPIHelper::kshowParamsFuncQuery = "SHOW PARAMETERS O
 const std::string RsMetadataAPIHelper::ksqlSemicolon = ";";
 const std::string RsMetadataAPIHelper::ksqlLike = " LIKE ?;";
 
+// V5 SHOW discovery grammar tokens (database level SHOW commands). Single
+// edit site for the V5 grammar. See rsMetadataAPIHelper.h for details.
+const std::string RsMetadataAPIHelper::kshowTablesFromDatabaseQuery = "SHOW TABLES FROM DATABASE ?";
+const std::string RsMetadataAPIHelper::kshowColumnsFromDatabaseQuery = "SHOW COLUMNS FROM DATABASE ?";
+const std::string RsMetadataAPIHelper::kshowGrantsOnTablesFromDatabaseQuery = "SHOW GRANTS ON TABLES FROM DATABASE ?";
+const std::string RsMetadataAPIHelper::kFilterSchemaName = "SCHEMA_NAME";
+const std::string RsMetadataAPIHelper::kFilterTableName = "TABLE_NAME";
+const std::string RsMetadataAPIHelper::kFilterColumnName = "COLUMN_NAME";
+const std::string RsMetadataAPIHelper::ksqlWhere = " WHERE ";
+const std::string RsMetadataAPIHelper::ksqlAnd = " AND ";
+const std::string RsMetadataAPIHelper::ksqlLikeParam = " LIKE ?";
 
+bool RsMetadataAPIHelper::isShowDiscoveryV5(SQLHSTMT phstmt) {
+    return showDiscoveryVersion((RS_STMT_INFO *)phstmt) >=
+           MIN_SHOW_DISCOVERY_VERSION_V5;
+}
+
+std::string RsMetadataAPIHelper::getDriverToken(SQLHSTMT phstmt) {
+    if (phstmt == NULL) {
+        return std::string();
+    }
+    RS_CONN_INFO *pConn = ((RS_STMT_INFO *)phstmt)->phdbc;
+    if (pConn == NULL) {
+        return std::string();
+    }
+    char *paramValueStr = libpqParameterStatus(pConn, "driver_token");
+    return paramValueStr ? std::string(paramValueStr) : std::string();
+}
+
+// The server issues the driver token as a random UUID (8-4-4-4-12 hex). We
+// validate that shape before inlining it as a string literal: a well-formed
+// UUID contains only hex digits and hyphens, so it can never break out of the
+// quoted literal and needs no escaping. A value that is not a UUID is dropped
+// rather than trusted.
+bool RsMetadataAPIHelper::isValidDriverToken(const std::string &token) {
+    // Match against the prebuilt member pattern; constructing a std::regex per
+    // call is expensive, so it is compiled once (see kDriverTokenRegex).
+    return std::regex_match(token, kDriverTokenRegex);
+}
+
+bool RsMetadataAPIHelper::shouldUseBatchShowV5(SQLHSTMT phstmt) {
+    if (!isShowDiscoveryV5(phstmt)) {
+        return false;
+    }
+    // An absent token means the server did not negotiate gating, so the batch
+    // command is issued without a clause; a well formed UUID is echoed back.
+    // Any other value is rejected so callers use the ungated per object path.
+    const std::string token = getDriverToken(phstmt);
+    return token.empty() || isValidDriverToken(token);
+}
+
+std::string RsMetadataAPIHelper::formatDriverTokenClause(
+    const std::string &token) {
+    // Only a validated UUID is inlined; a missing or malformed token emits no
+    // clause. Because a valid UUID has no single quote, no escaping is needed.
+    if (!isValidDriverToken(token)) {
+        return std::string();
+    }
+    return " DRIVER_TOKEN '" + token + "'";
+}
+
+std::string RsMetadataAPIHelper::redactDriverToken(const std::string &sql) {
+    static const std::string kClause = "DRIVER_TOKEN '";
+    static const std::string kRedacted = "[REDACTED]";
+    size_t pos = sql.find(kClause);
+    if (pos == std::string::npos) {
+        return sql;
+    }
+    std::string redacted = sql;
+    while (pos != std::string::npos) {
+        size_t valueStart = pos + kClause.size();
+        size_t cur = valueStart;
+        // Find the closing quote; a doubled quote is an escaped quote
+        // inside the literal, not the terminator.
+        while (cur < redacted.size()) {
+            if (redacted[cur] == '\'') {
+                if (cur + 1 < redacted.size() && redacted[cur + 1] == '\'') {
+                    cur += 2;
+                    continue;
+                }
+                break;
+            }
+            ++cur;
+        }
+        redacted.replace(valueStart, cur - valueStart, kRedacted);
+        pos = redacted.find(kClause, valueStart + kRedacted.size() + 1);
+    }
+    return redacted;
+}
 
 // ODBC 2.x column names
 // Reference: https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlcolumns-function?view=sql-server-ver17
@@ -752,6 +843,8 @@ const std::regex RsMetadataAPIHelper::dateTimeRegex(
         "zone|timestamp|timestamp without time zone|timestamptz|timestamp with "
         "time zone).*.\\(\\d+\\).*");
 const std::regex RsMetadataAPIHelper::intervalRegex("interval.*.\\(\\d+\\)");
+const std::regex RsMetadataAPIHelper::kDriverTokenRegex(
+    "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
 
 const std::set<std::string> RsMetadataAPIHelper::VALID_TYPES = {
     // Numeric types
@@ -1107,6 +1200,64 @@ std::tuple<std::string, std::vector<std::string>> RsMetadataAPIHelper::createPar
         (columnNamePattern.empty() ? ksqlSemicolon : ksqlLike);
 
     return std::make_tuple(sql, args);
+}
+
+/**
+ * @brief Builds a V5 SHOW discovery command from a query base and an ordered
+ *        list of (filter column, pattern) pairs.
+ *
+ * Starts from the database level command (SHOW ... FROM DATABASE ?) and
+ * appends a "<WHERE|AND> <column> LIKE ?" clause per filter pair, in order.
+ * The database is the first bound parameter and each pattern is appended to
+ * the parameter vector in clause order, so the sql placeholders and the
+ * parameters stay aligned left to right. Nothing is inlined, so no identifier
+ * or literal escaping is needed.
+ *
+ * Example: queryBase "SHOW COLUMNS FROM DATABASE ?", catalog "dev", filters
+ * {{"schema_name", "public"}, {"table_name", "orders%"}} produce
+ *   sql        = SHOW COLUMNS FROM DATABASE ? WHERE schema_name LIKE ? AND table_name LIKE ?
+ *   parameters = {"dev", "public", "orders%"}
+ *
+ * @param queryBase The database level command, e.g. kshowTablesFromDatabaseQuery.
+ * @param catalog   The target database name, bound as the first parameter.
+ * @param filters   Ordered (filter column name, ODBC pattern) pairs.
+ * @return A V5ShowQuery with the command text and ordered bound parameters.
+ */
+RsMetadataAPIHelper::V5ShowQuery RsMetadataAPIHelper::buildV5ShowQuery(
+    const std::string &queryBase, const std::string &catalog,
+    const std::vector<std::pair<std::string, std::string>> &filters,
+    const std::string &driverToken) {
+    V5ShowQuery query;
+    // The DRIVER_TOKEN clause sits between the database and any WHERE clause;
+    // formatDriverTokenClause emits nothing when the server negotiated no token.
+    query.sql = queryBase + formatDriverTokenClause(driverToken);
+    query.parameters.push_back(catalog);
+
+    bool firstClause = true;
+    for (const auto &filter : filters) {
+        query.sql += (firstClause ? ksqlWhere : ksqlAnd);
+        query.sql += filter.first;
+        query.sql += ksqlLikeParam;
+        query.parameters.push_back(filter.second);
+        firstClause = false;
+    }
+    return query;
+}
+
+std::string RsMetadataAPIHelper::makeLikeFilterPattern(const std::string &name,
+                                                       bool exactName) {
+    if (!exactName) {
+        return name;
+    }
+    std::string escaped;
+    escaped.reserve(name.size() * 2);
+    for (char c : name) {
+        if (c == '\\' || c == '%' || c == '_') {
+            escaped += '\\';
+        }
+        escaped += c;
+    }
+    return escaped;
 }
 
 int RsMetadataAPIHelper::getProcedureFunctionColumnType(const std::string& parameterType) {

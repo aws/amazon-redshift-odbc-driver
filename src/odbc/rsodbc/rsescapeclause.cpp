@@ -1,6 +1,7 @@
 #include "rsescapeclause.h"
 #include "rsodbc.h"
 #include "rsutil.h"
+#include "rsMetadataAPIHelper.h"
 
 // File-scope static mapping tables for ODBC escape clause processing
 static const RS_MAP_INTERVAL_NAME s_intervalMappings[] = {
@@ -373,7 +374,9 @@ unsigned char *ODBCEscapeClauseProcessor::replaceParamMarkerAndODBCEscapeClause(
         }
         *pDest = '\0';
     }
-    RS_LOG_DEBUG("RSUTIL", "The final escape clause generated is: %s", szData);
+    RS_LOG_DEBUG("RSUTIL", "The final escape clause generated is: %s",
+                 RsMetadataAPIHelper::redactDriverToken(
+                     reinterpret_cast<const char *>(szData)).c_str());
     return szData;
 }
 

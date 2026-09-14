@@ -1445,6 +1445,259 @@ TEST(ProcessDataTypeInfoBoolsAsChar, non_bool_type_unaffected_by_boolAsChar) {
     EXPECT_EQ(result.typeInfoResult.typeInfo.sqlType, SQL_INTEGER);
 }
 
+// ---------------------------------------------------------------------------
+// V5 SHOW discovery query builder tests.
+//
+// buildV5ShowQuery assembles the database level V5 command: the database is
+// the first bound parameter and each supplied (filter column, pattern) pair
+// appends a WHERE/AND LIKE clause with its pattern bound in clause order.
+// Callers pass only the filters they need; an omitted filter means match all.
+//
+// The command prefixes and filter column names are written as literals here
+// because the RsMetadataAPIHelper string constants are static data members,
+// which do not resolve across the DLL boundary on Windows (only functions
+// are exported through rsodbc_test.def). The literals mirror the constants;
+// the live V5 integration suites exercise the constant driven path.
+// ---------------------------------------------------------------------------
+
+TEST(V5ShowQueryBuilderTest, NoFilterIsBareCommand) {
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW TABLES FROM DATABASE ?", "dev", {});
+    EXPECT_EQ(q.sql, "SHOW TABLES FROM DATABASE ?");
+    ASSERT_EQ(q.parameters.size(), 1u);
+    EXPECT_EQ(q.parameters[0], "dev");
+}
+
+TEST(V5ShowQueryBuilderTest, SingleFilterEmitsWhere) {
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW TABLES FROM DATABASE ?", "dev",
+        {{"SCHEMA_NAME", "public"}});
+    EXPECT_EQ(q.sql, "SHOW TABLES FROM DATABASE ? WHERE SCHEMA_NAME LIKE ?");
+    ASSERT_EQ(q.parameters.size(), 2u);
+    EXPECT_EQ(q.parameters[0], "dev");
+    EXPECT_EQ(q.parameters[1], "public");
+}
+
+TEST(V5ShowQueryBuilderTest, MultipleFiltersChainWithAnd) {
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW COLUMNS FROM DATABASE ?", "dev",
+        {{"SCHEMA_NAME", "public"},
+         {"TABLE_NAME", "orders"},
+         {"COLUMN_NAME", "cust%"}});
+    EXPECT_EQ(q.sql,
+              "SHOW COLUMNS FROM DATABASE ? WHERE SCHEMA_NAME LIKE ? "
+              "AND TABLE_NAME LIKE ? AND COLUMN_NAME LIKE ?");
+    ASSERT_EQ(q.parameters.size(), 4u);
+    EXPECT_EQ(q.parameters[0], "dev");
+    EXPECT_EQ(q.parameters[1], "public");
+    EXPECT_EQ(q.parameters[2], "orders");
+    EXPECT_EQ(q.parameters[3], "cust%");
+}
+
+TEST(V5ShowQueryBuilderTest, GrantsOnTablesCommand) {
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW GRANTS ON TABLES FROM DATABASE ?", "dev",
+        {{"SCHEMA_NAME", "public"},
+         {"TABLE_NAME", "ord%"}});
+    EXPECT_EQ(q.sql,
+              "SHOW GRANTS ON TABLES FROM DATABASE ? WHERE SCHEMA_NAME "
+              "LIKE ? AND TABLE_NAME LIKE ?");
+    ASSERT_EQ(q.parameters.size(), 3u);
+    EXPECT_EQ(q.parameters[0], "dev");
+    EXPECT_EQ(q.parameters[1], "public");
+    EXPECT_EQ(q.parameters[2], "ord%");
+}
+
+TEST(V5ShowQueryBuilderTest, DatabaseNameIsBoundVerbatim) {
+    // The database is a bound parameter, so names with spaces or quotes pass
+    // through unchanged (no identifier quoting or escaping).
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW COLUMNS FROM DATABASE ?", "my db", {});
+    EXPECT_EQ(q.sql, "SHOW COLUMNS FROM DATABASE ?");
+    ASSERT_EQ(q.parameters.size(), 1u);
+    EXPECT_EQ(q.parameters[0], "my db");
+}
+
+TEST(V5ShowQueryBuilderTest, WildcardPatternsBoundVerbatim) {
+    // ODBC wildcards are not rewritten; % and _ pass through to the bound
+    // parameters unchanged.
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW COLUMNS FROM DATABASE ?", "dev",
+        {{"SCHEMA_NAME", "pub_ic"},
+         {"COLUMN_NAME", "%order%"}});
+    ASSERT_EQ(q.parameters.size(), 3u);
+    EXPECT_EQ(q.parameters[0], "dev");
+    EXPECT_EQ(q.parameters[1], "pub_ic");
+    EXPECT_EQ(q.parameters[2], "%order%");
+}
+
+// ---------------------------------------------------------------------------
+// makeLikeFilterPattern selects the LIKE filter value: search patterns pass
+// through unchanged so their wildcards keep their meaning, and literal
+// object names are escaped so they match only themselves (backslash,
+// percent, and underscore are each prefixed with a backslash, the LIKE
+// escape character; all other bytes, including multi byte characters, pass
+// through unchanged).
+// ---------------------------------------------------------------------------
+
+TEST(MakeLikeFilterPatternTest, PatternKeepsUnderscoreUnescaped) {
+    EXPECT_EQ(RsMetadataAPIHelper::makeLikeFilterPattern("test_", false),
+              "test_");
+}
+
+TEST(MakeLikeFilterPatternTest, PatternKeepsPercentUnescaped) {
+    EXPECT_EQ(RsMetadataAPIHelper::makeLikeFilterPattern("test%", false),
+              "test%");
+}
+
+TEST(MakeLikeFilterPatternTest, ExactPlainNameUnchanged) {
+    EXPECT_EQ(RsMetadataAPIHelper::makeLikeFilterPattern("orders", true),
+              "orders");
+}
+
+TEST(MakeLikeFilterPatternTest, ExactEmptyNameStaysEmpty) {
+    EXPECT_EQ(RsMetadataAPIHelper::makeLikeFilterPattern("", true), "");
+}
+
+TEST(MakeLikeFilterPatternTest, ExactUnderscoreEscaped) {
+    EXPECT_EQ(RsMetadataAPIHelper::makeLikeFilterPattern("test_all", true),
+              "test\\_all");
+}
+
+TEST(MakeLikeFilterPatternTest, ExactPercentEscaped) {
+    EXPECT_EQ(RsMetadataAPIHelper::makeLikeFilterPattern("100%done", true),
+              "100\\%done");
+}
+
+TEST(MakeLikeFilterPatternTest, ExactBackslashEscaped) {
+    // A literal backslash in a name must be doubled, otherwise LIKE consumes
+    // it as an escape and the pattern no longer matches the name itself.
+    EXPECT_EQ(RsMetadataAPIHelper::makeLikeFilterPattern("a\\nb", true),
+              "a\\\\nb");
+}
+
+TEST(MakeLikeFilterPatternTest, ExactAllMetacharactersMixed) {
+    EXPECT_EQ(RsMetadataAPIHelper::makeLikeFilterPattern("\\%_", true),
+              "\\\\\\%\\_");
+}
+
+TEST(MakeLikeFilterPatternTest, ExactConsecutiveMetacharacters) {
+    EXPECT_EQ(RsMetadataAPIHelper::makeLikeFilterPattern("a__b%%c", true),
+              "a\\_\\_b\\%\\%c");
+}
+
+TEST(MakeLikeFilterPatternTest, ExactMultiByteCharactersPassThrough) {
+    // UTF-8 continuation bytes never collide with the ASCII metacharacters,
+    // so multi byte names are preserved with only the metacharacters escaped.
+    EXPECT_EQ(RsMetadataAPIHelper::makeLikeFilterPattern(
+                  "t\xC9\x99st_nam\xE5\xA5\xBD"
+                  "e",
+                  true),
+              "t\xC9\x99st\\_nam\xE5\xA5\xBD"
+              "e");
+}
+
+TEST(MakeLikeFilterPatternTest, ExactSpacesAndQuotesUnchanged) {
+    // Only LIKE metacharacters are escaped; the value is bound as a
+    // parameter, so quotes and spaces need no treatment.
+    EXPECT_EQ(
+        RsMetadataAPIHelper::makeLikeFilterPattern("my name's ''table''", true),
+        "my name's ''table''");
+}
+
+// ---------------------------------------------------------------------------
+// DRIVER_TOKEN clause tests.
+//
+// The server negotiates a per session token at connection startup and the
+// database level SHOW commands echo it back through a DRIVER_TOKEN clause
+// placed after the database and before any WHERE clause. An empty token
+// (older server, or no negotiation) emits no clause.
+// ---------------------------------------------------------------------------
+
+TEST(V5ShowQueryBuilderTest, EmptyTokenEmitsNoClause) {
+    EXPECT_EQ(RsMetadataAPIHelper::formatDriverTokenClause(""), "");
+}
+
+TEST(V5ShowQueryBuilderTest, TokenEmitsQuotedClause) {
+    EXPECT_EQ(RsMetadataAPIHelper::formatDriverTokenClause(
+                  "deadbeef-dead-beef-dead-beefdeadbeef"),
+              " DRIVER_TOKEN 'deadbeef-dead-beef-dead-beefdeadbeef'");
+}
+
+TEST(V5ShowQueryBuilderTest, InvalidTokenEmitsNoClause) {
+    // Non-UUID tokens are rejected (dropped), never inlined.
+    EXPECT_EQ(RsMetadataAPIHelper::formatDriverTokenClause("a'b"), "");
+    EXPECT_EQ(RsMetadataAPIHelper::formatDriverTokenClause("not-a-uuid"), "");
+    EXPECT_EQ(RsMetadataAPIHelper::formatDriverTokenClause(
+                  "deadbeef-dead-beef-dead-beefdeadbeef-extra"),
+              "");
+    // Uppercase hex is rejected: the server emits a lowercase UUIDv7, so the
+    // check is lowercase only.
+    EXPECT_EQ(RsMetadataAPIHelper::formatDriverTokenClause(
+                  "DEADBEEF-DEAD-BEEF-DEAD-BEEFDEADBEEF"),
+              "");
+    // A value that tries to break out of the quoted literal is dropped whole,
+    // so no fragment and no stray quote can reach the command.
+    EXPECT_EQ(RsMetadataAPIHelper::formatDriverTokenClause(
+                  "deadbeef-dead-beef-dead-beefdeadbeef'; DROP TABLE x; --"),
+              "");
+}
+
+TEST(V5ShowQueryBuilderTest, IsValidDriverTokenAcceptsLowercaseUuidOnly) {
+    // Accepts a well formed lowercase 8-4-4-4-12 hex UUID.
+    EXPECT_TRUE(RsMetadataAPIHelper::isValidDriverToken(
+        "deadbeef-dead-beef-dead-beefdeadbeef"));
+    EXPECT_TRUE(RsMetadataAPIHelper::isValidDriverToken(
+        "0198c2f4-1111-7abc-9def-0123456789ab"));
+    // Rejects empty, malformed, trailing content, and uppercase.
+    EXPECT_FALSE(RsMetadataAPIHelper::isValidDriverToken(""));
+    EXPECT_FALSE(RsMetadataAPIHelper::isValidDriverToken("not-a-uuid"));
+    EXPECT_FALSE(RsMetadataAPIHelper::isValidDriverToken(
+        "deadbeef-dead-beef-dead-beefdeadbeef-extra"));
+    EXPECT_FALSE(RsMetadataAPIHelper::isValidDriverToken(
+        "DEADBEEF-DEAD-BEEF-DEAD-BEEFDEADBEEF"));
+}
+
+TEST(V5ShowQueryBuilderTest, TokenClausePrecedesWhere) {
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW TABLES FROM DATABASE ?", "dev", {{"SCHEMA_NAME", "public"}},
+        "deadbeef-dead-beef-dead-beefdeadbeef");
+    EXPECT_EQ(q.sql,
+              "SHOW TABLES FROM DATABASE ? "
+              "DRIVER_TOKEN 'deadbeef-dead-beef-dead-beefdeadbeef' "
+              "WHERE SCHEMA_NAME LIKE ?");
+    ASSERT_EQ(q.parameters.size(), 2u);
+    EXPECT_EQ(q.parameters[0], "dev");
+    EXPECT_EQ(q.parameters[1], "public");
+}
+
+TEST(V5ShowQueryBuilderTest, RedactMasksTokenValue) {
+    EXPECT_EQ(RsMetadataAPIHelper::redactDriverToken(
+                  "SHOW TABLES FROM DATABASE ? DRIVER_TOKEN "
+                  "'deadbeef-dead-beef-dead-beefdeadbeef' "
+                  "WHERE SCHEMA_NAME LIKE ?"),
+              "SHOW TABLES FROM DATABASE ? DRIVER_TOKEN '[REDACTED]' "
+              "WHERE SCHEMA_NAME LIKE ?");
+}
+
+TEST(V5ShowQueryBuilderTest, RedactLeavesTokenlessSqlUnchanged) {
+    const std::string sql =
+        "SHOW COLUMNS FROM DATABASE ? WHERE SCHEMA_NAME LIKE ?";
+    EXPECT_EQ(RsMetadataAPIHelper::redactDriverToken(sql), sql);
+}
+
+TEST(V5ShowQueryBuilderTest, RedactHandlesEscapedQuoteInToken) {
+    EXPECT_EQ(RsMetadataAPIHelper::redactDriverToken(
+                  "SHOW TABLES FROM DATABASE ? DRIVER_TOKEN 'a''b' LIMIT 1"),
+              "SHOW TABLES FROM DATABASE ? DRIVER_TOKEN '[REDACTED]' LIMIT 1");
+}
+
+TEST(V5ShowQueryBuilderTest, RedactMasksClauseAtEndOfCommand) {
+    EXPECT_EQ(RsMetadataAPIHelper::redactDriverToken(
+                  "SHOW TABLES FROM DATABASE ? DRIVER_TOKEN 'tok-9'"),
+              "SHOW TABLES FROM DATABASE ? DRIVER_TOKEN '[REDACTED]'");
+}
+
 /*
  * text type recognition on the SQLColumns metadata path.
  * A server text column is reported as varchar with the documented

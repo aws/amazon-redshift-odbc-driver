@@ -146,10 +146,19 @@ namespace RsMetadataServerProxyHelpers {
         const std::string& m_schema;
         const std::string& m_table;
         std::vector<SHOWTABLESResult> &m_intermediateRS;
+        const bool m_exactNames;
     public:
+        /**
+         * @param exactNames When true, the schema and table are literal
+         *        object names rather than search patterns; LIKE
+         *        metacharacters in them are escaped before they are used
+         *        as filters on the database level command. The per object
+         *        command is unaffected because it takes the names directly.
+         */
         ShowTablesHelper(SQLHSTMT phstmt, const std::string &catalog,
                         const std::string &schema, const std::string &table,
-                        std::vector<SHOWTABLESResult> &intermediateRS);
+                        std::vector<SHOWTABLESResult> &intermediateRS,
+                        bool exactNames = false);
 
         SQLRETURN execute() override;
     };
@@ -167,11 +176,21 @@ namespace RsMetadataServerProxyHelpers {
         const std::string& m_table;
         const std::string& m_column;
         std::vector<SHOWCOLUMNSResult> &m_intermediateRS;
+        const bool m_exactNames;
     public:
+        /**
+         * @param exactNames When true, the schema and table are literal
+         *        object names rather than search patterns; LIKE
+         *        metacharacters in them are escaped before they are used
+         *        as filters on the database level command. The column keeps
+         *        pattern semantics. The per object command is unaffected
+         *        because it takes the names directly.
+         */
         ShowColumnsHelper(SQLHSTMT phstmt, const std::string &catalog,
                         const std::string &schema, const std::string &table,
                         const std::string &column,
-                        std::vector<SHOWCOLUMNSResult> &intermediateRS);
+                        std::vector<SHOWCOLUMNSResult> &intermediateRS,
+                        bool exactNames = false);
 
         SQLRETURN execute() override;
     };
