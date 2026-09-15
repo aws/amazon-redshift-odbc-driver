@@ -8,6 +8,7 @@ v2.2.3 (2026-09-10)
 3. Fixed SQLDriverConnect to preserve the full password instead of truncating it to 1024 bytes (so long IAM temporary passwords authenticate correctly) and to omit authentication-resolved credentials from the returned connection string, so resolved identities are no longer echoed back to the application.
 4. Fixed JWT/OAuth authentication to honor the connection-level autocreate setting instead of forcing user auto-creation.
 5. Fixed streaming cursor mode to end the cursor cleanly when an error occurs mid-stream.
+6. Fixed logging to create the configured LogPath directory (including missing parents) rather than silently using a temp path, and to print a diagnostic and disable logging when it can't.
 
 v2.2.2 (2026-08-28)
 ---------------------
