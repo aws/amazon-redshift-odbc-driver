@@ -4,7 +4,7 @@ Changelog
 v2.2.3 (2026-09-10)
 ---------------------
 1. Added UseDeclareFetch connection option (default off; short alias UDF) to enable Declare/Fetch mode, which fetches large forward-only result sets in server-side batches over the Extended Query Protocol to reduce client memory usage.
-2. Added batch metadata retrieval using SHOW commands (SHOW TABLES / SHOW COLUMNS / SHOW GRANTS ON TABLES FROM DATABASE) to improve the performance of the SQLTables, SQLColumns, and SQLTablePrivileges metadata APIs.
+2. Improved the performance of the SQLTables, SQLColumns, and SQLTablePrivileges metadata APIs.
 3. Fixed SQLDriverConnect to preserve the full password instead of truncating it to 1024 bytes (so long IAM temporary passwords authenticate correctly) and to omit authentication-resolved credentials from the returned connection string, so resolved identities are no longer echoed back to the application.
 4. Fixed JWT/OAuth authentication to honor the connection-level autocreate setting instead of forcing user auto-creation.
 5. Fixed streaming cursor mode to end the cursor cleanly when an error occurs mid-stream.
