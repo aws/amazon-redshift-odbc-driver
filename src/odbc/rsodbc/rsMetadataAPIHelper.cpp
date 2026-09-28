@@ -1235,6 +1235,18 @@ RsMetadataAPIHelper::V5ShowQuery RsMetadataAPIHelper::buildV5ShowQuery(
 
     bool firstClause = true;
     for (const auto &filter : filters) {
+        // A match-all pattern -- a run of only '%' ("%", "%%", "%%%", …) OR an empty string --
+        // is semantically equivalent to no filter (it matches every row). In this driver an
+        // empty/NULL pattern is treated as match-all for backward compatibility (the metadata
+        // API entry point converts NULL to ""), so both cases must drop the redundant
+        // "<COL> LIKE ?" clause. Correctness-neutral: the returned rows are unchanged. An
+        // exact-name "%" is escaped to "\%" upstream by makeLikeFilterPattern (contains a
+        // non-'%' char), so this only drops true match-all patterns. Callers already skip
+        // empty filters (rsMetadataServerProxyHelper), so the empty case is defense-in-depth.
+        // (find_first_not_of('%') is npos for both an all-'%' run and an empty string.)
+        if (filter.second.find_first_not_of('%') == std::string::npos) {
+            continue;
+        }
         query.sql += (firstClause ? ksqlWhere : ksqlAnd);
         query.sql += filter.first;
         query.sql += ksqlLikeParam;

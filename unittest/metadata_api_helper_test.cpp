@@ -1531,6 +1531,78 @@ TEST(V5ShowQueryBuilderTest, WildcardPatternsBoundVerbatim) {
     EXPECT_EQ(q.parameters[2], "%order%");
 }
 
+TEST(V5ShowQueryBuilderTest, MatchAllFilterIsDropped) {
+    // A match-all pattern -- a non-empty run of only '%' ("%", "%%", "%%%") -- is
+    // semantically equivalent to no filter, so it is omitted (no clause, no bound param).
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW TABLES FROM DATABASE ?", "dev",
+        {{"SCHEMA_NAME", "%"}, {"TABLE_NAME", "%%"}});
+    EXPECT_EQ(q.sql, "SHOW TABLES FROM DATABASE ?");
+    ASSERT_EQ(q.parameters.size(), 1u);
+    EXPECT_EQ(q.parameters[0], "dev");
+}
+
+TEST(V5ShowQueryBuilderTest, MatchAllDroppedAmongRealFilters) {
+    // Only the match-all filters are dropped; a real prefix filter is kept.
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW COLUMNS FROM DATABASE ?", "dev",
+        {{"SCHEMA_NAME", "public"}, {"TABLE_NAME", "%"}, {"COLUMN_NAME", "%%%"}});
+    EXPECT_EQ(q.sql, "SHOW COLUMNS FROM DATABASE ? WHERE SCHEMA_NAME LIKE ?");
+    ASSERT_EQ(q.parameters.size(), 2u);
+    EXPECT_EQ(q.parameters[0], "dev");
+    EXPECT_EQ(q.parameters[1], "public");
+}
+
+TEST(V5ShowQueryBuilderTest, EscapedPercentIsKeptAsFilter) {
+    // "%%\%" matches anything ending in a literal '%' -> NOT match-all (it contains a
+    // non-'%' char), so the clause and its bound parameter are retained.
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW TABLES FROM DATABASE ?", "dev",
+        {{"TABLE_NAME", "%%\\%"}});
+    EXPECT_EQ(q.sql, "SHOW TABLES FROM DATABASE ? WHERE TABLE_NAME LIKE ?");
+    ASSERT_EQ(q.parameters.size(), 2u);
+    EXPECT_EQ(q.parameters[0], "dev");
+    EXPECT_EQ(q.parameters[1], "%%\\%");
+}
+
+TEST(V5ShowQueryBuilderTest, MatchAllDroppedForGrantsOnTables) {
+    // getTablePrivileges (SHOW GRANTS ON TABLES) funnels through the same builder,
+    // so match-all filters are dropped there too: both SCHEMA_NAME and TABLE_NAME
+    // are match-all -> bare command, only the catalog bound.
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW GRANTS ON TABLES FROM DATABASE ?", "dev",
+        {{"SCHEMA_NAME", "%"}, {"TABLE_NAME", "%%"}});
+    EXPECT_EQ(q.sql, "SHOW GRANTS ON TABLES FROM DATABASE ?");
+    ASSERT_EQ(q.parameters.size(), 1u);
+    EXPECT_EQ(q.parameters[0], "dev");
+}
+
+TEST(V5ShowQueryBuilderTest, EmptyFilterIsDroppedAsMatchAll) {
+    // An empty pattern is treated as NULL / match-all in this driver (the metadata API
+    // entry point maps NULL -> ""), so it is dropped just like an all-'%' run rather than
+    // emitting the "match-nothing" clause "<COL> LIKE ''". A real filter alongside is kept.
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW COLUMNS FROM DATABASE ?", "dev",
+        {{"SCHEMA_NAME", ""}, {"TABLE_NAME", "orders"}, {"COLUMN_NAME", ""}});
+    EXPECT_EQ(q.sql, "SHOW COLUMNS FROM DATABASE ? WHERE TABLE_NAME LIKE ?");
+    ASSERT_EQ(q.parameters.size(), 2u);
+    EXPECT_EQ(q.parameters[0], "dev");
+    EXPECT_EQ(q.parameters[1], "orders");
+}
+
+TEST(V5ShowQueryBuilderTest, GrantsOnTablesDropsMatchAllKeepsReal) {
+    // On the SHOW GRANTS ON TABLES path, a match-all TABLE_NAME is dropped while a
+    // real SCHEMA_NAME prefix is kept as a filter.
+    auto q = RsMetadataAPIHelper::buildV5ShowQuery(
+        "SHOW GRANTS ON TABLES FROM DATABASE ?", "dev",
+        {{"SCHEMA_NAME", "public"}, {"TABLE_NAME", "%"}});
+    EXPECT_EQ(q.sql,
+              "SHOW GRANTS ON TABLES FROM DATABASE ? WHERE SCHEMA_NAME LIKE ?");
+    ASSERT_EQ(q.parameters.size(), 2u);
+    EXPECT_EQ(q.parameters[0], "dev");
+    EXPECT_EQ(q.parameters[1], "public");
+}
+
 // ---------------------------------------------------------------------------
 // makeLikeFilterPattern selects the LIKE filter value: search patterns pass
 // through unchanged so their wildcards keep their meaning, and literal
