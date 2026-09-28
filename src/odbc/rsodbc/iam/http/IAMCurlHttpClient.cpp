@@ -5,6 +5,7 @@
 
 #include "IAMCurlHttpClient.h"
 #include "IAMUtils.h"
+#include <rslog.h>
 
 using namespace Redshift::IamSupport;
 using namespace Aws::Client;
@@ -65,18 +66,14 @@ IAMCurlHttpClient::IAMCurlHttpClient(const HttpClientConfig& in_config) :
         curl_easy_setopt(m_connectionHandle.Get(), CURLOPT_CAPATH, m_caPath.c_str());
     }
 
-    // At this point caPath does not work with our LibCurl 7.44 build, let's focus on caFile
-    // e.g., /etc/ssl/*.pem will use all pem files in /etc/ssl to verify the server certificate
-    if (!m_caFile.empty())
+    // Resolve the CA file: caller-supplied path, or the driver default converted
+    // to UTF-8. See ResolveCaFile for why the conversion is required.
+    const rs_string caFile = ResolveCaFile(m_caFile);
+
+    if (!caFile.empty())
     {
-        curl_easy_setopt(m_connectionHandle.Get(), CURLOPT_CAINFO, m_caFile.c_str());
-    }
-    else 
-    {
-        curl_easy_setopt(
-            m_connectionHandle.Get(), 
-            CURLOPT_CAINFO, 
-            IAMUtils::GetDefaultCaFile().c_str()); // GetAsPlatformString()
+        RS_LOG_DEBUG("IAMCurlHttpClient", "Using CA file: %s", caFile.c_str());
+        curl_easy_setopt(m_connectionHandle.Get(), CURLOPT_CAINFO, caFile.c_str());
     }
 
     if (m_verifySSL)
@@ -115,6 +112,19 @@ IAMCurlHttpClient::IAMCurlHttpClient(const HttpClientConfig& in_config) :
     }
 
 
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+rs_string IAMCurlHttpClient::ResolveCaFile(const rs_string& in_caFile)
+{
+    if (!in_caFile.empty())
+    {
+        return in_caFile;
+    }
+
+    // GetDefaultCaFile() returns an rs_wstring; convert to UTF-8 so libcurl
+    // receives a valid const char* path instead of a truncated wide string.
+    return IAMUtils::convertToUTF8(IAMUtils::GetDefaultCaFile());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

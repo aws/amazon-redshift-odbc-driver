@@ -104,6 +104,17 @@ namespace IamSupport
         /// @brief Destructor
         ~IAMCurlHttpClient();
 
+        /// @brief  Resolves the CA file path handed to libcurl (CURLOPT_CAINFO).
+        ///
+        /// Returns in_caFile when non-empty; otherwise returns the driver default
+        /// from IAMUtils::GetDefaultCaFile() converted to UTF-8 (the default is an
+        /// rs_wstring, which must be narrowed before use with the C curl API).
+        ///
+        /// @param  in_caFile   Caller-configured CA file path (may be empty).
+        ///
+        /// @return The effective UTF-8 CA file path.
+        static rs_string ResolveCaFile(const rs_string& in_caFile);
+
     private:
         /// @brief Disabled assignment operator to avoid warning.
         IAMCurlHttpClient& operator=(const IAMCurlHttpClient& in_httpClient);
