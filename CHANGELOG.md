@@ -1,6 +1,14 @@
 Changelog
 =========
 
+v2.2.4 (2026-09-28)
+---------------------
+1. Improved SQLTables, SQLColumns, and SQLTablePrivileges performance by running their SHOW commands over the unnamed prepared-statement protocol, removing a redundant per-call server-side prepare.
+2. Fixed IAM authentication to pass the default CA file path to libcurl as UTF-8, resolving connection failures on Linux and macOS when CaFile is not set.
+3. Fixed ODBC escape-clause parsing to accept date/time/timestamp literals with no space after the keyword (for example {ts'2026-07-08 07:45:00'}) and fixed a use-after-free on malformed clauses.
+4. Fixed JWT/OAuth authentication to honor connection-level StsConnectionTimeout and StsEndpointUrl on the STS call.
+5. Further improved metadata query performance by skipping redundant match-all (%) filters.
+
 v2.2.3 (2026-09-10)
 ---------------------
 1. Added UseDeclareFetch connection option (default off; short alias UDF) to enable Declare/Fetch mode, which fetches large forward-only result sets in server-side batches over the Extended Query Protocol to reduce client memory usage.
