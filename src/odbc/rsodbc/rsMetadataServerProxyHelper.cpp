@@ -40,14 +40,15 @@ namespace RsMetadataServerProxyHelpers {
 
     /**
      * @brief Template method for complete SHOW command execution workflow
-     * 
-     * Implements the standard ODBC execution pattern:
-     * 1. Prepare SQL statement
+     *
+     * Implements the metadata execution pattern (direct execute, no server-side
+     * named prepared statement):
+     * 1. Validate the query
      * 2. Clean existing parameter bindings
      * 3. Bind input parameters sequentially
-     * 4. Execute prepared statement
+     * 4. Execute directly (no named PREPARE)
      * 5. Clean up parameter bindings
-     * 
+     *
      * @param query SQL query string to execute
      * @param inputParameters Vector of string parameters to bind (in order)
      * @return SQLRETURN Success/failure code from ODBC operations
@@ -56,21 +57,16 @@ namespace RsMetadataServerProxyHelpers {
     SQLRETURN ShowDiscoveryBase::prepareBindAndExecuteQuery(
         const std::string& query, const std::vector<std::string> &inputParameters) {
         
-        // Step 1: Prepare the SQL statement
+        // Step 1: Validate. Metadata queries are executed directly (see Step 4)
+        // rather than through a server-side named prepared statement. Each
+        // metadata query is issued once per call, so a persistent named plan
+        // offers no reuse benefit and only adds the per-call cost of creating
+        // and describing it.
         if (query.empty()) {
             RS_LOG_ERROR("prepareBindAndExecuteQuery", "Query can't be empty");
             return SQL_ERROR;
         }
-        SQLRETURN rc = RsPrepare::RS_SQLPrepare(m_stmt, (SQLCHAR *)query.c_str(), SQL_NTS,
-                                    FALSE, FALSE, FALSE, TRUE);
-        if (!SQL_SUCCEEDED(rc)) {
-            std::string errorDetails = getErrorMessage(m_stmt);
-            RS_LOG_ERROR("prepareBindAndExecuteQuery",
-                        "Fail to prepare query \"%s\". Details: %s",
-                        RsMetadataAPIHelper::redactDriverToken(query).c_str(),
-                        errorDetails.c_str()); 
-            return rc;
-        }
+        SQLRETURN rc = SQL_SUCCESS;
 
         // Step 2: Clean up any existing parameter bindings before new operation
         // This prevents any conflicts with previous bindings
@@ -101,12 +97,19 @@ namespace RsMetadataServerProxyHelpers {
             }
         }
 
-        // Step 4: Execute the prepared statement with bound parameters
-        rc = RsExecute::RS_SQLExecDirect(m_stmt, NULL, 0, FALSE, TRUE, FALSE, TRUE);
+        // Step 4: Execute directly, without creating a named server-side prepared
+        // statement. RS_SQLExecDirect with executePrepared=FALSE routes to:
+        //   - PQsendQueryParams (unnamed extended-query, one Parse+Bind+Execute)
+        //     for parameterized queries, e.g. SHOW ... FROM DATABASE ?; or
+        //   - PQsendQuery (simple-query protocol) for queries with no bound
+        //     parameters, e.g. SHOW DATABASES.
+        // Neither path creates a named prepared plan.
+        rc = RsExecute::RS_SQLExecDirect(m_stmt, (SQLCHAR *)query.c_str(), SQL_NTS,
+                                         FALSE, FALSE, FALSE, TRUE);
         if (!SQL_SUCCEEDED(rc)) {
             std::string errorDetails = getErrorMessage(m_stmt);
             RS_LOG_ERROR("prepareBindAndExecuteQuery",
-                        "Fail to execute the prepared statement. Details: %s",
+                        "Fail to execute the metadata query. Details: %s",
                         errorDetails.c_str());
             return rc;
         }
