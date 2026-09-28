@@ -181,12 +181,9 @@ AWSCredentials IAMJwtPluginCredentialsProvider::GetAWSCredentialsWithJwt(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-AWSCredentials IAMJwtPluginCredentialsProvider::AssumeRoleWithJwtRequest(
-    const rs_string& in_jwtAssertion,
-    const rs_string& in_roleArn,
-    const rs_string& in_roleSessionName)
+ClientConfiguration IAMJwtPluginCredentialsProvider::BuildStsClientConfig()
 {
-    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::AssumeRoleWithJwtRequest");
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::BuildStsClientConfig");
 
     ClientConfiguration config;
 
@@ -210,6 +207,23 @@ AWSCredentials IAMJwtPluginCredentialsProvider::AssumeRoleWithJwtRequest(
         config.proxyUserName = m_config.GetHTTPSProxyUser();
         config.proxyPassword = m_config.GetHTTPSProxyPassword();
     }
+
+    // Honor the connection-level STS endpoint override and connection timeout,
+    // consistent with the other IAM credential providers.
+    ApplyStsClientConnectionSettings(config, m_config);
+
+    return config;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+AWSCredentials IAMJwtPluginCredentialsProvider::AssumeRoleWithJwtRequest(
+    const rs_string& in_jwtAssertion,
+    const rs_string& in_roleArn,
+    const rs_string& in_roleSessionName)
+{
+    RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::AssumeRoleWithJwtRequest");
+
+    ClientConfiguration config = BuildStsClientConfig();
 
     STSClient client(Aws::MakeShared<AnonymousAWSCredentialsProvider>(LOG_TAG), config);
 

@@ -4,6 +4,8 @@
 #include "../rs_iam_support.h"
 #include "IAMPluginCredentialsProvider.h"
 
+#include <aws/core/client/ClientConfiguration.h>
+
 namespace Redshift
 {
     namespace IamSupport
@@ -14,6 +16,26 @@ namespace Redshift
             rs_string payload;
             rs_string signature;
         };
+
+        /// @brief  Apply the connection-level STS endpoint override and STS
+        ///         connection timeout to a client configuration, matching the
+        ///         behavior of the other IAM credential providers.
+        ///
+        /// Defined inline so it is compiled into each translation unit (the
+        /// plugin and the unit tests) without requiring an exported symbol.
+        ///
+        /// @param io_config    The STS client configuration to update
+        /// @param in_config    The IAM connection configuration
+        inline void ApplyStsClientConnectionSettings(
+            Aws::Client::ClientConfiguration& io_config,
+            const IAMConfiguration& in_config)
+        {
+            io_config.endpointOverride     = in_config.GetStsEndpointUrl();
+            io_config.httpRequestTimeoutMs = in_config.GetStsConnectionTimeout();
+            io_config.connectTimeoutMs     = in_config.GetStsConnectionTimeout();
+            io_config.requestTimeoutMs     = in_config.GetStsConnectionTimeout();
+        }
+
         class IAMJwtPluginCredentialsProvider : public IAMPluginCredentialsProvider
         {
         public:
@@ -100,6 +122,14 @@ namespace Redshift
             virtual ~IAMJwtPluginCredentialsProvider();
 
         protected:
+            /// @brief  Build the STS client configuration used by
+            ///         AssumeRoleWithJwtRequest: CA file, HTTPS proxy, and (via
+            ///         ApplyStsClientConnectionSettings) the connection-level STS
+            ///         endpoint override and connection timeout.
+            ///
+            /// @return ClientConfiguration populated from the connection settings
+            Aws::Client::ClientConfiguration BuildStsClientConfig();
+
             /// @brief Disabled assignment operator to avoid warning.
             IAMJwtPluginCredentialsProvider& operator=(
                 const IAMJwtPluginCredentialsProvider& in_jwtProvider) = delete;
