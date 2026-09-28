@@ -363,14 +363,17 @@ unsigned char *ODBCEscapeClauseProcessor::replaceParamMarkerAndODBCEscapeClause(
             } // Switch
         } // Loop
 
-        // If parsing error occurred, return original data unchanged
+        // If parsing error occurred, return the original data unchanged,
+        // copied into the pPaStrBuf-owned work buffer (sized >= cbLen + 1).
+        // Callers free pData right after this call, so returning an alias
+        // of it would be a use-after-free.
         if (parseError) {
             RS_LOG_ERROR(
                 "RSUTIL",
                 "ODBC escape clause parsing error - preserving original query");
-            releasePaStrBuf(pPaStrBuf);
-            pPaStrBuf->pBuf = pData;
-            return (unsigned char *)pData;
+            memcpy(szData, pData, cbLen);
+            szData[cbLen] = '\0';
+            return szData;
         }
         *pDest = '\0';
     }
@@ -425,7 +428,11 @@ int ODBCEscapeClauseProcessor::replaceODBCEscapeClause(
         pSrc++;
         srcPos++;
 
-        pToken = getNextTokenForODBCEscapeClause(&pSrc, cbLen, &srcPos, NULL);
+        // Stop the keyword token at a single quote so {ts'...'} tokenizes
+        // the same as {ts '...'}.
+        char szQuoteDelim[] = "'";
+        pToken =
+            getNextTokenForODBCEscapeClause(&pSrc, cbLen, &srcPos, szQuoteDelim);
 
         if (pToken != pSrc) {
             iTokenLen = (int)(pSrc - pToken);
@@ -499,6 +506,9 @@ int ODBCEscapeClauseProcessor::replaceODBCEscapeClause(
             } else {
                 iODBCEscapeClauseSupportedKeyFound = FALSE;
             }
+        } else {
+            // Empty keyword token (e.g. {'...'}): not a valid escape clause.
+            iODBCEscapeClauseSupportedKeyFound = FALSE;
         }
 
         if (iODBCEscapeClauseSupportedKeyFound && !parseError) {
@@ -506,6 +516,14 @@ int ODBCEscapeClauseProcessor::replaceODBCEscapeClause(
             int iDoubleQuote = 0;
             int iComment = 0;
             int iSingleLineComment = 0;
+
+            // If the literal directly follows the keyword ({ts'...'}),
+            // emit one space so the replacement does not fuse with it.
+            if (!iScalarFunction && srcPos < (int)cbLen && *pSrc == '\'') {
+                occupied = (pDest - pDestStart);
+                iTemp = snprintf(pDest, iDestBufLen - occupied, " ");
+                pDest += iTemp;
+            }
 
             // Copy upto '}'
             for (; srcPos < (int)cbLen; srcPos++) {

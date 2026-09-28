@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <sstream>
 #include <string>
+#include <vector>
 
 // Helper functions to reduce verbosity
 namespace {
@@ -1871,6 +1872,228 @@ TEST(ParseFunctionArguments, EscapedQuotes_NearBoundary) {
 
     EXPECT_FALSE(result)
         << "Parser must reject unclosed string even with escaped quote at end";
+}
+
+// {ts'...'} with no whitespace before the literal must be transformed
+// like {ts '...'}.
+TEST(ODBCEscapeClauseProcessing, TimestampEscape_NoSpaceBeforeLiteral) {
+    RS_STR_BUF paStrBuf;
+    char input[] =
+        "SELECT col_bigint FROM t WHERE col_timestamp >= "
+        "{ts'2006-07-08 05:45:00'} AND col_timestamp < {ts'2026-07-08 07:45:00'};";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_STREQ((char *)result,
+                 "SELECT col_bigint FROM t WHERE col_timestamp >= "
+                 "TIMESTAMP '2006-07-08 05:45:00' AND col_timestamp < "
+                 "TIMESTAMP '2026-07-08 07:45:00';")
+        << "{ts'...'} must be transformed like {ts '...'}";
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Same for {d'...'} and {t'...'}.
+TEST(ODBCEscapeClauseProcessing, DateAndTimeEscape_NoSpaceBeforeLiteral) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "SELECT {d'2023-01-01'}, {t'12:34:56'}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_STREQ((char *)result, "SELECT DATE '2023-01-01', TIME '12:34:56'")
+        << "{d'...'} and {t'...'} must be transformed like the spaced forms";
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Escape keywords are case-insensitive; the no-space form must be too.
+TEST(ODBCEscapeClauseProcessing, TimestampEscape_NoSpace_CaseInsensitive) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "SELECT {TS'2006-07-08 05:45:00'}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_STREQ((char *)result, "SELECT TIMESTAMP '2006-07-08 05:45:00'");
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Spaced and no-space forms mixed in one statement, plus a parameter
+// marker, must all be handled in one pass.
+TEST(ODBCEscapeClauseProcessing, MixedSpacing_WithParamMarker) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "SELECT ? WHERE a >= {ts '2006-07-08 05:45:00'} AND "
+                   "b < {ts'2026-07-08 07:45:00'}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 1);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_STREQ((char *)result,
+                 "SELECT $1 WHERE a >= TIMESTAMP '2006-07-08 05:45:00' AND "
+                 "b < TIMESTAMP '2026-07-08 07:45:00'");
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Control: the canonical spaced form must keep working.
+TEST(ODBCEscapeClauseProcessing, TimestampEscape_WithSpace_Transformed) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "SELECT * FROM t WHERE c >= {ts '2006-07-08 05:45:00'}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_THAT((char *)result,
+                testing::HasSubstr("TIMESTAMP '2006-07-08 05:45:00'"));
+    EXPECT_THAT((char *)result, testing::Not(testing::HasSubstr("{ts")));
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// On parse error the preserved query must be returned in pPaStrBuf-owned
+// storage, never as an alias of the caller's buffer (callers free it right
+// after this call).
+TEST(ODBCEscapeClauseProcessing, ParseError_PreservedQueryMustNotAliasInput) {
+    RS_STR_BUF paStrBuf;
+    // Unknown escape keyword with no closing brace: forces parseError.
+    char input[] = "SELECT 1 FROM t WHERE c = {bogus xyz";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_STREQ((char *)result, input)
+        << "On parse error the original query must be preserved verbatim";
+    EXPECT_NE((void *)result, (void *)input)
+        << "Preserved query must be copied into pPaStrBuf-owned storage, not "
+           "alias the caller's buffer (callers free the input immediately)";
+    EXPECT_EQ((void *)result, (void *)paStrBuf.pBuf)
+        << "Returned pointer must be the pPaStrBuf buffer";
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Keyword token ending exactly at the specified (non-NTS) length: the
+// parser must not read past cbLen; the truncated query is preserved
+// verbatim.
+TEST(ODBCEscapeClauseProcessing, KeywordAtSpecifiedLengthBoundary_Preserved) {
+    // Physical buffer: a '\'' sits at index 10, one past the specified length.
+    char buf[] = "SELECT {ts'2012-01-15'}";
+    const size_t specifiedLen = 10; // length of "SELECT {ts"
+    ASSERT_EQ(buf[specifiedLen], '\'')
+        << "test setup: byte past the specified length must be '\\''";
+
+    RS_STR_BUF paStrBuf;
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, buf, specifiedLen, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_STREQ((char *)result, "SELECT {ts")
+        << "Unterminated clause at the length boundary must be preserved "
+           "verbatim up to cbLen";
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// A quote directly after the brace ({'...'}) has no keyword: it is not a
+// valid escape clause and the query must be preserved verbatim.
+TEST(ODBCEscapeClauseProcessing, EmptyKeyword_QuoteAfterBrace_PreservedVerbatim) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "SELECT {'2023-01-01'} FROM t";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_STREQ((char *)result, input);
+    EXPECT_NE((void *)result, (void *)input);
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// {escape'~'} with no whitespace before the escape-character literal.
+TEST(ODBCEscapeClauseProcessing, LikeEscape_NoSpaceBeforeLiteral) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "SELECT * FROM t WHERE c LIKE 't~%' {escape'~'}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_STREQ((char *)result, "SELECT * FROM t WHERE c LIKE 't~%' ESCAPE '~'");
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// {ts'...'} nested in a {fn ...} argument: the outer function is
+// transformed and the nested clause is preserved verbatim, same as the
+// spaced form.
+TEST(ODBCEscapeClauseProcessing, NestedFunction_TimestampNoSpaceArgument) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "SELECT {fn HOUR({ts'2012-04-05 12:12:11'})}";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_STREQ((char *)result,
+                 "SELECT DATE_PART('h', CAST({ts'2012-04-05 12:12:11'} AS "
+                 "TIMESTAMP))")
+        << "Outer {fn} must transform; inner clause preserved verbatim like "
+           "the spaced form, with no parse error";
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Parse error on a query longer than SHORT_STR_DATA: the preserved copy
+// must live in the heap-allocated pPaStrBuf buffer.
+TEST(ODBCEscapeClauseProcessing, ParseError_LongQuery_HeapPathCopied) {
+    RS_STR_BUF paStrBuf;
+    std::string longQuery = "SELECT 1 FROM t WHERE c = 'x' /* ";
+    longQuery.append(5000, 'p'); // > SHORT_STR_DATA (4096)
+    longQuery += " */ AND {bogus xyz";
+    std::vector<char> input(longQuery.begin(), longQuery.end());
+    input.push_back('\0');
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input.data(), SQL_NTS, &paStrBuf, 0);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_STREQ((char *)result, longQuery.c_str())
+        << "Original query must be preserved verbatim on parse error";
+    EXPECT_NE((void *)result, (void *)input.data())
+        << "Preserved query must not alias the caller's buffer";
+    EXPECT_EQ((void *)result, (void *)paStrBuf.pBuf);
+    EXPECT_GT(paStrBuf.iAllocDataLen, 0)
+        << "Long query must use the heap-allocated work buffer";
+
+    releasePaStrBuf(&paStrBuf);
+}
+
+// Parse error with parameter markers: query preserved verbatim, markers
+// not expanded.
+TEST(ODBCEscapeClauseProcessing, ParseError_WithParamMarkers_PreservedVerbatim) {
+    RS_STR_BUF paStrBuf;
+    char input[] = "SELECT ? FROM t WHERE c = {bogus xyz";
+
+    unsigned char *result = checkReplaceParamMarkerAndODBCEscapeClause(
+        nullptr, input, SQL_NTS, &paStrBuf, 1);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_STREQ((char *)result, input)
+        << "Query with param markers must be preserved verbatim on parse "
+           "error (no $n expansion)";
+    EXPECT_NE((void *)result, (void *)input);
+
+    releasePaStrBuf(&paStrBuf);
 }
 
 // Known ODBC function is transformed correctly
