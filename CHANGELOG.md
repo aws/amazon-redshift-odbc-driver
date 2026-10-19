@@ -1,6 +1,16 @@
 Changelog
 =========
 
+v2.3.0 (2026-10-19)
+---------------------
+1. Behavior Change: Changed the default value of sslmode from verify-ca to verify-full. In addition to validating the certificate chain, the driver now checks that the server certificate matches the host name it connected to. If sslmode is not set and the host name doesn't match, the driver logs a warning and still connects, so existing connections keep working while you migrate. If sslmode=verify-full is set explicitly, a mismatch still fails the connection. A future release will fail the connection on a mismatch in both cases.
+2. Behavior Change: Changed SQLDriverConnect and SQLDriverConnectW to return the supplied input connection string unchanged as the completed connection string when called with SQL_DRIVER_NOPROMPT.
+3. Behavior Change: Changed implicitly generated cursor names to begin with the ODBC required SQL_CUR prefix on all supported platforms, replacing the lowercase sql_cur prefix previously used on Linux and macOS.
+4. Improved connection times outside Amazon EC2 for IAM, federated, and IAM Identity Center authentication by preventing unnecessary EC2 instance metadata requests for Region discovery.
+5. Added Server Name Indication (SNI) to the TLS handshake for connections that use a host name. Connections that use an IP address do not send SNI.
+6. Fixed a stack buffer overflow that could occur when reading fractional seconds from interval and timestamp values sent by the server.
+7. Removed unused generation and handling of the secondary libpq connection trace file (redshift_odbc.log.1) for debug and trace logging.
+
 v2.2.4 (2026-09-28)
 ---------------------
 1. Improved SQLTables, SQLColumns, and SQLTablePrivileges performance by running their SHOW commands over the unnamed prepared-statement protocol, removing a redundant per-call server-side prepare.
