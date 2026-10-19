@@ -240,6 +240,44 @@ class RS_CONNECT_PROPS_INFO;
 size_t RS_appendSuppliedCredentialsToConnStr(
     RS_CONNECT_PROPS_INFO *pConnectProps, char *szConnStrOut, size_t cbConnStrOut);
 
+/**
+ * @brief Copies an input connection string to the output buffer.
+ * @param szConnStrIn Input connection string.
+ * @param cbConnStrIn Input length in bytes or SQL_NTS; any other negative
+ *                    value copies nothing.
+ * @param szConnStrOut Output buffer, or NULL for a length inquiry.
+ * @param cbConnStrOut Output buffer size in bytes.
+ * @param pTruncated Receives whether the output was truncated. A NULL output
+ *                   buffer is never truncated; a zero-length buffer is.
+ * @return Full input length in bytes, excluding the null terminator.
+ */
+size_t RS_copyDriverConnectInput(const SQLCHAR *szConnStrIn,
+                                 SQLSMALLINT cbConnStrIn, SQLCHAR *szConnStrOut,
+                                 SQLSMALLINT cbConnStrOut, bool *pTruncated);
+
+/**
+ * @brief Copies a supplied wide connection string to a wide output buffer
+ * in SQLWCHAR units without character set conversion.
+ *
+ * The unit width is 2 or 4 bytes as selected by unicodeType.
+ *
+ * @param wszConnStrIn Wide input connection string.
+ * @param cchConnStrIn Input length in characters, or SQL_NTS. Any other
+ * negative value causes no input to be copied.
+ * @param wszConnStrOut Wide output buffer. NULL performs a length inquiry.
+ * @param cchConnStrOut Output buffer capacity in characters.
+ * @param pTruncated Receives whether output was truncated. A NULL output
+ * buffer is never truncated. A zero length output buffer is truncated.
+ * @param unicodeType SQL_DD_CP_UTF16 or SQL_DD_CP_UTF32, the width of one
+ * SQLWCHAR unit in the supplied and output buffers.
+ * @return Full input length in characters, excluding the terminator.
+ */
+size_t RS_copyDriverConnectInputW(const SQLWCHAR *wszConnStrIn,
+                                  SQLSMALLINT cchConnStrIn,
+                                  SQLWCHAR *wszConnStrOut,
+                                  SQLSMALLINT cchConnStrOut, bool *pTruncated,
+                                  int unicodeType);
+
 class RS_DESC_INFO;
 class RS_DESC_HEADER;
 
@@ -428,7 +466,8 @@ public:
                                        SQLCHAR           *szConnStrOut,
                                        SQLSMALLINT       cbConnStrOut,
                                        SQLSMALLINT       *pcbConnStrOut,
-                                       SQLUSMALLINT       hDriverCompletion);
+                                       SQLUSMALLINT       hDriverCompletion,
+                                       bool              *pDialogShown = NULL);
 
    static SQLRETURN SQL_API RS_SQLBrowseConnect(SQLHDBC          phdbc,
                                        SQLCHAR       *szConnStrIn,

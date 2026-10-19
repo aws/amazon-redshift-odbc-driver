@@ -14,6 +14,10 @@
 #include "common.h"
 #include "rsutil.h"
 
+#include <algorithm>
+#include <cctype>
+#include <string>
+
 extern "C" {
 #include "pq_tls_policy.h"
 }
@@ -368,8 +372,13 @@ void expectCompletedStringCarriesMode(rsfake::EntryPoint entryPoint,
         << "accepted under verify-full. diagnostics were:\n"
         << attempt.diagnostics;
 
-    // Without the mode, reconnecting from this string would quietly get the allowance.
-    EXPECT_NE(attempt.outConnStr.find("SSLMode=verify-full"), std::string::npos)
+    // Without the mode, reconnecting from this string would quietly get the
+    // allowance. The completed string echoes the caller's own spelling of the
+    // keyword, so compare case insensitively.
+    std::string completed = attempt.outConnStr;
+    std::transform(completed.begin(), completed.end(), completed.begin(),
+                   [](unsigned char c) { return (char)std::tolower(c); });
+    EXPECT_NE(completed.find("sslmode=verify-full"), std::string::npos)
         << entryPointName << ": the completed string must carry the mode the "
         << "caller named, or reconnecting from it is weaker than the original "
         << "connection. it was:\n"

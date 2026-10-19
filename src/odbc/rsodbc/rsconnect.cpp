@@ -615,9 +615,212 @@ void applyUseDeclareFetchExclusivity(RS_CONNECT_PROPS_INFO *pConnectProps)
 
 /*====================================================================================================================================================*/
 
+/**
+ * @brief Copies the supplied connection string to an output buffer.
+ * @param szConnStrIn Input connection string.
+ * @param cbConnStrIn Input length in bytes or SQL_NTS; any other negative
+ *                    value copies nothing.
+ * @param szConnStrOut Output buffer, or NULL for a length inquiry.
+ * @param cbConnStrOut Output buffer size in bytes.
+ * @param pTruncated Receives whether the output was truncated. A NULL output
+ *                   buffer is never truncated; a zero-length buffer is.
+ * @return Full input length in bytes, excluding the null terminator.
+ */
+size_t RS_copyDriverConnectInput(const SQLCHAR *szConnStrIn,
+                                 SQLSMALLINT cbConnStrIn, SQLCHAR *szConnStrOut,
+                                 SQLSMALLINT cbConnStrOut, bool *pTruncated) {
+    size_t inputLen = 0;
+    size_t copiedLen = 0;
+
+    if (szConnStrIn) {
+        if (cbConnStrIn == SQL_NTS) {
+            inputLen = strlen((const char *)szConnStrIn);
+        } else if (cbConnStrIn > 0) {
+            inputLen = (size_t)cbConnStrIn;
+        }
+    }
+
+    if (szConnStrOut && cbConnStrOut > 0) {
+        copiedLen = (std::min)(inputLen, (size_t)cbConnStrOut - 1);
+        memcpy(szConnStrOut, szConnStrIn, copiedLen);
+        szConnStrOut[copiedLen] = '\0';
+    }
+
+    if (pTruncated) {
+        *pTruncated = szConnStrOut != NULL && inputLen > copiedLen;
+    }
+    return inputLen;
+}
+
+/**
+ * @brief Copies a supplied wide connection string to a wide output buffer
+ * in SQLWCHAR units without character set conversion.
+ *
+ * The unit width is 2 or 4 bytes as selected by unicodeType.
+ *
+ * @param wszConnStrIn Wide input connection string.
+ * @param cchConnStrIn Input length in characters, or SQL_NTS. Any other
+ * negative value causes no input to be copied.
+ * @param wszConnStrOut Wide output buffer. NULL performs a length inquiry.
+ * @param cchConnStrOut Output buffer capacity in characters.
+ * @param pTruncated Receives whether output was truncated. A NULL output
+ * buffer is never truncated. A zero length output buffer is truncated.
+ * @param unicodeType SQL_DD_CP_UTF16 or SQL_DD_CP_UTF32, the width of one
+ * SQLWCHAR unit in the supplied and output buffers.
+ * @return Full input length in characters, excluding the terminator.
+ */
+size_t RS_copyDriverConnectInputW(const SQLWCHAR *wszConnStrIn,
+                                  SQLSMALLINT cchConnStrIn,
+                                  SQLWCHAR *wszConnStrOut,
+                                  SQLSMALLINT cchConnStrOut, bool *pTruncated,
+                                  int unicodeType) {
+    size_t inputLen = 0;
+    size_t copiedLen = 0;
+
+    // Measurement and copy use the same unit size.
+    const size_t unitSize = sizeofSQLWCHAR(unicodeType);
+
+    if (wszConnStrIn) {
+        if (cchConnStrIn == SQL_NTS) {
+            inputLen =
+                sqlwcsnlen_cap(wszConnStrIn, kSQLWCHAR_SCAN_CAP, unicodeType);
+        } else if (cchConnStrIn > 0) {
+            inputLen = (size_t)cchConnStrIn;
+        }
+    }
+
+    if (wszConnStrOut && cchConnStrOut > 0) {
+        copyAndTerminateSqlwchar(wszConnStrOut, (size_t)cchConnStrOut,
+                                 wszConnStrIn, inputLen, unitSize, &copiedLen);
+    }
+
+    if (pTruncated) {
+        *pTruncated = wszConnStrOut != NULL && inputLen > copiedLen;
+    }
+    return inputLen;
+}
+
+/**
+ * @brief Builds the completed connection string after a dialog was shown.
+ * @param pConnectProps Connection properties selected by the dialog.
+ * @param szConnStrOut Output buffer, or NULL for a length inquiry.
+ * @param cbConnStrOut Output buffer size in bytes.
+ * @return Full output length in bytes, excluding the null terminator.
+ */
+static size_t RS_buildDriverConnectOutput(RS_CONNECT_PROPS_INFO *pConnectProps,
+                                          SQLCHAR *szConnStrOut,
+                                          SQLSMALLINT cbConnStrOut) {
+    size_t actualOutputLen = 0;
+    const char *pKeyword = NULL;
+
+    if (szConnStrOut && cbConnStrOut > 0) {
+        *szConnStrOut = '\0';
+    }
+
+    if (pConnectProps->szDSN[0]) {
+        if (szConnStrOut && cbConnStrOut > 0) {
+            strncat((char *)szConnStrOut,
+                    "DSN=", cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, pConnectProps->szDSN,
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, ";",
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+        }
+        actualOutputLen += strlen("DSN=") + strlen(pConnectProps->szDSN) + 1;
+    }
+
+    if (pConnectProps->szDriver[0]) {
+        if (szConnStrOut && cbConnStrOut > 0) {
+            strncat((char *)szConnStrOut,
+                    "Driver=", cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, pConnectProps->szDriver,
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, ";",
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+        }
+        actualOutputLen +=
+            strlen("Driver=") + strlen(pConnectProps->szDriver) + 1;
+    }
+
+    if (pConnectProps->szDatabase[0]) {
+        pKeyword = pConnectProps->iDatabaseKeyWordType == SHORT_NAME_KEYWORD
+                       ? "DB="
+                       : "Database=";
+        if (szConnStrOut && cbConnStrOut > 0) {
+            strncat((char *)szConnStrOut, pKeyword,
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, pConnectProps->szDatabase,
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, ";",
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+        }
+        actualOutputLen +=
+            strlen(pKeyword) + strlen(pConnectProps->szDatabase) + 1;
+    }
+
+    actualOutputLen += RS_appendSuppliedCredentialsToConnStr(
+        pConnectProps, (char *)szConnStrOut, (size_t)cbConnStrOut);
+
+    if (pConnectProps->szHost[0]) {
+        pKeyword = pConnectProps->iHostNameKeyWordType == SHORT_NAME_KEYWORD
+                       ? "Server="
+                       : "HostName=";
+        if (szConnStrOut && cbConnStrOut > 0) {
+            strncat((char *)szConnStrOut, pKeyword,
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, pConnectProps->szHost,
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, ";",
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+        }
+        actualOutputLen += strlen(pKeyword) + strlen(pConnectProps->szHost) + 1;
+    }
+
+    if (pConnectProps->szPort[0]) {
+        pKeyword = pConnectProps->iPortKeyWordType == SHORT_NAME_KEYWORD
+                       ? "Port="
+                       : "PortNumber=";
+        if (szConnStrOut && cbConnStrOut > 0) {
+            strncat((char *)szConnStrOut, pKeyword,
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, pConnectProps->szPort,
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, ";",
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+        }
+        actualOutputLen += strlen(pKeyword) + strlen(pConnectProps->szPort) + 1;
+    }
+
+    // A reconnect with this string must resolve the same way: a named or strict
+    // mode is echoed, a blank SSLMode= is kept so it still masks the DSN.
+    const char *pEchoSslMode = NULL;
+    if ((pConnectProps->iSslModeSource != RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT ||
+         pConnectProps->iSslMismatchPolicy == PQ_SSL_MISMATCH_STRICT) &&
+        pConnectProps->szSslMode[0]) {
+        pEchoSslMode = pConnectProps->szSslMode;
+    } else if (pConnectProps->connSslMode.has_value()) {
+        pEchoSslMode = "";
+    }
+
+    if (pEchoSslMode) {
+        if (szConnStrOut && cbConnStrOut > 0) {
+            strncat((char *)szConnStrOut, "SSLMode=",
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, pEchoSslMode,
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+            strncat((char *)szConnStrOut, ";",
+                    cbConnStrOut - strlen((char *)szConnStrOut) - 1);
+        }
+        actualOutputLen += strlen("SSLMode=") + strlen(pEchoSslMode) + 1;
+    }
+
+    return actualOutputLen;
+}
+
 //---------------------------------------------------------------------------------------------------------igarish
 // Common function for SQLDriverConnect and SQLDriverConnectW.
-//
+// pDialogShown, when supplied, receives whether the driver dialog completed
+// the connection.
 SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
                                     SQLHWND           hwnd,
                                     SQLCHAR           *szConnStrIn,
@@ -625,7 +828,8 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
                                     SQLCHAR           *szConnStrOut,
                                     SQLSMALLINT       cbConnStrOut,
                                     SQLSMALLINT       *pcbConnStrOut,
-                                    SQLUSMALLINT       hDriverCompletion)
+                                    SQLUSMALLINT       hDriverCompletion,
+                                    bool              *pDialogShown)
 {
     SQLRETURN rc = SQL_SUCCESS;
 #ifdef WIN32
@@ -634,8 +838,12 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
     int   iPrompt = FALSE;
     RS_CONNECT_PROPS_INFO *pConnectProps;
     size_t actualOutputLen = 0;
-    char *pKeyword = NULL;
+    size_t copiedOutputLen = 0;
+    bool outputTruncated = false;
 
+    if (pDialogShown) {
+        *pDialogShown = false;
+    }
 
     if(!VALID_HDBC(phdbc))
     {
@@ -704,6 +912,10 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
             {
                 iPrompt = TRUE;
             }
+        }
+
+        if (pDialogShown) {
+            *pDialogShown = iPrompt != FALSE;
         }
 
         if(iPrompt)
@@ -805,123 +1017,28 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
                 goto error;
         }
 
-        if(szConnStrOut && (cbConnStrOut > 0))
-            *szConnStrOut = '\0';
-
-        if(pConnectProps->szDSN[0])
-        {
-            if(szConnStrOut && (cbConnStrOut > 0))
-            {
-                strncat((char *)szConnStrOut, "DSN=", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat((char *)szConnStrOut, pConnectProps->szDSN, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat((char *)szConnStrOut, ";", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
+        if (iPrompt) {
+            actualOutputLen = RS_buildDriverConnectOutput(
+                pConnectProps, szConnStrOut, cbConnStrOut);
+            if (szConnStrOut && cbConnStrOut > 0) {
+                copiedOutputLen = strlen((char *)szConnStrOut);
             }
-
-            actualOutputLen += strlen("DSN=");
-            actualOutputLen += strlen(pConnectProps->szDSN);
-            actualOutputLen += strlen(";");
+            // A NULL output buffer is a length inquiry, never a truncation.
+            outputTruncated =
+                szConnStrOut != NULL && actualOutputLen > copiedOutputLen;
+        } else {
+            actualOutputLen = RS_copyDriverConnectInput(
+                szConnStrIn, cbConnStrIn, szConnStrOut, cbConnStrOut,
+                &outputTruncated);
         }
 
-        if(pConnectProps->szDriver[0])
-        {
-            if(szConnStrOut && (cbConnStrOut > 0))
-            {
-                strncat((char *)szConnStrOut, "Driver=", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat((char *)szConnStrOut, pConnectProps->szDriver, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat((char *)szConnStrOut, ";", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-            }
-
-            actualOutputLen += strlen("Driver=");
-            actualOutputLen += strlen(pConnectProps->szDriver);
-            actualOutputLen += strlen(";");
+        if (pcbConnStrOut) {
+            *pcbConnStrOut = (SQLSMALLINT)(std::min)(
+                actualOutputLen,
+                (size_t)(std::numeric_limits<SQLSMALLINT>::max)());
         }
 
-        if(pConnectProps->szDatabase[0])
-        {
-            pKeyword = (char *)((pConnectProps->iDatabaseKeyWordType == SHORT_NAME_KEYWORD) ? "DB=" : "Database=");
-
-            if(szConnStrOut && (cbConnStrOut > 0))
-            {
-                strncat((char *)szConnStrOut, pKeyword, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat((char *)szConnStrOut, pConnectProps->szDatabase, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat((char *)szConnStrOut, ";", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-            }
-
-            actualOutputLen += strlen(pKeyword);
-            actualOutputLen += strlen(pConnectProps->szDatabase);
-            actualOutputLen += strlen(";");
-        }
-
-        // Emit the pre-authentication UID/PWD; auth-resolved credentials are omitted.
-        actualOutputLen += RS_appendSuppliedCredentialsToConnStr(
-            pConnectProps, (char *)szConnStrOut, (size_t)cbConnStrOut);
-
-        if(pConnectProps->szHost[0])
-        {
-            pKeyword = (char *)((pConnectProps->iHostNameKeyWordType == SHORT_NAME_KEYWORD) ? "Server=" : "HostName=");
-
-            if(szConnStrOut && (cbConnStrOut > 0))
-            {
-                strncat( (char *)szConnStrOut, pKeyword, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat( (char *)szConnStrOut, pConnectProps->szHost, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat( (char *)szConnStrOut, ";", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-            }
-
-            actualOutputLen += strlen(pKeyword);
-            actualOutputLen += strlen(pConnectProps->szHost);
-            actualOutputLen += strlen(";");
-        }
-
-        if(pConnectProps->szPort[0])
-        {
-            pKeyword = (char *)((pConnectProps->iPortKeyWordType == SHORT_NAME_KEYWORD) ? "Port=" : "PortNumber=");
-
-            if(szConnStrOut && (cbConnStrOut > 0))
-            {
-                strncat( (char *)szConnStrOut, pKeyword, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat( (char *)szConnStrOut, pConnectProps->szPort, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat( (char *)szConnStrOut, ";", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-            }
-
-            actualOutputLen += strlen(pKeyword);
-            actualOutputLen += strlen(pConnectProps->szPort);
-            actualOutputLen += strlen(";");
-        }
-
-        // A reconnect with this string must resolve the same way: a named or strict
-        // mode is echoed, a blank SSLMode= is kept so it still masks the DSN.
-        const char *pEchoSslMode = NULL;
-        if((pConnectProps->iSslModeSource != RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT
-            || pConnectProps->iSslMismatchPolicy == PQ_SSL_MISMATCH_STRICT)
-           && pConnectProps->szSslMode[0])
-            pEchoSslMode = pConnectProps->szSslMode;
-        else if(pConnectProps->connSslMode.has_value())
-            pEchoSslMode = "";
-
-        if(pEchoSslMode)
-        {
-            if(szConnStrOut && (cbConnStrOut > 0))
-            {
-                strncat( (char *)szConnStrOut, "SSLMode=", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat( (char *)szConnStrOut, pEchoSslMode, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-                strncat( (char *)szConnStrOut, ";", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
-            }
-
-            actualOutputLen += strlen("SSLMode=");
-            actualOutputLen += strlen(pEchoSslMode);
-            actualOutputLen += strlen(";");
-        }
-
-        if(pcbConnStrOut)
-            *pcbConnStrOut = (short) actualOutputLen;
-
-        if (szConnStrOut && (cbConnStrOut > 0)) {
-            if (actualOutputLen > strlen((char *)szConnStrOut)) {
-                rc = SQL_SUCCESS_WITH_INFO;
-                addError(&pConn->pErrorList, "01004",
-                         "String data, right truncated", 0, NULL);
-            }
-        } else if (actualOutputLen > 0) {
+        if (outputTruncated) {
             rc = SQL_SUCCESS_WITH_INFO;
             addError(&pConn->pErrorList, "01004",
                      "String data, right truncated", 0, NULL);
@@ -986,9 +1103,25 @@ SQLRETURN SQL_API SQLDriverConnectW(SQLHDBC             phdbc,
 
     pConn = (RS_CONN_INFO *)phdbc;
 
+    // Start this call with an empty diagnostic list so the checks below do
+    // not stack on records left by the previous call on this handle.
+    pConn->pErrorList = clearErrorList(pConn->pErrorList);
+
+    // Validate the input length before it is used for conversion or copying.
+    if (cchConnStrIn != SQL_NTS && cchConnStrIn < 0) {
+        addError(&pConn->pErrorList, "HY090",
+                 "Invalid string or buffer length", 0, NULL);
+        rc = SQL_ERROR;
+        return rc;
+    }
+
+    // Resolve the client character width once for this call so the input
+    // conversion and the output copy agree.
+    const int unicodeType = get_app_unicode_type();
+
     // Convert input connection string (W -> UTF-8)
-    szConnStrInLen =
-        sqlwchar_to_utf8_alloc(wszConnStrIn, cchConnStrIn, &szConnStrIn);
+    szConnStrInLen = sqlwchar_to_utf8_alloc(wszConnStrIn, cchConnStrIn,
+                                            &szConnStrIn, unicodeType);
 
     if (wszConnStrIn && cchConnStrIn != 0 && szConnStrInLen == 0 &&
         szConnStrIn == NULL) {
@@ -1008,64 +1141,71 @@ SQLRETURN SQL_API SQLDriverConnectW(SQLHDBC             phdbc,
         return rc;
     }
 
-    // Internal ANSI buffer for RS_SQLDriverConnect
-    // We make this independent of the caller's buffer size so we always
-    // have the full ANSI connection string available.
-    // Also, we make it large enough for JWT/OAuth/SAML/IAM tokens
-    const SQLSMALLINT ansiBufSize =
-        (std::numeric_limits<SQLSMALLINT>::max)() - 1;  // leave room for NUL
-    std::vector<char> szConnStrOut(ansiBufSize + 1, 0); // +1 for safety
-    SQLSMALLINT ansiLength = 0;                         // bytes, excluding NUL
+    // The UTF-8 input is null terminated, so it is passed as SQL_NTS. The
+    // output is produced below, so no output buffer is passed down.
+    bool dialogShown = false;
 
     rc = RS_CONN_INFO::RS_SQLDriverConnect(
-        phdbc, hwnd, (SQLCHAR *)szConnStrIn, szConnStrInLen,
-        (SQLCHAR *)szConnStrOut.data(), (SQLSMALLINT)ansiBufSize, &ansiLength,
-        hDriverCompletion);
-    ansiLength = (std::max<SQLSMALLINT>)(ansiLength, 0);
-    // Compute how many bytes we actually have from ANSI side
-    size_t bytesAvailable = (std::min)(ansiLength, ansiBufSize);
+        phdbc, hwnd, (SQLCHAR *)szConnStrIn,
+        (SQLSMALLINT)(szConnStrIn ? SQL_NTS : 0), NULL, 0, NULL,
+        hDriverCompletion, &dialogShown);
 
     if (SQL_SUCCEEDED(rc)) {
-        if (wszConnStrOut && cchConnStrOut > 0) {
-            // Normal case: attempt to convert into caller's buffer
-            copiedChars = utf8_to_sqlwchar_str(
-                szConnStrOut.data(), bytesAvailable, wszConnStrOut,
-                cchConnStrOut, &totalCharsNeeded);
+        if (!dialogShown) {
+            // No dialog: copy the wide input in SQLWCHAR units.
+            totalCharsNeeded = RS_copyDriverConnectInputW(
+                wszConnStrIn, cchConnStrIn, wszConnStrOut, cchConnStrOut,
+                &truncation, unicodeType);
+            if (wszConnStrOut && cchConnStrOut > 0) {
+                copiedChars =
+                    (std::min)(totalCharsNeeded, (size_t)cchConnStrOut - 1);
+            }
+        } else {
+            // Dialog shown: build the string from the selected properties
+            // and convert it to the wide form.
+            const SQLSMALLINT ansiBufSize =
+                (std::numeric_limits<SQLSMALLINT>::max)() - 1;
+            std::vector<char> szConnStrOut(ansiBufSize + 1, 0);
 
-            if (copiedChars < totalCharsNeeded) {
-                rc = SQL_SUCCESS_WITH_INFO;
+            RS_buildDriverConnectOutput(pConn->pConnectProps,
+                                        (SQLCHAR *)szConnStrOut.data(),
+                                        ansiBufSize);
+            size_t bytesAvailable = strlen(szConnStrOut.data());
+
+            if (wszConnStrOut && cchConnStrOut > 0) {
+                copiedChars = utf8_to_sqlwchar_str(
+                    szConnStrOut.data(), bytesAvailable, wszConnStrOut,
+                    cchConnStrOut, &totalCharsNeeded, unicodeType);
+
+                if (copiedChars < totalCharsNeeded) {
+                    truncation = true;
+                }
+            } else if (wszConnStrOut != NULL && cchConnStrOut == 0) {
+                // A non-NULL zero-length buffer is reported as truncated.
                 truncation = true;
             }
-        } else if (wszConnStrOut != NULL && cchConnStrOut == 0) {
-            // Non-NULL pointer with zero-length buffer => truncation by spec
+
+            if (totalCharsNeeded == 0) {
+                totalCharsNeeded = utf8_to_sqlwchar_strlen(
+                    szConnStrOut.data(), bytesAvailable, unicodeType);
+            }
+        }
+
+        if (truncation) {
             rc = SQL_SUCCESS_WITH_INFO;
-            truncation = true;
-            // We do not touch wszConnStrOut here, only length.
-        } else {
-            // wszConnStrOut == NULL: pure length inquiry
-            rc = SQL_SUCCESS;
         }
 
         if (pcchConnStrOut) {
-            totalCharsNeeded = totalCharsNeeded > 0
-                                   ? totalCharsNeeded
-                                   : utf8_to_sqlwchar_strlen(
-                                         szConnStrOut.data(), bytesAvailable);
-            *pcchConnStrOut = static_cast<SQLSMALLINT>(totalCharsNeeded);
+            *pcchConnStrOut = (SQLSMALLINT)(std::min)(
+                totalCharsNeeded,
+                (size_t)(std::numeric_limits<SQLSMALLINT>::max)());
         }
     } else if (pcchConnStrOut) {
-        // Error path: provide best-effort length hint.
-        size_t estimatedLen = 0;
-
-        if (ansiLength > 0) {
-            // We can estimate from the ANSI output we got
-            estimatedLen =
-                utf8_to_sqlwchar_strlen(szConnStrOut.data(), bytesAvailable);
-        } else if (wszConnStrIn && szConnStrInLen > 0) {
-            // Fall back to input string length estimate
-            estimatedLen = utf8_to_sqlwchar_strlen(szConnStrIn, szConnStrInLen);
-        }
-        *pcchConnStrOut = static_cast<SQLSMALLINT>(estimatedLen);
+        // Error path: provide a best-effort length hint from the wide input.
+        size_t estimatedLen = RS_copyDriverConnectInputW(
+            wszConnStrIn, cchConnStrIn, NULL, 0, NULL, unicodeType);
+        *pcchConnStrOut = (SQLSMALLINT)(std::min)(
+            estimatedLen, (size_t)(std::numeric_limits<SQLSMALLINT>::max)());
     }
 
     return rc;

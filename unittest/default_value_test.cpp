@@ -5,8 +5,10 @@
 #include "rsodbc_setup/rs_dsn_ssl_keys.h"
 #include <sql.h>
 #include <cstring>
+#include <cstdint>
 #include <new>
 #include <string>
+#include <vector>
 #ifndef WIN32
 #include <unistd.h>
 #endif
@@ -896,6 +898,347 @@ TEST_F(UseDeclareFetchConnStringTest, MutualExclusivity_UDF_disabled_does_not_af
     applyUseDeclareFetchExclusivity(pConn->pConnectProps);
     EXPECT_EQ(pConn->pConnectProps->iUseDeclareFetch, 0);
     EXPECT_EQ(pConn->pConnectProps->iFetchRefCursor, 1);
+}
+
+TEST(DriverConnectInputCopy, CopiesSqlNtsInputVerbatim) {
+    const SQLCHAR input[] =
+        "Driver=Redshift;Database=dev;StreamingCursorRows=0;CustomKey=value;";
+    SQLCHAR output[sizeof(input)] = {0};
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInput(input, SQL_NTS, output,
+                                              sizeof(output), &truncated);
+
+    EXPECT_EQ(strlen((const char *)input), length);
+    EXPECT_FALSE(truncated);
+    EXPECT_STREQ((const char *)input, (const char *)output);
+}
+
+TEST(DriverConnectInputCopy, CopiesExplicitLengthWithoutReadingPastInput) {
+    const SQLCHAR input[] = {'A', '=', '1', ';'};
+    SQLCHAR output[5] = {0};
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInput(input, sizeof(input), output,
+                                              sizeof(output), &truncated);
+
+    EXPECT_EQ(sizeof(input), length);
+    EXPECT_FALSE(truncated);
+    EXPECT_EQ(0, memcmp(input, output, sizeof(input)));
+    EXPECT_EQ('\0', output[sizeof(input)]);
+}
+
+TEST(DriverConnectInputCopy, ReportsTruncationAndFullLength) {
+    const SQLCHAR input[] = "ExtraKeyword=preserved;";
+    SQLCHAR output[8] = {0};
+    bool truncated = false;
+
+    size_t length = RS_copyDriverConnectInput(input, SQL_NTS, output,
+                                              sizeof(output), &truncated);
+
+    EXPECT_EQ(strlen((const char *)input), length);
+    EXPECT_TRUE(truncated);
+    EXPECT_EQ(sizeof(output) - 1, strlen((const char *)output));
+    EXPECT_EQ('\0', output[sizeof(output) - 1]);
+}
+
+TEST(DriverConnectInputCopy, NullOutputIsLengthInquiryWithoutTruncation) {
+    const SQLCHAR input[] = "Database=dev;";
+    bool truncated = true;
+
+    size_t length =
+        RS_copyDriverConnectInput(input, SQL_NTS, NULL, 0, &truncated);
+
+    EXPECT_EQ(strlen((const char *)input), length);
+    EXPECT_FALSE(truncated);
+}
+
+TEST(DriverConnectInputCopy, ZeroLengthOutputReportsLengthAndTruncation) {
+    const SQLCHAR input[] = "Database=dev;";
+    SQLCHAR output = 'x';
+    bool truncated = false;
+
+    size_t length =
+        RS_copyDriverConnectInput(input, SQL_NTS, &output, 0, &truncated);
+
+    EXPECT_EQ(strlen((const char *)input), length);
+    EXPECT_TRUE(truncated);
+    EXPECT_EQ('x', output);
+}
+
+TEST(DriverConnectInputCopy, NullInputYieldsEmptyOutput) {
+    SQLCHAR output[4] = {'x', 'x', 'x', 'x'};
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInput(NULL, SQL_NTS, output,
+                                              sizeof(output), &truncated);
+
+    EXPECT_EQ(0u, length);
+    EXPECT_FALSE(truncated);
+    EXPECT_EQ('\0', output[0]);
+}
+
+TEST(DriverConnectInputCopy, NegativeLengthOtherThanSqlNtsCopiesNothing) {
+    const SQLCHAR input[] = "DSN=a;";
+    SQLCHAR output[8] = {'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x'};
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInput(input, (SQLSMALLINT)-2, output,
+                                              sizeof(output), &truncated);
+
+    EXPECT_EQ(0u, length);
+    EXPECT_FALSE(truncated);
+    EXPECT_EQ('\0', output[0]);
+}
+
+// Wide copy: SQLWCHAR units, exact bytes, lengths in characters.
+
+static std::vector<SQLWCHAR> makeWide(const std::vector<unsigned int> &cps) {
+    std::vector<SQLWCHAR> out(cps.begin(), cps.end());
+    out.push_back(0);
+    return out;
+}
+
+TEST(DriverConnectInputCopyW, CopiesSqlNtsInputVerbatim) {
+    std::vector<SQLWCHAR> input =
+        makeWide({'D', 'S', 'N', '=', 'a', ';', 'K', '=', 'v', ';'});
+    std::vector<SQLWCHAR> output(input.size(), 0xFFFF);
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInputW(
+        input.data(), SQL_NTS, output.data(), (SQLSMALLINT)output.size(),
+        &truncated, SQL_DD_CP_UTF16);
+
+    EXPECT_EQ(input.size() - 1, length);
+    EXPECT_FALSE(truncated);
+    EXPECT_EQ(0, memcmp(input.data(), output.data(),
+                        input.size() * sizeof(SQLWCHAR)));
+}
+
+TEST(DriverConnectInputCopyW, LengthIsInCharactersNotUtf8Bytes) {
+    // Each character below encodes to multiple UTF-8 bytes.
+    std::vector<SQLWCHAR> input = makeWide({'U', '=', 0x00E9, 0x4E2D, ';'});
+    std::vector<SQLWCHAR> output(input.size(), 0);
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInputW(
+        input.data(), SQL_NTS, output.data(), (SQLSMALLINT)output.size(),
+        &truncated, SQL_DD_CP_UTF16);
+
+    EXPECT_EQ(5u, length);
+    EXPECT_FALSE(truncated);
+    EXPECT_EQ(0, memcmp(input.data(), output.data(),
+                        input.size() * sizeof(SQLWCHAR)));
+}
+
+TEST(DriverConnectInputCopyW, CopiesExplicitLengthWithoutReadingPastInput) {
+    const SQLWCHAR input[] = {'A', '=', '1', ';'};
+    SQLWCHAR output[5] = {1, 1, 1, 1, 1};
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInputW(
+        input, (SQLSMALLINT)(sizeof(input) / sizeof(input[0])), output,
+        (SQLSMALLINT)(sizeof(output) / sizeof(output[0])), &truncated,
+        SQL_DD_CP_UTF16);
+
+    EXPECT_EQ(4u, length);
+    EXPECT_FALSE(truncated);
+    EXPECT_EQ(0, memcmp(input, output, sizeof(input)));
+    EXPECT_EQ(0, output[4]);
+}
+
+TEST(DriverConnectInputCopyW, ReportsTruncationAndFullLength) {
+    std::vector<SQLWCHAR> input =
+        makeWide({'E', 'x', 't', 'r', 'a', '=', 'k', 'e', 'p', 't', ';'});
+    SQLWCHAR output[4] = {0};
+    bool truncated = false;
+
+    size_t length = RS_copyDriverConnectInputW(
+        input.data(), SQL_NTS, output,
+        (SQLSMALLINT)(sizeof(output) / sizeof(output[0])), &truncated,
+        SQL_DD_CP_UTF16);
+
+    EXPECT_EQ(input.size() - 1, length);
+    EXPECT_TRUE(truncated);
+    EXPECT_EQ(0, memcmp(input.data(), output, 3 * sizeof(SQLWCHAR)));
+    EXPECT_EQ(0, output[3]);
+}
+
+TEST(DriverConnectInputCopyW, NullOutputIsLengthInquiryWithoutTruncation) {
+    std::vector<SQLWCHAR> input = makeWide({'D', 'B', '=', 'd', ';'});
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInputW(input.data(), SQL_NTS, NULL, 0,
+                                               &truncated, SQL_DD_CP_UTF16);
+
+    EXPECT_EQ(5u, length);
+    EXPECT_FALSE(truncated);
+}
+
+TEST(DriverConnectInputCopyW, ZeroLengthOutputReportsLengthAndTruncation) {
+    std::vector<SQLWCHAR> input = makeWide({'D', 'B', '=', 'd', ';'});
+    SQLWCHAR output = 'x';
+    bool truncated = false;
+
+    size_t length = RS_copyDriverConnectInputW(input.data(), SQL_NTS, &output,
+                                               0, &truncated, SQL_DD_CP_UTF16);
+
+    EXPECT_EQ(5u, length);
+    EXPECT_TRUE(truncated);
+    EXPECT_EQ('x', output);
+}
+
+TEST(DriverConnectInputCopyW, NullInputYieldsEmptyOutput) {
+    SQLWCHAR output[4] = {'x', 'x', 'x', 'x'};
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInputW(NULL, SQL_NTS, output, 4,
+                                               &truncated, SQL_DD_CP_UTF16);
+
+    EXPECT_EQ(0u, length);
+    EXPECT_FALSE(truncated);
+    EXPECT_EQ(0, output[0]);
+}
+
+TEST(DriverConnectInputCopyW, NegativeLengthOtherThanSqlNtsCopiesNothing) {
+    std::vector<SQLWCHAR> input = makeWide({'D', 'S', 'N', '=', 'a', ';'});
+    SQLWCHAR output[8] = {'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x'};
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInputW(
+        input.data(), (SQLSMALLINT)-2, output,
+        (SQLSMALLINT)(sizeof(output) / sizeof(output[0])), &truncated,
+        SQL_DD_CP_UTF16);
+
+    EXPECT_EQ(0u, length);
+    EXPECT_FALSE(truncated);
+    EXPECT_EQ(0, output[0]);
+}
+
+// Wide copy at the 4 byte unit width. Buffers are uint32_t vectors so the
+// tests are independent of the compile time SQLWCHAR width and the storage
+// satisfies the 4 byte alignment the copy primitive requires.
+
+static std::vector<uint32_t> makeWide32(const std::vector<char32_t> &cps) {
+    std::vector<uint32_t> out(cps.begin(), cps.end());
+    out.push_back(0);
+    return out;
+}
+
+static const SQLWCHAR *asSqlwchar(const std::vector<uint32_t> &v) {
+    return reinterpret_cast<const SQLWCHAR *>(v.data());
+}
+
+static SQLWCHAR *asSqlwchar(std::vector<uint32_t> &v) {
+    return reinterpret_cast<SQLWCHAR *>(v.data());
+}
+
+TEST(DriverConnectInputCopyW, Utf32SqlNtsLengthCountsFourByteUnits) {
+    // Read in 2 byte units, this string ends after the first character
+    // because the upper half of each 4 byte unit is zero.
+    std::vector<uint32_t> input =
+        makeWide32({'D', 'S', 'N', '=', 'a', ';', 'K', '=', 'v', ';'});
+    std::vector<uint32_t> output(input.size(), 0xFFFFFFFFu);
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInputW(
+        asSqlwchar(input), SQL_NTS, asSqlwchar(output),
+        (SQLSMALLINT)output.size(), &truncated, SQL_DD_CP_UTF32);
+
+    EXPECT_EQ(10u, length);
+    EXPECT_FALSE(truncated);
+    EXPECT_EQ(input, output);
+}
+
+TEST(DriverConnectInputCopyW, Utf32ExplicitLengthCopiesFourByteUnits) {
+    std::vector<uint32_t> input = makeWide32({'A', '=', '1', ';'});
+    std::vector<uint32_t> output(5, 0xFFFFFFFFu);
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInputW(
+        asSqlwchar(input), (SQLSMALLINT)4, asSqlwchar(output), (SQLSMALLINT)5,
+        &truncated, SQL_DD_CP_UTF32);
+
+    EXPECT_EQ(4u, length);
+    EXPECT_FALSE(truncated);
+    // Four characters copied, then a full 4 byte terminator.
+    EXPECT_EQ(input, output);
+}
+
+TEST(DriverConnectInputCopyW, Utf32TruncationTerminatesWithFourByteUnit) {
+    std::vector<uint32_t> input =
+        makeWide32({'E', 'x', 't', 'r', 'a', '=', 'k', 'e', 'p', 't', ';'});
+    std::vector<uint32_t> output(4, 0xFFFFFFFFu);
+    bool truncated = false;
+
+    size_t length = RS_copyDriverConnectInputW(
+        asSqlwchar(input), SQL_NTS, asSqlwchar(output), (SQLSMALLINT)4,
+        &truncated, SQL_DD_CP_UTF32);
+
+    EXPECT_EQ(11u, length);
+    EXPECT_TRUE(truncated);
+    const std::vector<uint32_t> expected = {'E', 'x', 't', 0};
+    EXPECT_EQ(expected, output);
+}
+
+// Negative control: the same 4 byte unit bytes measured as 2 byte units stop
+// at the zero high half of the first character, so a caller that passes the
+// wrong width sees length 1 instead of the full string.
+TEST(DriverConnectInputCopyW, Utf32BytesMeasuredAsUtf16StopAtFirstUnit) {
+    std::vector<uint32_t> input =
+        makeWide32({'D', 'S', 'N', '=', 'a', ';', 'K', '=', 'v', ';'});
+    bool truncated = true;
+
+    size_t length = RS_copyDriverConnectInputW(asSqlwchar(input), SQL_NTS,
+                                               NULL, 0, &truncated,
+                                               SQL_DD_CP_UTF16);
+
+    EXPECT_EQ(1u, length);
+    EXPECT_FALSE(truncated);
+}
+
+// SQLDriverConnectW diagnostics: each call starts with an empty list.
+
+TEST(DriverConnectDiagnostics, WideLengthErrorReplacesPriorRecords) {
+    SQLHENV env = SQL_NULL_HANDLE;
+    SQLHDBC dbc = SQL_NULL_HANDLE;
+    ASSERT_EQ(SQL_SUCCESS, SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &env));
+    ASSERT_EQ(SQL_SUCCESS, SQLSetEnvAttr(env, SQL_ATTR_ODBC_VERSION,
+                                         (SQLPOINTER)SQL_OV_ODBC3, 0));
+    ASSERT_EQ(SQL_SUCCESS, SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc));
+
+    std::vector<SQLWCHAR> input = makeWide({'D', 'S', 'N', '=', 'a', ';', 0});
+    SQLWCHAR output[16] = {0};
+    SQLSMALLINT outputLength = 0;
+
+    // Two consecutive calls rejected before any connection attempt.
+    for (int call = 0; call < 2; ++call) {
+        EXPECT_EQ(SQL_ERROR,
+                  SQLDriverConnectW(dbc, NULL, input.data(), (SQLSMALLINT)-999,
+                                    output, 16, &outputLength,
+                                    SQL_DRIVER_NOPROMPT));
+    }
+
+    SQLINTEGER recordCount = -1;
+    ASSERT_EQ(SQL_SUCCESS,
+              SQLGetDiagField(SQL_HANDLE_DBC, dbc, 0, SQL_DIAG_NUMBER,
+                              &recordCount, SQL_IS_INTEGER, NULL));
+    EXPECT_EQ(1, recordCount);
+
+    SQLCHAR sqlState[6] = {0};
+    SQLINTEGER nativeError = 0;
+    SQLCHAR message[256] = {0};
+    SQLSMALLINT messageLength = 0;
+    ASSERT_EQ(SQL_SUCCESS,
+              SQLGetDiagRec(SQL_HANDLE_DBC, dbc, 1, sqlState, &nativeError,
+                            message, sizeof(message), &messageLength));
+    EXPECT_STREQ("HY090", (const char *)sqlState);
+    EXPECT_EQ(SQL_NO_DATA,
+              SQLGetDiagRec(SQL_HANDLE_DBC, dbc, 2, sqlState, &nativeError,
+                            message, sizeof(message), &messageLength));
+
+    SQLFreeHandle(SQL_HANDLE_DBC, dbc);
+    SQLFreeHandle(SQL_HANDLE_ENV, env);
 }
 
 // RS_appendSuppliedCredentialsToConnStr emits only pre-authentication credentials.

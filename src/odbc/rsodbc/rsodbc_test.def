@@ -2,6 +2,8 @@ LIBRARY         rsodbc64-test
 
 EXPORTS
 	RS_appendSuppliedCredentialsToConnStr
+	RS_copyDriverConnectInput
+	RS_copyDriverConnectInputW
 	?resetConnectProps@RS_CONN_INFO@@QEAAXXZ
 	SQLAllocConnect 
 	SQLAllocEnv 
