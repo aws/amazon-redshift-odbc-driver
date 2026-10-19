@@ -193,11 +193,16 @@ AWSCredentials IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest(
 {
     RS_LOG_DEBUG("IAMCRD", "IAMSamlPluginCredentialsProvider::AssumeRoleWithSamlRequest");
 
-    ClientConfiguration config;
-    
-    if(!m_config.GetRegion().empty())
+    // IMDS disabled. Region comes from the DSN, else the Redshift hostname
+    // (resolving a CNAME), else the SDK default (AWS_DEFAULT_REGION /
+    // AWS_REGION / AWS config file, else us-east-1).
+    ClientConfiguration config = IAMUtils::CreateClientConfiguration();
+
+    const rs_string region = IAMUtils::ResolveStsRegion(
+        m_config.GetRegion(), m_config.GetHost(), m_config.GetIsCname());
+    if (!region.empty())
     {
-      config.region = m_config.GetRegion();
+        config.region = region;
     }
 
 

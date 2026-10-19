@@ -41,7 +41,8 @@ Redshift::IamSupport::HttpResponse IAMHttpClient::MakeHttpRequest(
 ClientConfiguration IAMHttpClient::GetClientConfiguration(const HttpClientConfig& in_config) 
 {
     RS_LOG_DEBUG("IAM_HTTP_CLNT", "IAMHttpClient::GetClientConfiguration");
-    ClientConfiguration clientConfig;
+    // IMDS disabled; the IdP HTTP client does not use the region.
+    ClientConfiguration clientConfig = IAMUtils::CreateClientConfiguration();
 
     if (!in_config.m_userAgent.empty())
     {

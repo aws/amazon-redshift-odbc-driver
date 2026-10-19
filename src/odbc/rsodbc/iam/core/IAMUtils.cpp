@@ -24,6 +24,7 @@
 #include "IAMUtils.h"
 #include "RsSettings.h"
 #include "rslog.h"
+#include <aws/core/client/ClientConfiguration.h>
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
@@ -80,6 +81,45 @@ std::vector<rs_string> IAMUtils::TokenizeSetting(
         res.push_back(temp);
 
     return res;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+Aws::Client::ClientConfiguration IAMUtils::CreateClientConfiguration()
+{
+    Aws::Client::ClientConfigurationInitValues initValues;
+    initValues.shouldDisableIMDS = true;
+    return Aws::Client::ClientConfiguration(initValues);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+rs_string IAMUtils::ResolveStsRegion(
+    const rs_string& in_region,
+    const rs_string& in_host,
+    bool in_isCname)
+{
+    if (!in_region.empty())
+    {
+        return in_region;
+    }
+
+    /* e.g., redshiftj-iam-test.c2mf5zd3u3sv.us-west-2.redshift.amazonaws.com
+       e.g., default.518627716765.us-east-1.redshift-serverless.amazonaws.com
+    */
+    std::vector<rs_string> hostnameTokens = TokenizeSetting(in_host, ".");
+    if (hostnameTokens.size() >= 6 &&
+        (hostnameTokens[3] == "redshift" || hostnameTokens[3] == "redshift-serverless"))
+    {
+        return hostnameTokens[2];
+    }
+
+    if (in_isCname && !in_host.empty())
+    {
+        rs_string cnameRegion = IAMUtils().GetAwsRegionFromCname(in_host);
+        RS_LOG_DEBUG("IAM", "ResolveStsRegion GetAwsRegionFromCname->%s", cnameRegion.c_str());
+        return cnameRegion;
+    }
+
+    return "";
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

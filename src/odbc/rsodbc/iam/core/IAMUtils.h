@@ -17,6 +17,15 @@
 #else
 #include <winhttp.h>
 #endif
+
+namespace Aws
+{
+namespace Client
+{
+    struct ClientConfiguration;
+}
+}
+
 namespace Redshift
 {
 namespace IamSupport
@@ -142,6 +151,39 @@ namespace IamSupport
        static bool isEqual(std::wstring  s1, std::wstring  s2, bool caseInsenstive);
        static rs_wstring convertStringToWstring(rs_string  str);
        static rs_wstring convertCharStringToWstring(char *str);
+
+        /// @brief Create an AWS SDK client configuration with EC2 instance
+        ///        metadata (IMDS) region lookup disabled.
+        ///
+        /// The SDK's default ClientConfiguration constructor queries IMDS when
+        /// no region is found in the environment or AWS config file, which
+        /// blocks for ~10s per attempt on non-EC2 machines. Without IMDS the
+        /// region is the SDK default (AWS_DEFAULT_REGION / AWS_REGION / AWS
+        /// config file, else us-east-1) unless the caller sets config.region.
+        ///
+        /// @return ClientConfiguration with IMDS disabled
+        static Aws::Client::ClientConfiguration CreateClientConfiguration();
+
+        /// @brief Resolve the region for an STS client: the configured region
+        ///        if set, otherwise the region inferred from a Redshift
+        ///        provisioned or serverless hostname, e.g.
+        ///        cluster.account.us-west-2.redshift.amazonaws.com or
+        ///        workgroup.account.us-west-2.redshift-serverless.amazonaws.com,
+        ///        otherwise, for a custom domain name, the region of the
+        ///        canonical Redshift hostname it resolves to via DNS.
+        ///
+        /// @param in_region    The configured region, may be empty
+        /// @param in_host      The Redshift hostname, may be empty
+        /// @param in_isCname   True if in_host is a custom domain name (CNAME)
+        ///
+        /// @return The resolved region, or an empty string if no source
+        ///         provides one. Callers then keep the SDK default region
+        ///         (AWS_DEFAULT_REGION / AWS_REGION / AWS config file, else
+        ///         us-east-1).
+        static rs_string ResolveStsRegion(
+            const rs_string& in_region,
+            const rs_string& in_host,
+            bool in_isCname);
 
         /// @brief Get the Fully Qualified Domain Name (FQDN) from cname endpoint;
         ///

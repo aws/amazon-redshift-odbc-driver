@@ -185,7 +185,17 @@ ClientConfiguration IAMJwtPluginCredentialsProvider::BuildStsClientConfig()
 {
     RS_LOG_DEBUG("IAMCRD", "IAMJwtPluginCredentialsProvider::BuildStsClientConfig");
 
-    ClientConfiguration config;
+    // IMDS disabled. Region comes from the DSN, else the Redshift hostname
+    // (resolving a CNAME), else the SDK default (AWS_DEFAULT_REGION /
+    // AWS_REGION / AWS config file, else us-east-1).
+    ClientConfiguration config = IAMUtils::CreateClientConfiguration();
+
+    const rs_string region = IAMUtils::ResolveStsRegion(
+        m_config.GetRegion(), m_config.GetHost(), m_config.GetIsCname());
+    if (!region.empty())
+    {
+        config.region = region;
+    }
 
 #ifndef _WIN32
     // Added CA file to the config for verifying STS server certificate

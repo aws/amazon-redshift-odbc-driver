@@ -544,6 +544,16 @@ namespace IamSupport
         /// @param in_isServerless     IsServerless flag of the IAMConfiguration
         void SetIsServerless(bool in_isServerless);
 
+        /// @brief Returns the IsCname flag of the IAMConfiguration
+        ///
+        /// @return IsCname flag of the IAMConfiguration
+        bool GetIsCname() const;
+
+        /// @brief Sets the IsCname flag of the IAMConfiguration
+        ///
+        /// @param in_isCname     True if Host is a custom domain name (CNAME)
+        void SetIsCname(bool in_isCname);
+
         /// @brief Destructor.
         ~IAMConfiguration();
 
@@ -570,6 +580,9 @@ namespace IamSupport
 
         /* Flag to indicate serverless mode */
         bool m_isServerless = false;
+
+        /* Flag to indicate Host is a custom domain name (CNAME) */
+        bool m_isCname = false;
     };
 }
 }

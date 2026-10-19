@@ -306,7 +306,8 @@ Model::GetClusterCredentialsOutcome RsIamClient::SendClusterCredentialsRequest(
 {
     RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialRequest");
 
-    ClientConfiguration config;
+    // IMDS disabled; region is set explicitly from connection settings below.
+    ClientConfiguration config = IAMUtils::CreateClientConfiguration();
     
 
     /* infer awsRegion and ClusterId from host name if not provided in the connection string 
@@ -512,7 +513,8 @@ Model::GetClusterCredentialsWithIAMOutcome RsIamClient::SendClusterCredentialsWi
 {
 	RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendClusterCredentialsWithIAMRequest");
 
-	ClientConfiguration config;
+	// IMDS disabled; region is set explicitly from connection settings below.
+	ClientConfiguration config = IAMUtils::CreateClientConfiguration();
 
 
 	/* infer awsRegion and ClusterId from host name if not provided in the connection string
@@ -676,7 +678,8 @@ Aws::RedshiftServerless::Model::GetCredentialsOutcome RsIamClient::SendCredentia
 {
 	RS_LOG_DEBUG("IAMCLNT", "RsIamClient::SendCredentialsRequest");
 
-	ClientConfiguration config;
+	// IMDS disabled; region is set explicitly from connection settings below.
+	ClientConfiguration config = IAMUtils::CreateClientConfiguration();
 
 	/* infer awsRegion from host name if not provided in the connection string
 	e.g., default.518627716765.us-east-1.redshift-serverless.amazonaws.com,
@@ -1056,6 +1059,11 @@ IAMConfiguration RsIamClient::CreateIAMConfiguration(const rs_string& in_authTyp
 	config.SetAuthProfile(m_settings.m_authProfile);
 	config.SetStsConnectionTimeout(m_settings.m_stsConnectionTimeout * 1000);
 
+    /* Region, Host and IsCname resolve the STS client region for Profile and Plugin */
+    config.SetRegion(m_settings.m_awsRegion);
+    config.SetHost(m_settings.m_host);
+    config.SetIsCname(m_settings.m_isCname);
+
     /* Username and password for Profile and Plugin */
     config.SetUser(m_settings.m_username);
     config.SetPassword(m_settings.m_password);
@@ -1091,13 +1099,11 @@ IAMConfiguration RsIamClient::CreateIAMConfiguration(const rs_string& in_authTyp
         config.SetRoleSessionName(m_settings.m_role_session_name);
         config.SetIdpAuthToken(m_settings.m_idpAuthToken);
         config.SetIdpAuthTokenType(m_settings.m_idpAuthTokenType);
-        config.SetRegion(m_settings.m_awsRegion);
         config.SetIssuerUrl(m_settings.m_issuerUrl);
         config.SetIdcRegion(m_settings.m_idcRegion);
         config.SetIdcClientDisplayName(m_settings.m_idcClientDisplayName);
 
         /* Set cluster/workgroup resolution settings for IdpTokenAuthPlugin identity enhanced flow*/
-        config.SetHost(m_settings.m_host);
         config.SetClusterId(m_settings.m_clusterIdentifer);
         config.SetWorkgroup(m_settings.m_workGroup);
         config.SetIsServerless(m_settings.m_isServerless);
@@ -1142,7 +1148,8 @@ rs_string RsIamClient::ReadAuthProfile(rs_string auth_profile_name,
 									rs_string host,
 									rs_string region)
 {
-	ClientConfiguration config;
+	// IMDS disabled; region is set explicitly from connection settings below.
+	ClientConfiguration config = IAMUtils::CreateClientConfiguration();
 
 
 	/* infer awsRegion and ClusterId from host name if not provided in the connection string

@@ -31,6 +31,10 @@ namespace Redshift
             // @brief Builds the OIDC host URL with region validation
             std::string BuildOidcHostUrl(const std::string& idcRegion);
 
+        protected:
+            // @brief Build the IdC client configuration: region and HTTPS proxy
+            Aws::Client::ClientConfiguration BuildIdcClientConfig(const std::string& in_region);
+
         private:
             // @brief Client to call IdC functions
             std::shared_ptr<Aws::SSOOIDC::SSOOIDCClient> pIdcClient_;

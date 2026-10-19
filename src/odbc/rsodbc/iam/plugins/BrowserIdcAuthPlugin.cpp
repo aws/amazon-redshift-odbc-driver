@@ -225,7 +225,13 @@ std::string BrowserIdcAuthPlugin::GetIdcToken() {
 
 void BrowserIdcAuthPlugin::InitializeIdcClient(const std::string& in_region) {
     RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::InitializeIdcClient");
-    Aws::Client::ClientConfiguration client_config;
+    pIdcClient_ = std::make_shared<SSOOIDCClient>(BuildIdcClientConfig(in_region));
+}
+
+Aws::Client::ClientConfiguration BrowserIdcAuthPlugin::BuildIdcClientConfig(const std::string& in_region) {
+    RS_LOG_DEBUG("IAMIDC", "BrowserIdcAuthPlugin::BuildIdcClientConfig");
+    // IMDS disabled; region is set explicitly from the IdC region.
+    Aws::Client::ClientConfiguration client_config = IAMUtils::CreateClientConfiguration();
     client_config.region = in_region;
 
     // Configure proxy settings if available
@@ -242,7 +248,7 @@ void BrowserIdcAuthPlugin::InitializeIdcClient(const std::string& in_region) {
                      client_config.proxyHost.c_str(), client_config.proxyPort);
     }
 
-    pIdcClient_ = std::make_shared<SSOOIDCClient>(client_config);
+    return client_config;
 }
 
 RegisterClientResult BrowserIdcAuthPlugin:: GetRegisterClientResult() {

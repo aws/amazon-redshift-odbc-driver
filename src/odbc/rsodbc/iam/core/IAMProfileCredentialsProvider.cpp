@@ -248,14 +248,19 @@ IAMProfile IAMProfileCredentialsProvider::LoadProfile(const rs_string& in_profil
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-AWSCredentials IAMProfileCredentialsProvider::AssumeRole(
-    const rs_string& in_roleArn,
-	const rs_string& in_roleSessionName,
-    const std::shared_ptr<AWSCredentialsProvider>& in_credentialsProvider)
+ClientConfiguration IAMProfileCredentialsProvider::BuildStsClientConfig()
 {
-    RS_LOG_DEBUG("IAM", "IAMProfileCredentialsProvider::AssumeRole");
+    // IMDS disabled. Region comes from the DSN, else the Redshift hostname
+    // (resolving a CNAME), else the SDK default (AWS_DEFAULT_REGION /
+    // AWS_REGION / AWS config file, else us-east-1).
+    ClientConfiguration config = IAMUtils::CreateClientConfiguration();
 
-    ClientConfiguration config;
+    const rs_string region = IAMUtils::ResolveStsRegion(
+        m_config.GetRegion(), m_config.GetHost(), m_config.GetIsCname());
+    if (!region.empty())
+    {
+        config.region = region;
+    }
 
 #ifndef _WIN32
     // Added CA file to the config for verifying STS server certificate
@@ -284,9 +289,22 @@ AWSCredentials IAMProfileCredentialsProvider::AssumeRole(
 	config.requestTimeoutMs = m_config.GetStsConnectionTimeout();
 
     RS_LOG_DEBUG("IAM",
-                    "AssumeRole httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
-                    config.httpRequestTimeoutMs, config.connectTimeoutMs,
+                    "AssumeRole region: %s, httpRequestTimeoutMs: %ld, connectTimeoutMs: %ld, requestTimeoutMs: %ld",
+                    config.region.c_str(), config.httpRequestTimeoutMs, config.connectTimeoutMs,
                     config.requestTimeoutMs);
+
+    return config;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+AWSCredentials IAMProfileCredentialsProvider::AssumeRole(
+    const rs_string& in_roleArn,
+	const rs_string& in_roleSessionName,
+    const std::shared_ptr<AWSCredentialsProvider>& in_credentialsProvider)
+{
+    RS_LOG_DEBUG("IAM", "IAMProfileCredentialsProvider::AssumeRole");
+
+    ClientConfiguration config = BuildStsClientConfig();
 
         STSClient client(in_credentialsProvider, config);
         Model::AssumeRoleRequest request = Model::AssumeRoleRequest();

@@ -8,6 +8,7 @@
 
 #include <set>
 #include <aws/core/auth/AWSCredentialsProvider.h>
+#include <aws/core/client/ClientConfiguration.h>
 
 #include "../rs_iam_support.h"
 
@@ -95,6 +96,14 @@ namespace IamSupport
         
         /// @brief Destructor.
         ~IAMProfileCredentialsProvider();
+
+    protected:
+        /// @brief  Build the STS client configuration used by AssumeRole:
+        ///         region, CA file, HTTPS proxy, STS endpoint override and
+        ///         connection timeout.
+        ///
+        /// @return ClientConfiguration populated from the connection settings
+        Aws::Client::ClientConfiguration BuildStsClientConfig();
 
     private:
         // The connection log. (NOT OWN)

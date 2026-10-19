@@ -335,7 +335,8 @@ void IdpTokenAuthPlugin::ResolveClusterInfo() {
 Aws::Client::ClientConfiguration IdpTokenAuthPlugin::CreateClientConfiguration(const rs_string& region) const {
     RS_LOG_DEBUG("IAMIDP", "IdpTokenAuthPlugin::CreateClientConfiguration for region: %s", region.c_str());
     
-    Aws::Client::ClientConfiguration config;
+    // IMDS disabled; region is set explicitly from the resolved region below.
+    Aws::Client::ClientConfiguration config = IAMUtils::CreateClientConfiguration();
     
     // Set region from resolved region
     config.region = region;
