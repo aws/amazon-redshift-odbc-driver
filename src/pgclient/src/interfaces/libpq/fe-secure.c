@@ -270,6 +270,22 @@ pqsecure_open_client(PGconn *conn)
 			return PGRES_POLLING_FAILED;
 		}
 
+		/* Set SNI from the final endpoint host before starting TLS. */
+		if (pq_should_send_sni(conn->sslsni, conn->pghost))
+		{
+			if (SSL_set_tlsext_host_name(conn->ssl, conn->pghost) != 1)
+			{
+				char *err = SSLerrmessage();
+
+				printfPQExpBuffer(&conn->errorMessage,
+					libpq_gettext("could not set SSL Server Name Indication (SNI): %s\n"),
+					err);
+				SSLerrfree(err);
+				close_SSL(conn);
+				return PGRES_POLLING_FAILED;
+			}
+		}
+
 		/* Apply per-connection PQ group preference.
 		 * Failures are logged but do not abort the handshake -- the
 		 * connection proceeds with the library's built-in default groups. */

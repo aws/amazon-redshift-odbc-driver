@@ -3,8 +3,7 @@
  *
  * pq_tls_policy.h
  *
- * Helpers for the post-quantum key-exchange policy the driver enforces
- * on Redshift-endpoint connections.
+ * TLS handshake policy helpers used by the bundled libpq.
  *
  * Defined as static inline so they are unit-testable from a C++ gtest
  * translation unit without exposing new symbols from libpq.
@@ -37,6 +36,22 @@ pq_should_prefer_pq(const char *user_value)
         strcmp(user_value, "FALSE") == 0)
         return 0;
     return 1;
+}
+
+/**
+ * @brief Returns whether the ClientHello should carry SNI.
+ * @param user_value Value of the sslsni connection property.
+ * @param host Final database endpoint hostname.
+ * @return 1 when SNI should be sent, 0 otherwise.
+ */
+static inline int
+pq_should_send_sni(const char *user_value, const char *host)
+{
+    /* Keep IP-like targets out of SNI using upstream libpq's heuristic. */
+    return user_value != NULL && user_value[0] == '1' && host != NULL &&
+           host[0] != '\0' &&
+           !(strspn(host, "0123456789.") == strlen(host) ||
+             strchr(host, ':') != NULL);
 }
 
 /**

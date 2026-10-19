@@ -241,6 +241,9 @@ static const PQconninfoOption PQconninfoOptions[] = {
 	{"sslcrl", "PGSSLCRL", NULL, NULL,
 	"SSL-Revocation-List", "", 64},
 
+	{"sslsni", "PGSSLSNI", "1", NULL,
+	"SSL-SNI", "", 1},
+
 	{"requirepeer", "PGREQUIREPEER", NULL, NULL,
 	"Require-Peer", "", 10},
 
@@ -931,6 +934,8 @@ fillPGconn(PGconn *conn, PQconninfoOption *connOptions)
 	conn->ssldefaultrootcert = tmp ? strdup(tmp) : NULL;
 	tmp = conninfo_getval(connOptions, "sslcrl");
 	conn->sslcrl = tmp ? strdup(tmp) : NULL;
+	tmp = conninfo_getval(connOptions, "sslsni");
+	conn->sslsni = tmp ? strdup(tmp) : NULL;
 	tmp = conninfo_getval(connOptions, "min_tls");
 	conn->min_tls = tmp ? strdup(tmp) : NULL;
 	tmp = conninfo_getval(connOptions, "prefer_pq");
@@ -3480,6 +3485,8 @@ freePGconn(PGconn *conn)
 		free(conn->ssldefaultrootcert);
 	if (conn->sslcrl)
 		free(conn->sslcrl);
+	if (conn->sslsni)
+		free(conn->sslsni);
 	if (conn->compression)
 		free(conn->compression);
 	if (conn->requirepeer)

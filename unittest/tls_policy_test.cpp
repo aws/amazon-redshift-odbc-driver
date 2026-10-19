@@ -60,6 +60,48 @@ TEST(TlsPolicyPreferPQ, TypoIsTreatedAsOn) {
 }
 
 /*
+ * SNI policy -- enabled by default, with IP literals excluded
+ */
+
+TEST(TlsPolicySni, LeadingOneEnablesHostnameSni) {
+    EXPECT_EQ(1, pq_should_send_sni("1", "relay.example.com"));
+    EXPECT_EQ(1, pq_should_send_sni("10", "relay.example.com"));
+}
+
+TEST(TlsPolicySni, ValuesNotStartingWithOneDisableSni) {
+    EXPECT_EQ(0, pq_should_send_sni(nullptr, "relay.example.com"));
+    EXPECT_EQ(0, pq_should_send_sni("", "relay.example.com"));
+    EXPECT_EQ(0, pq_should_send_sni("0", "relay.example.com"));
+    EXPECT_EQ(0, pq_should_send_sni("false", "relay.example.com"));
+    EXPECT_EQ(0, pq_should_send_sni("invalid", "relay.example.com"));
+}
+
+TEST(TlsPolicySni, DigitAndDotOnlyHostsDoNotUseSni) {
+    EXPECT_EQ(0, pq_should_send_sni("1", "127.0.0.1"));
+    EXPECT_EQ(0, pq_should_send_sni("1", "255.255.255.255"));
+    EXPECT_EQ(0, pq_should_send_sni("1", "256.1.1.1"));
+    EXPECT_EQ(0, pq_should_send_sni("1", "1234"));
+}
+
+TEST(TlsPolicySni, Ipv6LiteralDoesNotUseSni) {
+    EXPECT_EQ(0, pq_should_send_sni("1", "2001:db8::1"));
+    EXPECT_EQ(0, pq_should_send_sni("1", "::1"));
+}
+
+TEST(TlsPolicySni, BracketedIpv6DoesNotUseSni) {
+    EXPECT_EQ(0, pq_should_send_sni("1", "[2001:db8::1]"));
+}
+
+TEST(TlsPolicySni, DigitLeadingHostnameUsesSni) {
+    EXPECT_EQ(1, pq_should_send_sni("1", "123.relay.example.com"));
+}
+
+TEST(TlsPolicySni, MissingHostDoesNotUseSni) {
+    EXPECT_EQ(0, pq_should_send_sni("1", nullptr));
+    EXPECT_EQ(0, pq_should_send_sni("1", ""));
+}
+
+/*
  * pq_resolve_min_tls -- min_tls property mapping + fail-secure default
  */
 

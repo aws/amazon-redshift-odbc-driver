@@ -329,6 +329,7 @@ struct pg_conn
 	char	   *sslcert;		/* client certificate filename */
 	char	   *sslrootcert;	/* root certificate filename */
 	char	   *sslcrl;			/* certificate revocation list filename */
+	char	   *sslsni;			/* send SNI in the TLS ClientHello */
 	char	   *requirepeer;	/* required peer credentials for local sockets */
 	char     *ssldefaultrootcert; /* default root certificate filename */
 
