@@ -117,7 +117,6 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
     char szCscThreshold[MAX_NUMBER_BUF_LEN];
     char szSslMode[MAX_IDEN_LEN];
     char szSslRootCert[MAX_PATH + 1];
-    char szlibpqConnectionTraceFile[MAX_PATH + 1];
     char szStreamingCursorRows[MAX_NUMBER_BUF_LEN];
     char szSslDefaultCertPath [MAX_PATH + 1];
 	char szClientProtocolVersion[MAX_NUMBER_BUF_LEN];
@@ -472,7 +471,6 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 			ppValues[iCount++] = pConnAttr->szCompression;
 		}
 
-		// This should be last parameter
         if (IS_TRACE_LEVEL_DEBUG())
         {
             RS_LOG_DEBUG("RSLIBPQ",
@@ -493,21 +491,6 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
             }
         }
 
-		szlibpqConnectionTraceFile[0] = '\0';
-		if(IS_TRACE_LEVEL_MSG_PROTOCOL())
-		{
-			char *pTraceFileName = getTraceFileName();
-			if(pTraceFileName != NULL && pTraceFileName[0] != '\0')
-			{
-				snprintf(szlibpqConnectionTraceFile,sizeof(szlibpqConnectionTraceFile),"%s.1",pTraceFileName);
-
-				// Enable tracing during connection. Keep this parameter last, so we can remove it in PQconnectdbParams.
-				ppKeywords[iCount] = "libpqConnectionTracingFile";
-				ppValues[iCount++] = szlibpqConnectionTraceFile;
-			}
-		}
-
-
         // Last terminated as NULL
         ppKeywords[iCount] = NULL; 
 
@@ -525,7 +508,6 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
             pConn->pgConn = pgConn;
 
             // Enable libpq tracing
-            // libpqTrace(pConn); // Deprecated infavor of rslog
 
             pError = libpqErrorMsg(pConn);
 
@@ -2123,20 +2105,6 @@ void libpqReleasePrepare(RS_PREPARE_INFO *pPrepare)
     // Release col info
     releaseResult(pPrepare->pResultForDescribeCol, FALSE, NULL);
     pPrepare->pResultForDescribeCol = NULL;
-}
-
-/*====================================================================================================================================================*/
-
-//---------------------------------------------------------------------------------------------------------igarish
-// Trace libpq calls.
-// Deprecated infavor of rslog
-void libpqTrace(RS_CONN_INFO *pConn)
-{
-    return;
-    if(IS_TRACE_LEVEL_MSG_PROTOCOL())
-    {
-        PQtrace(pConn->pgConn, NULL);
-    }
 }
 
 /*====================================================================================================================================================*/

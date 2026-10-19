@@ -1,4 +1,7 @@
 
+// Include first: winsock2.h must precede windows.h on Windows.
+#include "fake_redshift_endpoint.hpp"
+
 #include "common.h"
 #include <rslog.h>
 #include <atomic>
@@ -476,6 +479,21 @@ TEST(RSLOG_TEST_SUITE, concurrent_reinit_and_log_is_stable) {
     // Surviving the churn is not enough: logging must still deliver lines.
     EXPECT_TRUE(writeMarkerToLog(log.file, "MARKER_AFTER_CONCURRENT_REINIT"))
         << "logging stopped working after concurrent re-init: " << log.file;
+}
+
+TEST(TraceLogging, trace_connect_logs_without_secondary_file) {
+    rsfake::FakeEndpoint endpoint("matching");
+    ASSERT_TRUE(endpoint.started())
+        << "the fake endpoint did not start: " << endpoint.startupOutput();
+
+    rsfake::Attempt attempt =
+        rsfake::connectTo(rsfake::DIRECT_DRIVER_CLAUSE, "localhost", endpoint,
+                          ";SSLMode=verify-full");
+
+    ASSERT_TRUE(SQL_SUCCEEDED(attempt.rc)) << attempt.diagnostics;
+    EXPECT_TRUE(rsfake::hasConnectReturn(attempt.logText));
+    EXPECT_FALSE(attempt.secondaryLogCreated);
+    EXPECT_TRUE(attempt.logCleanupSucceeded);
 }
 
 // Regression tests for the format-string fix in the trace logging

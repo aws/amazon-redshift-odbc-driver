@@ -2026,7 +2026,6 @@ void *
 libpqPrepareThreadProc(void *pArg);
 
 void libpqReleasePrepare(RS_PREPARE_INFO *pPrepare);
-void libpqTrace(RS_CONN_INFO *pConn); // Deprecated
 SQLRETURN libpqDescribeParams(RS_STMT_INFO *pStmt, RS_PREPARE_INFO *pPrepare, PGresult *pgResult);
 SQLRETURN libpqClosePreparedStatement(RS_STMT_INFO *pStmt,
                                       int iLockRequired,

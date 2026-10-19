@@ -756,31 +756,6 @@ connectStartParamsWithSslPolicy(const char **keywords,
 {
 	PGconn	   *conn;
 	PQconninfoOption *connOptions;
-	FILE *fp = NULL;
-
-	if(keywords != NULL && values != NULL)
-	{
-		int  i = 0;
-
-		while(keywords[i] != NULL)
-			i++;
-
-		// Check last parameter
-		if(i != 0)
-		{
-			if(strcmp(keywords[i - 1],"libpqConnectionTracingFile") == 0)
-			{
-				if(values[i - 1] != NULL)
-				{
-					if(strcmp(values[i - 1],"stdout") == 0)
-						fp = stdout;
-					else
-						fp = fopen(values[i - 1], "w+");
-				}
-				keywords[i - 1] = NULL; // Mark it as last parameter
-			}
-		}
-	}
 
 	/*
 	 * Allocate memory for the conn structure
@@ -788,9 +763,6 @@ connectStartParamsWithSslPolicy(const char **keywords,
 	conn = makeEmptyPGconn();
 	if (conn == NULL)
 		return NULL;
-
-	if(fp != NULL)
-		PQtrace(conn,NULL);
 
 	/*
 	 * Parse the conninfo arrays

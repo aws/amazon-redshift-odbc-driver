@@ -49,7 +49,6 @@ namespace AwsLogging = Aws::Utils::Logging;
 void createTraceFile();
 void closeTraceFile();
 FILE *getTraceFileHandle();
-char *getTraceFileName();
 
 /*
 This class implements ODBC API call logging.

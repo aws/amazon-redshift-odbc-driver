@@ -5,7 +5,7 @@
 *-------------------------------------------------------------------------
 */
 
-// In-process fake Redshift endpoint for the hostname-mismatch tests in tls_policy_test.cpp.
+// In-process fake Redshift endpoint for TLS and logging regression tests.
 // Certificates are minted with the OpenSSL the driver already links, so no external tools.
 
 #ifndef __FAKE_REDSHIFT_ENDPOINT_H__
@@ -25,6 +25,8 @@
 #include <sql.h>
 #include <sqlext.h>
 #include <sqlucode.h>
+
+#include <rslog.h>
 
 #include <openssl/err.h>
 #include <openssl/pem.h>
@@ -102,8 +104,7 @@ const char *const DIRECT_DRIVER_CLAUSE = "Driver=Amazon Redshift ODBC Driver;";
 const char *const GOOD_NAME = "localhost";
 const char *const WRONG_NAME = "attacker.example";
 
-// Fixed name, so the log can be read without listing the directory. The ".1"
-// sibling is libpq's connection trace, written at LogLevel 4 and above.
+// Fixed name, so the log can be read without listing the directory.
 const char *const DRIVER_LOG_NAME = "redshift_odbc.log";
 
 /**
@@ -174,14 +175,18 @@ inline std::string readFileIfPresent(const std::string &path)
 }
 
 /**
- * @brief Reads libpq's connection trace followed by the driver log.
+ * @brief Reads the driver log.
  * @param dir The LogPath directory.
- * @return Both files' contents; a missing file reads as "".
+ * @return The file contents, or an empty string when the file is absent.
  */
 inline std::string readDriverLog(const std::string &dir)
 {
-    return readFileIfPresent(dir + "/" + DRIVER_LOG_NAME + ".1") +
-           readFileIfPresent(dir + "/" + DRIVER_LOG_NAME);
+    return readFileIfPresent(dir + "/" + DRIVER_LOG_NAME);
+}
+
+inline std::string secondaryDriverLogPath(const std::string &dir)
+{
+    return dir + "/" + DRIVER_LOG_NAME + ".1";
 }
 
 /**
@@ -215,14 +220,28 @@ inline std::string readDriverLogWhenComplete(const std::string &dir)
 }
 
 /**
- * @brief Deletes the driver log, the libpq trace and their directory.
- * @param dir The LogPath directory.
+ * @brief Deletes a file when it exists.
+ * @param path File path.
+ * @return true when the file is absent after the call.
  */
-inline void removeDriverLog(const std::string &dir)
-{
-    RS_UNLINK((dir + "/" + DRIVER_LOG_NAME).c_str());
-    RS_UNLINK((dir + "/" + DRIVER_LOG_NAME + ".1").c_str());
-    RS_RMDIR(dir.c_str());
+inline bool removeFileIfPresent(const std::string &path) {
+    errno = 0;
+    return RS_UNLINK(path.c_str()) == 0 || errno == ENOENT;
+}
+
+/**
+ * @brief Deletes the primary and legacy secondary logs, then their directory.
+ * @param dir The LogPath directory.
+ * @return true when the files and directory are absent after the call.
+ */
+inline bool removeDriverLog(const std::string &dir) {
+    bool removed = removeFileIfPresent(dir + "/" + DRIVER_LOG_NAME);
+    removed = removeFileIfPresent(secondaryDriverLogPath(dir)) && removed;
+    errno = 0;
+    if (RS_RMDIR(dir.c_str()) != 0 && errno != ENOENT) {
+        removed = false;
+    }
+    return removed;
 }
 
 /**
@@ -838,6 +857,8 @@ struct Attempt
     std::string stderrText;
     std::string captureError; // set if the stderr redirect failed
     std::string logText;
+    bool secondaryLogCreated = false;
+    bool logCleanupSucceeded = true;
     // Callers may reconnect from this, so it must carry the SSL mode to stay as strict.
     std::string outConnStr;
     // Only queried when the connect succeeded.
@@ -941,7 +962,8 @@ inline Attempt connectTo(const std::string &driverClause, const std::string &hos
     if (!logDir.empty())
     {
         attempt.logText = readDriverLogWhenComplete(logDir);
-        removeDriverLog(logDir);
+        attempt.secondaryLogCreated =
+            std::ifstream(secondaryDriverLogPath(logDir)).good();
     }
 
     if (SQL_SUCCEEDED(attempt.rc))
@@ -953,6 +975,11 @@ inline Attempt connectTo(const std::string &driverClause, const std::string &hos
     SQLDisconnect(dbc);
     SQLFreeHandle(SQL_HANDLE_DBC, dbc);
     SQLFreeHandle(SQL_HANDLE_ENV, env);
+    if (!logDir.empty())
+    {
+        shutdownLogging();
+        attempt.logCleanupSucceeded = removeDriverLog(logDir);
+    }
     return attempt;
 }
 
