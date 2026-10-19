@@ -12864,7 +12864,7 @@ void makeItReadyForNewQueryExecution(RS_STMT_INFO *pStmt, int executePrepared, i
     if(!executePrepared)
     {
         // Release prepared stmt in the server
-        libpqExecuteDeallocateCommand(pStmt, TRUE, FALSE);
+        libpqClosePreparedStatement(pStmt, TRUE, FALSE);
 
         // Release prepare stmt related resources
         releasePrepares(pStmt);
@@ -16122,7 +16122,7 @@ SQLRETURN rePrepareMultiInsertCommand(RS_STMT_INFO *pStmt, char *pszCmd)
     SQLRETURN rc;
 
     // Release prepared stmt in the server
-    rc = libpqExecuteDeallocateCommand(pStmt, FALSE, FALSE);
+    rc = libpqClosePreparedStatement(pStmt, FALSE, FALSE);
     if(rc == SQL_SUCCESS)
     {
         rc = libpqPrepareOnThreadWithoutStoringResults(pStmt, pszCmd);

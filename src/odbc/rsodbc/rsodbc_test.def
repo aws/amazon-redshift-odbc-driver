@@ -411,6 +411,7 @@ EXPORTS
 	PQsendExecutePortal
 	PQsendClosePortal
 	PQsendCloseStatement
+	libpqClosePreparedStatement
 	PQresultStatus
 	PQresStatus
 	; Execution path helpers

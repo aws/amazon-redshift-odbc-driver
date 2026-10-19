@@ -118,17 +118,10 @@
 #define BEGIN_CMD        "BEGIN"
 #define COMMIT_CMD        "COMMIT"
 #define ROLLBACK_CMD    "ROLLBACK"
-#define DEALLOCATE_CMD  "DEALLOCATE" 
 #define CURSOR_FETCH_ALL_CMD "FETCH ALL FROM \"%s\";"
 
-#ifdef WIN32
 #define IMPLICIT_CURSOR_NAME_PREFIX "SQL_CUR"
 #define IMPLICIT_CURSOR_NAME_PREFIX2 "SQLCUR"
-#endif
-#if defined LINUX 
-#define IMPLICIT_CURSOR_NAME_PREFIX "sql_cur"
-#define IMPLICIT_CURSOR_NAME_PREFIX2 "sqlcur"
-#endif
 
 #define RS_TEXT_FORMAT     0
 #define RS_BINARY_FORMAT   1
@@ -1965,7 +1958,9 @@ libpqPrepareThreadProc(void *pArg);
 void libpqReleasePrepare(RS_PREPARE_INFO *pPrepare);
 void libpqTrace(RS_CONN_INFO *pConn); // Deprecated
 SQLRETURN libpqDescribeParams(RS_STMT_INFO *pStmt, RS_PREPARE_INFO *pPrepare, PGresult *pgResult);
-SQLRETURN libpqExecuteDeallocateCommand(RS_STMT_INFO *pStmt, int iLockRequired, int calledFromDrop);
+SQLRETURN libpqClosePreparedStatement(RS_STMT_INFO *pStmt,
+                                      int iLockRequired,
+                                      int calledFromDrop);
 void initLibpq(FILE    *fpTrace);
 void uninitLibpq();
 

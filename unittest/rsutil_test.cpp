@@ -7,6 +7,32 @@
 #include <climits>
 #include <iomanip>
 
+TEST(ImplicitCursorNamePrefixTest, UsesUppercasePrefixOnAllPlatforms) {
+    EXPECT_STREQ(IMPLICIT_CURSOR_NAME_PREFIX, "SQL_CUR");
+    EXPECT_STREQ(IMPLICIT_CURSOR_NAME_PREFIX2, "SQLCUR");
+}
+
+TEST(LibpqClosePreparedStatementTest, SendFailureReturnsError) {
+    RS_ENV_INFO envInfo{};
+    RS_CONN_INFO conn(&envInfo);
+    RS_STMT_INFO stmt(&conn);
+    RS_PREPARE_INFO prepare(&stmt, nullptr);
+
+    conn.pgConn = PQconnectStart("");
+    ASSERT_NE(conn.pgConn, nullptr);
+    stmt.pPrepareHead = &prepare;
+    strcpy(stmt.szCursorName, IMPLICIT_CURSOR_NAME_PREFIX);
+
+    EXPECT_EQ(libpqClosePreparedStatement(&stmt, FALSE, FALSE), SQL_ERROR);
+    ASSERT_NE(stmt.pErrorList, nullptr);
+    EXPECT_STREQ(stmt.pErrorList->szSqlState, "HY000");
+
+    stmt.pPrepareHead = nullptr;
+    stmt.pErrorList = clearErrorList(stmt.pErrorList);
+    PQfinish(conn.pgConn);
+    conn.pgConn = nullptr;
+}
+
 // Test printHexSQLCHAR and printHexSQLWCHR
 class PrintHexSQLCharAndWCharTest : public ::testing::Test {
   protected:

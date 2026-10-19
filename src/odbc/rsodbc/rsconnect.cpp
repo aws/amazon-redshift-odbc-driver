@@ -2013,7 +2013,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFreeStmt(SQLHSTMT phstmt,
             waitAndFreeExecThread(pStmt, (iInternalFlag) ? FALSE : TRUE);
 
             // Release prepared stmt in the server
-            libpqExecuteDeallocateCommand(pStmt, TRUE, TRUE);
+            libpqClosePreparedStatement(pStmt, TRUE, TRUE);
 
             // Release prepare stmt related resources
             releasePrepares(pStmt);

@@ -125,6 +125,11 @@ TEST_F(PortalAPITest, Close_BadConnection_ReturnsZero) {
     EXPECT_EQ(result, 0);
 }
 
+TEST_F(PortalAPITest, CloseStatement_BadConnection_ReturnsZero) {
+    int result = PQsendCloseStatement(conn, "stmt");
+    EXPECT_EQ(result, 0);
+}
+
 // ============================================================================
 // Protocol Version Rejection Tests
 // Forces CONNECTION_OK with pversion < 3 to test the protocol guard.

@@ -2492,18 +2492,21 @@ static void getResultDescription(PGresult *pgResult, RS_RESULT_INFO *pResult, in
 
 /*====================================================================================================================================================*/
 
-//---------------------------------------------------------------------------------------------------------igarish
-// Release prepared statement on server.
-//
-// DEALLOCATE stmt_name
-SQLRETURN libpqExecuteDeallocateCommand(RS_STMT_INFO *pStmt, int iLockRequired, int calledFromDrop)
+/**
+ * @brief Close the prepared statement on the server.
+ * @param pStmt Statement that owns the prepared statement.
+ * @param iLockRequired Whether to acquire the connection semaphore.
+ * @param calledFromDrop Whether cleanup was requested while dropping the handle.
+ * @return SQL_SUCCESS when the close completes, otherwise SQL_ERROR.
+ */
+SQLRETURN libpqClosePreparedStatement(RS_STMT_INFO *pStmt, int iLockRequired,
+                                      int calledFromDrop)
 {
     int fail = FALSE;
     RS_CONN_INFO *pConn = pStmt->phdbc;
 
     if(pStmt->pPrepareHead && (calledFromDrop || pStmt->iStatus != RS_CANCEL_STMT))
     {
-        char szCmd[SHORT_CMD_LEN + 1];
         PGresult *pgResult;
 
         if(iLockRequired)
@@ -2515,25 +2518,35 @@ SQLRETURN libpqExecuteDeallocateCommand(RS_STMT_INFO *pStmt, int iLockRequired, 
             pgWaitForCscThreadToFinish(pConn->pgConn, FALSE);
         }
 
-		// We have to release any result of streaming cursor before executing internal command
-		checkAndSkipAllResultsOfStreamingCursor(pStmt);
+        // Release any streaming results before sending the close message.
+        checkAndSkipAllResultsOfStreamingCursor(pStmt);
 
-        snprintf(szCmd,sizeof(szCmd),"%s %s", DEALLOCATE_CMD, pStmt->szCursorName);
-        
-        pgResult = PQexec(pConn->pgConn, szCmd);
+        // Drain pending results so the connection is idle before sending Close.
+        while((pgResult = PQgetResult(pConn->pgConn)) != NULL)
+            PQclear(pgResult);
 
-        if(PQresultStatus(pgResult) != PGRES_COMMAND_OK)
+        if(PQsendCloseStatement(pConn->pgConn, pStmt->szCursorName))
         {
-            char *pError = libpqErrorMsg(pConn);
-
-            fail = (pError && *pError != '\0'); 
-
-            if(fail)
-                addError(&pStmt->pErrorList,"HY000", pError, 0, pConn);
+            while((pgResult = PQgetResult(pConn->pgConn)) != NULL)
+            {
+                if(PQresultStatus(pgResult) != PGRES_COMMAND_OK)
+                    fail = TRUE;
+        
+                PQclear(pgResult);
+            }
+        }
+        else
+        {
+            fail = TRUE;
         }
 
-        PQclear(pgResult);
-        pgResult = NULL;
+        if(fail)
+        {
+            char *pError = libpqErrorMsg(pConn);
+            addError(&pStmt->pErrorList, "HY000",
+                     (pError && *pError != '\0') ? pError :
+                     (char *)"Failed to close prepared statement", 0, pConn);
+        }
 
         if(iLockRequired)
         {
