@@ -14,6 +14,8 @@
 
 #include <string.h>
 
+#include "libpq-fe.h"
+
 /**
  * @brief Returns whether the driver should advertise post-quantum hybrid
  *        key-exchange groups in the TLS 1.3 ClientHello.
@@ -108,5 +110,37 @@ pq_resolve_min_tls(const char *user_value)
 
 #define PQ_CLASSICAL_GROUPS_LIST \
     "X25519:P-256:P-384"
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+/**
+ * @brief Whether a certificate that does not name the host is allowed with a warning.
+ *        Kept out of libpq-fe.h so only the driver, not an application, can ask for it.
+ */
+typedef enum
+{
+    PQ_SSL_MISMATCH_STRICT = 0,
+    PQ_SSL_MISMATCH_ALLOW_TEMPORARILY
+} PQSslMismatchPolicy;
+
+/**
+ * @brief PQconnectdbParams with a host-name mismatch policy. Every other entry
+ *        point gets PQ_SSL_MISMATCH_STRICT, since makeEmptyPGconn zeroes the struct.
+ * @param keywords NULL-terminated connection option names.
+ * @param values Values for keywords.
+ * @param expand_dbname Nonzero to expand dbname as a connection string.
+ * @param policy What to do when the certificate does not name the host.
+ * @return The connection, as PQconnectdbParams returns it.
+ */
+extern PGconn *pqConnectdbParamsWithSslPolicy(const char **keywords,
+                                              const char **values, int expand_dbname,
+                                              PQSslMismatchPolicy policy);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* PQ_TLS_POLICY_H */

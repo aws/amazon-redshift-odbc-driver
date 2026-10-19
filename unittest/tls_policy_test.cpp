@@ -8,7 +8,11 @@
  * the post-quantum key exchange groups the driver advertises.
  */
 
+// Include first: it pulls in winsock2.h, which must precede windows.h on Windows.
+#include "fake_redshift_endpoint.hpp"
+
 #include "common.h"
+#include "rsutil.h"
 
 extern "C" {
 #include "pq_tls_policy.h"
@@ -211,4 +215,222 @@ TEST(TlsPolicyCrypto, SslRejectsInvalidGroupName) {
 
     SSL_free(ssl);
     SSL_CTX_free(ctx);
+}
+
+/*====================================================================================================================================================*/
+
+// No mode named: the mismatch is logged and the connection still goes through.
+TEST(SslModeHostnameMismatch, defaulted_mode_warns_about_a_wrong_name)
+{
+    rsfake::FakeEndpoint endpoint("mismatched");
+    ASSERT_TRUE(endpoint.started())
+        << "the fake endpoint did not start: " << endpoint.startupOutput();
+
+    rsfake::Attempt attempt = rsfake::connectTo(
+        rsfake::DIRECT_DRIVER_CLAUSE, "127.0.0.1", endpoint, "");
+
+    EXPECT_NE(attempt.logText.find(rsfake::TOLERATED_WARNING), std::string::npos)
+        << "A defaulted mode must record the mismatch in the driver log. log was:\n"
+        << attempt.logText;
+    EXPECT_EQ(attempt.diagnostics.find(rsfake::REJECTED_ERROR), std::string::npos)
+        << "A defaulted mode must not reject the name outright. diagnostics were:\n"
+        << attempt.diagnostics;
+
+    // The warning goes to the log only; the application's user sees nothing.
+    ASSERT_TRUE(attempt.captureError.empty())
+        << "could not capture stderr: " << attempt.captureError;
+    EXPECT_EQ(attempt.stderrText.find(rsfake::TOLERATED_WARNING), std::string::npos)
+        << "The mismatch must not reach stderr. stderr was:\n"
+        << attempt.stderrText;
+    EXPECT_EQ(attempt.rc, SQL_SUCCESS)
+        << "A tolerated mismatch must connect plainly, with nothing for the "
+        << "application to surface. diagnostics were:\n"
+        << attempt.diagnostics;
+    EXPECT_EQ(attempt.connectionDead, SQL_CD_FALSE)
+        << "The connection must still be usable";
+    // Release 1 still sends the password after a tolerated mismatch, by design.
+    EXPECT_TRUE(endpoint.passwordReceived())
+        << "A tolerated mismatch completes the login, so the password must reach the server";
+}
+
+/*====================================================================================================================================================*/
+
+// A caller who named the mode gets no allowance: the same certificate fails.
+TEST(SslModeHostnameMismatch, explicit_verify_full_rejects_a_wrong_name)
+{
+    rsfake::FakeEndpoint endpoint("mismatched");
+    ASSERT_TRUE(endpoint.started())
+        << "the fake endpoint did not start: " << endpoint.startupOutput();
+
+    rsfake::Attempt attempt = rsfake::connectTo(
+        rsfake::DIRECT_DRIVER_CLAUSE, "127.0.0.1", endpoint, ";sslmode=verify-full");
+
+    EXPECT_FALSE(endpoint.passwordReceived())
+        << "The password must not be sent to a server whose certificate names another host";
+    ASSERT_TRUE(attempt.captureError.empty())
+        << "could not capture stderr: " << attempt.captureError;
+    EXPECT_FALSE(SQL_SUCCEEDED(attempt.rc))
+        << "An explicit verify-full must reject a certificate naming another host. "
+        << "diagnostics were:\n"
+        << attempt.diagnostics;
+    EXPECT_NE(attempt.diagnostics.find(rsfake::REJECTED_ERROR), std::string::npos)
+        << "The failure must name the mismatch. diagnostics were:\n"
+        << attempt.diagnostics;
+    ASSERT_TRUE(rsfake::hasConnectReturn(attempt.logText))
+        << "the driver log was not captured, so the warning check would prove nothing";
+    EXPECT_EQ(attempt.logText.find(rsfake::TOLERATED_WARNING), std::string::npos)
+        << "A caller who chose the mode must not get the transitional warning. "
+        << "log was:\n"
+        << attempt.logText;
+}
+
+/*====================================================================================================================================================*/
+
+// EncryptionMethod=2 also names verify-full and must be just as strict.
+TEST(SslModeHostnameMismatch, explicit_encryption_method_rejects_a_wrong_name)
+{
+    rsfake::FakeEndpoint endpoint("mismatched");
+    ASSERT_TRUE(endpoint.started())
+        << "the fake endpoint did not start: " << endpoint.startupOutput();
+
+    rsfake::Attempt attempt = rsfake::connectTo(
+        rsfake::DIRECT_DRIVER_CLAUSE, "127.0.0.1", endpoint, ";EncryptionMethod=2");
+
+    EXPECT_FALSE(endpoint.passwordReceived())
+        << "The password must not be sent to a server whose certificate names another host";
+    EXPECT_FALSE(SQL_SUCCEEDED(attempt.rc))
+        << "EncryptionMethod=2 names verify-full, so a certificate for another host "
+        << "must be rejected. diagnostics were:\n"
+        << attempt.diagnostics;
+    EXPECT_NE(attempt.diagnostics.find(rsfake::REJECTED_ERROR), std::string::npos)
+        << "The failure must name the mismatch. diagnostics were:\n"
+        << attempt.diagnostics;
+    ASSERT_TRUE(rsfake::hasConnectReturn(attempt.logText))
+        << "the driver log was not captured, so the warning check would prove nothing";
+    EXPECT_EQ(attempt.logText.find(rsfake::TOLERATED_WARNING), std::string::npos)
+        << "A caller who chose the mode must not get the transitional warning. "
+        << "log was:\n"
+        << attempt.logText;
+}
+
+/*====================================================================================================================================================*/
+
+// The allowance skips the name check only. No mode is named, and the leaf is
+// signed by a CA the driver is never given.
+TEST(SslModeHostnameMismatch, the_allowance_never_relaxes_chain_validation)
+{
+    rsfake::FakeEndpoint endpoint("untrusted");
+    ASSERT_TRUE(endpoint.started())
+        << "the fake endpoint did not start: " << endpoint.startupOutput();
+
+    rsfake::Attempt attempt = rsfake::connectTo(
+        rsfake::DIRECT_DRIVER_CLAUSE, "127.0.0.1", endpoint, "");
+
+    EXPECT_FALSE(SQL_SUCCEEDED(attempt.rc))
+        << "A chain that does not validate must fail even when the mode was "
+        << "defaulted. diagnostics were:\n"
+        << attempt.diagnostics;
+    // Any failure would satisfy the check above, so require the chain's.
+    EXPECT_NE(attempt.diagnostics.find(rsfake::CHAIN_REJECTED_ERROR), std::string::npos)
+        << "The connection must fail on the certificate chain. diagnostics were:\n"
+        << attempt.diagnostics;
+    EXPECT_FALSE(endpoint.passwordReceived())
+        << "The password must not be sent to a server whose chain does not validate";
+    EXPECT_EQ(attempt.logText.find(rsfake::TOLERATED_WARNING), std::string::npos)
+        << "A chain failure is not a name mismatch and must not be recorded as a "
+        << "tolerated one. log was:\n"
+        << attempt.logText;
+}
+
+/*====================================================================================================================================================*/
+
+namespace {
+
+/**
+ * @brief Connects with sslmode=verify-full to an endpoint whose certificate names
+ *        the host, and checks the completed connection string still names the mode.
+ * @param entryPoint ANSI or wide SQLDriverConnect.
+ * @param entryPointName Name of the entry point, for failure messages.
+ */
+void expectCompletedStringCarriesMode(rsfake::EntryPoint entryPoint,
+                                      const char *entryPointName)
+{
+    rsfake::FakeEndpoint endpoint("matching");
+    ASSERT_TRUE(endpoint.started())
+        << "the fake endpoint did not start: " << endpoint.startupOutput();
+
+    rsfake::Attempt attempt =
+        rsfake::connectTo(rsfake::DIRECT_DRIVER_CLAUSE, "localhost", endpoint,
+                          ";sslmode=verify-full", entryPoint);
+
+    ASSERT_TRUE(SQL_SUCCEEDED(attempt.rc))
+        << entryPointName << ": a certificate that does name the host must be "
+        << "accepted under verify-full. diagnostics were:\n"
+        << attempt.diagnostics;
+
+    // Without the mode, reconnecting from this string would quietly get the allowance.
+    EXPECT_NE(attempt.outConnStr.find("SSLMode=verify-full"), std::string::npos)
+        << entryPointName << ": the completed string must carry the mode the "
+        << "caller named, or reconnecting from it is weaker than the original "
+        << "connection. it was:\n"
+        << attempt.outConnStr;
+}
+
+}  // namespace
+
+// ANSI and wide entry points build the output string separately, so test both.
+TEST(SslModeRoundTrip, ansi_completed_string_carries_an_explicit_mode)
+{
+    // If the driver manager maps ANSI onto wide, the wide test covers it.
+    if (rsfake::ansiEntryPointIsRemapped())
+    {
+        GTEST_SKIP() << "this driver manager maps SQLDriverConnect onto its wide "
+                        "form, so the wide case covers this platform";
+    }
+
+    expectCompletedStringCarriesMode(rsfake::ENTRY_POINT_ANSI, "ANSI");
+}
+
+/*====================================================================================================================================================*/
+
+TEST(SslModeRoundTrip, wide_completed_string_carries_an_explicit_mode)
+{
+    expectCompletedStringCarriesMode(rsfake::ENTRY_POINT_WIDE, "wide");
+}
+
+/*====================================================================================================================================================*/
+
+// Writing the default into the string would take the allowance from callers
+// who never named a mode.
+TEST(SslModeRoundTrip, completed_string_does_not_pin_a_defaulted_mode)
+{
+    rsfake::FakeEndpoint endpoint("matching");
+    ASSERT_TRUE(endpoint.started())
+        << "the fake endpoint did not start: " << endpoint.startupOutput();
+
+    rsfake::Attempt attempt = rsfake::connectTo(rsfake::DIRECT_DRIVER_CLAUSE,
+                                                "localhost", endpoint, "");
+
+    ASSERT_TRUE(SQL_SUCCEEDED(attempt.rc))
+        << "a defaulted mode must still connect to a matching certificate. "
+        << "diagnostics were:\n"
+        << attempt.diagnostics;
+    EXPECT_EQ(attempt.outConnStr.find("SSLMode="), std::string::npos)
+        << "a caller who named no mode must not have one written into their "
+        << "completed string. it was:\n"
+        << attempt.outConnStr;
+}
+
+/*====================================================================================================================================================*/
+
+// connStrValue must survive the driver's parser: ';' stays inside, '}' is doubled.
+TEST(SslModeHostnameMismatch, conn_str_value_round_trips_through_the_parser)
+{
+    for (const std::string value : {"C:\\Temp\\a;b", "C:\\Users\\A}B\\Temp", "/tmp/x;y}z}"})
+    {
+        StringMap parsed = parseConnectionString(
+            "Driver=x;CaFile=" + rsfake::connStrValue(value) + ";LogLevel=6");
+        EXPECT_EQ(parsed["CaFile"], value) << "value did not round-trip";
+        EXPECT_EQ(parsed["LogLevel"], "6") << "the value leaked into the next attribute";
+    }
 }

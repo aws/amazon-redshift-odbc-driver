@@ -7,6 +7,8 @@
 */
 
 #include "rsodbc.h"
+/* Driver-private SSL mismatch policy, not a public libpq option. */
+#include "pq_tls_policy.h"
 #include "rsutil.h"
 #include "rsunicode.h"
 #include "rstrace.h"
@@ -18,6 +20,8 @@
 #include <aws/core/utils/StringUtils.h>
 #include<algorithm>
 
+#include <cerrno>
+#include <climits>
 #include <cstdio>
 #include <iostream>
 #include <map>
@@ -881,6 +885,30 @@ SQLRETURN SQL_API RS_CONN_INFO::RS_SQLDriverConnect(SQLHDBC            phdbc,
 
             actualOutputLen += strlen(pKeyword);
             actualOutputLen += strlen(pConnectProps->szPort);
+            actualOutputLen += strlen(";");
+        }
+
+        // A reconnect with this string must resolve the same way: a named or strict
+        // mode is echoed, a blank SSLMode= is kept so it still masks the DSN.
+        const char *pEchoSslMode = NULL;
+        if((pConnectProps->iSslModeSource != RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT
+            || pConnectProps->iSslMismatchPolicy == PQ_SSL_MISMATCH_STRICT)
+           && pConnectProps->szSslMode[0])
+            pEchoSslMode = pConnectProps->szSslMode;
+        else if(pConnectProps->connSslMode.has_value())
+            pEchoSslMode = "";
+
+        if(pEchoSslMode)
+        {
+            if(szConnStrOut && (cbConnStrOut > 0))
+            {
+                strncat( (char *)szConnStrOut, "SSLMode=", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
+                strncat( (char *)szConnStrOut, pEchoSslMode, (cbConnStrOut - strlen((char *)szConnStrOut)-1));
+                strncat( (char *)szConnStrOut, ";", (cbConnStrOut - strlen((char *)szConnStrOut)-1));
+            }
+
+            actualOutputLen += strlen("SSLMode=");
+            actualOutputLen += strlen(pEchoSslMode);
             actualOutputLen += strlen(";");
         }
 
@@ -2208,8 +2236,18 @@ int RS_CONN_INFO::readAuthProfile(int append)
 				pConn->pConnectProps->pHttpsProps);
 			if (pAuthProfileConnStr && *pAuthProfileConnStr != '\0')
 			{
+				// SSL keys from a fetched auth profile do not count as caller-named. Restore
+				// even an empty snapshot, or the profile's key would survive.
+				const std::optional<std::string> callerSslMode =
+					pConn->pConnectProps->connSslMode;
+				const std::optional<int> callerEncryptionMethod =
+					pConn->pConnectProps->connEncryptionMethod;
+
 				// Parse the input string for all
 				pConn->parseConnectString(pAuthProfileConnStr, SQL_NTS, append, FALSE);
+
+				pConn->pConnectProps->connSslMode = callerSslMode;
+				pConn->pConnectProps->connEncryptionMethod = callerEncryptionMethod;
 			}
 
 			if (pAuthProfileConnStr)
@@ -2426,12 +2464,15 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
           sscanf(pval, "%lld", &pConnectProps->llCscThreshold);
         } else if (_stricmp(pname, RS_ENCRYPTION_METHOD) == 0 ||
                    _stricmp(pname, "EM") == 0) {
-          sscanf(pval, "%d", &pConnectProps->iEncryptionMethod);
-          if (pConnectProps->iEncryptionMethod == 0)
-            rs_strncpy(pConnectProps->szSslMode, "disable",
-                       sizeof(pConnectProps->szSslMode));
+          // Recorded only. A blank value is absent; one that isn't a number is kept as unreadable.
+          if (pval && pval[0] != '\0') {
+            pConnectProps->connEncryptionMethod = RS_CONN_INFO::readEncryptionMethod(pval);
+          }
         } else if (_stricmp(pname, RS_SSL_MODE) == 0) {
-          if (pval) strncpy(pConnectProps->szSslMode, pval, MAX_IDEN_LEN);
+          if (pval) {
+            // Record even a blank value: its presence overrides the DSN's SSLMode.
+            pConnectProps->connSslMode = std::string(pval);
+          }
         } else if (_stricmp(pname, RS_VALIDATE_SERVER_CERTIFICATE) == 0 ||
                    _stricmp(pname, "VSC") == 0) {
           sscanf(pval, "%d", &pConnectProps->iValidateServerCertificate);
@@ -2822,8 +2863,16 @@ void RS_CONN_INFO::resetConnectProps()
     pConnectProps->szCscPath[0] = '\0';
     pConnectProps->llCscThreshold = 1;
 
-    // Default SSL options
-    pConnectProps->iEncryptionMethod = 1; // verify-ca
+    // Default SSL options. Clear what a previous connect supplied so a reused
+    // handle cannot inherit its SSL mode.
+    pConnectProps->szSslMode[0] = '\0';
+    pConnectProps->dsnSslMode.reset();
+    pConnectProps->connSslMode.reset();
+    pConnectProps->dsnEncryptionMethod.reset();
+    pConnectProps->connEncryptionMethod.reset();
+    pConnectProps->iSslMismatchPolicy = PQ_SSL_MISMATCH_STRICT;
+    pConnectProps->iSslModeSource = RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT;
+    pConnectProps->iEncryptionMethod = 2; // verify-full
     pConnectProps->iValidateServerCertificate = 1;
 //    pConnectProps->szHostNameInCertificate[0] = '\0';
     pConnectProps->szTrustStore[0] = '\0';
@@ -3319,9 +3368,32 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_CSC_PATH, "", pConnectProps->szCscPath, MAX_PATH, ODBC_INI);
         RS_CONN_INFO::readLongLongValFromDsn(pConnectProps->szDSN, RS_CSC_MAX_FILE_SIZE, &(pConnectProps->llCscMaxFileSize));
 
-        // Read SSL related parameters
-        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_SSL_MODE, "", pConnectProps->szSslMode, MAX_IDEN_LEN, ODBC_INI);
-        RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_ENCRYPTION_METHOD, &(pConnectProps->iEncryptionMethod));
+        // Read SSL related parameters. Recorded only; resolveSslPolicy picks the
+        // mode once both sources are read.
+        // The Linux reader leaves a value that fills the buffer unterminated, so
+        // both reads terminate it themselves.
+        char szSslModeFromDsn[MAX_IDEN_LEN];
+        szSslModeFromDsn[0] = '\0';
+        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_SSL_MODE, "", szSslModeFromDsn, MAX_IDEN_LEN, ODBC_INI);
+        szSslModeFromDsn[MAX_IDEN_LEN - 1] = '\0';
+        if (szSslModeFromDsn[0] != '\0')
+        {
+            pConnectProps->dsnSslMode = std::string(szSslModeFromDsn);
+        }
+        // Read as text like SSLMode, so a value that isn't a number is kept as unreadable.
+        char szEncryptionMethodFromDsn[MAX_NUMBER_BUF_LEN];
+        szEncryptionMethodFromDsn[0] = '\0';
+        int encryptionMethodLen = RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_ENCRYPTION_METHOD, "", szEncryptionMethodFromDsn, MAX_NUMBER_BUF_LEN, ODBC_INI);
+        szEncryptionMethodFromDsn[MAX_NUMBER_BUF_LEN - 1] = '\0';
+        if (encryptionMethodLen >= MAX_NUMBER_BUF_LEN - 1)
+        {
+            // A value that fills the buffer may be cut off, so it is never read as a number.
+            pConnectProps->dsnEncryptionMethod = RS_ENCRYPTION_METHOD_UNREADABLE;
+        }
+        else if (szEncryptionMethodFromDsn[0] != '\0')
+        {
+            pConnectProps->dsnEncryptionMethod = RS_CONN_INFO::readEncryptionMethod(szEncryptionMethodFromDsn);
+        }
         RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_VALIDATE_SERVER_CERTIFICATE, &(pConnectProps->iValidateServerCertificate));
 //        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_HOST_NAME_IN_CERTIFICATE, "", pConnectProps->szHostNameInCertificate, MAX_IDEN_LEN, ODBC_INI);
         RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_TRUST_STORE, "", pConnectProps->szTrustStore, MAX_PATH, ODBC_INI);
@@ -3904,11 +3976,220 @@ static SQLRETURN handleFederatedNonIamConnection(RS_CONN_INFO* pConn) {
             return SQL_ERROR;
         }
     }
+
+    // Not a federated plugin. Falling off the end here would be undefined behavior.
+    return SQL_SUCCESS;
+}
+
+/*====================================================================================================================================================*/
+
+namespace {
+
+// The sslmode values libpq accepts.
+const char *const SSL_MODES[] = {"disable",  "allow",     "prefer",
+                                 "require",  "verify-ca", "verify-full"};
+
+/**
+ * @brief Matches an SSLMode value against SSL_MODES, ignoring case.
+ * @param value SSLMode value from the DSN or the connection string.
+ * @return The mode as libpq spells it, or nullopt for a blank or unknown value,
+ *         so a typo falls back to another source instead of failing the connect.
+ */
+std::optional<std::string> parseSslMode(const std::string &value) {
+    for (const char *mode : SSL_MODES) {
+        if (_stricmp(value.c_str(), mode) == 0) {
+            return std::string(mode);
+        }
+    }
+    return std::nullopt;
+}
+
+/**
+ * @brief Maps an EncryptionMethod code to its SSL mode.
+ * @param value 0 disable, 1 verify-ca, 2 verify-full or 3 require.
+ * @return The SSL mode, or nullopt for any other code.
+ */
+std::optional<std::string> parseEncryptionMethod(int value) {
+    switch (value) {
+    case 0:
+        return std::string("disable");
+    case 1:
+        return std::string("verify-ca");
+    case 2:
+        return std::string("verify-full");
+    case 3:
+        return std::string("require");
+    default:
+        return std::nullopt;
+    }
+}
+
+/**
+ * @brief Maps an SSL mode to the EncryptionMethod code libpqConnect uses, so
+ *        iEncryptionMethod stays in step with szSslMode.
+ * @param mode An SSL mode from SSL_MODES.
+ * @return 0, 1, 2 or 3; allow and prefer have no code of their own and return 2.
+ */
+int encryptionMethodForMode(const std::string &mode) {
+    if (_stricmp(mode.c_str(), "disable") == 0) {
+        return 0;
+    }
+    if (_stricmp(mode.c_str(), "verify-ca") == 0) {
+        return 1;
+    }
+    if (_stricmp(mode.c_str(), "require") == 0) {
+        return 3;
+    }
+    return 2; // verify-full; allow and prefer have no number of their own
+}
+
+/**
+ * @brief Checks whether any source set a non-blank SSL value that names no mode.
+ *        Such a value still counts as a choice, so the mode it falls back to is strict.
+ * @param pConnectProps Connection properties holding what each source recorded.
+ * @return true if any SSLMode or EncryptionMethod value names no mode.
+ */
+bool anySslValueUnreadable(const RS_CONNECT_PROPS_INFO *pConnectProps) {
+    if (pConnectProps->connSslMode.has_value() &&
+        !pConnectProps->connSslMode->empty() &&
+        !parseSslMode(*pConnectProps->connSslMode).has_value()) {
+        return true;
+    }
+    if (pConnectProps->dsnSslMode.has_value() &&
+        !pConnectProps->dsnSslMode->empty() &&
+        !parseSslMode(*pConnectProps->dsnSslMode).has_value()) {
+        return true;
+    }
+    if (pConnectProps->connEncryptionMethod.has_value() &&
+        !parseEncryptionMethod(*pConnectProps->connEncryptionMethod).has_value()) {
+        return true;
+    }
+    if (pConnectProps->dsnEncryptionMethod.has_value() &&
+        !parseEncryptionMethod(*pConnectProps->dsnEncryptionMethod).has_value()) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief Records the chosen SSL mode, where it came from and its mismatch policy.
+ * @param pConnectProps Connection properties to update.
+ * @param mode The chosen SSL mode.
+ * @param source Which RS_SSL_MODE_SOURCE_* value supplied the mode.
+ */
+void applySslPolicy(RS_CONNECT_PROPS_INFO *pConnectProps, const std::string &mode,
+                    int source) {
+    rs_strncpy(pConnectProps->szSslMode, mode.c_str(),
+               sizeof(pConnectProps->szSslMode));
+    pConnectProps->iEncryptionMethod = encryptionMethodForMode(mode);
+    pConnectProps->iSslModeSource = source;
+    // Only the built-in default gets the mismatch allowance.
+    pConnectProps->iSslMismatchPolicy =
+        (source == RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT &&
+         !anySslValueUnreadable(pConnectProps))
+            ? PQ_SSL_MISMATCH_ALLOW_TEMPORARILY
+            : PQ_SSL_MISMATCH_STRICT;
+}
+
+} // namespace
+
+/**
+ * @brief Reads an EncryptionMethod value that must be a whole number.
+ * @param text The value as written; surrounding spaces are allowed.
+ * @return The number, or RS_ENCRYPTION_METHOD_UNREADABLE if text is not entirely
+ *         a number that fits in an int.
+ */
+int RS_CONN_INFO::readEncryptionMethod(const char *text) {
+    // sscanf would read "0oops" as 0 (disable), so the whole value must be a number.
+    char *end = nullptr;
+    errno = 0;
+    long value = strtol(text, &end, 10);
+    if (end == text || errno == ERANGE || value < INT_MIN || value > INT_MAX) {
+        return RS_ENCRYPTION_METHOD_UNREADABLE;
+    }
+    while (*end == ' ' || *end == '\t') {
+        ++end;
+    }
+    return *end == '\0' ? static_cast<int>(value) : RS_ENCRYPTION_METHOD_UNREADABLE;
+}
+
+/**
+ * @brief Chooses the SSL mode and mismatch policy once the DSN and the connection
+ *        string have both been read.
+ * @param pConnectProps Connection properties; sets szSslMode, iEncryptionMethod,
+ *        iSslModeSource and iSslMismatchPolicy.
+ */
+void RS_CONN_INFO::resolveSslPolicy(RS_CONNECT_PROPS_INFO *pConnectProps) {
+    // Connection string beats DSN; SSLMode beats EncryptionMethod. A connection
+    // SSLMode naming no mode masks the DSN SSLMode but not either EncryptionMethod.
+    if (pConnectProps->connSslMode.has_value()) {
+        std::optional<std::string> named =
+            parseSslMode(*pConnectProps->connSslMode);
+        if (named.has_value()) {
+            applySslPolicy(pConnectProps, *named,
+                           RS_SSL_MODE_SOURCE_CONN_SSL_MODE);
+            return;
+        }
+        if (pConnectProps->connEncryptionMethod.has_value()) {
+            named = parseEncryptionMethod(*pConnectProps->connEncryptionMethod);
+            if (named.has_value()) {
+                applySslPolicy(pConnectProps, *named,
+                               RS_SSL_MODE_SOURCE_CONN_ENCRYPTION_METHOD);
+                return;
+            }
+        }
+        if (pConnectProps->dsnEncryptionMethod.has_value()) {
+            named = parseEncryptionMethod(*pConnectProps->dsnEncryptionMethod);
+            if (named.has_value()) {
+                applySslPolicy(pConnectProps, *named,
+                               RS_SSL_MODE_SOURCE_DSN_ENCRYPTION_METHOD);
+                return;
+            }
+        }
+        applySslPolicy(pConnectProps, "verify-full",
+                       RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT);
+        return;
+    }
+
+    if (pConnectProps->connEncryptionMethod.has_value()) {
+        std::optional<std::string> named =
+            parseEncryptionMethod(*pConnectProps->connEncryptionMethod);
+        if (named.has_value()) {
+            applySslPolicy(pConnectProps, *named,
+                           RS_SSL_MODE_SOURCE_CONN_ENCRYPTION_METHOD);
+            return;
+        }
+    }
+    if (pConnectProps->dsnSslMode.has_value()) {
+        std::optional<std::string> named =
+            parseSslMode(*pConnectProps->dsnSslMode);
+        if (named.has_value()) {
+            applySslPolicy(pConnectProps, *named,
+                           RS_SSL_MODE_SOURCE_DSN_SSL_MODE);
+            return;
+        }
+    }
+    if (pConnectProps->dsnEncryptionMethod.has_value()) {
+        std::optional<std::string> named =
+            parseEncryptionMethod(*pConnectProps->dsnEncryptionMethod);
+        if (named.has_value()) {
+            applySslPolicy(pConnectProps, *named,
+                           RS_SSL_MODE_SOURCE_DSN_ENCRYPTION_METHOD);
+            return;
+        }
+    }
+
+    applySslPolicy(pConnectProps, "verify-full",
+                   RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT);
 }
 
 /*====================================================================================================================================================*/
 
 SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
+    // Both sources are read by now. Resolve before IAM copies szSslMode and
+    // libpqConnect passes the mode and policy to libpq.
+    RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+
 
   SQLRETURN rc = SQL_SUCCESS;
   RS_CONNECT_PROPS_INFO *pConnectProps = pConn->pConnectProps;

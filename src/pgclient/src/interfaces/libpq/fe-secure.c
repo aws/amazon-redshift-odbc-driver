@@ -785,6 +785,25 @@ wildcard_certificate_match(const char *pattern, const char *string)
 }
 
 
+/**
+ * @brief Logs that the server certificate does not name the host. Goes to the
+ *        driver log only; the connection succeeds, so nothing reaches the app.
+ * @param host The host being connected to; NULL is logged as empty.
+ */
+static void
+pq_warn_hostname_mismatch(const char *host)
+{
+	const char *shown = host ? host : "";
+
+	RS_LOG_WARN("FESEC",
+				"Server certificate does not name host \"%s\". The connection was "
+				"allowed because sslmode was not set. A future release will "
+				"require the certificate to name the host being connected to; if "
+				"you connect through a name the certificate does not carry, set "
+				"sslmode=verify-ca.",
+				shown);
+}
+
 /*
  *	Verify that common name resolves to peer.
  */
@@ -821,7 +840,14 @@ verify_peer_name_matches_certificate(PGconn *conn)
 		}
 		else if (result == 0)
 		{
-			/* Hostname does not match */
+			/* The driver chose verify-full, not the caller, so warn and allow it.
+			 * The chain was already verified in the handshake. */
+			if (conn->ssl_mismatch_policy == PQ_SSL_MISMATCH_ALLOW_TEMPORARILY)
+			{
+				pq_warn_hostname_mismatch(conn->pghost);
+				return true;
+			}
+
 			printfPQExpBuffer(&conn->errorMessage,
 							  libpq_gettext("server certificate does not match host name \"%s\"\n"),
 							  conn->pghost);

@@ -2,10 +2,15 @@
 #include <rsdesc.h>
 #include <rsodbc.h>
 #include <rsutil.h>
+#include "rsodbc_setup/rs_dsn_ssl_keys.h"
 #include <sql.h>
 #include <cstring>
 #include <new>
 #include <string>
+#ifndef WIN32
+#include <unistd.h>
+#endif
+#include "pq_tls_policy.h"
 
 // Unit tests for connection property default values and parsing.
 // This unit test is for testing the default value when databaseMetadataCurrentDbOnly flag is not included in DSN.
@@ -56,6 +61,27 @@ TEST(DEFAULT_VALUE_TEST_SUITE, test_RS_DEFAULT_FETCH_SIZE_value) {
     EXPECT_EQ(RS_DEFAULT_FETCH_SIZE, 100);
 }
 
+// szSslMode and iEncryptionMethod must agree, or DSN and DSN-less connects get
+// different defaults.
+
+TEST(DEFAULT_VALUE_TEST_SUITE, test_SslMode_default_is_verify_full) {
+    RS_CONNECT_PROPS_INFO obj;
+    EXPECT_STREQ(obj.szSslMode, "verify-full")
+        << "The default SSL mode must verify the server's hostname";
+}
+
+TEST(DEFAULT_VALUE_TEST_SUITE, test_EncryptionMethod_default_matches_SslMode) {
+    RS_CONNECT_PROPS_INFO obj;
+    // libpqConnect maps 0=disable, 1=verify-ca, 2=verify-full, 3=require.
+    EXPECT_EQ(obj.iEncryptionMethod, 2)
+        << "iEncryptionMethod must re-derive the same mode szSslMode carries, "
+           "or the default differs between the DSN and DSN-less paths";
+}
+
+TEST(DEFAULT_VALUE_TEST_SUITE, test_RS_SSL_MODE_key) {
+    EXPECT_STREQ(RS_SSL_MODE, "SSLMode");
+}
+
 // ===========================================================================
 // Connection string parsing tests for UseDeclareFetch / Fetch
 // Uses RS_CONN_INFO::parseConnectString which is the same path used
@@ -85,6 +111,626 @@ protected:
         pConn->parseConnectString(const_cast<char *>(connStr), SQL_NTS, FALSE, FALSE);
     }
 };
+
+// The parser only records what it saw; resolveSslPolicy decides, tested below.
+
+TEST_F(UseDeclareFetchConnStringTest, EncryptionMethod_is_recorded) {
+    parseConnStr("Driver=Amazon Redshift ODBC Driver;EncryptionMethod=2;");
+    ASSERT_TRUE(pConn->pConnectProps->connEncryptionMethod.has_value());
+    EXPECT_EQ(*pConn->pConnectProps->connEncryptionMethod, 2);
+}
+
+TEST_F(UseDeclareFetchConnStringTest, EM_alias_is_recorded) {
+    parseConnStr("Driver=Amazon Redshift ODBC Driver;EM=1;");
+    ASSERT_TRUE(pConn->pConnectProps->connEncryptionMethod.has_value());
+    EXPECT_EQ(*pConn->pConnectProps->connEncryptionMethod, 1);
+}
+
+// A typo still counts as a choice, like an unreadable SSLMode: default mode, strict.
+TEST_F(UseDeclareFetchConnStringTest, A_nonnumeric_EncryptionMethod_is_unreadable_and_strict) {
+    parseConnStr("Driver=Amazon Redshift ODBC Driver;EncryptionMethod=abc;");
+    ASSERT_TRUE(pConn->pConnectProps->connEncryptionMethod.has_value());
+    EXPECT_EQ(*pConn->pConnectProps->connEncryptionMethod, RS_ENCRYPTION_METHOD_UNREADABLE);
+
+    RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+    EXPECT_STREQ(pConn->pConnectProps->szSslMode, "verify-full");
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_STRICT);
+}
+
+// Only a whole number is a value; a numeric prefix must not turn SSL off.
+TEST(EncryptionMethodReadTest, reads_only_a_whole_number) {
+    const struct {
+        const char *text;
+        int expected;
+    } cases[] = {
+        {"0", 0}, {"1", 1}, {"2", 2}, {"3", 3}, {" 2", 2}, {"2 ", 2}, {" 2 ", 2},
+        {"+2", 2}, {"-1", -1},
+        {"0oops", RS_ENCRYPTION_METHOD_UNREADABLE},
+        {"1x", RS_ENCRYPTION_METHOD_UNREADABLE},
+        {"2.0", RS_ENCRYPTION_METHOD_UNREADABLE},
+        {"0x1", RS_ENCRYPTION_METHOD_UNREADABLE},
+        {"2 2", RS_ENCRYPTION_METHOD_UNREADABLE},
+        {"abc", RS_ENCRYPTION_METHOD_UNREADABLE},
+        {" ", RS_ENCRYPTION_METHOD_UNREADABLE},
+        {"99999999999", RS_ENCRYPTION_METHOD_UNREADABLE},
+        {"-99999999999", RS_ENCRYPTION_METHOD_UNREADABLE},
+    };
+    for (const auto &c : cases) {
+        EXPECT_EQ(RS_CONN_INFO::readEncryptionMethod(c.text), c.expected)
+            << "text: [" << c.text << "]";
+    }
+}
+
+TEST_F(UseDeclareFetchConnStringTest, A_numeric_prefix_EncryptionMethod_is_unreadable_and_strict) {
+    for (const char *value : {"0oops", "1x", "3abc"}) {
+        pConn->pConnectProps->connEncryptionMethod.reset();
+        parseConnStr((std::string("Driver=Amazon Redshift ODBC Driver;EncryptionMethod=") +
+                      value + ";").c_str());
+        ASSERT_TRUE(pConn->pConnectProps->connEncryptionMethod.has_value()) << value;
+        EXPECT_EQ(*pConn->pConnectProps->connEncryptionMethod,
+                  RS_ENCRYPTION_METHOD_UNREADABLE) << value;
+
+        RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+        EXPECT_STREQ(pConn->pConnectProps->szSslMode, "verify-full") << value;
+        EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_STRICT) << value;
+    }
+}
+
+TEST_F(UseDeclareFetchConnStringTest, A_blank_EncryptionMethod_records_nothing) {
+    parseConnStr("Driver=Amazon Redshift ODBC Driver;EncryptionMethod=;");
+    EXPECT_FALSE(pConn->pConnectProps->connEncryptionMethod.has_value());
+}
+
+TEST_F(UseDeclareFetchConnStringTest, No_mode_keyword_records_nothing) {
+    parseConnStr("Driver=Amazon Redshift ODBC Driver;");
+    EXPECT_FALSE(pConn->pConnectProps->connSslMode.has_value());
+    EXPECT_FALSE(pConn->pConnectProps->connEncryptionMethod.has_value());
+}
+
+// A blank SSLMode is how a caller drops the DSN's mode, so presence is recorded.
+TEST_F(UseDeclareFetchConnStringTest, An_empty_SSLMode_is_recorded_as_present) {
+    parseConnStr("Driver=Amazon Redshift ODBC Driver;SSLMode=;");
+    ASSERT_TRUE(pConn->pConnectProps->connSslMode.has_value());
+    EXPECT_EQ(*pConn->pConnectProps->connSslMode, "");
+}
+
+// ===========================================================================
+// resolveSslPolicy runs after both sources are read, so parse order can't matter.
+// ===========================================================================
+
+namespace {
+
+struct SslResolveCase {
+    const char *name;
+    const char *dsnSslMode;      // nullptr = key absent
+    int dsnEncryptionMethod;     // -1 = key absent
+    const char *connSslMode;     // nullptr = key absent
+    int connEncryptionMethod;    // -1 = key absent
+    const char *expectedMode;
+    int expectedSource;
+    int expectedPolicy;
+};
+
+const SslResolveCase kSslResolveCases[] = {
+    // Nothing named: the built-in default, which tolerates a mismatch.
+    {"nothing named", nullptr, -1, nullptr, -1,
+     "verify-full", RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT,
+     PQ_SSL_MISMATCH_ALLOW_TEMPORARILY},
+
+    // A single source names the mode.
+    {"connection SSLMode", nullptr, -1, "verify-ca", -1,
+     "verify-ca", RS_SSL_MODE_SOURCE_CONN_SSL_MODE, PQ_SSL_MISMATCH_STRICT},
+    {"connection EncryptionMethod", nullptr, -1, nullptr, 2,
+     "verify-full", RS_SSL_MODE_SOURCE_CONN_ENCRYPTION_METHOD,
+     PQ_SSL_MISMATCH_STRICT},
+    {"DSN SSLMode", "require", -1, nullptr, -1,
+     "require", RS_SSL_MODE_SOURCE_DSN_SSL_MODE, PQ_SSL_MISMATCH_STRICT},
+    {"DSN EncryptionMethod", nullptr, 3, nullptr, -1,
+     "require", RS_SSL_MODE_SOURCE_DSN_ENCRYPTION_METHOD,
+     PQ_SSL_MISMATCH_STRICT},
+
+    // The connection string outranks the DSN, whichever key each one uses.
+    {"connection EncryptionMethod beats DSN SSLMode", "verify-ca", -1, nullptr, 2,
+     "verify-full", RS_SSL_MODE_SOURCE_CONN_ENCRYPTION_METHOD,
+     PQ_SSL_MISMATCH_STRICT},
+    {"connection SSLMode beats DSN SSLMode", "verify-ca", -1, "require", -1,
+     "require", RS_SSL_MODE_SOURCE_CONN_SSL_MODE, PQ_SSL_MISMATCH_STRICT},
+    {"SSLMode outranks EncryptionMethod in one source", nullptr, -1, "require", 2,
+     "require", RS_SSL_MODE_SOURCE_CONN_SSL_MODE, PQ_SSL_MISMATCH_STRICT},
+
+    // A blank connection SSLMode drops the DSN's SSLMode but not an EncryptionMethod.
+    {"empty SSLMode drops a DSN SSLMode", "verify-ca", -1, "", -1,
+     "verify-full", RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT,
+     PQ_SSL_MISMATCH_ALLOW_TEMPORARILY},
+    {"empty SSLMode keeps a DSN EncryptionMethod", nullptr, 3, "", -1,
+     "require", RS_SSL_MODE_SOURCE_DSN_ENCRYPTION_METHOD,
+     PQ_SSL_MISMATCH_STRICT},
+    {"empty SSLMode keeps a connection EncryptionMethod", nullptr, -1, "", 3,
+     "require", RS_SSL_MODE_SOURCE_CONN_ENCRYPTION_METHOD,
+     PQ_SSL_MISMATCH_STRICT},
+
+    // An unreadable value is skipped when picking the mode but still forces strict,
+    // so a typo can't relax a connection.
+    {"invalid SSLMode names no mode but stays strict", nullptr, -1,
+     "verify-fulll", -1, "verify-full", RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT,
+     PQ_SSL_MISMATCH_STRICT},
+    {"invalid EncryptionMethod names no mode but stays strict", nullptr, -1,
+     nullptr, 99, "verify-full", RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT,
+     PQ_SSL_MISMATCH_STRICT},
+    {"invalid connection SSLMode drops the DSN mode and stays strict", "require",
+     -1, "nonsense", -1, "verify-full", RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT,
+     PQ_SSL_MISMATCH_STRICT},
+    {"invalid connection EncryptionMethod falls back to the DSN", "require", -1,
+     nullptr, 99, "require", RS_SSL_MODE_SOURCE_DSN_SSL_MODE,
+     PQ_SSL_MISMATCH_STRICT},
+
+    // A DSN's own mode is honoured, including the verify-ca that older releases
+    // wrote into every DSN, so upgrading never changes how an existing DSN connects.
+    {"DSN SSLMode=verify-ca is kept", "verify-ca", -1, nullptr, -1,
+     "verify-ca", RS_SSL_MODE_SOURCE_DSN_SSL_MODE, PQ_SSL_MISMATCH_STRICT},
+    {"DSN SSLMode=verify-ca is kept in any case", "VERIFY-CA", -1, nullptr, -1,
+     "verify-ca", RS_SSL_MODE_SOURCE_DSN_SSL_MODE, PQ_SSL_MISMATCH_STRICT},
+    {"DSN EncryptionMethod=1 is kept", nullptr, 1, nullptr, -1,
+     "verify-ca", RS_SSL_MODE_SOURCE_DSN_ENCRYPTION_METHOD, PQ_SSL_MISMATCH_STRICT},
+    {"DSN SSLMode outranks DSN EncryptionMethod", "verify-ca", 3, nullptr, -1,
+     "verify-ca", RS_SSL_MODE_SOURCE_DSN_SSL_MODE, PQ_SSL_MISMATCH_STRICT},
+    {"connection verify-full overrides a DSN verify-ca", "verify-ca", 1,
+     "verify-full", -1, "verify-full", RS_SSL_MODE_SOURCE_CONN_SSL_MODE,
+     PQ_SSL_MISMATCH_STRICT},
+    {"connection EncryptionMethod=1 is honoured", nullptr, -1, nullptr, 1,
+     "verify-ca", RS_SSL_MODE_SOURCE_CONN_ENCRYPTION_METHOD,
+     PQ_SSL_MISMATCH_STRICT},
+    {"a DSN verify-full is honoured", "verify-full", -1,
+     nullptr, -1, "verify-full", RS_SSL_MODE_SOURCE_DSN_SSL_MODE,
+     PQ_SSL_MISMATCH_STRICT},
+
+    // disable is a named mode, so it's strict too.
+    {"EncryptionMethod 0 names disable", nullptr, -1, nullptr, 0,
+     "disable", RS_SSL_MODE_SOURCE_CONN_ENCRYPTION_METHOD,
+     PQ_SSL_MISMATCH_STRICT},
+};
+
+} // namespace
+
+TEST(SslModeResolveTest, resolves_every_combination_of_sources) {
+    for (const SslResolveCase &c : kSslResolveCases) {
+        RS_CONNECT_PROPS_INFO props;
+        if (c.dsnSslMode) {
+            props.dsnSslMode = std::string(c.dsnSslMode);
+        }
+        if (c.dsnEncryptionMethod != -1) {
+            props.dsnEncryptionMethod = c.dsnEncryptionMethod;
+        }
+        if (c.connSslMode) {
+            props.connSslMode = std::string(c.connSslMode);
+        }
+        if (c.connEncryptionMethod != -1) {
+            props.connEncryptionMethod = c.connEncryptionMethod;
+        }
+
+        RS_CONN_INFO::resolveSslPolicy(&props);
+
+        EXPECT_STREQ(props.szSslMode, c.expectedMode) << "case: " << c.name;
+        EXPECT_EQ(props.iSslModeSource, c.expectedSource) << "case: " << c.name;
+        EXPECT_EQ(props.iSslMismatchPolicy, c.expectedPolicy) << "case: " << c.name;
+    }
+}
+
+// Checks the resolver's output, not the table's expectations: a mismatch is
+// only ever tolerated when the mode came from the built-in default.
+TEST(SslModeResolveTest, only_the_built_in_default_tolerates_a_mismatch) {
+    for (const SslResolveCase &c : kSslResolveCases) {
+        RS_CONNECT_PROPS_INFO props;
+        if (c.dsnSslMode) {
+            props.dsnSslMode = std::string(c.dsnSslMode);
+        }
+        if (c.dsnEncryptionMethod != -1) {
+            props.dsnEncryptionMethod = c.dsnEncryptionMethod;
+        }
+        if (c.connSslMode) {
+            props.connSslMode = std::string(c.connSslMode);
+        }
+        if (c.connEncryptionMethod != -1) {
+            props.connEncryptionMethod = c.connEncryptionMethod;
+        }
+
+        RS_CONN_INFO::resolveSslPolicy(&props);
+
+        bool tolerated =
+            props.iSslMismatchPolicy == PQ_SSL_MISMATCH_ALLOW_TEMPORARILY;
+        bool defaulted =
+            props.iSslModeSource == RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT;
+
+        // Not the reverse: an unreadable value can land on the default and stay strict.
+        if (tolerated) {
+            EXPECT_TRUE(defaulted)
+                << "case: " << c.name
+                << " -- a mismatch was tolerated for a mode the caller named";
+        }
+    }
+}
+
+/**
+ * @brief Frees what a fixture's connection allocated, as ParseConnectStringTest
+ *        does: RS_CONNECT_PROPS_INFO and RS_ENV_INFO have no destructors.
+ * @param envInfo The fixture's environment; its attributes are freed.
+ * @param pConn The fixture's connection; deleted on return.
+ */
+static void freeTestConnection(RS_ENV_INFO &envInfo, RS_CONN_INFO *pConn) {
+    RS_CONNECT_PROPS_INFO *props = pConn->pConnectProps;
+    RsFree(props->pConnectStr);
+    props->pConnectStr = NULL;
+    RsFree(props->pInitializationString);
+    props->pInitializationString = NULL;
+    if (props->pIamProps) {
+        RsFree(props->pIamProps->pszJwt);
+        props->pIamProps->pszJwt = NULL;
+        RsFree(props->pIamProps);
+        props->pIamProps = NULL;
+    }
+    RsFree(props->pHttpsProps);
+    props->pHttpsProps = NULL;
+    RsFree(props->pTcpProxyProps);
+    props->pTcpProxyProps = NULL;
+    RsFree(pConn->pConnAttr->pTraceFile);
+    pConn->pConnAttr->pTraceFile = NULL;
+
+    delete pConn->pConnAttr;
+    delete pConn->pConnectProps;
+    delete pConn;
+
+    delete envInfo.pEnvAttr;
+    envInfo.pEnvAttr = NULL;
+}
+
+// DSNs are read by readMoreConnectPropsFromRegistry: from a temp odbc.ini (ODBCINI) on
+// Linux/macOS, and from a real registry DSN on Windows.
+class SslModeDsnTest : public ::testing::Test {
+protected:
+    RS_ENV_INFO envInfo;
+    RS_CONN_INFO *pConn = NULL;
+#ifdef WIN32
+    std::string writtenDsn;
+#else
+    std::string workdir;
+    std::string savedOdbcIni;
+    bool hadOdbcIni = false;
+#endif
+
+    /** @brief Creates the connection and, off Windows, a temp directory for odbc.ini. */
+    void SetUp() override {
+        pConn = new RS_CONN_INFO(&envInfo);
+        pConn->pConnectProps = new RS_CONNECT_PROPS_INFO();
+        pConn->pConnAttr = new RS_CONN_ATTR_INFO();
+#ifndef WIN32
+        const char *existing = getenv(ODBCINI_ENV_VAR);
+        hadOdbcIni = existing != NULL;
+        if (hadOdbcIni) {
+            savedOdbcIni = existing;
+        }
+
+        char templ[] = "/tmp/rsodbc_dsn_XXXXXX";
+        ASSERT_NE(mkdtemp(templ), (char *)NULL);
+        workdir = templ;
+#endif
+    }
+
+    /** @brief Removes the DSN the test wrote, restores ODBCINI and frees the connection. */
+    void TearDown() override {
+#ifdef WIN32
+        if (!writtenDsn.empty()) {
+            SQLWritePrivateProfileString(writtenDsn.c_str(), NULL, NULL, ODBC_INI);
+        }
+#else
+        if (hadOdbcIni) {
+            setenv(ODBCINI_ENV_VAR, savedOdbcIni.c_str(), 1);
+        } else {
+            unsetenv(ODBCINI_ENV_VAR);
+        }
+        if (!workdir.empty()) {
+            unlink((workdir + "/odbc.ini").c_str());
+            rmdir(workdir.c_str());
+        }
+#endif
+        freeTestConnection(envInfo, pConn);
+    }
+
+    /**
+     * @brief Saves a DSN as the only copy of dsn, in the registry on Windows and in a
+     *        temp odbc.ini elsewhere, then reads it into the connection.
+     * @param dsn The DSN name.
+     * @param body "[dsn]" then one key=value per line.
+     */
+    void readDsn(const char *dsn, const std::string &body) {
+#ifdef WIN32
+        SQLWritePrivateProfileString(dsn, NULL, NULL, ODBC_INI);
+        writtenDsn = dsn;
+        size_t start = 0;
+        while (start < body.size()) {
+            size_t end = body.find('\n', start);
+            std::string line = body.substr(start, end == std::string::npos ? std::string::npos : end - start);
+            start = end == std::string::npos ? body.size() : end + 1;
+            size_t eq = line.find('=');
+            if (line.empty() || line[0] == '[' || eq == std::string::npos) {
+                continue;
+            }
+            ASSERT_TRUE(SQLWritePrivateProfileString(dsn, line.substr(0, eq).c_str(),
+                                                     line.substr(eq + 1).c_str(), ODBC_INI))
+                << "could not write " << line << " to registry DSN " << dsn;
+        }
+#else
+        std::string path = workdir + "/odbc.ini";
+        FILE *fp = fopen(path.c_str(), "w");
+        ASSERT_NE(fp, (FILE *)NULL);
+        fputs(body.c_str(), fp);
+        fclose(fp);
+        setenv(ODBCINI_ENV_VAR, path.c_str(), 1);
+#endif
+        strncpy(pConn->pConnectProps->szDSN, dsn,
+                sizeof(pConn->pConnectProps->szDSN) - 1);
+        pConn->readMoreConnectPropsFromRegistry(FALSE);
+    }
+};
+
+TEST_F(SslModeDsnTest, a_DSN_EncryptionMethod_is_recorded) {
+    readDsn("emdsn",
+            "[emdsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+            "Database=d\nEncryptionMethod=2\n");
+
+    ASSERT_TRUE(pConn->pConnectProps->dsnEncryptionMethod.has_value());
+    EXPECT_EQ(*pConn->pConnectProps->dsnEncryptionMethod, 2);
+
+    RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_STRICT)
+        << "A DSN naming the mode through EncryptionMethod must fail a mismatch, "
+           "not warn about it";
+}
+
+TEST_F(SslModeDsnTest, a_DSN_SSLMode_is_recorded) {
+    readDsn("modedsn",
+            "[modedsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+            "Database=d\nSSLMode=require\n");
+
+    ASSERT_TRUE(pConn->pConnectProps->dsnSslMode.has_value());
+    EXPECT_EQ(*pConn->pConnectProps->dsnSslMode, "require");
+
+    RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+    EXPECT_STREQ(pConn->pConnectProps->szSslMode, "require");
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_STRICT)
+        << "A DSN naming the mode outright is the caller's choice";
+}
+
+// DSNs made by older releases keep the mode they carry after an upgrade.
+TEST_F(SslModeDsnTest, an_upgraded_DSN_keeps_its_mode) {
+    const char *const bodies[] = {
+        // The old Linux/macOS odbc.ini template.
+        "[olddsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+        "Database=d\nSSLMode=verify-ca\n",
+        // What the old Windows dialog saved.
+        "[olddsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+        "Database=d\nSSLMode=verify-ca\nEncryptionMethod=1\n",
+    };
+    for (const char *body : bodies) {
+        pConn->pConnectProps->dsnSslMode.reset();
+        pConn->pConnectProps->dsnEncryptionMethod.reset();
+        readDsn("olddsn", body);
+
+        RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+        EXPECT_STREQ(pConn->pConnectProps->szSslMode, "verify-ca")
+            << "an upgraded DSN must keep its mode: " << body;
+        EXPECT_EQ(pConn->pConnectProps->iSslModeSource,
+                  RS_SSL_MODE_SOURCE_DSN_SSL_MODE) << body;
+        EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy,
+                  PQ_SSL_MISMATCH_STRICT) << body;
+    }
+}
+
+TEST_F(SslModeDsnTest, a_DSN_EncryptionMethod_with_trailing_text_is_unreadable) {
+    readDsn("typodsn",
+            "[typodsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+            "Database=d\nEncryptionMethod=0oops\n");
+
+    ASSERT_TRUE(pConn->pConnectProps->dsnEncryptionMethod.has_value());
+    EXPECT_EQ(*pConn->pConnectProps->dsnEncryptionMethod, RS_ENCRYPTION_METHOD_UNREADABLE);
+
+    RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+    EXPECT_STREQ(pConn->pConnectProps->szSslMode, "verify-full")
+        << "0oops must not be read as 0, which disables SSL";
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_STRICT);
+}
+
+TEST_F(SslModeDsnTest, a_nonnumeric_DSN_EncryptionMethod_is_unreadable_and_strict) {
+    readDsn("typodsn",
+            "[typodsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+            "Database=d\nEncryptionMethod=abc\n");
+
+    ASSERT_TRUE(pConn->pConnectProps->dsnEncryptionMethod.has_value());
+    EXPECT_EQ(*pConn->pConnectProps->dsnEncryptionMethod, RS_ENCRYPTION_METHOD_UNREADABLE);
+
+    RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+    EXPECT_STREQ(pConn->pConnectProps->szSslMode, "verify-full");
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_STRICT);
+}
+
+TEST_F(SslModeDsnTest, a_DSN_with_no_mode_key_stays_defaulted) {
+    readDsn("plaindsn",
+            "[plaindsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+            "Database=d\n");
+
+    EXPECT_FALSE(pConn->pConnectProps->dsnSslMode.has_value());
+    EXPECT_FALSE(pConn->pConnectProps->dsnEncryptionMethod.has_value());
+
+    RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+    EXPECT_STREQ(pConn->pConnectProps->szSslMode, "verify-full");
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy,
+              PQ_SSL_MISMATCH_ALLOW_TEMPORARILY)
+        << "A DSN made from the shipped template names no mode, so it must keep "
+           "the transitional warning instead of hard-failing";
+}
+
+// A DSN EncryptionMethod that fills the read buffer may be cut off, so it is never
+// read as a number; the boundary is one character short of the buffer.
+// Windows returns nothing for a value longer than the buffer, so the key reads as unset.
+TEST_F(SslModeDsnTest, a_DSN_EncryptionMethod_that_fills_the_buffer_is_unreadable) {
+    const std::string padded = "0" + std::string(70, ' ') + "oops";
+    readDsn("longdsn", "[longdsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+                       "Database=d\nEncryptionMethod=" + padded + "\n");
+#ifdef WIN32
+    EXPECT_FALSE(pConn->pConnectProps->dsnEncryptionMethod.has_value());
+#else
+    ASSERT_TRUE(pConn->pConnectProps->dsnEncryptionMethod.has_value());
+    EXPECT_EQ(*pConn->pConnectProps->dsnEncryptionMethod, RS_ENCRYPTION_METHOD_UNREADABLE)
+        << "a cut-off value read as 0 would turn SSL off";
+#endif
+
+    RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+    EXPECT_STREQ(pConn->pConnectProps->szSslMode, "verify-full");
+#ifdef WIN32
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_ALLOW_TEMPORARILY);
+#else
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_STRICT);
+#endif
+}
+
+TEST_F(SslModeDsnTest, a_DSN_EncryptionMethod_at_the_buffer_boundary) {
+    // MAX_NUMBER_BUF_LEN - 2 characters still fit, so the number is read.
+    const std::string fits = std::string(MAX_NUMBER_BUF_LEN - 3, '0') + "3";
+    readDsn("edgedsn", "[edgedsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+                       "Database=d\nEncryptionMethod=" + fits + "\n");
+    ASSERT_TRUE(pConn->pConnectProps->dsnEncryptionMethod.has_value());
+    EXPECT_EQ(*pConn->pConnectProps->dsnEncryptionMethod, 3) << "value: " << fits;
+
+    // One more character fills the buffer, so it is no longer trusted.
+    const std::string fills = std::string(MAX_NUMBER_BUF_LEN - 2, '0') + "3";
+    pConn->pConnectProps->dsnEncryptionMethod.reset();
+    readDsn("edgedsn", "[edgedsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+                       "Database=d\nEncryptionMethod=" + fills + "\n");
+    ASSERT_TRUE(pConn->pConnectProps->dsnEncryptionMethod.has_value());
+    EXPECT_EQ(*pConn->pConnectProps->dsnEncryptionMethod, RS_ENCRYPTION_METHOD_UNREADABLE)
+        << "value: " << fills;
+}
+
+// A DSN SSLMode longer than the buffer is read as a terminated string that names no mode.
+// Windows returns nothing for it, so the key reads as unset.
+TEST_F(SslModeDsnTest, a_DSN_SSLMode_that_fills_the_buffer_is_unreadable) {
+    const std::string padded = "disable" + std::string(3000, ' ') + "x";
+    readDsn("longdsn", "[longdsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+                       "Database=d\nSSLMode=" + padded + "\n");
+#ifdef WIN32
+    EXPECT_FALSE(pConn->pConnectProps->dsnSslMode.has_value());
+#else
+    ASSERT_TRUE(pConn->pConnectProps->dsnSslMode.has_value());
+    EXPECT_LT(pConn->pConnectProps->dsnSslMode->size(), (size_t)MAX_IDEN_LEN)
+        << "the value was not terminated inside the buffer";
+#endif
+
+    RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+    EXPECT_STREQ(pConn->pConnectProps->szSslMode, "verify-full") << "a cut-off value must not disable SSL";
+#ifdef WIN32
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_ALLOW_TEMPORARILY);
+#else
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_STRICT);
+#endif
+}
+
+// A blank DSN key names nothing, so the mode stays defaulted.
+TEST_F(SslModeDsnTest, blank_DSN_SSL_keys_stay_defaulted) {
+    readDsn("blankdsn", "[blankdsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\n"
+                        "Database=d\nSSLMode=\nEncryptionMethod=\n");
+    EXPECT_FALSE(pConn->pConnectProps->dsnSslMode.has_value());
+    EXPECT_FALSE(pConn->pConnectProps->dsnEncryptionMethod.has_value());
+
+    RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+    EXPECT_STREQ(pConn->pConnectProps->szSslMode, "verify-full");
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_ALLOW_TEMPORARILY);
+}
+
+// Test Connection sends the DSN's SSL keys in a connection string; it must reach the
+// same mode and policy as using the saved DSN. Keys are picked as setup.c does: the
+// dialog holds the DSN value or its table default, and only named keys go out.
+TEST_F(SslModeDsnTest, test_connection_matches_the_saved_dsn) {
+    struct DsnKeys { const char *sslMode; const char *encryptionMethod; };
+    const DsnKeys cases[] = {
+        {nullptr, nullptr}, {"verify-ca", nullptr}, {nullptr, "1"},
+        {"verify-ca", "1"}, {"verify-full", "2"}, {"require", nullptr},
+        {"disable", nullptr}, {nullptr, "3"},
+    };
+    for (const DsnKeys &keys : cases) {
+        std::string body = "[cmpdsn]\nDriver=Amazon Redshift ODBC Driver\nHostName=h\nDatabase=d\n";
+        if (keys.sslMode) {
+            body += std::string("SSLMode=") + keys.sslMode + "\n";
+        }
+        if (keys.encryptionMethod) {
+            body += std::string("EncryptionMethod=") + keys.encryptionMethod + "\n";
+        }
+        const int sslModeNamed = keys.sslMode != nullptr;
+        const int encryptionMethodNamed = keys.encryptionMethod != nullptr;
+        std::string testConnStr = "Driver=Amazon Redshift ODBC Driver";
+        if (rs_dsn_ssl_key_is_named(RS_DSN_SSL_MODE_KEY, sslModeNamed, encryptionMethodNamed)) {
+            testConnStr += std::string(";SSLMode=") + (keys.sslMode ? keys.sslMode : "verify-full");
+        }
+        if (rs_dsn_ssl_key_is_named(RS_DSN_ENCRYPTION_METHOD_KEY, sslModeNamed, encryptionMethodNamed)) {
+            testConnStr += std::string(";EncryptionMethod=") + (keys.encryptionMethod ? keys.encryptionMethod : "2");
+        }
+        const std::string label = std::string("SSLMode=") + (keys.sslMode ? keys.sslMode : "<none>") +
+                                  " EncryptionMethod=" + (keys.encryptionMethod ? keys.encryptionMethod : "<none>");
+
+        pConn->resetConnectProps();
+        readDsn("cmpdsn", body);
+        RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+        const std::string savedMode = pConn->pConnectProps->szSslMode;
+        const int savedPolicy = pConn->pConnectProps->iSslMismatchPolicy;
+
+        pConn->resetConnectProps();
+        pConn->parseConnectString(const_cast<char *>(testConnStr.c_str()), SQL_NTS, FALSE, FALSE);
+        RS_CONN_INFO::resolveSslPolicy(pConn->pConnectProps);
+        EXPECT_EQ(std::string(pConn->pConnectProps->szSslMode), savedMode)
+            << "Test Connection picked a different mode for " << label;
+        EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, savedPolicy)
+            << "Test Connection picked a different policy for " << label;
+    }
+}
+
+// A reused HDBC must not keep the previous connection's SSL mode.
+
+class SslModeResetTest : public ::testing::Test {
+protected:
+    RS_ENV_INFO envInfo;
+    RS_CONN_INFO *pConn;
+
+    /** @brief Creates the connection. */
+    void SetUp() override {
+        pConn = new RS_CONN_INFO(&envInfo);
+        pConn->pConnectProps = new RS_CONNECT_PROPS_INFO();
+        pConn->pConnAttr = new RS_CONN_ATTR_INFO();
+    }
+
+    /** @brief Frees the connection. */
+    void TearDown() override { freeTestConnection(envInfo, pConn); }
+};
+
+TEST_F(SslModeResetTest, reset_clears_a_previous_connections_mode) {
+    // Leave a disabled mode behind from both a DSN and a connection string.
+    strncpy(pConn->pConnectProps->szSslMode, "disable",
+            sizeof(pConn->pConnectProps->szSslMode) - 1);
+    pConn->pConnectProps->dsnSslMode = std::string("disable");
+    pConn->pConnectProps->connEncryptionMethod = 0;
+    pConn->pConnectProps->iSslMismatchPolicy = PQ_SSL_MISMATCH_STRICT;
+
+    pConn->resetConnectProps();
+
+    EXPECT_STREQ(pConn->pConnectProps->szSslMode, "")
+        << "A reused handle must not inherit the previous connection's mode";
+    EXPECT_EQ(pConn->pConnectProps->iEncryptionMethod, 2)
+        << "After the reset the re-derived mode must be verify-full";
+    EXPECT_FALSE(pConn->pConnectProps->dsnSslMode.has_value());
+    EXPECT_FALSE(pConn->pConnectProps->connSslMode.has_value());
+    EXPECT_FALSE(pConn->pConnectProps->dsnEncryptionMethod.has_value());
+    EXPECT_FALSE(pConn->pConnectProps->connEncryptionMethod.has_value());
+    EXPECT_EQ(pConn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_STRICT)
+        << "Nothing has been resolved yet on a fresh handle, so the strict "
+           "policy is what a mismatch would get";
+}
 
 TEST_F(UseDeclareFetchConnStringTest, UseDeclareFetch_default_is_zero) {
     parseConnStr("Driver=Amazon Redshift ODBC Driver;");
@@ -361,4 +1007,110 @@ TEST(SuppliedCredentialsConnStr, DestructorScrubsCredentials) {
         EXPECT_EQ(0, storage[origOffset + i]) << "szOrigPassword byte " << i;
         EXPECT_EQ(0, storage[passwordOffset + i]) << "szPassword byte " << i;
     }
+}
+
+/*====================================================================================================================================================*/
+
+// SSLMode/EncryptionMethod logic of the Windows DSN dialog, which builds on every platform.
+namespace {
+
+// Combo index equals the EncryptionMethod value.
+const int EM_DISABLE = 0;
+const int EM_VERIFY_CA = 1;
+const int EM_VERIFY_FULL = 2;
+const int EM_REQUIRE = 3;
+
+// What the setup table reads for EncryptionMethod when the DSN lacks it.
+const int EM_TABLE_DEFAULT = EM_VERIFY_FULL;
+
+struct OpenCase {
+    const char *name;
+    bool sslModeNamed;
+    const char *sslMode;
+    int encryptionMethod;
+    int expectedIndex;
+};
+
+const OpenCase kOpenCases[] = {
+    {"names_neither_key", false, "verify-full", EM_TABLE_DEFAULT, EM_VERIFY_FULL},
+    {"names_only_encryption_method_3", false, "verify-full", EM_REQUIRE, EM_REQUIRE},
+    {"names_only_sslmode_require", true, "require", EM_TABLE_DEFAULT, EM_REQUIRE},
+    {"names_only_sslmode_disable", true, "DISABLE", EM_TABLE_DEFAULT, EM_DISABLE},
+    {"sslmode_outranks_encryption_method", true, "verify-full", EM_REQUIRE, EM_VERIFY_FULL},
+    {"sslmode_the_combo_cannot_show", true, "prefer", EM_REQUIRE, EM_REQUIRE},
+    // DSNs saved by older releases open on the mode they carry.
+    {"old_dsn_encryption_method_1", false, "verify-full", EM_VERIFY_CA, EM_VERIFY_CA},
+    {"old_dsn_sslmode_verify_ca", true, "verify-ca", EM_TABLE_DEFAULT, EM_VERIFY_CA},
+    {"old_windows_dsn_with_both_keys", true, "verify-ca", EM_VERIFY_CA, EM_VERIFY_CA},
+};
+
+/**
+ * @brief Prints the case name on failure instead of raw bytes.
+ * @param c The case.
+ * @param os Stream gtest prints to.
+ */
+void PrintTo(const OpenCase &c, std::ostream *os) { *os << c.name; }
+
+class DsnSetupSslTabOpen : public ::testing::TestWithParam<OpenCase> {};
+
+} // namespace
+
+/*====================================================================================================================================================*/
+
+// The SSL tab opens on the mode the DSN resolves to, so an untouched save
+// doesn't change it.
+TEST_P(DsnSetupSslTabOpen, shows_the_mode_the_dsn_resolves_to)
+{
+    const OpenCase &c = GetParam();
+
+    EXPECT_EQ(rs_dsn_em_index_on_open(c.sslModeNamed, c.sslMode, c.encryptionMethod),
+              c.expectedIndex)
+        << c.name << ": SSLMode " << (c.sslModeNamed ? c.sslMode : "(absent)")
+        << ", EncryptionMethod " << c.encryptionMethod;
+}
+
+INSTANTIATE_TEST_SUITE_P(DsnSetup, DsnSetupSslTabOpen, ::testing::ValuesIn(kOpenCases),
+                         [](const ::testing::TestParamInfo<OpenCase> &info) {
+                             return std::string(info.param.name);
+                         });
+
+/*====================================================================================================================================================*/
+
+// Adding an SSLMode here would outrank EncryptionMethod=1 and change the mode.
+TEST(DsnSetupSslKeys, a_single_key_dsn_keeps_only_its_own_key)
+{
+    const int sslModeNamed = 0;
+    const int encryptionMethodNamed = 1;
+
+    EXPECT_FALSE(rs_dsn_ssl_key_is_named(RS_DSN_SSL_MODE_KEY, sslModeNamed,
+                                         encryptionMethodNamed))
+        << "SSLMode was not in the DSN, so it must not be written or tested";
+    EXPECT_TRUE(rs_dsn_ssl_key_is_named(RS_DSN_ENCRYPTION_METHOD_KEY, sslModeNamed,
+                                        encryptionMethodNamed))
+        << "EncryptionMethod was in the DSN, so it must be kept";
+}
+
+// Writing either key would pin verify-full and drop the mismatch allowance.
+TEST(DsnSetupSslKeys, a_dsn_naming_neither_key_gains_neither)
+{
+    EXPECT_FALSE(rs_dsn_ssl_key_is_named(RS_DSN_SSL_MODE_KEY, 0, 0))
+        << "an unnamed SSLMode must not be written or tested at its default";
+    EXPECT_FALSE(rs_dsn_ssl_key_is_named(RS_DSN_ENCRYPTION_METHOD_KEY, 0, 0))
+        << "an unnamed EncryptionMethod must not be written or tested at its default";
+}
+
+TEST(DsnSetupSslKeys, keys_are_matched_without_regard_to_case)
+{
+    EXPECT_FALSE(rs_dsn_ssl_key_is_named("sslmode", 0, 1))
+        << "the setup table compares attribute names case-insensitively";
+    EXPECT_FALSE(rs_dsn_ssl_key_is_named("ENCRYPTIONMETHOD", 1, 0))
+        << "the setup table compares attribute names case-insensitively";
+}
+
+TEST(DsnSetupSslKeys, other_attributes_are_unaffected)
+{
+    EXPECT_TRUE(rs_dsn_ssl_key_is_named("HostName", 0, 0))
+        << "only the two SSL mode keys are gated";
+    EXPECT_TRUE(rs_dsn_ssl_key_is_named("TLSMethod", 0, 0))
+        << "only the two SSL mode keys are gated";
 }

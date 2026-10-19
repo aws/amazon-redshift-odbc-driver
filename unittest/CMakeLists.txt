@@ -12,6 +12,9 @@ add_executable(${EXECUTABLE_NAME} ${TEST_SOURCES})
 
 if (WIN32)
     target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} ${CMAKE_FIND_LIBRARY_PREFIXES}rsodbc64-test ${RS_STATIC_LIBS} crypto ssl)
+    # SslModeDsnTest writes registry DSNs (odbccp32 needs legacy_stdio_definitions);
+    # the fake TLS endpoint opens loopback sockets (ws2_32).
+    target_link_libraries(${EXECUTABLE_NAME} odbccp32 legacy_stdio_definitions ws2_32)
     target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/pgclient/src/include/port/win32)
     target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/pgclient/src/include/port/win32_msvc)
     target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/pgclient/src/port)

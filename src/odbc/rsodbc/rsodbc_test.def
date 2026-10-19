@@ -406,6 +406,14 @@ EXPORTS
 	PQfinish
 	; RS_CONN_INFO::parseConnectString(char*, size_t, int, int) - public
 	?parseConnectString@RS_CONN_INFO@@QEAAHPEAD_KHH@Z
+	; RS_CONN_INFO::readMoreConnectPropsFromRegistry(int) - public
+	?readMoreConnectPropsFromRegistry@RS_CONN_INFO@@QEAAXH@Z
+	; RS_CONN_INFO::resolveSslPolicy(RS_CONNECT_PROPS_INFO*) - public static
+	?resolveSslPolicy@RS_CONN_INFO@@SAXPEAVRS_CONNECT_PROPS_INFO@@@Z
+	; RS_CONN_INFO::readEncryptionMethod(const char*) - public static
+	?readEncryptionMethod@RS_CONN_INFO@@SAHPEBD@Z
+	; parseConnectionString(const std::string&)
+	?parseConnectionString@@YA?AV?$map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@V?$function@$$A6A_NAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@0@Z@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@@std@@@2@@std@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@@Z
 	; Portal management API (libpq)
 	PQsendBindPortal
 	PQsendExecutePortal

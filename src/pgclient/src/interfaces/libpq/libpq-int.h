@@ -23,6 +23,7 @@
 /* We assume libpq-fe.h has already been included. */
 #include "postgres_fe.h"
 #include "libpq-events.h"
+#include "pq_tls_policy.h"
 #include "libpq/zpq_stream.h"
 
 #if defined LINUX 
@@ -498,6 +499,7 @@ struct pg_conn
 	// Min TLS
 	char	   *min_tls;			/* min TLS */
 	char	   *prefer_pq;		/* advertise PQ hybrid groups in TLS 1.3 ClientHello */
+	PQSslMismatchPolicy ssl_mismatch_policy;	/* whether a host-name mismatch only warns */
 
 	// Redshift Native Auth
 	char	   *idp_type;			

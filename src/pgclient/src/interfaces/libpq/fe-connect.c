@@ -362,6 +362,9 @@ static int	connectDBStart(PGconn *conn);
 static int	connectDBComplete(PGconn *conn);
 static PGPing internal_ping(PGconn *conn);
 static PGconn *makeEmptyPGconn(void);
+static PGconn *connectStartParamsWithSslPolicy(const char **keywords,
+					 const char **values, int expand_dbname,
+					 PQSslMismatchPolicy policy);
 static void fillPGconn(PGconn *conn, PQconninfoOption *connOptions);
 static void freePGconn(PGconn *conn);
 static void closePGconn(PGconn *conn);
@@ -732,6 +735,25 @@ PQconnectStartParams(const char **keywords,
 					 const char **values,
 					 int expand_dbname)
 {
+	return connectStartParamsWithSslPolicy(keywords, values, expand_dbname,
+										  PQ_SSL_MISMATCH_STRICT);
+}
+
+/**
+ * @brief Begins a connection like PQconnectStartParams, with a host-name
+ *        mismatch policy set before the TLS handshake.
+ * @param keywords NULL-terminated connection option names.
+ * @param values Values for keywords.
+ * @param expand_dbname Nonzero to expand dbname as a connection string.
+ * @param policy What to do when the certificate does not name the host.
+ * @return The connection, as PQconnectStartParams returns it.
+ */
+static PGconn *
+connectStartParamsWithSslPolicy(const char **keywords,
+					 const char **values,
+					 int expand_dbname,
+					 PQSslMismatchPolicy policy)
+{
 	PGconn	   *conn;
 	PQconninfoOption *connOptions;
 	FILE *fp = NULL;
@@ -793,6 +815,9 @@ PQconnectStartParams(const char **keywords,
 	 */
 	PQconninfoFree(connOptions);
 
+	/* Must be set before connectDBStart, which runs the TLS handshake. */
+	conn->ssl_mismatch_policy = policy;
+
 	/*
 	 * Compute derived options
 	 */
@@ -818,6 +843,31 @@ PQconnectStartParams(const char **keywords,
         conn->m_pCscExecutor = NULL;
     }
     
+
+	return conn;
+}
+
+/**
+ * @brief PQconnectdbParams with a host-name mismatch policy.
+ * @param keywords NULL-terminated connection option names.
+ * @param values Values for keywords.
+ * @param expand_dbname Nonzero to expand dbname as a connection string.
+ * @param policy What to do when the certificate does not name the host.
+ * @return The connection, as PQconnectdbParams returns it.
+ */
+PGconn *
+pqConnectdbParamsWithSslPolicy(const char **keywords,
+				  const char **values,
+				  int expand_dbname,
+				  PQSslMismatchPolicy policy)
+{
+	PGconn	   *conn = connectStartParamsWithSslPolicy(keywords, values,
+														  expand_dbname, policy);
+
+	if (conn && conn->status != CONNECTION_BAD)
+	{
+		(void) connectDBComplete(conn);
+	}
 
 	return conn;
 }

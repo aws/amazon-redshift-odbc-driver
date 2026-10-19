@@ -31,6 +31,7 @@
 #include <prsht.h>
 #include  "resource.h"
 #include "version.h"
+#include "rs_dsn_ssl_keys.h"
 #include <openssl/evp.h>
 
 #define ODBC_INI "ODBC.INI"
@@ -83,6 +84,8 @@
 #define RS_IAM_CA_PATH            "CaPath"
 #define RS_IAM_CA_FILE            "CaFile"
 #define RS_SSL_MODE               "SSLMode"
+/* Must match the attrs table; the named-key tracking compares against it. */
+#define RS_ENCRYPTION_METHOD      "EncryptionMethod"
 #define RS_IAM_STS_ENDPOINT_URL   "StsEndpointUrl"
 #define RS_IAM_AUTH_PROFILE       "AuthProfile"
 #define RS_SCOPE                  "scope"
@@ -168,7 +171,7 @@
 #define DFLT_DB ""
 #define DFLT_DSN ""
 //#define DFLT_EDP "1"
-#define DFLT_EM "1"
+#define DFLT_EM "2"
 #define DFLT_TLS "2"
 //#define DFLT_ECMD "0"
 #define DFLT_FG "0"
@@ -209,7 +212,7 @@
 #define DFLT_SC_ROWS "100"
 #define DFLT_USE_DECLARE_FETCH "0"
 #define DFLT_FETCH_SIZE "100"
-#define DFLT_SSL_MODE "verify-ca"
+#define DFLT_SSL_MODE "verify-full"
 #define DFTL_TLS_VERSION "1.2" // Default TLS version is 1.2
 
 // IDP default values
@@ -353,6 +356,11 @@ typedef struct {
 	BOOL		csc_inited;			    /* TRUE => Cursor tab has been init'd */
 	BOOL		ssl_inited;			    /* TRUE => SSL tab has been init'd */
 	BOOL		proxy_inited;			/* TRUE => Proxy tab has been init'd */
+/*	SSL keys are written only once named, so saving a DSN does not pin the default.
+ *	Per key, since writing SSLMode would override an EncryptionMethod-only DSN. */
+	BOOL		ssl_mode_named;			/* TRUE => SSLMode was named */
+	BOOL		encryption_method_named;	/* TRUE => EncryptionMethod was named */
+	int			em_index_on_open;		/* SSL tab mode shown on open */
 }	rs_dsn_setup_t, *rs_dsn_setup_ptr_t;
 
 typedef struct {
@@ -1621,6 +1629,12 @@ rs_dsn_set_attr(rs_dsn_setup_ptr_t rs_setup_ctxt, const char *attr, char *val)
 
 	set_attr_val(&(rs_setup_ctxt->attrs[i]), val);
 
+	if (_stricmp(rs_setup_ctxt->attrs[i].attr_code, RS_SSL_MODE) == 0) {
+		rs_setup_ctxt->ssl_mode_named = TRUE;
+	}
+	else if (_stricmp(rs_setup_ctxt->attrs[i].attr_code, RS_ENCRYPTION_METHOD) == 0) {
+		rs_setup_ctxt->encryption_method_named = TRUE;
+	}
 
 	return TRUE;
 }
@@ -2466,7 +2480,12 @@ static LRESULT CALLBACK rs_dsn_ssl_sheet(HWND hwndDlg, UINT message, WPARAM wPar
             lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_EM),"verify-ca"); 
 			lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_EM), "verify-full");
 			lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_EM), "require");
-			ComboBox_SetCurSel(GetDlgItem(hwndDlg, IDC_COMBO_EM), rs_dsn_int_attr(rs_dsn_setup_ctxt, "EncryptionMethod"));
+			/* Show the mode the DSN resolves to, not the EncryptionMethod default. */
+			ComboBox_SetCurSel(GetDlgItem(hwndDlg, IDC_COMBO_EM), rs_dsn_em_index_on_open(
+				rs_dsn_setup_ctxt->ssl_mode_named, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_SSL_MODE),
+				rs_dsn_int_attr(rs_dsn_setup_ctxt, "EncryptionMethod")));
+			/* What the combo actually shows, so an out-of-range value reads back unchanged. */
+			rs_dsn_setup_ctxt->em_index_on_open = ComboBox_GetCurSel(GetDlgItem(hwndDlg, IDC_COMBO_EM));
 //			CheckDlgButton(hwndDlg, IDC_VSC, rs_dsn_bool_attr(rs_dsn_setup_ctxt, "ValidateServerCertificate"));
 //			SetDlgItemText(hwndDlg, IDC_EDIT_HNIC, rs_dsn_get_attr(rs_dsn_setup_ctxt, "HostNameInCertificate"));
 			SetDlgItemText(hwndDlg, IDC_EDIT_TS, rs_dsn_get_attr(rs_dsn_setup_ctxt, "TrustStore"));
@@ -3337,6 +3356,10 @@ rs_dsn_make_connect_str(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt, char *connectstr,i
 			((!attrs[i].attr_val[0])
 				&& (attrs[i].large_attr_val == NULL)))
  			continue;
+		/* Test the mode the saved DSN would use, not the table default. */
+		if (!rs_dsn_ssl_key_is_named(attrs[i].attr_code, rs_dsn_setup_ctxt->ssl_mode_named,
+				rs_dsn_setup_ctxt->encryption_method_named))
+			continue;
 		*ptr++ = ';';
 #ifndef BUGNNNN
 		if (strcmp("ASVR", rs_dsn_attr_name2code(attrs[i].attr_code)))
@@ -3600,7 +3623,11 @@ rs_dsn_read_ssl_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 
 	if (rs_dsn_setup_ctxt->ssl_inited) 
     {
-		rs_dsn_read_int_entry(hdlg, rs_dsn_setup_ctxt, IDC_COMBO_EM, "EncryptionMethod", NULL);
+		/* Only a changed combo names a mode; opening the tab leaves the keys alone. */
+		BOOL em_changed = ComboBox_GetCurSel(GetDlgItem(hdlg, IDC_COMBO_EM)) !=
+						  rs_dsn_setup_ctxt->em_index_on_open;
+		if (em_changed)
+			rs_dsn_read_int_entry(hdlg, rs_dsn_setup_ctxt, IDC_COMBO_EM, "EncryptionMethod", NULL);
 //		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_VSC, "ValidateServerCertificate");
 //		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_EDIT_HNIC, "HostNameInCertificate");
 		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_EDIT_TS, "TrustStore");
@@ -3625,7 +3652,8 @@ rs_dsn_read_ssl_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 		if (em == 3)
 			sslMode = SSL_MODE_REQUIRE;
 
-		rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_SSL_MODE, sslMode);
+		if (em_changed)
+			rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_SSL_MODE, sslMode);
 
 		int tls = rs_dsn_int_attr(rs_dsn_setup_ctxt, "TLSMethod");
 		char *tlsVersion = TLS_VERSION_12;
@@ -3741,6 +3769,12 @@ rs_dsn_write_attrs(
  *	iterate over the attrs and write them out
  */
 	for (i = 0; attrs[i].attr_code[0]; i++) {
+		/* Skip SSL keys nobody named; see ssl_mode_named. */
+		if (!rs_dsn_ssl_key_is_named(attrs[i].attr_code, rs_dsn_setup_ctxt->ssl_mode_named,
+				rs_dsn_setup_ctxt->encryption_method_named)) {
+			continue;
+		}
+
 		rs_dsn_log(__LINE__, "DSN %s: attr %s value %s", dsn, attrs[i].attr_code, attrs[i].attr_val);
 
 		if (!SQLWritePrivateProfileString(dsn, attrs[i].attr_code, get_attr_val(&attrs[i], TRUE), ODBC_INI))
@@ -3834,6 +3868,21 @@ rs_dsn_read_attrs(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 					free(pwd);
 				}
 			}
+		}
+	}
+
+/*	Probe the SSL keys directly: the loop above uses the table value as the default,
+ *	so it cannot tell a DSN's own mode from the default; a rename would drop it. */
+	{
+		char		ssl_mode_probe[MAXVALLEN];
+
+		if (SQLGetPrivateProfileString(dsn, RS_SSL_MODE, "", ssl_mode_probe,
+				sizeof(ssl_mode_probe), ODBC_INI) > 0) {
+			rs_dsn_setup_ctxt->ssl_mode_named = TRUE;
+		}
+		if (SQLGetPrivateProfileString(dsn, RS_ENCRYPTION_METHOD, "", ssl_mode_probe,
+				sizeof(ssl_mode_probe), ODBC_INI) > 0) {
+			rs_dsn_setup_ctxt->encryption_method_named = TRUE;
 		}
 	}
 

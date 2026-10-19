@@ -34,6 +34,8 @@
 #include <vector>
 
 #include "libpq-fe.h"
+/* Driver-private SSL mismatch policy, not a public libpq option. */
+#include "pq_tls_policy.h"
 
 #define RS_MAX_VARCHAR_COLUMN_SIZE 65535
 
@@ -402,6 +404,13 @@ public:
    static bool convertToBoolVal(const char *pVal);
 
    static SQLRETURN doConnection(RS_CONN_INFO *pConn);
+
+   // Resolves the effective mode and mismatch policy. Called once, after both
+   // sources are read, so the answer cannot depend on parse order.
+   static void resolveSslPolicy(RS_CONNECT_PROPS_INFO *pConnectProps);
+
+   // Reads a whole EncryptionMethod value; anything else is unreadable.
+   static int readEncryptionMethod(const char *text);
 
 
    static SQLRETURN  SQL_API RS_SQLConnect(SQLHDBC phdbc,
@@ -1143,6 +1152,17 @@ struct SHOWPROCEDURESFUNCTIONSResult {
 #define RS_CSC_MAX_FILE_SIZE          "CscMaxFileSize"
 #define RS_SSL_MODE                   "SSLMode"
 #define RS_ENCRYPTION_METHOD          "EncryptionMethod"
+// Stands in for a non-blank EncryptionMethod that isn't a number: it names no mode
+// but still counts as a choice, so the connection stays strict.
+#define RS_ENCRYPTION_METHOD_UNREADABLE (-1)
+
+/* Where the effective SSL mode came from. Only the built-in default can get
+ * the host-name mismatch allowance. */
+#define RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT        0
+#define RS_SSL_MODE_SOURCE_DSN_SSL_MODE            1
+#define RS_SSL_MODE_SOURCE_DSN_ENCRYPTION_METHOD   2
+#define RS_SSL_MODE_SOURCE_CONN_SSL_MODE           3
+#define RS_SSL_MODE_SOURCE_CONN_ENCRYPTION_METHOD  4
 #define RS_VALIDATE_SERVER_CERTIFICATE  "ValidateServerCertificate"
 //#define RS_HOST_NAME_IN_CERTIFICATE     "HostNameInCertificate"
 #define RS_TRUST_STORE                  "TrustStore"
@@ -1381,8 +1401,10 @@ public:
 
       llCscThreshold = 0LL;
 
-	  strncpy(szSslMode,"verify-ca",sizeof(szSslMode));
-      iEncryptionMethod = 1;
+      strncpy(szSslMode,"verify-full",sizeof(szSslMode));
+      iSslMismatchPolicy = 0;   /* PQ_SSL_MISMATCH_STRICT until resolved */
+      iSslModeSource = 0;       /* RS_SSL_MODE_SOURCE_BUILT_IN_DEFAULT */
+      iEncryptionMethod = 2;
       iValidateServerCertificate = 1;
 
 //      szHostNameInCertificate[0] = '\0';
@@ -1544,6 +1566,15 @@ public:
     If set to 1 (SSL), data is encrypted using SSL. 
     Default is zero.
 */
+    // Raw values from each source: nullopt is absent, empty is present but blank.
+    std::optional<std::string> dsnSslMode;
+    std::optional<std::string> connSslMode;
+    std::optional<int> dsnEncryptionMethod;
+    std::optional<int> connEncryptionMethod;
+    // Resolved PQSslMismatchPolicy, held as an int and cast at the libpq call.
+    int iSslMismatchPolicy;
+    // RS_SSL_MODE_SOURCE_* that settled the mode; logged and used for the out string.
+    int iSslModeSource;
     int iEncryptionMethod;
 
 /*  Determines whether the driver validates the certificate that is sent by the database server when SSL encryption is enabled (Encryption Method=1). 

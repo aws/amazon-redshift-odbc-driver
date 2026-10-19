@@ -7,6 +7,8 @@
 */
 
 #include "rsodbc.h"
+/* Driver-private SSL mismatch policy, not a public libpq option. */
+#include "pq_tls_policy.h"
 #include "rs_pq_type.h"
 #include "rsutil.h"
 #include "rsunicode.h"
@@ -74,6 +76,28 @@ int getResultConcurrencyTypeForCsc(void *pCallerContext);
 //---------------------------------------------------------------------------------------------------------igarish
 // Connect using libpq with given connection attributes.
 //
+/**
+ * @brief Names the source that settled the SSL mode, for the connection log.
+ * @param source An RS_SSL_MODE_SOURCE_* value.
+ * @return A fixed description such as "DSN SSLMode" or "built-in default".
+ */
+static const char *sslModeSourceName(int source)
+{
+    switch (source)
+    {
+    case RS_SSL_MODE_SOURCE_DSN_SSL_MODE:
+        return "DSN SSLMode";
+    case RS_SSL_MODE_SOURCE_DSN_ENCRYPTION_METHOD:
+        return "DSN EncryptionMethod";
+    case RS_SSL_MODE_SOURCE_CONN_SSL_MODE:
+        return "connection SSLMode";
+    case RS_SSL_MODE_SOURCE_CONN_ENCRYPTION_METHOD:
+        return "connection EncryptionMethod";
+    default:
+        return "built-in default";
+    }
+}
+
 SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 {
 //    RS_ENV_INFO *pEnv = pConn->phenv;
@@ -172,6 +196,15 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 
         ppKeywords[iCount] = "sslmode";
         ppValues[iCount++] = szSslMode;
+
+        // The mismatch policy goes to libpq as an argument, not a keyword, so no
+        // connection string can ask for it.
+        RS_LOG_DEBUG("RSLIBPQ",
+                     "SSLMode=%s, SSLModeSource=%s, SSLMismatchPolicy=%s",
+                     szSslMode, sslModeSourceName(pConnectProps->iSslModeSource),
+                     pConnectProps->iSslMismatchPolicy ==
+                             PQ_SSL_MISMATCH_ALLOW_TEMPORARILY
+                         ? "tolerate mismatch" : "strict");
 
         if(_stricmp(szSslMode,"disable") != 0)
         {
@@ -481,7 +514,9 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
         do
         {
             networkError = FALSE;
-            pgConn = PQconnectdbParams((const char **)ppKeywords, (const char **)ppValues, FALSE);
+            pgConn = pqConnectdbParamsWithSslPolicy(
+                (const char **)ppKeywords, (const char **)ppValues, FALSE,
+                (PQSslMismatchPolicy)pConnectProps->iSslMismatchPolicy);
 
             // Release previous connection resources
             libpqFreeConnect(pConn);

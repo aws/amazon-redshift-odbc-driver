@@ -23,6 +23,7 @@
 #include <rsodbc.h>
 #include <rsutil.h>
 #include <string>
+#include "pq_tls_policy.h"
 
 /*
  * Fixture that builds a minimal RS_CONN_INFO with allocated connection
@@ -131,4 +132,21 @@ TEST_F(ParseConnectStringTest, PasswordBufferSizedForLongPasswords) {
     EXPECT_EQ(sizeof(conn->pConnectProps->szPassword),
               (size_t)PADB_MAX_PARAMETERS);
     EXPECT_GT(sizeof(conn->pConnectProps->szPassword), (size_t)MAX_IDEN_LEN);
+}
+
+// Only a known mode is ever copied into szSslMode, so an over-long value can't
+// overflow it. It falls back to verify-full but, being unreadable, stays strict.
+TEST_F(ParseConnectStringTest, SslModeAtIdentifierLengthBoundaryNamesNoMode) {
+    std::string sslMode(MAX_IDEN_LEN, 'D');
+    std::string connStr = "SSLMode=" + sslMode;
+
+    conn->parseConnectString(const_cast<char *>(connStr.c_str()), SQL_NTS,
+                             FALSE, FALSE);
+    RS_CONN_INFO::resolveSslPolicy(conn->pConnectProps);
+
+    ASSERT_TRUE(conn->pConnectProps->connSslMode.has_value());
+    EXPECT_EQ(conn->pConnectProps->connSslMode->size(), sslMode.size())
+        << "The raw value is kept whole, not truncated into the fixed buffer";
+    EXPECT_STREQ(conn->pConnectProps->szSslMode, "verify-full");
+    EXPECT_EQ(conn->pConnectProps->iSslMismatchPolicy, PQ_SSL_MISMATCH_STRICT);
 }
