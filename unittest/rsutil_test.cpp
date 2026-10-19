@@ -5856,6 +5856,55 @@ TEST_F(IntervalD2SParseTest, MaxPrecisionFraction) {
     verifyD2SResult(result, 0, 0, 0, 1, 999999, SQL_FALSE);
 }
 
+// A fractional-seconds field longer than the interval struct can represent is
+// truncated to the supported precision, and stays within the parser's fixed
+// fraction buffer. parse_intervald2s() returns its result by value with no
+// status channel, so the reduced precision is not reported to the caller.
+TEST_F(IntervalD2SParseTest, OverlongFractionSqlStandard) {
+    const char *input = "1 02:03:04.12345678901234567890123456789012345678901234";
+    SQL_INTERVAL_STRUCT result = parse_intervald2s(input, strlen(input));
+    verifyD2SResult(result, 1, 2, 3, 4, 123456, SQL_FALSE);
+}
+
+TEST_F(IntervalD2SParseTest, OverlongFractionPostgresNoDays) {
+    const char *input = "02:03:04.12345678901234567890123456789012345678901234";
+    SQL_INTERVAL_STRUCT result = parse_intervald2s(input, strlen(input));
+    verifyD2SResult(result, 0, 2, 3, 4, 123456, SQL_FALSE);
+}
+
+TEST_F(IntervalD2SParseTest, OverlongFractionPostgresWithDays) {
+    const char *input = "3 days 02:03:04.12345678901234567890123456789012345678";
+    SQL_INTERVAL_STRUCT result = parse_intervald2s(input, strlen(input));
+    verifyD2SResult(result, 3, 2, 3, 4, 123456, SQL_FALSE);
+}
+
+// The postgres-verbose format carries no overall length limit, so the
+// conversion width alone bounds the fraction.
+//
+// The fraction is written into an 11-byte buffer that sits alongside the day,
+// hour, minute and second locals, so an unbounded conversion does not merely
+// produce a wrong fraction: it overruns into those fields and the parse fails
+// outright. Lengths from roughly 48 digits upward are enough to show it, which
+// makes the day/hour/minute/second assertions here a usable signal and not just
+// a check of the fraction.
+TEST_F(IntervalD2SParseTest, OverlongFractionPostgresVerbose) {
+    // Lengths either side of the buffer. The sweep stops at 64 deliberately:
+    // without the bound these already corrupt the surrounding fields, while
+    // much longer inputs fault outright and would take the whole suite down
+    // instead of reporting a failure against the test that found it.
+    for (size_t digits : {6u, 9u, 12u, 24u, 48u, 64u}) {
+        std::string input = "@ 1 days 2 hours 3 mins 4.123456";
+        input.append(digits, '9');
+        input += " secs";
+
+        SQL_INTERVAL_STRUCT result =
+            parse_intervald2s(input.c_str(), (int)input.size());
+
+        SCOPED_TRACE("fraction digits: " + std::to_string(digits));
+        verifyD2SResult(result, 1, 2, 3, 4, 123456, SQL_FALSE);
+    }
+}
+
 // Test suite for intervaly2m_out function (string conversion)
 class IntervalY2MOutTest : public ::testing::Test {
   protected:
@@ -8720,4 +8769,385 @@ TEST_F(SQLGetTypeInfoFilterTest, boolsAsChar_enabled_sql_varchar_includes_bool) 
     EXPECT_EQ(filtered.size(), 2u);
     EXPECT_EQ(filtered[0].szTypeName, "bool");
     EXPECT_EQ(filtered[1].szTypeName, "character varying");
+}
+
+/*====================================================================================================================================================*/
+// postgres_verbose signs the fractional field on a negative interval. The value
+// -3 days -18:39:14.322 comes back as
+// "@ 3 days 18 hours 39 mins 14.-32 secs ago", where .32 is the fraction and the
+// sign restates the interval's own sign. The magnitude is kept and the sign left
+// to the component signs and the "ago" suffix, so the fraction stays inside the
+// valid 0..999999999 range instead of wrapping when stored unsigned.
+TEST_F(IntervalD2SParseTest, SignedFractionalFieldKeepsItsMagnitude) {
+    const char *input = "@ 3 days 18 hours 39 mins 14.-32 secs ago";
+    SQL_INTERVAL_STRUCT result = parse_intervald2s(input, (int)strlen(input));
+
+    verifyD2SResult(result, 3, 18, 39, 14, 320000, SQL_TRUE);
+    EXPECT_LT(result.intval.day_second.fraction, 1000000000u);
+}
+
+// The signed form only ever appears on a negative interval, which the server
+// also marks with "ago". INTERVAL '-0.56 seconds' comes back as
+// "@ 0.-56 secs ago", so the magnitude is .56 and the sign is negative.
+TEST_F(IntervalD2SParseTest, SignedFractionOnlySecondsField) {
+    const char *input = "@ 0.-56 secs ago";
+    SQL_INTERVAL_STRUCT result = parse_intervald2s(input, (int)strlen(input));
+
+    verifyD2SResult(result, 0, 0, 0, 0, 560000, SQL_TRUE);
+}
+
+// A negative fraction mixed with positive components is normalised by the
+// server rather than rendered signed: INTERVAL '1 day -0.56 seconds' comes back
+// as "@ 23 hours 59 mins 59.44 secs", carrying an ordinary unsigned fraction.
+TEST_F(IntervalD2SParseTest, ServerNormalisesMixedSignToUnsignedFraction) {
+    const char *input = "@ 23 hours 59 mins 59.44 secs";
+    SQL_INTERVAL_STRUCT result = parse_intervald2s(input, (int)strlen(input));
+
+    verifyD2SResult(result, 0, 23, 59, 59, 440000, SQL_FALSE);
+}
+
+// The equivalent unsigned rendering must parse identically.
+TEST_F(IntervalD2SParseTest, UnsignedFractionMatchesSignedRendering) {
+    const char *signedText = "@ 3 days 18 hours 39 mins 14.-32 secs ago";
+    const char *plainText = "@ 3 days 18 hours 39 mins 14.32 secs ago";
+
+    SQL_INTERVAL_STRUCT a = parse_intervald2s(signedText, (int)strlen(signedText));
+    SQL_INTERVAL_STRUCT b = parse_intervald2s(plainText, (int)strlen(plainText));
+
+    EXPECT_EQ(a.intval.day_second.fraction, b.intval.day_second.fraction);
+    EXPECT_EQ(a.intval.day_second.second, b.intval.day_second.second);
+    EXPECT_EQ(a.interval_sign, b.interval_sign);
+}
+
+// Fractional-seconds handling for TIMESTAMP and TIME in getRsVal().
+//
+// The fraction is copied out of the column text into a fixed buffer, so the
+// conversion is width-bounded. Both input paths are covered, since they read
+// from different buffers:
+//
+//   - "NUL terminated" : pColData already ends in '\0' and is scanned in place
+//                        (iColDataLen includes the terminator).
+//   - "copied"         : pColData is not terminated, so makeNullTerminateIntVal()
+//                        copies it into szNumBuf first.
+//
+// A column may carry more fractional digits than the target field represents.
+// The value is truncated to the supported precision and stays representable.
+/*====================================================================================================================================================*/
+
+namespace {
+
+// Fractional-seconds string of n digits.
+std::string longFraction(size_t n) { return std::string(n, '9'); }
+
+} // namespace
+
+class OversizedFractionTest : public ::testing::Test {};
+
+// TIMESTAMP is scanned in place. The fraction is nanoseconds, so a longer field
+// truncates to nine digits.
+TEST_F(OversizedFractionTest, Timestamp_NulTerminated_ClampsToNanoseconds) {
+    std::string s = "1955-10-11 11:10:33." + longFraction(60);
+    std::vector<char> data(s.begin(), s.end());
+    data.push_back('\0');
+
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    // iColDataLen includes the NUL, so getRsVal scans pColData directly.
+    getRsVal(data.data(), (int)data.size(), SQL_TYPE_TIMESTAMP, &val,
+             SQL_C_TYPE_TIMESTAMP, TEXT_FORMAT, NULL, 0, true);
+
+    EXPECT_EQ(val.tsVal.year, 1955);
+    EXPECT_EQ(val.tsVal.month, 10);
+    EXPECT_EQ(val.tsVal.day, 11);
+    EXPECT_EQ(val.tsVal.hour, 11);
+    EXPECT_EQ(val.tsVal.minute, 10);
+    EXPECT_EQ(val.tsVal.second, 33);
+    // Truncated to nine digits of nanoseconds.
+    EXPECT_EQ(val.tsVal.fraction, 999999999u);
+}
+
+// TIMESTAMP, copied through szNumBuf: no trailing NUL in the supplied length.
+TEST_F(OversizedFractionTest, Timestamp_Copied_ClampsToNanoseconds) {
+    std::string s = "1955-10-11 11:10:33." + longFraction(60);
+
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    // No terminator within iColDataLen, so makeNullTerminateIntVal() copies.
+    getRsVal(const_cast<char *>(s.data()), (int)s.size(), SQL_TYPE_TIMESTAMP,
+             &val, SQL_C_TYPE_TIMESTAMP, TEXT_FORMAT, NULL, 0, true);
+
+    EXPECT_EQ(val.tsVal.year, 1955);
+    EXPECT_EQ(val.tsVal.second, 33);
+    EXPECT_EQ(val.tsVal.fraction, 999999999u);
+}
+
+// A nine-digit fraction is within precision and passes through unchanged.
+TEST_F(OversizedFractionTest, Timestamp_NineDigitFractionUnchanged) {
+    std::string s = "1955-10-11 11:10:33.123456789";
+    std::vector<char> data(s.begin(), s.end());
+    data.push_back('\0');
+
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data.data(), (int)data.size(), SQL_TYPE_TIMESTAMP, &val,
+             SQL_C_TYPE_TIMESTAMP, TEXT_FORMAT, NULL, 0, true);
+
+    EXPECT_EQ(val.tsVal.fraction, 123456789u);
+}
+
+// TIME carries microsecond precision (6 digits) on this path.
+TEST_F(OversizedFractionTest, Time_NulTerminated_ClampsToMicroseconds) {
+    std::string s = "12:34:56." + longFraction(60);
+    std::vector<char> data(s.begin(), s.end());
+    data.push_back('\0');
+
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data.data(), (int)data.size(), SQL_TYPE_TIME, &val,
+             SQL_C_TYPE_TIME, TEXT_FORMAT, NULL, 0, true);
+
+    EXPECT_EQ(val.tVal.sqltVal.hour, 12);
+    EXPECT_EQ(val.tVal.sqltVal.minute, 34);
+    EXPECT_EQ(val.tVal.sqltVal.second, 56);
+    EXPECT_EQ(val.tVal.fraction, 999999u);
+}
+
+TEST_F(OversizedFractionTest, Time_Copied_ClampsToMicroseconds) {
+    std::string s = "12:34:56." + longFraction(60);
+
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(const_cast<char *>(s.data()), (int)s.size(), SQL_TYPE_TIME, &val,
+             SQL_C_TYPE_TIME, TEXT_FORMAT, NULL, 0, true);
+
+    EXPECT_EQ(val.tVal.sqltVal.hour, 12);
+    EXPECT_EQ(val.tVal.sqltVal.second, 56);
+    EXPECT_EQ(val.tVal.fraction, 999999u);
+}
+
+TEST_F(OversizedFractionTest, Time_SixDigitFractionUnchanged) {
+    std::string s = "12:34:56.123456";
+    std::vector<char> data(s.begin(), s.end());
+    data.push_back('\0');
+
+    RS_VALUE val;
+    memset(&val, 0, sizeof(val));
+    getRsVal(data.data(), (int)data.size(), SQL_TYPE_TIME, &val, SQL_C_TYPE_TIME,
+             TEXT_FORMAT, NULL, 0, true);
+
+    EXPECT_EQ(val.tVal.fraction, 123456u);
+}
+
+// A timezone suffix must not be mistaken for fractional digits. Redshift emits
+// offsets of differing width -- "+00" but also "+05:30" for Asia/Kolkata and
+// "+05:45" for Nepal -- so the fraction is read as digits only rather than by
+// trimming a fixed-width suffix.
+//
+// Both input paths are covered. libpqGetData() reports the column length from
+// PQgetlength(), which excludes the terminator, so a live fetch leaves
+// pColData[iColDataLen - 1] on the last real character and takes the copied
+// path. The NUL-terminated path is reached when a caller includes the
+// terminator in the length, so each case runs twice: once with the terminator
+// inside the length, once without.
+TEST_F(OversizedFractionTest, TimestampTzSuffixIsNotTreatedAsFraction) {
+    struct {
+        const char *text;
+        SQLUINTEGER fraction;
+    } cases[] = {
+        {"2026-01-01 00:00:00.10+05:30", 100000000u},
+        {"2026-01-01 00:00:00.10+05:45", 100000000u},
+        {"2026-01-01 00:00:00.10+00", 100000000u},
+        {"2026-01-01 00:00:00.123456+05:30", 123456000u},
+        {"2026-01-01 00:00:00.123456789+00", 123456789u},
+        {"2026-01-01 00:00:00.123456+00", 123456000u},
+    };
+
+    for (const auto &c : cases) {
+        for (bool terminatorInLength : {true, false}) {
+            std::vector<char> data(c.text, c.text + strlen(c.text));
+            data.push_back('\0');
+            const int length =
+                terminatorInLength ? (int)data.size() : (int)data.size() - 1;
+
+            RS_VALUE val;
+            memset(&val, 0, sizeof(val));
+            getRsVal(data.data(), length, SQL_TYPE_TIMESTAMP, &val,
+                     SQL_C_TYPE_TIMESTAMP, TEXT_FORMAT, NULL, TIMESTAMPTZOID,
+                     true);
+
+            SCOPED_TRACE(std::string(c.text) + (terminatorInLength
+                                                    ? " [NUL-terminated path]"
+                                                    : " [copied path]"));
+            EXPECT_EQ(val.tsVal.year, 2026);
+            EXPECT_EQ(val.tsVal.month, 1);
+            EXPECT_EQ(val.tsVal.day, 1);
+            EXPECT_EQ(val.tsVal.hour, 0);
+            EXPECT_EQ(val.tsVal.minute, 0);
+            EXPECT_EQ(val.tsVal.second, 0);
+            EXPECT_EQ(val.tsVal.fraction, c.fraction);
+        }
+    }
+}
+
+TEST_F(OversizedFractionTest, TimeTzSuffixIsNotTreatedAsFraction) {
+    struct {
+        const char *text;
+        SQLUINTEGER fraction;
+    } cases[] = {
+        {"12:34:56.10+05:30", 100000u},
+        {"12:34:56.10+00", 100000u},
+        {"12:34:56.123456+05:30", 123456u},
+        {"12:34:56.123456", 123456u},
+    };
+
+    for (const auto &c : cases) {
+        for (bool terminatorInLength : {true, false}) {
+            std::vector<char> data(c.text, c.text + strlen(c.text));
+            data.push_back('\0');
+            const int length =
+                terminatorInLength ? (int)data.size() : (int)data.size() - 1;
+
+            RS_VALUE val;
+            memset(&val, 0, sizeof(val));
+            getRsVal(data.data(), length, SQL_TYPE_TIME, &val, SQL_C_TYPE_TIME,
+                     TEXT_FORMAT, NULL, 0, true);
+
+            SCOPED_TRACE(std::string(c.text) + (terminatorInLength
+                                                    ? " [NUL-terminated path]"
+                                                    : " [copied path]"));
+            EXPECT_EQ(val.tVal.sqltVal.hour, 12);
+            EXPECT_EQ(val.tVal.sqltVal.minute, 34);
+            EXPECT_EQ(val.tVal.sqltVal.second, 56);
+            EXPECT_EQ(val.tVal.fraction, c.fraction);
+        }
+    }
+}
+
+/*====================================================================================================================================================*/
+// TIMESTAMP -> SQL_C_TIME via convertSQLDataToCData().
+//
+// This branch has its own fractional-seconds scan, whose result is converted
+// with atoi(), so it is bounded to nine digits to stay within int range.
+// TIME_STRUCT has no fraction field, so a discarded fraction is a truncation.
+/*====================================================================================================================================================*/
+
+class TimestampToCTimeTest : public ::testing::Test {
+  protected:
+    RS_STMT_INFO stmtInfo = {0};
+
+    // convertSQLDataToCData() allocates a diagnostic record whenever it reports a
+    // SQLSTATE. The statement here is a local, so nothing else owns that record;
+    // release it after every test.
+    void TearDown() override {
+        stmtInfo.pErrorList = clearErrorList(stmtInfo.pErrorList);
+    }
+};
+
+TEST_F(TimestampToCTimeTest, OversizedFractionStillReportsTruncation) {
+    std::string s = "2026-01-01 00:00:00." + longFraction(31);
+    TIME_STRUCT out;
+    memset(&out, 0, sizeof(out));
+    SQLLEN cbOffset = 0;
+    SQLLEN lenInd = 0;
+
+    SQLRETURN rc = convertSQLDataToCData(
+        &stmtInfo, const_cast<char *>(s.c_str()), (int)s.size(),
+        SQL_TYPE_TIMESTAMP, &out, sizeof(out), &cbOffset, &lenInd,
+        SQL_C_TYPE_TIME, 0, TEXT_FORMAT, nullptr);
+
+    // Dropping the fraction is a truncation, reported as 01S07.
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    ASSERT_NE(stmtInfo.pErrorList, nullptr);
+    EXPECT_STREQ((char *)stmtInfo.pErrorList->szSqlState, "01S07");
+
+    EXPECT_EQ(out.hour, 0);
+    EXPECT_EQ(out.minute, 0);
+    EXPECT_EQ(out.second, 0);
+}
+
+TEST_F(TimestampToCTimeTest, NoFractionReportsPlainSuccess) {
+    std::string s = "2026-01-01 01:02:03";
+    TIME_STRUCT out;
+    memset(&out, 0, sizeof(out));
+    SQLLEN cbOffset = 0;
+    SQLLEN lenInd = 0;
+
+    SQLRETURN rc = convertSQLDataToCData(
+        &stmtInfo, const_cast<char *>(s.c_str()), (int)s.size(),
+        SQL_TYPE_TIMESTAMP, &out, sizeof(out), &cbOffset, &lenInd,
+        SQL_C_TYPE_TIME, 0, TEXT_FORMAT, nullptr);
+
+    EXPECT_EQ(rc, SQL_SUCCESS);
+    EXPECT_EQ(stmtInfo.pErrorList, nullptr);
+    EXPECT_EQ(out.hour, 1);
+    EXPECT_EQ(out.minute, 2);
+    EXPECT_EQ(out.second, 3);
+}
+
+namespace {
+
+// Microseconds since the 2000-01-01 Postgres epoch for 2026-01-01 plus the
+// given time of day. 2026-01-01 is 9497 days past the epoch.
+long long postgresEpochUsec(int hour, int min, int sec, int usec) {
+    return ((9497LL * 86400LL) + (hour * 3600LL) + (min * 60LL) + sec) *
+               1000000LL +
+           usec;
+}
+
+// Big-endian encoding of a 64-bit wire value.
+void encodeInt64BE(long long value, char (&out)[8]) {
+    for (int i = 0; i < 8; i++) {
+        out[i] = (char)((value >> (56 - 8 * i)) & 0xFF);
+    }
+}
+
+} // namespace
+
+// Binary-format TIMESTAMP -> SQL_C_TIME.
+//
+// For binary input the value is formatted into a scratch buffer and the scan
+// reads that buffer, not pColData, which holds the raw eight-byte integer.
+TEST_F(TimestampToCTimeTest, BinaryFormatScansPreparedTextNotRawBytes) {
+    // 2026-01-01 01:02:03 exactly, so there is no fraction to discard.
+    char raw[8];
+    encodeInt64BE(postgresEpochUsec(1, 2, 3, 0), raw);
+
+    TIME_STRUCT out;
+    memset(&out, 0, sizeof(out));
+    SQLLEN cbOffset = 0;
+    SQLLEN lenInd = 0;
+
+    SQLRETURN rc = convertSQLDataToCData(
+        &stmtInfo, raw, (int)sizeof(raw), SQL_TYPE_TIMESTAMP, &out, sizeof(out),
+        &cbOffset, &lenInd, SQL_C_TYPE_TIME, 0, BINARY_FORMAT, nullptr);
+
+    EXPECT_TRUE(SQL_SUCCEEDED(rc));
+    EXPECT_EQ(stmtInfo.pErrorList, nullptr);
+    EXPECT_EQ(out.hour, 1);
+    EXPECT_EQ(out.minute, 2);
+    EXPECT_EQ(out.second, 3);
+}
+
+// The same path with a non-zero fraction. TIME_STRUCT has no fractional field,
+// so the microseconds are discarded and that must be reported as a truncation.
+TEST_F(TimestampToCTimeTest, BinaryFormatWithFractionReportsTruncation) {
+    char raw[8];
+    encodeInt64BE(postgresEpochUsec(1, 2, 3, 123456), raw);
+
+    TIME_STRUCT out;
+    memset(&out, 0, sizeof(out));
+    SQLLEN cbOffset = 0;
+    SQLLEN lenInd = 0;
+
+    SQLRETURN rc = convertSQLDataToCData(
+        &stmtInfo, raw, (int)sizeof(raw), SQL_TYPE_TIMESTAMP, &out, sizeof(out),
+        &cbOffset, &lenInd, SQL_C_TYPE_TIME, 0, BINARY_FORMAT, nullptr);
+
+    EXPECT_EQ(rc, SQL_SUCCESS_WITH_INFO);
+    ASSERT_NE(stmtInfo.pErrorList, nullptr);
+    EXPECT_STREQ((char *)stmtInfo.pErrorList->szSqlState, "01S07");
+
+    EXPECT_EQ(out.hour, 1);
+    EXPECT_EQ(out.minute, 2);
+    EXPECT_EQ(out.second, 3);
 }

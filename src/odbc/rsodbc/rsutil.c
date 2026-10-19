@@ -5113,7 +5113,16 @@ SQLRETURN convertSQLDataToCData(RS_STMT_INFO *pStmt, char *pColData,
 					}
 
 					// Not using  timezone value.
-					sscanf(pColData, "%4hd-%2hd-%2hd %2hd:%2hd:%2hd.%s", &(rsVal.tsVal.year),
+					// Scan pTemp, not pColData: in binary format pTemp points at
+					// the text produced by timestamp_out() above, while pColData
+					// still holds the raw binary and must not be parsed as text.
+					// The fraction is bounded to TIME_FRAC_PRECISION_NS digits,
+					// which is both the widest value this field can represent
+					// (billionths of a second) and small enough that the atoi()
+					// below cannot exceed INT_MAX. An unbounded conversion here
+					// fed atoi() up to 31 digits, which is undefined behaviour
+					// once the value stops being representable as int.
+					sscanf(pTemp, "%4hd-%2hd-%2hd %2hd:%2hd:%2hd.%9[0-9]", &(rsVal.tsVal.year),
 						&(rsVal.tsVal.month), &(rsVal.tsVal.day),
 						&(rsVal.tsVal.hour), &(rsVal.tsVal.minute), &(rsVal.tsVal.second),
 						szFraction);
@@ -6107,7 +6116,7 @@ int getRsVal(char *pColData, int iColDataLen, short hSQLType, RS_VALUE  *pRsVal,
 
 						if (pColData[iColDataLen - 1] == '\0')
 						{
-							sscanf(pColData, "%4hd-%2hd-%2hd %2hd:%2hd:%2hd.%s", &(pRsVal->tsVal.year), &(pRsVal->tsVal.month), &(pRsVal->tsVal.day),
+							sscanf(pColData, "%4hd-%2hd-%2hd %2hd:%2hd:%2hd.%9[0-9]", &(pRsVal->tsVal.year), &(pRsVal->tsVal.month), &(pRsVal->tsVal.day),
 								&(pRsVal->tsVal.hour), &(pRsVal->tsVal.minute), &(pRsVal->tsVal.second),
 								szFraction);
 						}
@@ -6115,17 +6124,17 @@ int getRsVal(char *pColData, int iColDataLen, short hSQLType, RS_VALUE  *pRsVal,
 						{
 							makeNullTerminateIntVal(pColData, iColDataLen, szNumBuf, MAX_NUMBER_BUF_LEN + 1);
 
-							sscanf(szNumBuf, "%4hd-%2hd-%2hd %2hd:%2hd:%2hd.%s", &(pRsVal->tsVal.year), &(pRsVal->tsVal.month), &(pRsVal->tsVal.day),
+							sscanf(szNumBuf, "%4hd-%2hd-%2hd %2hd:%2hd:%2hd.%9[0-9]", &(pRsVal->tsVal.year), &(pRsVal->tsVal.month), &(pRsVal->tsVal.day),
 								&(pRsVal->tsVal.hour), &(pRsVal->tsVal.minute), &(pRsVal->tsVal.second),
 								szFraction);
 						}
 
-						// Pad zeros at the right
+						// Pad zeros at the right. The scan above accepts digits only,
+						// so any timezone suffix has already been excluded and the
+						// length here is the fractional digit count. Subtracting a
+						// fixed suffix width would mis-handle offsets that are not
+						// three characters, such as the "+05:30" of Asia/Kolkata.
 						fractionLen = (int)strlen(szFraction);
-						if (hRsSpecialType == TIMESTAMPTZOID)
-						{
-							fractionLen -= 3;
-						}
 						if (fractionLen > 0)
 						{
 							for (i = fractionLen + 1; i < 10; i++)
@@ -6247,14 +6256,14 @@ int getRsVal(char *pColData, int iColDataLen, short hSQLType, RS_VALUE  *pRsVal,
 
 						if (pColData[iColDataLen - 1] == '\0')
 						{
-							sscanf(pColData, "%2hd:%2hd:%2hd.%s", &(pRsVal->tVal.sqltVal.hour), &(pRsVal->tVal.sqltVal.minute), &(pRsVal->tVal.sqltVal.second),
+							sscanf(pColData, "%2hd:%2hd:%2hd.%6[0-9]", &(pRsVal->tVal.sqltVal.hour), &(pRsVal->tVal.sqltVal.minute), &(pRsVal->tVal.sqltVal.second),
 								szFraction);
 						}
 						else
 						{
 							makeNullTerminateIntVal(pColData, iColDataLen, szNumBuf, MAX_NUMBER_BUF_LEN + 1);
 
-							sscanf(szNumBuf, "%2hd:%2hd:%2hd.%s", &(pRsVal->tVal.sqltVal.hour), &(pRsVal->tVal.sqltVal.minute), &(pRsVal->tVal.sqltVal.second),
+							sscanf(szNumBuf, "%2hd:%2hd:%2hd.%6[0-9]", &(pRsVal->tVal.sqltVal.hour), &(pRsVal->tVal.sqltVal.minute), &(pRsVal->tVal.sqltVal.second),
 								szFraction);
 						}
 
@@ -16820,6 +16829,14 @@ SQL_INTERVAL_STRUCT parse_intervald2s(const char *buf, int buf_len) {
     result.interval_sign = SQL_FALSE;  // Default to positive
 
     int day = 0, hour = 0, min = 0, sec = 0;
+    /* Fractional seconds are read as digits only, so a sign or any other
+     * non-digit can never enter this buffer. That matters because the server
+     * signs the fractional field of a negative interval under
+     * postgres_verbose, for example "14.-32 secs". Only the magnitude is
+     * taken; the sign belongs to the interval and is carried by the component
+     * signs and the "ago" suffix. Taking it verbatim produced a negative
+     * value that wrapped to roughly 4.29e9 once stored in the unsigned
+     * fraction, far outside the valid 0..999999999 range. */
     char micr[] = "+000000000";
     bool is_negative = false;
     bool is_postgres_verbose = false;
@@ -16851,14 +16868,14 @@ SQL_INTERVAL_STRUCT parse_intervald2s(const char *buf, int buf_len) {
             if (!isValidDayToSecondFormat(original_buf)) {
                 return returnInvalidIntervalD2S();
             }
-            sscanf(buf, "%d %d:%d:%d.%s", &day, &hour, &min, &sec, micr+1);
+            sscanf(buf, "%d %d:%d:%d.%9[0-9]", &day, &hour, &min, &sec, micr+1);
         } else {
             // Postgres but no days: "H:M:S.F"
             // Validate time format
             if (!isValidTimeFormat(buf)) {
                 return returnInvalidIntervalD2S();
             }
-            sscanf(buf, "%d:%d:%d.%s", &hour, &min, &sec, micr+1);
+            sscanf(buf, "%d:%d:%d.%9[0-9]", &hour, &min, &sec, micr+1);
         }
     } else {
         // Postgres or Postgres Verbose format
@@ -16918,7 +16935,36 @@ SQL_INTERVAL_STRUCT parse_intervald2s(const char *buf, int buf_len) {
                     if (!isdigit(*c) && *c != '-' && *c != '.') break;
                 }
                 int temp_sec = 0;
-                sscanf(c + 1, "%d.%s", &temp_sec, micr+1);
+                const char *frac = NULL;
+                const char *scan;
+
+                sscanf(c + 1, "%d", &temp_sec);
+
+                /* Fractional seconds. Locate the separator within this
+                 * numeric token only, stopping at the space before "secs". */
+                for (scan = c + 1; *scan != '\0' && *scan != ' '; scan++) {
+                    if (*scan == '.') {
+                        frac = scan;
+                        break;
+                    }
+                }
+                if (frac != NULL) {
+                    const char *digits = frac + 1;
+
+                    /* postgres_verbose signs the fractional field on a
+                     * negative interval: -3 days -18:39:14.322 is rendered
+                     * "@ 3 days 18 hours 39 mins 14.-32 secs ago", where the
+                     * intended fraction is .32. The sign describes the
+                     * interval, which is already carried by the component
+                     * signs and the "ago" suffix, so read the magnitude and
+                     * leave the sign to those. Reading it verbatim yielded a
+                     * negative value that wrapped to roughly 4.29e9 once
+                     * stored in the unsigned fraction. */
+                    if (*digits == '-' || *digits == '+') {
+                        digits++;
+                    }
+                    sscanf(digits, "%9[0-9]", micr + 1);
+                }
                 if (temp_sec < 0) {
                     is_negative = true;
                     sec = -temp_sec;
@@ -16950,7 +16996,7 @@ SQL_INTERVAL_STRUCT parse_intervald2s(const char *buf, int buf_len) {
                 if (!isValidTimeFormat(search_pos)) {
                     return returnInvalidIntervalD2S();
                 }
-                sscanf(search_pos, "%d:%d:%d.%s", &hour, &min, &sec, micr + 1);
+                sscanf(search_pos, "%d:%d:%d.%9[0-9]", &hour, &min, &sec, micr + 1);
             }
         }
     }

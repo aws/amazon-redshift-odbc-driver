@@ -10,6 +10,16 @@ configure_file(${CMAKE_SOURCE_DIR}/version.txt ${CMAKE_CURRENT_BINARY_DIR}/versi
 # Add an executable for all the tests
 add_executable(${EXECUTABLE_NAME} ${TEST_SOURCES})
 
+# GoogleTest expands each TEST/TEST_F into its own set of COFF sections, and the
+# larger suites here (rsutil_test.cpp is several thousand tests) exceed the
+# default 65,279-section limit of the object file format, which MSVC reports as
+# "error C1128: number of sections exceeded object file format limit".
+# /bigobj raises that limit. It only affects the object file encoding, not code
+# generation, and is MSVC-only.
+if (MSVC)
+    target_compile_options(${EXECUTABLE_NAME} PRIVATE /bigobj)
+endif()
+
 if (WIN32)
     target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} ${CMAKE_FIND_LIBRARY_PREFIXES}rsodbc64-test ${RS_STATIC_LIBS} crypto ssl)
     # SslModeDsnTest writes registry DSNs (odbccp32 needs legacy_stdio_definitions);
