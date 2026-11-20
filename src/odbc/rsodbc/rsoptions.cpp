@@ -637,8 +637,10 @@ SQLRETURN  SQL_API RsOptions::RS_SQLGetConnectAttr(SQLHDBC phdbc,
 
         case SQL_ATTR_IGNORE_UNICODE_FUNCTIONS: // DD DM Linux
         {
-            *piVal = 1;
-            break;
+            // Unsupported attribute: report the error, leave *pValue unchanged.
+            rc = SQL_ERROR;
+            addError(&pConn->pErrorList, "HY092", "Invalid attribute/option identifier", 0, NULL);
+            return rc;
         }
         case SQL_ATTR_DRIVER_UNICODE_TYPE:
         case SQL_ATTR_APP_WCHAR_TYPE:   // DD DM specific attribute.
@@ -1811,9 +1813,11 @@ SQLRETURN  SQL_API SQLGetConnectAttrW(SQLHDBC        phdbc,
     }
 
     if (!isStr) {
-        // Non-string attributes: pass through unchanged.
-        return RsOptions::RS_SQLGetConnectAttr(phdbc, iAttribute, pwValue,
-                                               cbLen, pcbLen);
+        // Non-string attributes: pass through unchanged. Assign rc so the
+        // exit tracer reports the real result and its diagnostics.
+        rc = RsOptions::RS_SQLGetConnectAttr(phdbc, iAttribute, pwValue, cbLen,
+                                             pcbLen);
+        return rc;
     }
 
     // -------- STRING ATTRIBUTE GUARDS (per ODBC) --------
