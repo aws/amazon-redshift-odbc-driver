@@ -85,6 +85,9 @@ static bool verify_peer_name_matches_certificate(PGconn *);
 static int	verify_cb(int ok, X509_STORE_CTX *ctx);
 static int	init_ssl_system(PGconn *conn);
 static void destroy_ssl_system(void);
+static SSL_CTX *create_connection_ssl_ctx(PGconn *conn);
+static void free_connection_ssl_ctx(PGconn *conn);
+static void release_verify_store(PGconn *conn);
 static int	initialize_SSL(PGconn *conn);
 static void destroySSL(void);
 static PostgresPollingStatusType open_client_SSL(PGconn *);
@@ -94,7 +97,7 @@ static void SSLerrfree(char *buf);
 
 static bool pq_init_ssl_lib = true;
 static bool pq_init_crypto_lib = true;
-static SSL_CTX *SSL_context = NULL;
+static bool ssl_lib_initialized = false;
 
 #ifdef ENABLE_THREAD_SAFETY
 static long ssl_open_connections = 0;
@@ -217,7 +220,8 @@ PQinitOpenSSL(int do_ssl, int do_crypto)
 }
 
 /*
- *	Initialize global SSL context
+ *	Initialize the SSL library once per process, then create this
+ *	connection's SSL context.
  */
 int
 pqsecure_initialize(PGconn *conn)
@@ -226,13 +230,31 @@ pqsecure_initialize(PGconn *conn)
 
 #ifdef USE_SSL
 	r = init_ssl_system(conn);
+	if (r != 0)
+	{
+		/* libpqConnect() detects a failed connect by its error message. */
+		printfPQExpBuffer(&conn->errorMessage,
+						  libpq_gettext("could not initialize SSL library\n"));
+	}
+	else
+	{
+		/* A fresh context each attempt, so nothing carries over from an earlier one. */
+		free_connection_ssl_ctx(conn);
+		conn->ssl_ctx = create_connection_ssl_ctx(conn);
+		if (conn->ssl_ctx == NULL)
+		{
+			/* Undo the count init_ssl_system() took for this context. */
+			pqsecure_destroy();
+			r = -1;
+		}
+	}
 #endif
 
 	return r;
 }
 
 /*
- *	Destroy global context
+ *	Undo the count of one connection's SSL context
  */
 void
 pqsecure_destroy(void)
@@ -241,6 +263,177 @@ pqsecure_destroy(void)
 	destroySSL();
 #endif
 }
+
+/**
+ * @brief Reads the open-connection count behind the libcrypto callbacks; for tests.
+ * @return The count, or 0 in a build without SSL or thread safety.
+ */
+long
+pqsecure_open_connection_count(void)
+{
+#if defined(USE_SSL) && defined(ENABLE_THREAD_SAFETY)
+	long		count = 0;
+
+	if (pthread_mutex_lock(&ssl_config_mutex) == 0)
+	{
+		count = ssl_open_connections;
+		pthread_mutex_unlock(&ssl_config_mutex);
+	}
+	return count;
+#else
+	return 0;
+#endif
+}
+
+#ifdef USE_SSL
+/**
+ * @brief Creates an SSL context owned by one connection, so loading its
+ *        certificates can't race another connection's handshake.
+ * @param conn The connection; its min_tls sets the minimum TLS version.
+ * @return The new context, or NULL with conn->errorMessage set.
+ */
+static SSL_CTX *
+create_connection_ssl_ctx(PGconn *conn)
+{
+	SSL_CTX	   *ctx = SSL_CTX_new(TLS_method());
+
+	if (!ctx)
+	{
+		char	   *err = SSLerrmessage();
+
+		printfPQExpBuffer(&conn->errorMessage,
+					 libpq_gettext("could not create SSL context: %s\n"),
+						  err);
+		SSLerrfree(err);
+		return NULL;
+	}
+
+	{
+		/*
+		 * Resolve the effective minimum TLS version. Invalid values
+		 * fail secure to TLS 1.2 (see pq_resolve_min_tls). The mapping
+		 * is factored into pq_tls_policy.h so it can be unit-tested.
+		 */
+		rs_min_tls_version min_tls = pq_resolve_min_tls(conn->min_tls);
+		int			tls_version;
+
+		if (conn->min_tls != NULL &&
+			min_tls == RS_MIN_TLS_1_2 &&
+			strcmp(conn->min_tls, "1.2") != 0)
+		{
+			RS_LOG_WARN("FESEC",
+				"Invalid min_tls value \"%s\"; valid values are "
+				"1.1, 1.2, 1.3. Defaulting to TLS 1.2.\n",
+				conn->min_tls);
+		}
+
+		switch (min_tls)
+		{
+			case RS_MIN_TLS_1_3:
+				tls_version = TLS1_3_VERSION;
+				break;
+			case RS_MIN_TLS_1_1:
+				tls_version = TLS1_1_VERSION;
+				break;
+			case RS_MIN_TLS_1_2:
+			default:
+				tls_version = TLS1_2_VERSION;
+				break;
+		}
+
+		/* Refuse the connection rather than run below the minimum. */
+		if (!SSL_CTX_set_min_proto_version(ctx, tls_version))
+		{
+			char	   *err = SSLerrmessage();
+
+			printfPQExpBuffer(&conn->errorMessage,
+				libpq_gettext("could not set minimum TLS protocol version: %s\n"),
+							  err);
+			SSLerrfree(err);
+			SSL_CTX_free(ctx);
+			return NULL;
+		}
+
+		RS_LOG_DEBUG("FESEC", "Min TLS version=%s\n",
+			min_tls == RS_MIN_TLS_1_3 ? "1.3" :
+			min_tls == RS_MIN_TLS_1_1 ? "1.1" : "1.2");
+	}
+
+	/*
+	 * Disable OpenSSL's moving-write-buffer sanity check, because it
+	 * causes unnecessary failures in nonblocking send cases.
+	 */
+	SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+	return ctx;
+}
+
+/**
+ * @brief Frees a connection's SSL context and undoes its count.
+ * @param conn The connection; does nothing if it has no context.
+ */
+static void
+free_connection_ssl_ctx(PGconn *conn)
+{
+	if (conn->ssl_ctx)
+	{
+		SSL_CTX_free(conn->ssl_ctx);
+		conn->ssl_ctx = NULL;
+		pqsecure_destroy();
+	}
+}
+
+/**
+ * @brief Refuses renegotiation on the connection, whatever the library's
+ *        default. This is the only place that decides it; release_verify_store()
+ *        acts on the result.
+ * @param ssl The connection's SSL object.
+ * @return true if the refusal took effect. A library that defines
+ *         SSL_OP_NO_RENEGOTIATION as 0, or has no way to refuse, returns false.
+ */
+static bool
+refuse_renegotiation(SSL *ssl)
+{
+#if defined(OPENSSL_IS_AWSLC) || defined(OPENSSL_IS_BORINGSSL)
+	/* Already AWS-LC's client default; set so this does not depend on it. */
+	SSL_set_renegotiate_mode(ssl, ssl_renegotiate_never);
+	return true;
+#elif defined(SSL_OP_NO_RENEGOTIATION)
+	return (SSL_set_options(ssl, SSL_OP_NO_RENEGOTIATION) & SSL_OP_NO_RENEGOTIATION) != 0;
+#else
+	(void) ssl;
+	return false;
+#endif
+}
+
+/**
+ * @brief Swaps the connection's trust store for an empty one once the server
+ *        is verified, so an open connection does not keep its own parsed copy
+ *        of the CA bundle. It runs only when refuse_renegotiation() took
+ *        effect, so the chain is never verified again on this connection. The
+ *        store also holds any CRL from sslcrl, so CRL checking covers the
+ *        handshake only. If the empty store cannot be allocated, the
+ *        connection keeps its store.
+ * @param conn The connection; its handshake has completed.
+ */
+static void
+release_verify_store(PGconn *conn)
+{
+	X509_STORE *empty;
+
+	if (conn->ssl_ctx == NULL || !conn->ssl_renegotiation_refused)
+		return;
+
+	empty = X509_STORE_new();
+	if (empty == NULL)
+	{
+		/* Do not leave the allocation error for a later SSLerrmessage(). */
+		ERR_clear_error();
+		RS_LOG_DEBUG("FESEC", "Could not allocate an empty trust store; the connection keeps its store\n");
+		return;
+	}
+	SSL_CTX_set_cert_store(conn->ssl_ctx, empty);
+}
+#endif
 
 /*
  *	Begin or continue negotiating a secure session.
@@ -256,7 +449,7 @@ pqsecure_open_client(PGconn *conn)
 		conn->sigpipe_flag = false;
 
 		/* Create a connection-specific SSL object */
-		if (!(conn->ssl = SSL_new(SSL_context)) ||
+		if (!(conn->ssl = SSL_new(conn->ssl_ctx)) ||
 			!SSL_set_app_data(conn->ssl, conn) ||
 			!SSL_set_fd(conn->ssl, conn->sock))
 		{
@@ -269,6 +462,12 @@ pqsecure_open_client(PGconn *conn)
 			close_SSL(conn);
 			return PGRES_POLLING_FAILED;
 		}
+
+		/*
+		 * Refuse renegotiation; the trust store is released after the
+		 * handshake only if this took effect (release_verify_store()).
+		 */
+		conn->ssl_renegotiation_refused = refuse_renegotiation(conn->ssl);
 
 		/* Set SNI from the final endpoint host before starting TLS. */
 		if (pq_should_send_sni(conn->sslsni, conn->pghost))
@@ -328,7 +527,15 @@ pqsecure_open_client(PGconn *conn)
 	}
 
 	/* Begin or continue the actual handshake */
-	return open_client_SSL(conn);
+	{
+		PostgresPollingStatusType status = open_client_SSL(conn);
+
+		if (status == PGRES_POLLING_OK)
+		{
+			release_verify_store(conn);
+		}
+		return status;
+	}
 #else
 	/* shouldn't get here */
 	return PGRES_POLLING_FAILED;
@@ -342,8 +549,10 @@ void
 pqsecure_close(PGconn *conn)
 {
 #ifdef USE_SSL
-	if (conn->ssl)
+	if (conn->ssl || conn->ssl_ctx)
+	{
 		close_SSL(conn);
+	}
 #endif
 }
 
@@ -899,8 +1108,8 @@ pq_lockingcallback(int mode, int n, const char *file, int line)
 #endif   /* ENABLE_THREAD_SAFETY */
 
 /*
- * Initialize SSL system, in particular creating the SSL_context object
- * that will be shared by all SSL-using connections in this process.
+ * Initialize the SSL library, once per process. Each connection creates its
+ * own context in create_connection_ssl_ctx().
  *
  * In threadsafe mode, this includes setting up libcrypto callback functions
  * to do thread locking.
@@ -909,10 +1118,10 @@ pq_lockingcallback(int mode, int n, const char *file, int line)
  * of libcrypto, we expect that callbacks are already set, and won't try to
  * override it.
  *
- * The conn parameter is only used to be able to pass back an error
- * message - no connection-local setup is made here.
+ * The conn parameter is unused; no connection-local setup is made here.
  *
- * Returns 0 if OK, -1 on failure (with a message in conn->errorMessage).
+ * Returns 0 if OK, -1 on failure. It sets no error message; the caller,
+ * pqsecure_initialize(), does.
  */
 static int
 init_ssl_system(PGconn *conn)
@@ -963,6 +1172,11 @@ init_ssl_system(PGconn *conn)
 			}
 		}
 
+		/*
+		 * Count the context the caller creates next, setting the libcrypto
+		 * callbacks for the first before any context exists, as mainline
+		 * did. destroy_ssl_system() undoes it.
+		 */
 		if (ssl_open_connections++ == 0)
 		{
 			/* These are only required for threaded libcrypto applications */
@@ -972,74 +1186,14 @@ init_ssl_system(PGconn *conn)
 	}
 #endif   /* ENABLE_THREAD_SAFETY */
 
-	if (!SSL_context)
+	if (pq_init_ssl_lib && !ssl_lib_initialized)
 	{
-		if (pq_init_ssl_lib)
-		{
 #if SSLEAY_VERSION_NUMBER >= 0x00907000L
-			OPENSSL_config(NULL);
+		OPENSSL_config(NULL);
 #endif
-			SSL_library_init();
-			SSL_load_error_strings();
-		}
-
-		SSL_context = SSL_CTX_new(TLS_method());
-		if (!SSL_context)
-		{
-			char	   *err = SSLerrmessage();
-
-			printfPQExpBuffer(&conn->errorMessage,
-						 libpq_gettext("could not create SSL context: %s\n"),
-							  err);
-			SSLerrfree(err);
-#ifdef ENABLE_THREAD_SAFETY
-			pthread_mutex_unlock(&ssl_config_mutex);
-#endif
-			return -1;
-		}
-
-		{
-			/*
-			 * Resolve the effective minimum TLS version. Invalid values
-			 * fail secure to TLS 1.2 (see pq_resolve_min_tls). The mapping
-			 * is factored into pq_tls_policy.h so it can be unit-tested.
-			 */
-			rs_min_tls_version min_tls = pq_resolve_min_tls(conn->min_tls);
-
-			if (conn->min_tls != NULL &&
-				min_tls == RS_MIN_TLS_1_2 &&
-				strcmp(conn->min_tls, "1.2") != 0)
-			{
-				RS_LOG_WARN("FESEC",
-					"Invalid min_tls value \"%s\"; valid values are "
-					"1.1, 1.2, 1.3. Defaulting to TLS 1.2.\n",
-					conn->min_tls);
-			}
-
-			switch (min_tls)
-			{
-				case RS_MIN_TLS_1_3:
-					SSL_CTX_set_min_proto_version(SSL_context, TLS1_3_VERSION);
-					break;
-				case RS_MIN_TLS_1_1:
-					SSL_CTX_set_min_proto_version(SSL_context, TLS1_1_VERSION);
-					break;
-				case RS_MIN_TLS_1_2:
-				default:
-					SSL_CTX_set_min_proto_version(SSL_context, TLS1_2_VERSION);
-					break;
-			}
-
-			RS_LOG_DEBUG("FESEC", "Min TLS version=%s\n",
-				min_tls == RS_MIN_TLS_1_3 ? "1.3" :
-				min_tls == RS_MIN_TLS_1_1 ? "1.1" : "1.2");
-		}
-
-		/*
-		 * Disable OpenSSL's moving-write-buffer sanity check, because it
-		 * causes unnecessary failures in nonblocking send cases.
-		 */
-		SSL_CTX_set_mode(SSL_context, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+		SSL_library_init();
+		SSL_load_error_strings();
+		ssl_lib_initialized = true;
 	}
 
 #ifdef ENABLE_THREAD_SAFETY
@@ -1094,10 +1248,8 @@ destroy_ssl_system(void)
  *	client certificate, private key, and trusted CA certs.
  *
  *	conn->ssl must already be created.	It receives the connection's client
- *	certificate and private key.  Note however that certificates also get
- *	loaded into the SSL_context object, and are therefore accessible to all
- *	connections in this process.  This should be OK as long as there aren't
- *	any hash collisions among the certs.
+ *	certificate and private key.  Certificates load into this connection's
+ *	own context, so other connections never see them.
  *
  *	Returns 0 if OK, -1 on failure (with a message in conn->errorMessage).
  */
@@ -1143,7 +1295,16 @@ initialize_SSL(PGconn *conn)
       rc = stat(defsslcertbuffer, &buf);
       if(rc == 0)
       {
-        SSL_CTX_load_verify_locations(SSL_context, defsslcertbuffer, NULL);
+        if (SSL_CTX_load_verify_locations(conn->ssl_ctx, defsslcertbuffer, NULL) != 1)
+        {
+          /* Ignored as before; clear it so a later failure reports its own error. */
+          char *err = SSLerrmessage();
+
+          RS_LOG_WARN("FESEC", "Could not read default root certificate file. path=%s, error=%s\n",
+                      defsslcertbuffer, err);
+          SSLerrfree(err);
+          ERR_clear_error();
+        }
         have_rootcert = true;
       } else {
           RS_LOG_DEBUG(
@@ -1185,29 +1346,8 @@ initialize_SSL(PGconn *conn)
 	}
 	else
 	{
-		/*
-		 * Cert file exists, so load it.  Since OpenSSL doesn't provide the
-		 * equivalent of "SSL_use_certificate_chain_file", we actually have to
-		 * load the file twice.  The first call loads any extra certs after
-		 * the first one into chain-cert storage associated with the
-		 * SSL_context.  The second call loads the first cert (only) into the
-		 * SSL object, where it will be correctly paired with the private key
-		 * we load below.  We do it this way so that each connection
-		 * understands which subject cert to present, in case different
-		 * sslcert settings are used for different connections in the same
-		 * process.
-		 */
-		if (SSL_CTX_use_certificate_chain_file(SSL_context, fnbuf) != 1)
-		{
-			char	   *err = SSLerrmessage();
-
-			printfPQExpBuffer(&conn->errorMessage,
-			   libpq_gettext("could not read certificate file \"%s\": %s\n"),
-							  fnbuf, err);
-			SSLerrfree(err);
-			return -1;
-		}
-		if (SSL_use_certificate_file(conn->ssl, fnbuf, SSL_FILETYPE_PEM) != 1)
+		/* Load the leaf and its chain onto this connection's SSL object. */
+		if (SSL_use_certificate_chain_file(conn->ssl, fnbuf) != 1)
 		{
 			char	   *err = SSLerrmessage();
 
@@ -1384,7 +1524,7 @@ initialize_SSL(PGconn *conn)
 	{
 		X509_STORE *cvstore;
 
-		if (SSL_CTX_load_verify_locations(SSL_context, fnbuf, NULL) != 1)
+		if (SSL_CTX_load_verify_locations(conn->ssl_ctx, fnbuf, NULL) != 1)
 		{
 			char	   *err = SSLerrmessage();
 
@@ -1395,7 +1535,7 @@ initialize_SSL(PGconn *conn)
 			return -1;
 		}
 
-		if ((cvstore = SSL_CTX_get_cert_store(SSL_context)) != NULL)
+		if ((cvstore = SSL_CTX_get_cert_store(conn->ssl_ctx)) != NULL)
 		{
 			if (conn->sslcrl && strlen(conn->sslcrl) > 0)
 				strncpy(fnbuf, conn->sslcrl, sizeof(fnbuf));
@@ -1599,11 +1739,12 @@ close_SSL(PGconn *conn)
 		SSL_shutdown(conn->ssl);
 		SSL_free(conn->ssl);
 		conn->ssl = NULL;
-		pqsecure_destroy();
 		/* We have to assume we got EPIPE */
 		REMEMBER_EPIPE(spinfo, true);
 		RESTORE_SIGPIPE(conn, spinfo);
 	}
+
+	free_connection_ssl_ctx(conn);
 
 	if (conn->peer)
 	{

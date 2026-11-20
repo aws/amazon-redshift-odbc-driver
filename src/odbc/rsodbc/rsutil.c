@@ -17453,10 +17453,6 @@ StringMap createCaseInsensitiveMap() {
 }
 
 StringMap parseConnectionString(const std::string &connStr) {
-  static std::map<std::string, StringMap> cache;
-  if (auto it = cache.find(connStr); it != cache.end()) {
-     return it->second;
-  }
   StringMap res = createCaseInsensitiveMap();
   auto IsWstrWhitespace = [](const char in_char) -> bool {
     switch (in_char) {
@@ -17517,7 +17513,7 @@ StringMap parseConnectionString(const std::string &connStr) {
     if (('\0' == *currentPos) || (0 == keyLength)) {
       RS_LOG_ERROR("RSUTIL", "Error parsing Connectionstring: Key parsing finished too early %d:%d",
                    (int)keyLength, (int)(*currentPos));
-      return StringMap();
+      return createCaseInsensitiveMap();
     }
 
     // Skip = sign.
@@ -17576,7 +17572,7 @@ StringMap parseConnectionString(const std::string &connStr) {
         printf(
             "Error parsing Connectionstring: Braced value parsing "
             "finished too early\n");
-        return StringMap();
+        return createCaseInsensitiveMap();
       }
       ++usrInputValueLength;
       ++currentPos;
@@ -17606,7 +17602,6 @@ StringMap parseConnectionString(const std::string &connStr) {
     // Skip whitespace for early detection of EOL
     SkipWhitespace(currentPos);
   }  // mail while loop
-  cache[connStr] = res;
   return res;
 }
 

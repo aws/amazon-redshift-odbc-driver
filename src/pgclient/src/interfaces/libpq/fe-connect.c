@@ -3732,6 +3732,25 @@ pqCloseConnection(PGconn *conn)
 	}
 }
 
+/**
+ * @brief Shuts down the connection's socket in both directions, without
+ *        closing it. A thread blocked reading the socket returns, and a
+ *        later send fails at once instead of waiting on the server.
+ * @param conn The connection; does nothing if it has no socket.
+ */
+void
+pqShutdownConnection(PGconn *conn)
+{
+	if (conn && conn->sock >= 0)
+	{
+#ifdef WIN32
+		shutdown(conn->sock, SD_BOTH);
+#else
+		shutdown(conn->sock, SHUT_RDWR);
+#endif
+	}
+}
+
 /*
  * pqFreeConnection: frees the PGconn data structure so it shouldn't be re-used after this. Added for ODBC -- IHG
  * 

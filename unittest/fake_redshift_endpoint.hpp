@@ -574,9 +574,9 @@ public:
 
 private:
     /**
-     * @brief Mints the CA, writes it to m_caFile and sets up the TLS context. libpq
-     *        keeps every CA in one process-global store, where two CAs with the same
-     *        subject collide, so each subject gets a unique tag.
+     * @brief Mints the CA, writes it to m_caFile and sets up the TLS context.
+     *        Each subject gets a unique tag so no two endpoints share a CA
+     *        name.
      * @param certMode "matching", "mismatched" or "untrusted".
      * @return true on success; otherwise m_startupOutput says why.
      */

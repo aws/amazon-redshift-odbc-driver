@@ -427,6 +427,8 @@ struct pg_conn
 	bool		wait_ssl_try;	/* Delay SSL negotiation until after
 								 * attempting normal connection */
 	SSL		   *ssl;			/* SSL status, if have SSL connection */
+	SSL_CTX	   *ssl_ctx;		/* this connection's own context; never shared */
+	bool		ssl_renegotiation_refused;	/* refuse_renegotiation() took effect */
 	X509	   *peer;			/* X509 cert of server */
 	char		peer_dn[256 + 1];		/* peer distinguished name */
 	char		peer_cn[SM_PEER + 1];	/* peer common name */
@@ -654,6 +656,7 @@ extern int	pqReadPending(PGconn *conn);
 
 extern int	pqsecure_initialize(PGconn *);
 extern void pqsecure_destroy(void);
+extern long pqsecure_open_connection_count(void);
 extern PostgresPollingStatusType pqsecure_open_client(PGconn *);
 extern void pqsecure_close(PGconn *);
 extern ssize_t pqsecure_read(PGconn *, void *ptr, size_t len);

@@ -615,6 +615,7 @@ extern int	pg_valid_server_encoding_id(int encoding);
 
 /* Added for ODBC -- IHG */
 extern void  pqCloseConnection(PGconn *conn);
+extern void  pqShutdownConnection(PGconn *conn);
 extern void  pqFreeConnection(PGconn *conn);
 extern char *pqGetNativeSqlState(PGconn *conn);
 extern PGresult *pqExec(PGconn *conn, const char *query, struct _CscStatementContext *pCscStatementContext);

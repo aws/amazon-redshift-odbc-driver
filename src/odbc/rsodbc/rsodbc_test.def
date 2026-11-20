@@ -431,3 +431,10 @@ EXPORTS
 	PQsendExecutePortalResume
 	PQprepareResultForResume
 	applyUseDeclareFetchExclusivity
+	pqsecure_open_connection_count
+	pqsecure_destroy
+	PQconnectdb
+	PQconnectPoll
+	PQsocket
+	PQstatus
+	PQerrorMessage

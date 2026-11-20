@@ -602,6 +602,19 @@ void libpqFreeConnect(RS_CONN_INFO *pConn)
 {
     if(pConn->pgConn != NULL)
     {
+        // Still open when the app frees the handle without SQLDisconnect, or
+        // after a failed connect. SQLDisconnect has already closed it.
+        if(PQsocket(pConn->pgConn) >= 0)
+        {
+            // Shut the socket first: a CSC thread blocked reading it then
+            // returns, so the wait below ends, and closing sends no data that
+            // could block on an unresponsive server.
+            pqShutdownConnection(pConn->pgConn);
+            pgWaitForCscThreadToFinish(pConn->pgConn, TRUE);
+
+            // Close before freeing, so a failed connect also releases its socket and SSL state.
+            pqCloseConnection(pConn->pgConn);
+        }
         pqFreeConnection(pConn->pgConn);
         pConn->pgConn = NULL;
     }

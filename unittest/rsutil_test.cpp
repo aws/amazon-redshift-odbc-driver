@@ -6,6 +6,9 @@
 #include <cstring>
 #include <climits>
 #include <iomanip>
+#include <atomic>
+#include <thread>
+#include <vector>
 
 TEST(ImplicitCursorNamePrefixTest, UsesUppercasePrefixOnAllPlatforms) {
     EXPECT_STREQ(IMPLICIT_CURSOR_NAME_PREFIX, "SQL_CUR");
@@ -9215,4 +9218,73 @@ TEST(ComputeArrayElementOffsetTest, RejectsNegativeRowOrStride) {
     EXPECT_FALSE(computeArrayElementOffset(-1, 16, 0, &offset));
     EXPECT_FALSE(computeArrayElementOffset(1, -16, 0, &offset));
     EXPECT_EQ(offset, 42);
+}
+
+/*
+ * Every connection parses its connection string here, so it must be safe to
+ * call from many threads at once.
+ */
+class ParseConnectionStringTest : public ::testing::Test {};
+
+TEST_F(ParseConnectionStringTest, ParsesKeysCaseInsensitively) {
+    StringMap m{parseConnectionString(
+        "Server=host.example.com;UID=awsuser;Database=dev;SSLMode=verify-ca")};
+    // The map's comparator is case-insensitive, so lookups ignore key case.
+    EXPECT_EQ(m["server"], "host.example.com") << "Server not parsed";
+    EXPECT_EQ(m["UID"], "awsuser") << "UID not parsed";
+    EXPECT_EQ(m["DataBase"], "dev")
+        << "Database not matched case-insensitively";
+    EXPECT_EQ(m["sslmode"], "verify-ca") << "SSLMode not parsed";
+}
+
+TEST_F(ParseConnectionStringTest, ConcurrentParsingIsThreadSafe) {
+    std::string const shared{
+        "Server=host.example.com;UID=awsuser;Database=dev;SSLMode=verify-ca"};
+    static constexpr int kThreads{16};
+    static constexpr int kIters{500};
+    std::atomic<int> wrongHot{0};
+    std::atomic<int> wrongFresh{0};
+    std::vector<std::thread> threads;
+
+    for (int threadIndex = 0; threadIndex < kThreads; ++threadIndex) {
+        threads.emplace_back([&, threadIndex]() {
+            for (int iteration = 0; iteration < kIters; ++iteration) {
+                // The same string on every thread.
+                StringMap hot{parseConnectionString(shared)};
+                if (hot["uid"] != "awsuser") {
+                    ++wrongHot;
+                }
+                // A different string each time.
+                StringMap fresh{parseConnectionString(
+                    "Server=h" + std::to_string(threadIndex) + "_" +
+                    std::to_string(iteration) +
+                    ".example.com;UID=u;Database=dev")};
+                if (fresh["database"] != "dev") {
+                    ++wrongFresh;
+                }
+            }
+        });
+    }
+    for (auto &thread : threads) {
+        thread.join();
+    }
+    EXPECT_EQ(wrongHot.load(), 0)
+        << "the shared string parsed wrong under " << kThreads << " threads";
+    EXPECT_EQ(wrongFresh.load(), 0)
+        << "unique strings parsed wrong under " << kThreads << " threads";
+}
+
+TEST_F(ParseConnectionStringTest, MalformedStringReturnsUsableMap) {
+    // A parse error must still return a case-insensitive map that is safe to
+    // look up.
+    for (char const *const malformed : {"Server", "PWD={unterminated"}) {
+        SCOPED_TRACE(malformed);
+        StringMap m{parseConnectionString(malformed)};
+        EXPECT_TRUE(m.empty())
+            << "a malformed string parsed to " << m.size() << " keys";
+        EXPECT_NO_THROW({
+            m["server"];
+            m["uid"];
+        }) << "lookups on the result of a malformed string threw";
+    }
 }
