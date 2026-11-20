@@ -1408,6 +1408,34 @@ TEST(GeneralizeTableTypeTest, generalized_list_is_table_view) {
     EXPECT_EQ(list[1], "VIEW");
 }
 
+TEST(SQLGetTypeInfoEmptyResultTest, applies_to_tinyint) {
+    EXPECT_TRUE(RsMetadataAPIHelper::shouldReturnEmptySQLGetTypeInfoResult(
+        SQL_TINYINT, false));
+    EXPECT_TRUE(RsMetadataAPIHelper::shouldReturnEmptySQLGetTypeInfoResult(
+        SQL_TINYINT, true));
+}
+
+TEST(SQLGetTypeInfoEmptyResultTest, applies_to_remapped_sql_bit) {
+    EXPECT_FALSE(RsMetadataAPIHelper::shouldReturnEmptySQLGetTypeInfoResult(
+        SQL_BIT, false));
+    EXPECT_TRUE(RsMetadataAPIHelper::shouldReturnEmptySQLGetTypeInfoResult(
+        SQL_BIT, true));
+}
+
+TEST(SQLGetTypeInfoEmptyResultTest, excludes_sql_binary) {
+    EXPECT_FALSE(RsMetadataAPIHelper::shouldReturnEmptySQLGetTypeInfoResult(
+        SQL_BINARY, false));
+    EXPECT_FALSE(RsMetadataAPIHelper::shouldReturnEmptySQLGetTypeInfoResult(
+        SQL_BINARY, true));
+}
+
+TEST(SQLGetTypeInfoEmptyResultTest, excludes_unknown_value) {
+    EXPECT_FALSE(RsMetadataAPIHelper::shouldReturnEmptySQLGetTypeInfoResult(
+        9999, false));
+    EXPECT_FALSE(
+        RsMetadataAPIHelper::shouldReturnEmptySQLGetTypeInfoResult(9999, true));
+}
+
 /*====================================================================================================================================================*/
 // processDataTypeInfo tests for BoolsAsChar
 /*====================================================================================================================================================*/

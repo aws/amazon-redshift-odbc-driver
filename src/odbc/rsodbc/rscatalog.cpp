@@ -3266,10 +3266,8 @@ SQLRETURN  SQL_API RsCatalog::RS_SQLGetTypeInfo(SQLHSTMT phstmt,
         }
 
         if (tempTypeInfo.empty()) {
-            // When BoolsAsChar remaps boolean away from SQL_BIT, return empty
-            // result set for SQL_BIT (ODBC spec: unsupported type = no rows).
-            // For all other unmatched types, preserve existing SQL_ERROR behavior.
-            if (boolAsChar && hType == SQL_BIT) {
+            if (RsMetadataAPIHelper::shouldReturnEmptySQLGetTypeInfoResult(
+                    hType, boolAsChar)) {
                 rc = RsMetadataAPIPostProcessor::sqlGetTypeInfoPostProcessing(
                     phstmt, tempTypeInfo);
             } else {

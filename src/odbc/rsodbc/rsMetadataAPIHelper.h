@@ -480,6 +480,17 @@ class RsMetadataAPIHelper {
      */
     static std::string generalizeTableType(const std::string &tableType);
 
+    /**
+     * @brief Returns whether SQLGetTypeInfo should produce an empty result.
+     * @param sqlType The requested SQL data type identifier.
+     * @param boolAsChar Whether Boolean values are exposed as character data.
+     * @return true for SQL_TINYINT, or for SQL_BIT when boolAsChar is enabled.
+     */
+    static bool shouldReturnEmptySQLGetTypeInfoResult(SQLSMALLINT sqlType,
+                                                      bool boolAsChar) {
+        return sqlType == SQL_TINYINT || (boolAsChar && sqlType == SQL_BIT);
+    }
+
     struct DataTypeName {
         const std::string ksmallint = "smallint";
         const std::string kinteger = "integer";
