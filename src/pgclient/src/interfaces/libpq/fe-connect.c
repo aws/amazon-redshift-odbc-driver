@@ -2707,28 +2707,6 @@ keep_going:
 					conn->status = CONNECTION_MADE;
 					return PGRES_POLLING_WRITING;
 				}
-				if (pollres == PGRES_POLLING_FAILED)
-				{
-					/*
-					 * Failed ... if sslmode is "prefer" then do a non-SSL
-					 * retry
-					 */
-					if (conn->sslmode[0] == 'p' /* "prefer" */
-						&& conn->allow_ssl_try	/* redundant? */
-						&& !conn->wait_ssl_try) /* redundant? */
-					{
-						/* only retry once */
-						conn->allow_ssl_try = false;
-						/* Must drop the old connection */
-						closesocket(conn->sock);
-						conn->sock = -1;
-						conn->status = CONNECTION_NEEDED;
-						/* Discard any unread/unsent data */
-						conn->inStart = conn->inCursor = conn->inEnd = 0;
-						conn->outCount = 0;
-						goto keep_going;
-					}
-				}
 				return pollres;
 #else							/* !USE_SSL */
 				/* can't get here */
@@ -2914,27 +2892,6 @@ keep_going:
 						/* only retry once */
 						conn->wait_ssl_try = false;
 						/* Must drop the old connection */
-						closesocket(conn->sock);
-						conn->sock = -1;
-						conn->status = CONNECTION_NEEDED;
-						/* Discard any unread/unsent data */
-						conn->inStart = conn->inCursor = conn->inEnd = 0;
-						conn->outCount = 0;
-						goto keep_going;
-					}
-
-					/*
-					 * if sslmode is "prefer" and we're in an SSL connection,
-					 * then do a non-SSL retry
-					 */
-					if (conn->sslmode[0] == 'p' /* "prefer" */
-						&& conn->allow_ssl_try
-						&& !conn->wait_ssl_try) /* redundant? */
-					{
-						/* only retry once */
-						conn->allow_ssl_try = false;
-						/* Must drop the old connection */
-						pqsecure_close(conn);
 						closesocket(conn->sock);
 						conn->sock = -1;
 						conn->status = CONNECTION_NEEDED;

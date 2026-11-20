@@ -1,7 +1,42 @@
 #ifndef _RS_IAM_H_
 #define _RS_IAM_H_
+#include <cstddef>
+#include <cstring>
+#include <optional>
 
 #define MAX_IAM_BUF_VAL     256
+/* Longest CA file or directory path held, terminator included; equals libpq's MAXPGPATH. */
+#define MAX_CERT_PATH_LEN   1024
+/* DSN read size for a CA path: above MAX_CERT_PATH_LEN so a long value arrives whole. */
+#define CERT_PATH_READ_LEN  32767
+/* Whether a CA path value was too long to keep, and its length when known. */
+struct CertPathStatus {
+  bool overlong = false;
+  // nullopt: too long, length not known.
+  std::optional<std::size_t> requiredLength;
+};
+/**
+ * Copies a certificate option's value into destination when it fits, else empties it.
+ * A shortened path would name another file, so a too-long value is reported, not kept.
+ * @return The default status when kept or empty; else overlong, with requiredLength set.
+ */
+static inline CertPathStatus
+storeCertPathOrRecordOverflow(char *destination, std::size_t capacity,
+                              const char *value) {
+  const char *source = (value == NULL) ? "" : value;
+  const std::size_t length = std::strlen(source);
+  if (length + 1 > capacity) {
+    if (capacity > 0) {
+      destination[0] = '\0';
+    }
+    CertPathStatus status;
+    status.overlong = true;
+    status.requiredLength = length;
+    return status;
+  }
+  std::memcpy(destination, source, length + 1);
+  return CertPathStatus();
+}
 #define MAX_IAM_SESSION_TOKEN_LEN 2048
 #define MAX_IAM_DBGROUPS_LEN 1024
 #define MAX_IAM_JWT_LEN (16 * 1024)
@@ -50,8 +85,8 @@ struct RS_IAM_CONN_PROPS_INFO {
   char szUser[MAX_IDEN_LEN];
   char szPassword[MAX_IDEN_LEN];
   char szSslMode[MAX_IDEN_LEN];
-  char szCaPath[MAX_IAM_BUF_VAL];
-  char szCaFile[MAX_IAM_BUF_VAL];
+  char szCaPath[MAX_CERT_PATH_LEN];
+  char szCaFile[MAX_CERT_PATH_LEN];
   char szHost[MAX_IDEN_LEN];
   char szPort[MAX_IDEN_LEN];
   char szDatabase[MAX_IDEN_LEN];

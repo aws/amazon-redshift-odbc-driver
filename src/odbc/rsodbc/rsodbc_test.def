@@ -416,6 +416,8 @@ EXPORTS
 	?resolveSslPolicy@RS_CONN_INFO@@SAXPEAVRS_CONNECT_PROPS_INFO@@@Z
 	; RS_CONN_INFO::readEncryptionMethod(const char*) - public static
 	?readEncryptionMethod@RS_CONN_INFO@@SAHPEBD@Z
+	; RS_SQLGetPrivateProfileString(): C linkage, undecorated. SslModeDsnTest reads a DSN value back with it.
+	RS_SQLGetPrivateProfileString
 	; parseConnectionString(const std::string&)
 	?parseConnectionString@@YA?AV?$map@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@V?$function@$$A6A_NAEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@0@Z@2@V?$allocator@U?$pair@$$CBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V12@@std@@@2@@std@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@2@@Z
 	; Portal management API (libpq)
@@ -438,3 +440,7 @@ EXPORTS
 	PQsocket
 	PQstatus
 	PQerrorMessage
+
+	; === TLS policy test exports (tls_policy_test.cpp) ===
+	; getDriverPath(): C linkage, undecorated. rsfake::BuiltInRootExtension uses it to find the built-in root.crt.
+	getDriverPath

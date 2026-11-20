@@ -84,6 +84,10 @@ typedef int RS_SOCKET;
 #define RS_CLOSE_SOCKET(s) close(s)
 #endif
 
+// Defined in rsutil.c: the loaded driver's directory (this binary's own here).
+// Declared here, not via rsutil.h, to keep this header cheap; C linkage like rsutil.h.
+extern "C" char *getDriverPath();
+
 namespace rsfake
 {
 
@@ -92,11 +96,29 @@ const char *const TOLERATED_WARNING = "does not name host";
 const char *const REJECTED_ERROR = "does not match host name";
 const char *const CHAIN_REJECTED_ERROR = "CERTIFICATE_VERIFY_FAILED";
 
+// Part of the driver's error when a named CA file cannot be read.
+const char *const CA_FILE_UNREADABLE_ERROR = "could not be opened";
+
+// Part of the driver's error for a CA file path that is not a file (a directory opens on glibc).
+const char *const CA_FILE_NOT_A_FILE_ERROR = "is not a regular file";
+
+// Part of the driver's error for a CA file with no readable certificate.
+const char *const CA_FILE_NOT_LOADABLE_ERROR = "holds no certificate";
+
+// Part of the driver's error when an identity-provider request's path was too long to keep.
+const char *const IAM_CA_FILE_DROPPED_ERROR = "identity provider request reads";
+
 // Distinctive so a leak of it is easy to spot.
 const char *const PROBE_PASSWORD = "SECRET-MARKER-DO-NOT-LEAK";
 
 // Caps each wait on the driver, so a test that fails before connecting can't hang the suite.
 const int ENDPOINT_TIMEOUT_SECONDS = 30;
+
+// Bounds the wait for the TLS retry after a refused plaintext startup.
+const int RETRY_WAIT_SECONDS = 5;
+
+// Upper bound on a plaintext StartupMessage drained before it is refused.
+const int MAX_STARTUP_LENGTH = 10000;
 
 // The tests link the driver directly, so the Driver keyword only has to be present.
 const char *const DIRECT_DRIVER_CLAUSE = "Driver=Amazon Redshift ODBC Driver;";
@@ -303,6 +325,27 @@ inline std::string authRequest(int code)
 }
 
 /**
+ * Builds a fatal ErrorResponse. An sslmode=allow client retries over TLS only if its
+ * plaintext startup gets an error; a bare close looks like a broken server.
+ */
+inline std::string errorResponse(const char *sqlState, const char *text)
+{
+    std::string body("SFATAL");
+    body.push_back('\0');
+    body.push_back('C');
+    body += sqlState;
+    body.push_back('\0');
+    body.push_back('M');
+    body += text;
+    body.push_back('\0');
+    body.push_back('\0');  // end of the field list
+    std::string message("E");
+    putInt32(&message, 4 + (int)body.size());
+    message += body;
+    return message;
+}
+
+/**
  * @brief Builds ParameterStatus, BackendKeyData and ReadyForQuery: the minimum to
  *        pass as a server after authentication.
  * @return The message bytes.
@@ -431,6 +474,350 @@ inline X509 *newCert(EVP_PKEY *key, const std::string &commonName, X509 *issuer,
 }
 
 /**
+ * Mints a self-signed CA that signs nothing and writes it to a temp file. Its subject is
+ * unique, as libpq's process-global store makes equal subjects collide.
+ * @return The PEM file path, or "" on failure.
+ */
+inline std::string writeUnrelatedCa()
+{
+    static int next = 0;
+    const std::string name = "Unrelated Test CA " +
+                             std::to_string((long)RS_GETPID()) + "_" +
+                             std::to_string(next++);
+    EVP_PKEY *key = newKey();
+    X509 *ca = (key != NULL) ? newCert(key, name, NULL, NULL, NULL) : NULL;
+    std::string path;
+    if (ca != NULL) {
+        path = uniquePath("rsodbc_unrelated_ca_") + ".crt";
+        // BIO, not FILE *: on Windows a FILE * from another C runtime crashes OpenSSL.
+        BIO *out = BIO_new_file(path.c_str(), "w");
+        const bool ok = out != NULL && PEM_write_bio_X509(out, ca) == 1;
+        BIO_free(out);
+        if (!ok) {
+            // Remove the partial file BIO_new_file created before the write failed.
+            removeFileIfPresent(path);
+            path.clear();
+        }
+    }
+    X509_free(ca);
+    EVP_PKEY_free(key);
+    return path;
+}
+
+/** A CA that signs nothing, in a file removed when it goes out of scope. */
+class UnrelatedCa
+{
+public:
+    UnrelatedCa() : m_path(writeUnrelatedCa()) {}
+
+    ~UnrelatedCa()
+    {
+        if (!m_path.empty()) {
+            removeFileIfPresent(m_path);
+        }
+    }
+
+    UnrelatedCa(const UnrelatedCa &) = delete;
+    UnrelatedCa &operator=(const UnrelatedCa &) = delete;
+
+    /** @return True when the certificate was minted and written. */
+    bool ok() const { return !m_path.empty(); }
+
+    /** @return The PEM file path, or "" when minting or writing failed. */
+    const std::string &path() const { return m_path; }
+
+private:
+    std::string m_path;
+};
+
+// What libpqConnect appends to the driver directory for the built-in root.crt path.
+const char *const BUILT_IN_ROOT_NAME = "root.crt";
+
+// The separator libpqConnect joins them with; a diagnostic naming the built-in root.crt
+// carries it.
+#ifdef WIN32
+const char BUILT_IN_ROOT_SEPARATOR = '\\';
+#else
+const char BUILT_IN_ROOT_SEPARATOR = '/';
+#endif
+
+/** The cause of the last failed socket call: WSAGetLastError() on Windows, errno elsewhere. */
+inline int lastSocketError()
+{
+#ifdef WIN32
+    return WSAGetLastError();
+#else
+    return errno;
+#endif
+}
+
+/** The cause of the last failed file replace: GetLastError() on Windows, errno elsewhere. */
+inline std::string lastFileReplaceError()
+{
+#ifdef WIN32
+    return "Windows error " + std::to_string((unsigned long)GetLastError());
+#else
+    return strerror(errno);
+#endif
+}
+
+/** Replaces one file with another in a single step; true when to now holds what from held. */
+inline bool replaceFileInPlace(const std::string &from, const std::string &to)
+{
+#ifdef WIN32
+    // rename() refuses an existing target on Windows.
+    return MoveFileExA(from.c_str(), to.c_str(),
+                       MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+    return rename(from.c_str(), to.c_str()) == 0;
+#endif
+}
+
+/** The path of the built-in root.crt beside this binary, or "" if the driver directory is unknown. */
+inline std::string builtInRootPath()
+{
+    std::string path;
+    char *driverPath = ::getDriverPath();
+    if (driverPath != NULL && driverPath[0] != '\0') {
+        path = std::string(driverPath) + BUILT_IN_ROOT_SEPARATOR + BUILT_IN_ROOT_NAME;
+    }
+    free(driverPath);
+    return path;
+}
+
+/**
+ * Appends a CA to the driver directory's root.crt while in scope, restoring the original
+ * bytes on destruction. libpqConnect passes that file as ssldefaultrootcert, so this sets
+ * what the built-in root.crt trusts. libpq's store is process-global, so the CA stays
+ * trusted, but its unique subject and key mean it never signs another endpoint's leaf.
+ */
+class BuiltInRootExtension
+{
+public:
+    /** Appends the certificate in a PEM file to the built-in root.crt. */
+    explicit BuiltInRootExtension(const std::string &pemFile)
+    {
+        const std::string pem = readFileIfPresent(pemFile);
+        if (pem.empty()) {
+            m_why = "could not read " + pemFile;
+            return;
+        }
+        m_path = builtInRootPath();
+        if (m_path.empty()) {
+            m_why = "the driver directory could not be determined";
+            return;
+        }
+        m_original = readFileIfPresent(m_path);
+        if (m_original.empty()) {
+            m_why = m_path + " is missing or empty";
+            return;
+        }
+        FILE *out = fopen(m_path.c_str(), "ab");
+        if (out == NULL) {
+            m_why = m_path + " could not be opened for writing";
+            return;
+        }
+        const bool wrote =
+            fwrite(pem.data(), 1, pem.size(), out) == pem.size() && fflush(out) == 0;
+        const bool closed = fclose(out) == 0;
+        if (!wrote || !closed) {
+            m_why = "could not append to " + m_path;
+            if (!restore()) {
+                m_why += ", and the original bytes could not be put back";
+            }
+            return;
+        }
+        m_extended = true;
+    }
+
+    /**
+     * Puts the built-in root.crt back. A destructor cannot fail the test, so a failure is
+     * printed to stderr rather than left as silent residue.
+     */
+    ~BuiltInRootExtension()
+    {
+        if (m_extended && !restore()) {
+            fprintf(stderr,
+                    "ERROR: %s still carries the CA this test appended; restore it "
+                    "before trusting another run of this suite\n",
+                    m_path.c_str());
+            fflush(stderr);
+        }
+    }
+
+    BuiltInRootExtension(const BuiltInRootExtension &) = delete;
+    BuiltInRootExtension &operator=(const BuiltInRootExtension &) = delete;
+
+    /** True when the built-in root.crt now carries the extra CA. */
+    bool ok() const { return m_extended; }
+
+    /** Puts the built-in root.crt back now so a case can assert it is whole. */
+    bool restoreNow()
+    {
+        if (!m_extended) {
+            return true;
+        }
+        if (restore()) {
+            return true;
+        }
+        m_why = "the original bytes of " + m_path + " could not be put back";
+        return false;
+    }
+
+    /** Why the built-in root.crt could not be extended or restored, "" when both worked. */
+    const std::string &why() const { return m_why; }
+
+private:
+    /**
+     * Restores the original bytes atomically: through a temp file (named with the process id)
+     * moved over root.crt, so a failed write leaves it whole. m_extended clears only on success.
+     * @return true when the original bytes are back.
+     */
+    bool restore()
+    {
+        const std::string temp =
+            m_path + ".restore." + std::to_string((long)RS_GETPID());
+        FILE *out = fopen(temp.c_str(), "wb");
+        if (out == NULL) {
+            return false;
+        }
+        const bool wrote =
+            fwrite(m_original.data(), 1, m_original.size(), out) == m_original.size() &&
+            fflush(out) == 0;
+        const bool closed = fclose(out) == 0;
+        if (!wrote || !closed || !replaceFileInPlace(temp, m_path)) {
+            RS_UNLINK(temp.c_str());
+            return false;
+        }
+        m_extended = false;
+        return true;
+    }
+
+    std::string m_path;
+    std::string m_original;
+    std::string m_why;
+    bool m_extended = false;
+};
+
+/**
+ * Replaces the built-in root.crt with test content, or removes it, and restores the
+ * original bytes on destruction like BuiltInRootExtension. The cases that drive the
+ * driver's check of that file need it unusable.
+ */
+class BuiltInRootReplacement
+{
+public:
+    /** Takes the built-in root.crt over; content "" removes the file. */
+    explicit BuiltInRootReplacement(const std::string &content)
+    {
+        m_path = builtInRootPath();
+        if (m_path.empty()) {
+            m_why = "the driver directory could not be determined";
+            return;
+        }
+        m_original = readFileIfPresent(m_path);
+        if (m_original.empty()) {
+            m_why = m_path + " is missing or empty";
+            return;
+        }
+        if (content.empty()) {
+            if (RS_UNLINK(m_path.c_str()) != 0) {
+                m_why = m_path + " could not be removed";
+                return;
+            }
+            m_replaced = true;
+            return;
+        }
+        const std::string why = writeOver(content);
+        if (!why.empty()) {
+            m_why = m_path + ": " + why;
+            return;
+        }
+        m_replaced = true;
+    }
+
+    ~BuiltInRootReplacement()
+    {
+        if (m_replaced && !restore()) {
+            fprintf(stderr,
+                    "ERROR: %s no longer holds the built-in root.crt; restore it "
+                    "before trusting another run of this suite\n",
+                    m_path.c_str());
+            fflush(stderr);
+        }
+    }
+
+    BuiltInRootReplacement(const BuiltInRootReplacement &) = delete;
+    BuiltInRootReplacement &operator=(const BuiltInRootReplacement &) = delete;
+
+    /** True when the built-in root.crt now holds what this asked for. */
+    bool ok() const { return m_replaced; }
+
+    /** @return The path of the built-in root.crt, which a diagnostic must name. */
+    const std::string &path() const { return m_path; }
+
+    /** Puts the installed file back now so a case can assert it is whole. */
+    bool restoreNow()
+    {
+        // restore() sets m_why with the step that failed.
+        return !m_replaced || restore();
+    }
+
+    /** Why the built-in root.crt could not be replaced or restored, "" when both worked. */
+    const std::string &why() const { return m_why; }
+
+private:
+    /**
+     * @brief Writes content over the built-in root.crt in one step.
+     * @return "" on success, otherwise the step that failed and its error.
+     */
+    std::string writeOver(const std::string &content)
+    {
+        const std::string temp =
+            m_path + ".replace." + std::to_string((long)RS_GETPID());
+        FILE *out = fopen(temp.c_str(), "wb");
+        if (out == NULL) {
+            return "the temporary file could not be created: " +
+                   std::string(strerror(errno));
+        }
+        const bool wrote =
+            fwrite(content.data(), 1, content.size(), out) == content.size() &&
+            fflush(out) == 0;
+        const int wroteErrno = errno;
+        const bool closed = fclose(out) == 0;
+        if (!wrote || !closed) {
+            RS_UNLINK(temp.c_str());
+            return "the temporary file could not be written: " +
+                   std::string(strerror(wrote ? errno : wroteErrno));
+        }
+        if (!replaceFileInPlace(temp, m_path)) {
+            // Usually something else still holds the file open.
+            const std::string why = lastFileReplaceError();
+            RS_UNLINK(temp.c_str());
+            return "it could not be replaced: " + why;
+        }
+        return std::string();
+    }
+
+    /** @brief Puts the built-in root.crt back, atomically. */
+    bool restore()
+    {
+        const std::string why = writeOver(m_original);
+        if (!why.empty()) {
+            m_why = "the original bytes of " + m_path + " could not be put back, " + why;
+            return false;
+        }
+        m_replaced = false;
+        return true;
+    }
+
+    std::string m_path;
+    std::string m_original;
+    std::string m_why;
+    bool m_replaced = false;
+};
+
+/**
  * @brief Reads count bytes over TLS.
  * @param ssl The TLS connection.
  * @param count How many bytes to read.
@@ -451,6 +838,19 @@ inline std::string sslRead(SSL *ssl, int count)
         data.append(buffer, (size_t)got);
     }
     return data;
+}
+
+/*
+ * The message lengths this fake acts on. A length counts its own four bytes, so a payload
+ * makes it at least five. Out-of-range lengths are rejected before any subtraction or read.
+ */
+const int MIN_MESSAGE_LENGTH = 5;
+const int MAX_MESSAGE_LENGTH = 64 * 1024;
+
+/** True when a peer-supplied message length is one this fake will read. */
+inline bool messageLengthIsUsable(int length)
+{
+    return length >= MIN_MESSAGE_LENGTH && length <= MAX_MESSAGE_LENGTH;
 }
 
 /**
@@ -481,16 +881,37 @@ inline void setReceiveTimeout(RS_SOCKET sock, int seconds)
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout));
 }
 
-// Serves one connection on a background thread. certMode is "matching", "mismatched"
-// (valid chain, wrong name) or "untrusted" (signed by a CA the client never gets).
+// What one client exchange did, so the server knows whether to expect a retry.
+enum ServeResult
+{
+    SERVE_DONE,
+    SERVE_PLAINTEXT_REFUSED,  // sslmode=allow retries TLS after a plaintext refusal
+    SERVE_TLS_REJECTED        // records that the client rejected the TLS certificate
+};
+
+// Serves one TLS connection on a background thread after refusing any plaintext startup.
+// certMode: "matching", "mismatched" (valid chain, wrong name) or "untrusted" (unknown CA).
 class FakeEndpoint
 {
 public:
     /**
      * @brief Mints the certificates, listens on loopback and starts serving.
      * @param certMode "matching", "mismatched" or "untrusted".
+     * @param acceptPlaintextAfterTlsRejection Makes the endpoint accept a later plaintext
+     *        startup. Tests use it to prove that a TLS certificate rejection does not
+     *        disclose credentials in plaintext.
+     * @param declineTls Respond with PostgreSQL's explicit TLS-unsupported response ('N')
+     *        and accept the resulting plaintext startup.
+     * @param sendInvalidTlsData Reply 'S' then send data that cannot be a TLS handshake.
+     * @param rejectAuthentication Complete TLS then reject the startup before requesting a password.
      */
-    explicit FakeEndpoint(const char *certMode)
+    explicit FakeEndpoint(const char *certMode, bool acceptPlaintextAfterTlsRejection = false,
+                          bool declineTls = false, bool sendInvalidTlsData = false,
+                          bool rejectAuthentication = false)
+        : m_acceptPlaintextAfterTlsRejection(acceptPlaintextAfterTlsRejection),
+          m_declineTls(declineTls),
+          m_sendInvalidTlsData(sendInvalidTlsData),
+          m_rejectAuthentication(rejectAuthentication)
     {
 #ifdef WIN32
         static const bool winsockReady = []() {
@@ -560,7 +981,8 @@ public:
 
     /**
      * @brief Waits for the server thread to finish its one client, then reports
-     *        whether that client sent the password.
+     *        whether that client sent the password. It is read only inside the TLS
+     *        session, so true also proves the connection was encrypted.
      * @return true if a PasswordMessage carrying PROBE_PASSWORD arrived.
      */
     bool passwordReceived()
@@ -570,6 +992,26 @@ public:
             m_thread.join();
         }
         return m_passwordReceived;
+    }
+
+    /** @return True when the client completed the TLS handshake. */
+    bool tlsHandshakeCompleted()
+    {
+        if (m_thread.joinable())
+        {
+            m_thread.join();
+        }
+        return m_tlsHandshakeCompleted;
+    }
+
+    /** @return True when a plaintext fallback sent PROBE_PASSWORD. */
+    bool plaintextPasswordReceived()
+    {
+        if (m_thread.joinable())
+        {
+            m_thread.join();
+        }
+        return m_plaintextPasswordReceived;
     }
 
 private:
@@ -663,10 +1105,12 @@ private:
         addr.sin_port = 0;
         socklen_t length = sizeof(addr);
         if (bind(m_listener, (struct sockaddr *)&addr, sizeof(addr)) != 0 ||
-            listen(m_listener, 1) != 0 ||
+            // Room for the retry of a refused plaintext client.
+            listen(m_listener, 4) != 0 ||
             getsockname(m_listener, (struct sockaddr *)&addr, &length) != 0)
         {
-            m_startupOutput = "could not listen on 127.0.0.1: errno " + std::to_string(errno);
+            m_startupOutput = "could not listen on 127.0.0.1: socket error " +
+                              std::to_string(lastSocketError());
             return false;
         }
         m_port = ntohs(addr.sin_port);
@@ -674,42 +1118,96 @@ private:
     }
 
     /**
-     * @brief Accepts and serves one client. Polls the accept so the destructor can
-     *        stop a wait the test abandoned.
+     * @brief Accepts and serves one TLS client. Polls the accept so the destructor can
+     *        stop a wait the test abandoned. A plaintext client is refused and served
+     *        again, since sslmode=allow upgrades to TLS only after that.
      */
     void serveOnce()
     {
-        const time_t deadline = time(NULL) + ENDPOINT_TIMEOUT_SECONDS;
-        RS_SOCKET client = RS_NO_SOCKET;
-        while (!m_stop && time(NULL) < deadline)
-        {
-            fd_set readable;
-            FD_ZERO(&readable);
-            FD_SET(m_listener, &readable);
-            struct timeval tick;
-            tick.tv_sec = 0;
-            tick.tv_usec = 100 * 1000;
-            if (select((int)m_listener + 1, &readable, NULL, NULL, &tick) > 0)
-            {
-                client = accept(m_listener, NULL, NULL);
-                break;
+        time_t deadline = time(NULL) + ENDPOINT_TIMEOUT_SECONDS;
+        while (true) {
+            RS_SOCKET client = RS_NO_SOCKET;
+            while (!m_stop && time(NULL) < deadline) {
+                fd_set readable;
+                FD_ZERO(&readable);
+                FD_SET(m_listener, &readable);
+                struct timeval tick;
+                tick.tv_sec = 0;
+                tick.tv_usec = 100 * 1000;
+                if (select((int)m_listener + 1, &readable, NULL, NULL, &tick) > 0) {
+                    client = accept(m_listener, NULL, NULL);
+                    break;
+                }
             }
-        }
-        if (client == RS_NO_SOCKET)
-        {
+            if (client == RS_NO_SOCKET) {
+                return;
+            }
+            setReceiveTimeout(client, ENDPOINT_TIMEOUT_SECONDS);
+            const ServeResult result = serveClient(client);
+            RS_CLOSE_SOCKET(client);
+            if (result == SERVE_PLAINTEXT_REFUSED ||
+                (result == SERVE_TLS_REJECTED && m_acceptPlaintextAfterTlsRejection) ||
+                (result == SERVE_DONE && m_rejectAuthentication && m_acceptPlaintextAfterTlsRejection)) {
+                // Only the libpq retry is still owed, so stop waiting for it sooner.
+                deadline = time(NULL) + RETRY_WAIT_SECONDS;
+                continue;
+            }
             return;
         }
-        setReceiveTimeout(client, ENDPOINT_TIMEOUT_SECONDS);
-        serveClient(client);
-        RS_CLOSE_SOCKET(client);
+    }
+
+    /** Completes an already-started plaintext connection for the prefer fallback case. */
+    ServeResult servePlaintextStartup(RS_SOCKET client, int length)
+    {
+        if (length <= SSL_REQUEST_LENGTH || length >= MAX_STARTUP_LENGTH) {
+            return SERVE_DONE;
+        }
+        std::string startup;
+        startup.resize((size_t)(length - SSL_REQUEST_LENGTH));
+        size_t drained = 0;
+        while (drained < startup.size()) {
+            int got = recv(client, &startup[drained], (int)(startup.size() - drained), 0);
+            if (got <= 0) {
+                return SERVE_DONE;
+            }
+            drained += (size_t)got;
+        }
+        const std::string request = authRequest(AUTH_CLEARTEXT_PASSWORD);
+        if (send(client, request.data(), (int)request.size(), 0) <= 0) {
+            return SERVE_DONE;
+        }
+        char kind = '\0';
+        if (recv(client, &kind, 1, 0) != 1 || kind != 'p') {
+            return SERVE_DONE;
+        }
+        unsigned char size[4];
+        if (recv(client, (char *)size, sizeof(size), 0) != (int)sizeof(size)) {
+            return SERVE_DONE;
+        }
+        const int passwordLength = getInt32(size);
+        if (!messageLengthIsUsable(passwordLength)) {
+            return SERVE_DONE;
+        }
+        std::string password;
+        password.resize((size_t)(passwordLength - 4));
+        if (recv(client, &password[0], (int)password.size(), 0) != (int)password.size()) {
+            return SERVE_DONE;
+        }
+        m_plaintextPasswordReceived = password.find(PROBE_PASSWORD) != std::string::npos;
+        const std::string ready = authRequest(AUTH_OK) + readyForQuery();
+        send(client, ready.data(), (int)ready.size(), 0);
+        return SERVE_DONE;
     }
 
     /**
      * @brief Answers SSLRequest, completes the TLS handshake, asks for a cleartext
-     *        password and lets the client in.
+     *        password and lets the client in. A plaintext startup is refused with a
+     *        fatal error, which makes an sslmode=allow client retry on TLS.
      * @param client The accepted socket.
+     * @return SERVE_PLAINTEXT_REFUSED for an allow retry, SERVE_TLS_REJECTED for a
+     *         prefer fallback, otherwise SERVE_DONE.
      */
-    void serveClient(RS_SOCKET client)
+    ServeResult serveClient(RS_SOCKET client)
     {
         unsigned char opening[SSL_REQUEST_LENGTH];
         int have = 0;
@@ -718,37 +1216,84 @@ private:
             int got = recv(client, (char *)opening + have, SSL_REQUEST_LENGTH - have, 0);
             if (got <= 0)
             {
-                return;
+                return SERVE_DONE;
             }
             have += got;
         }
-        if (getInt32(opening) != SSL_REQUEST_LENGTH ||
-            getInt32(opening + 4) != SSL_REQUEST_CODE ||
-            send(client, "S", 1, 0) != 1)
-        {
-            return;
+        const int length = getInt32(opening);
+        if (length != SSL_REQUEST_LENGTH || getInt32(opening + 4) != SSL_REQUEST_CODE) {
+            // A StartupMessage, not an SSLRequest. Only the prefer-fallback endpoint accepts it.
+            if (m_acceptPlaintextAfterTlsRejection) {
+                return servePlaintextStartup(client, length);
+            }
+            if (length > SSL_REQUEST_LENGTH && length < MAX_STARTUP_LENGTH) {
+                std::string rest;
+                rest.resize((size_t)(length - SSL_REQUEST_LENGTH));
+                size_t drained = 0;
+                while (drained < rest.size()) {
+                    int got = recv(client, &rest[drained], (int)(rest.size() - drained), 0);
+                    if (got <= 0) {
+                        break;
+                    }
+                    drained += (size_t)got;
+                }
+            }
+            const std::string refusal =
+                errorResponse("28000", "fake endpoint requires TLS");
+            send(client, refusal.data(), (int)refusal.size(), 0);
+            return SERVE_PLAINTEXT_REFUSED;
+        }
+        if (m_declineTls) {
+            if (send(client, "N", 1, 0) != 1) {
+                return SERVE_DONE;
+            }
+            unsigned char startup[SSL_REQUEST_LENGTH];
+            if (recv(client, (char *)startup, sizeof(startup), 0) != (int)sizeof(startup)) {
+                return SERVE_DONE;
+            }
+            return servePlaintextStartup(client, getInt32(startup));
+        }
+        if (send(client, "S", 1, 0) != 1) {
+            return SERVE_DONE;
+        }
+        if (m_sendInvalidTlsData) {
+#ifdef WIN32
+            send(client, "not TLS", 7, 0);
+#else
+            send(client, "not TLS", 7, MSG_NOSIGNAL);
+#endif
+            return SERVE_TLS_REJECTED;
         }
 
         SSL *ssl = SSL_new(m_ctx);
         if (ssl == NULL)
         {
-            return;
+            return SERVE_DONE;
         }
         SSL_set_fd(ssl, (int)client);
         // A client that rejects the certificate ends the exchange here.
-        if (SSL_accept(ssl) == 1)
+        const bool tlsAccepted = SSL_accept(ssl) == 1;
+        if (tlsAccepted)
         {
+            m_tlsHandshakeCompleted = true;
             std::string length = sslRead(ssl, 4);
-            if (length.size() == 4)
-            {
+            // Check the length before subtracting from it, so a bad one is refused, not read.
+            if (length.size() == 4 &&
+                messageLengthIsUsable(
+                    getInt32((const unsigned char *)length.data()))) {
                 sslRead(ssl, getInt32((const unsigned char *)length.data()) - 4);
+                if (m_rejectAuthentication) {
+                    const std::string rejection = errorResponse("28000", "fake authentication failure");
+                    sslWrite(ssl, rejection);
+                }
                 // Ask for a cleartext password, as a rogue server would, then let the client in.
-                if (sslWrite(ssl, authRequest(AUTH_CLEARTEXT_PASSWORD)) &&
+                else if (sslWrite(ssl, authRequest(AUTH_CLEARTEXT_PASSWORD)) &&
                     sslRead(ssl, 1) == "p")
                 {
                     std::string size = sslRead(ssl, 4);
-                    if (size.size() == 4)
-                    {
+                    if (size.size() == 4 &&
+                        messageLengthIsUsable(
+                            getInt32((const unsigned char *)size.data()))) {
                         std::string password =
                             sslRead(ssl, getInt32((const unsigned char *)size.data()) - 4);
                         m_passwordReceived = password.find(PROBE_PASSWORD) != std::string::npos;
@@ -759,17 +1304,24 @@ private:
             SSL_shutdown(ssl);
         }
         SSL_free(ssl);
+        return tlsAccepted ? SERVE_DONE : SERVE_TLS_REJECTED;
     }
 
     std::thread m_thread;
     std::atomic<bool> m_stop{false};
+    const bool m_acceptPlaintextAfterTlsRejection = false;
+    const bool m_declineTls = false;
+    const bool m_sendInvalidTlsData = false;
+    const bool m_rejectAuthentication = false;
     RS_SOCKET m_listener = RS_NO_SOCKET;
     SSL_CTX *m_ctx = NULL;
     std::string m_caFile;
     std::string m_startupOutput;
     int m_port = 0;
     // Written by the server thread; read only after it is joined.
+    bool m_tlsHandshakeCompleted = false;
     bool m_passwordReceived = false;
+    bool m_plaintextPasswordReceived = false;
 };
 
 // Redirects stderr to a temp file while in scope; the tests check the warning stays off it.
@@ -873,11 +1425,13 @@ struct Attempt
  * @param endpoint The endpoint to connect to.
  * @param extra More attributes, each starting with ';'.
  * @param entryPoint Which entry point to call; by default the one a driver manager would.
+ * @param supplyCaFile When true (default) the endpoint's CA is passed as CaFile.
  * @return What the attempt returned and logged.
  */
 inline Attempt connectTo(const std::string &driverClause, const std::string &host,
                          const FakeEndpoint &endpoint, const std::string &extra,
-                         EntryPoint entryPoint = ENTRY_POINT_NATIVE)
+                         EntryPoint entryPoint = ENTRY_POINT_NATIVE,
+                         bool supplyCaFile = true)
 {
     Attempt attempt;
 
@@ -903,8 +1457,11 @@ inline Attempt connectTo(const std::string &driverClause, const std::string &hos
 
     std::string connStr = driverClause + "Server=" + host +
                           ";Port=" + std::to_string(endpoint.port()) +
-                          ";Database=dev;UID=victim;PWD=" + PROBE_PASSWORD +
-                          ";CaFile=" + connStrValue(endpoint.caFile()) + extra;
+                          ";Database=dev;UID=victim;PWD=" + PROBE_PASSWORD;
+    if (supplyCaFile) {
+        connStr += ";CaFile=" + connStrValue(endpoint.caFile());
+    }
+    connStr += extra;
     if (!logDir.empty())
     {
         connStr += ";LogLevel=6;LogPath=" + connStrValue(logDir);

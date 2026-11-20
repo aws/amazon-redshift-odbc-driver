@@ -17,7 +17,27 @@
 #include "rsdrvinfo.h"
 #include "rsMetadataAPIPostProcessor.h"
 
+/* Which SSL modes load the driver's built-in root.crt. */
+#include "rs_ssl_common.h"
+/* MAXPGPATH, the path length libpq accepts for its certificate options. */
+#include "pg_config_manual.h"
+/* Option buffers feed sslrootcert, so they must hold a full libpq path. */
+static_assert(MAX_CERT_PATH_LEN == MAXPGPATH,
+              "certificate option buffers must hold a full libpq path");
+/* libpq composes the user's default root.crt path in a MAXPGPATH buffer too. */
+static_assert(RS_SSL_USER_DEFAULT_CERT_PATH_MAX == MAXPGPATH,
+              "the user's default root.crt path must be held at libpq's limit");
+#include <cstdarg>
+#include <errno.h>
+#include <optional>
 #include <regex>
+#include <string>
+#include <variant>
+#include <vector>
+/* X509_STORE, to ask the same libcrypto libpq links whether a CA file parses. */
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#include <openssl/x509.h>
 
 /* Buffer size for portal/statement name strings.
  * Format is "_rs_portal_%p" or "_rs_stmt_%p" which with a 64-bit pointer
@@ -66,6 +86,9 @@ int getResultSetTypeForCsc(void *pCallerContext);
 short RS_ResultHandlerCallbackFunc(void *pCallerContext, PGresult *pgResult);
 int getResultConcurrencyTypeForCsc(void *pCallerContext);
 
+/* Declared here: libpq-int.h has no extern "C" guard. Defined in fe-connect.c. */
+extern bool pqGetHomeDirectory(char *buf, int bufsize);
+
 #ifdef __cplusplus
 }
 #endif
@@ -98,6 +121,504 @@ static const char *sslModeSourceName(int source)
     }
 }
 
+/** The name a certificate option goes by in diagnostics. */
+static const char *certOptionName(CertPathOption option)
+{
+    switch (option) {
+        case CertPathOption::TrustStore: return RS_TRUST_STORE;
+        case CertPathOption::CaFile:     return RS_IAM_CA_FILE;
+        case CertPathOption::CaPath:     return RS_IAM_CA_PATH;
+        default:                         return "certificate";
+    }
+}
+
+/** Where the CA file came from. */
+enum class CaSource { None, TrustStore, CaFile, CaPath, ServiceFile, Environment, UserDefault };
+
+/** The name a CA file source goes by in the log and in messages. */
+static const char *caSourceName(CaSource source)
+{
+    switch (source) {
+        case CaSource::TrustStore:  return RS_TRUST_STORE;
+        case CaSource::CaFile:      return RS_IAM_CA_FILE;
+        case CaSource::CaPath:      return RS_IAM_CA_PATH;
+        case CaSource::ServiceFile: return "service file sslrootcert";
+        case CaSource::Environment: return "PGSSLROOTCERT";
+        case CaSource::UserDefault: return "user default certificate file";
+        default:                    return "none";
+    }
+}
+
+/** The SSL options libpq gets once every CA file source has been read. */
+struct SslConnectionOptions {
+    std::string mode;
+    // nullopt: pass no sslrootcert. Empty: pass it empty, so libpq cannot refill it.
+    std::optional<std::string> rootCert;
+    // The built-in root.crt, when libpq is to load it.
+    std::optional<std::string> builtInRootCert;
+    CaSource source = CaSource::None;
+    std::vector<std::string> warnings;
+};
+
+/** Why the connection must not be tried. */
+struct SslConfigError {
+    std::string message;
+};
+
+using SslResolution = std::variant<SslConnectionOptions, SslConfigError>;
+
+/**
+ * Parses a CA file with the libcrypto libpq links.
+ * InternalError means OpenSSL could not allocate a store.
+ */
+static CaLoadStatus caFileLoadStatus(const char *path)
+{
+    X509_STORE *pStore;
+    int loaded;
+
+    if (path == NULL || path[0] == '\0') {
+        return CaLoadStatus::Invalid;
+    }
+
+    // Safe to repeat; libpq may not have initialized OpenSSL yet.
+    SSL_library_init();
+
+    pStore = X509_STORE_new();
+    if (pStore == NULL) {
+        ERR_clear_error();
+        return CaLoadStatus::InternalError;
+    }
+
+    loaded = X509_STORE_load_locations(pStore, path, NULL);
+    X509_STORE_free(pStore);
+
+    if (loaded != 1) {
+        // Else a later failure would report this error.
+        ERR_clear_error();
+        return CaLoadStatus::Invalid;
+    }
+    return CaLoadStatus::Loaded;
+}
+
+/* Reason text for CaLoadStatus::InternalError. */
+#define CA_CHECK_FAILED_REASON "could not check the CA file: out of memory"
+
+/* Longest path an error shows, so the reason and remedy fit the ODBC message limit. */
+#define SSL_ERROR_PATH_SHOWN 100
+
+/** A path short enough for an error message, with the middle of a long one elided. */
+static std::string shownPath(const std::string &path)
+{
+    if (path.size() <= SSL_ERROR_PATH_SHOWN) {
+        return path;
+    }
+    const size_t half = (SSL_ERROR_PATH_SHOWN - 3) / 2;
+    return path.substr(0, half) + "..." + path.substr(path.size() - half);
+}
+
+/** printf into a std::string. */
+static std::string formatText(const char *format, ...)
+{
+    char buf[MAXPGPATH + MAX_TEMP_BUF_LEN];
+    va_list args;
+
+    va_start(args, format);
+    vsnprintf(buf, sizeof(buf), format, args);
+    va_end(args);
+    return buf;
+}
+
+/** The reason for a CA file state, "" when the state is Ok. */
+static std::string caFileStateReason(TrustedCaFileState state, int savedErrno)
+{
+    switch (state) {
+        case TrustedCaFileState::NotFound:
+        case TrustedCaFileState::NotReadable:
+            return formatText("could not be opened: %s", strerror(savedErrno));
+        case TrustedCaFileState::NotRegular:
+            return "is not a regular file";
+        default:
+            return std::string();
+    }
+}
+
+/** The reason for a path too long to hold. */
+static std::string tooLongReason(const std::optional<size_t> &needed)
+{
+    if (needed.has_value()) {
+        return formatText("is %d bytes long, which is more than the %d bytes a CA file "
+                          "path may have", (int)*needed, MAXPGPATH - 1);
+    }
+    return formatText("is longer than the %d bytes a CA file path may have",
+                      MAXPGPATH - 1);
+}
+
+/** A CA file named or found, before it is checked. */
+struct CaFileCandidate {
+    CaSource source = CaSource::None;
+    std::string path;              // empty when tooLong
+    bool tooLong = false;
+    std::optional<size_t> needed;  // the length a too-long path needs, when known
+};
+
+/** What checking a CA file found. */
+enum class CaFileVerdict {
+    Usable,
+    Unresolved,  // the path names no file: missing, or too long to hold
+    Unusable,    // a file is there, but holds no certificate OpenSSL can read
+    CheckFailed  // the check itself could not run
+};
+
+/** Records a path, or that it is too long for libpq. */
+static void setCandidatePath(CaFileCandidate &candidate, CaSource source,
+                             const std::string &path)
+{
+    candidate.source = source;
+    if (path.size() + 1 > MAXPGPATH) {
+        candidate.tooLong = true;
+        candidate.needed = path.size();
+    } else {
+        candidate.path = path;
+    }
+}
+
+/** Checks a CA file the way libpq loads it: stat first, then parse. */
+static CaFileVerdict checkCaFile(const CaFileCandidate &candidate, std::string &reason)
+{
+    int savedErrno = 0;
+
+    if (candidate.tooLong) {
+        reason = tooLongReason(candidate.needed);
+        return CaFileVerdict::Unresolved;
+    }
+
+    // Separate statement: as arguments of one call, savedErrno could be read
+    // before rs_ssl_ca_file_state sets it.
+    const TrustedCaFileState state = rs_ssl_ca_file_state(candidate.path.c_str(), &savedErrno);
+
+    reason = caFileStateReason(state, savedErrno);
+    if (state == TrustedCaFileState::NotFound) {
+        return CaFileVerdict::Unresolved;
+    }
+    if (!reason.empty()) {
+        return CaFileVerdict::Unusable;
+    }
+
+    // libpq would fail the handshake, and prefer would then retry in plaintext.
+    const CaLoadStatus loadStatus = caFileLoadStatus(candidate.path.c_str());
+    if (loadStatus == CaLoadStatus::InternalError) {
+        reason = CA_CHECK_FAILED_REASON;
+        return CaFileVerdict::CheckFailed;
+    }
+    if (loadStatus == CaLoadStatus::Invalid) {
+        reason = "holds no certificate the driver can load";
+        return CaFileVerdict::Unusable;
+    }
+    return CaFileVerdict::Usable;
+}
+
+/**
+ * Finds the built-in root.crt and says why it cannot be used, "" when it can.
+ * Parsed in full only beside a CA file, as it holds 144 certificates.
+ */
+static std::string builtInRootUnusableReason(int caFileInPlay, std::string &path,
+                                             bool &checkFailed)
+{
+    char *driverPath = getDriverPath();
+    int savedErrno = 0;
+
+    checkFailed = false;
+    path.clear();
+    if (driverPath == NULL || *driverPath == '\0') {
+        if (driverPath != NULL) {
+            free(driverPath);
+        }
+        return "cannot be found, because the driver directory could not be determined";
+    }
+
+    path = std::string(driverPath) + PATH_SEPARATOR_CHAR + REDSHIFT_ROOT_CERT_FILE;
+    free(driverPath);
+
+    // A shortened path would name no file.
+    if (path.size() + 1 > MAXPGPATH) {
+        return tooLongReason(path.size());
+    }
+
+    const TrustedCaFileState state = rs_ssl_ca_file_state(path.c_str(), &savedErrno);
+    std::string reason = caFileStateReason(state, savedErrno);
+    if (!reason.empty()) {
+        return reason;
+    }
+
+    if (!rs_ssl_ca_file_has_certificate_header(path.c_str())) {
+        return "holds no certificate in the PEM form libpq reads";
+    }
+
+    if (!caFileInPlay) {
+        return std::string();
+    }
+
+    const CaLoadStatus loadStatus = caFileLoadStatus(path.c_str());
+    if (loadStatus == CaLoadStatus::InternalError) {
+        checkFailed = true;
+        return CA_CHECK_FAILED_REASON;
+    }
+    if (loadStatus == CaLoadStatus::Invalid) {
+        return "holds no certificate the driver can load";
+    }
+    return std::string();
+}
+
+/** What the libpq service file says about sslrootcert. */
+struct ServiceCaSetting {
+    bool present = false;  // the group sets it, possibly to ""
+    std::string value;
+    CaSource source = CaSource::ServiceFile;
+};
+
+/**
+ * Reads the sslrootcert the PGSERVICE group sets. PQconndefaults() fills an unset option from
+ * PGSSLROOTCERT, so a value equal to that variable is left to the environment.
+ */
+static ServiceCaSetting getServiceFileCaSetting(const char *pEnvRootCert)
+{
+    PQconninfoOption *pDefaults;
+    PQconninfoOption *pOption;
+    const char *pService = getenv("PGSERVICE");
+    ServiceCaSetting setting;
+
+    // Only a PGSERVICE group can name one; skip PQconndefaults otherwise.
+    if (pService == NULL || pService[0] == '\0') {
+        return setting;
+    }
+
+    pDefaults = PQconndefaults();
+    if (pDefaults == NULL) {
+        // libpq reports an unreadable service file when it connects, so carry on.
+        RS_LOG_DEBUG("RSLIBPQ",
+                     "PQconndefaults() read no settings for PGSERVICE=%s", pService);
+        return setting;
+    }
+
+    for (pOption = pDefaults; pOption->keyword != NULL; pOption++) {
+        if (strcmp(pOption->keyword, "sslrootcert") == 0) {
+            if (pOption->val != NULL &&
+                (pEnvRootCert == NULL || strcmp(pOption->val, pEnvRootCert) != 0)) {
+                setting.present = true;
+                setting.value = pOption->val;
+            }
+            break;
+        }
+    }
+
+    PQconninfoFree(pDefaults);
+    return setting;
+}
+
+/**
+ * Finds the CA file in libpq's order: TrustStore, CaFile, CaPath, the service file,
+ * PGSSLROOTCERT, then the user's default root.crt. The first one set wins.
+ */
+static CaFileCandidate findCaFile(const RS_CONNECT_PROPS_INFO &properties)
+{
+    CaFileCandidate candidate;
+    const struct {
+        CertPathOption option;
+        CaSource source;
+        const char *value;
+    } callerOptions[] = {
+        {CertPathOption::TrustStore, CaSource::TrustStore, properties.szTrustStore},
+        {CertPathOption::CaFile, CaSource::CaFile, properties.szCaFile},
+        {CertPathOption::CaPath, CaSource::CaPath, properties.szCaPath},
+    };
+
+    // A too-long option keeps its rank, so a lower one cannot take its place.
+    for (const auto &caller : callerOptions) {
+        const CertPathStatus &status = properties.certPathStatusOf(caller.option);
+
+        if (status.overlong) {
+            candidate.source = caller.source;
+            candidate.tooLong = true;
+            candidate.needed = status.requiredLength;
+            return candidate;
+        }
+        if (caller.value[0] != '\0') {
+            std::string path = caller.value;
+            if (caller.source == CaSource::CaPath) {
+                path = path + PATH_SEPARATOR_CHAR + REDSHIFT_ROOT_CERT_FILE;
+            }
+            setCandidatePath(candidate, caller.source, path);
+            return candidate;
+        }
+    }
+
+    // The service file ranks above the environment, as in libpq. An empty value set there
+    // still stops the search, since libpq then never reads PGSSLROOTCERT.
+    const char *pEnvRootCert = getenv("PGSSLROOTCERT");
+    const ServiceCaSetting service = getServiceFileCaSetting(pEnvRootCert);
+
+    if (service.present && !service.value.empty()) {
+        setCandidatePath(candidate, service.source, service.value);
+        return candidate;
+    }
+    if (!service.present && pEnvRootCert != NULL && pEnvRootCert[0] != '\0') {
+        setCandidatePath(candidate, CaSource::Environment, pEnvRootCert);
+        return candidate;
+    }
+
+    // libpq loads the user's default root.crt when nothing names a CA file. A look-up, not
+    // a request, so an absent file is no CA file at all. The buffer is larger than libpq's,
+    // so a home directory libpq would cut short is seen whole.
+    char szHomeDir[2 * MAXPGPATH];
+    char szPath[RS_SSL_USER_DEFAULT_CERT_PATH_MAX];
+
+    szHomeDir[0] = '\0';
+    if (!pqGetHomeDirectory(szHomeDir, (int)sizeof(szHomeDir))) {
+        return candidate;
+    }
+    if (!rs_ssl_compose_user_default_cert_path(szHomeDir, szPath, sizeof(szPath))) {
+        // libpq would look at a shortened path, so treat it as a CA file that cannot be found.
+        if (szHomeDir[0] != '\0') {
+            candidate.source = CaSource::UserDefault;
+            candidate.tooLong = true;
+            if (strlen(szHomeDir) + 1 < sizeof(szHomeDir)) {
+                candidate.needed =
+                    strlen(szHomeDir) + 1 + strlen(RS_SSL_USER_DEFAULT_CERT_SUFFIX);
+            }
+        }
+        return candidate;
+    }
+    if (rs_ssl_ca_file_state(szPath, NULL) != TrustedCaFileState::NotFound) {
+        // Passed to libpq as sslrootcert, so libpq does not compose it again.
+        setCandidatePath(candidate, CaSource::UserDefault, szPath);
+    }
+    return candidate;
+}
+
+/** The error for a CA file or built-in root.crt that rules the connection out. */
+static SslConfigError sslConfigError(const char *subject, const std::string &reason,
+                                     const std::string &path, const char *mode,
+                                     const char *remedy)
+{
+    if (path.empty()) {
+        return SslConfigError{formatText("%s %s. SSLMode=%s needs it; %s.", subject,
+                                         reason.c_str(), mode, remedy)};
+    }
+    return SslConfigError{formatText("%s %s: \"%s\". SSLMode=%s needs it; %s.", subject,
+                                     reason.c_str(), shownPath(path).c_str(), mode,
+                                     remedy)};
+}
+
+/**
+ * Decides which CA file and which built-in root.crt libpq loads, before any socket opens.
+ * @param sslMode The validated SSL mode; not "disable".
+ */
+static SslResolution resolveSslConnectionOptions(const RS_CONNECT_PROPS_INFO &properties,
+                                                 const char *sslMode)
+{
+    SslConnectionOptions options;
+    const CaFileCandidate candidate = findCaFile(properties);
+    CaFileVerdict verdict = CaFileVerdict::Unresolved;
+    std::string reason;
+    std::string subject;
+
+    options.mode = sslMode;
+    options.source = candidate.source;
+
+    // A too-long option ranked below the CA file would not have been read anyway.
+    for (size_t i = 0; i < kCertPathOptionCount; i++) {
+        const CertPathOption option = static_cast<CertPathOption>(i);
+        if (properties.certPathStatusOf(option).overlong &&
+            strcmp(certOptionName(option), caSourceName(candidate.source)) != 0) {
+            options.warnings.push_back(formatText(
+                "%s path was too long to keep and is ignored; the CA file comes from %s",
+                certOptionName(option), caSourceName(candidate.source)));
+        }
+    }
+
+    if (candidate.source != CaSource::None) {
+        subject = formatText("The %s CA file", caSourceName(candidate.source));
+        verdict = checkCaFile(candidate, reason);
+        if (verdict == CaFileVerdict::CheckFailed) {
+            return sslConfigError(subject.c_str(), reason, candidate.path, sslMode,
+                                  "no connection was tried");
+        }
+        // Every mode stops here, so prefer and allow never reach libpq's plaintext
+        // retry. A named file that is not a certificate is a mistake worth showing.
+        if (verdict == CaFileVerdict::Unusable) {
+            const std::string remedy =
+                formatText("fix the file or remove %s", caSourceName(candidate.source));
+            return sslConfigError(subject.c_str(), reason, candidate.path, sslMode,
+                                  remedy.c_str());
+        }
+    }
+
+    const int caFileInPlay = candidate.source != CaSource::None;
+    const bool caFileUsable = caFileInPlay && verdict == CaFileVerdict::Usable;
+
+    // The verify modes always validate. require, prefer and allow validate whenever a
+    // usable caller or ambient CA was resolved; otherwise they keep libpq's non-verifying
+    // behavior by suppressing its user-default lookup and loading no built-in root.
+    bool validationRequired = rs_ssl_mode_verifies_cert(sslMode) || caFileUsable;
+    if (!validationRequired) {
+        if (caFileInPlay) {
+            // A named CA that cannot resolve must not silently downgrade validation.
+            validationRequired = true;
+        } else {
+            options.rootCert = std::string();
+            return options;
+        }
+    }
+
+    std::string builtInPath;
+    bool builtInCheckFailed = false;
+    const std::string builtInReason =
+        builtInRootUnusableReason(caFileInPlay, builtInPath, builtInCheckFailed);
+
+    if (builtInCheckFailed || (!builtInReason.empty() && !caFileUsable)) {
+        // Nothing else is left to validate against. Name the CA file that would have
+        // stood in, or the message reads as if none was asked for.
+        if (caFileInPlay) {
+            const std::string remedy =
+                formatText("the %s CA file could not be used either, so fix %s or "
+                           "reinstall the driver",
+                           caSourceName(candidate.source),
+                           caSourceName(candidate.source));
+            return sslConfigError("The built-in root.crt", builtInReason, builtInPath,
+                                  sslMode, remedy.c_str());
+        }
+        return sslConfigError("The built-in root.crt", builtInReason, builtInPath, sslMode,
+                              "reinstall the driver, or name a CA file with CaFile");
+    }
+
+    if (!builtInReason.empty()) {
+        options.warnings.push_back(formatText(
+            "The built-in root.crt \"%s\" %s; validating against the %s CA file alone",
+            builtInPath.c_str(), builtInReason.c_str(), caSourceName(candidate.source)));
+    } else {
+        options.builtInRootCert = builtInPath;
+    }
+
+    if (caFileUsable) {
+        options.rootCert = candidate.path;
+    } else if (caFileInPlay) {
+        if (candidate.tooLong) {
+            options.warnings.push_back(formatText(
+                "%s path %s; validating against the built-in root.crt instead",
+                subject.c_str(), reason.c_str()));
+        } else {
+            options.warnings.push_back(formatText(
+                "%s \"%s\" %s; validating against the built-in root.crt instead",
+                subject.c_str(), candidate.path.c_str(), reason.c_str()));
+        }
+        // Not empty, which libpq would fill from the home directory.
+        options.rootCert = builtInPath;
+    } else {
+        options.rootCert = std::string();
+    }
+    return options;
+}
+
 SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 {
 //    RS_ENV_INFO *pEnv = pConn->phenv;
@@ -116,9 +637,9 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
     char szCscMaxFileSize[MAX_NUMBER_BUF_LEN];
     char szCscThreshold[MAX_NUMBER_BUF_LEN];
     char szSslMode[MAX_IDEN_LEN];
-    char szSslRootCert[MAX_PATH + 1];
     char szStreamingCursorRows[MAX_NUMBER_BUF_LEN];
-    char szSslDefaultCertPath [MAX_PATH + 1];
+    // Holds the strings the SSL keywords point at until the connection is made.
+    SslConnectionOptions sslOptions;
 	char szClientProtocolVersion[MAX_NUMBER_BUF_LEN];
 	char szDriverDiscoveryVersion[MAX_NUMBER_BUF_LEN];
 	char szOsVersion[MAX_TEMP_BUF_LEN];
@@ -173,7 +694,6 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 
         // SSL parameters
         szSslMode[0] = '\0';
-        szSslRootCert[0] = '\0';
 
         rs_strncpy(szSslMode, pConnectProps->szSslMode,sizeof(szSslMode));
 
@@ -207,43 +727,42 @@ SQLRETURN libpqConnect(RS_CONN_INFO *pConn)
 
         if(_stricmp(szSslMode,"disable") != 0)
         {
-          char *driverPath = getDriverPath();
-          if (driverPath != NULL && *driverPath != '\0')
-          {
-            snprintf(szSslDefaultCertPath, sizeof(szSslDefaultCertPath), "%s%c%s",driverPath, PATH_SEPARATOR_CHAR, REDSHIFT_ROOT_CERT_FILE);
-            // ssldefaultrootcert
-            if(szSslDefaultCertPath[0] != '\0')
-            {
-                ppKeywords[iCount] = "ssldefaultrootcert";
-                ppValues[iCount++] = szSslDefaultCertPath;
-            }
+          SslResolution resolution = resolveSslConnectionOptions(*pConnectProps, szSslMode);
+
+          // The failure comes before any socket opens, so no server state is attached.
+          if (const SslConfigError *pSslError = std::get_if<SslConfigError>(&resolution)) {
+              RS_LOG_ERROR("RSLIBPQ", "%s", pSslError->message.c_str());
+              addError(&pConn->pErrorList, "HY000", (char *)pSslError->message.c_str(), 0,
+                       NULL);
+
+              ppKeywords = (char **)rs_free(ppKeywords);
+              ppValues = (char **)rs_free(ppValues);
+
+              return SQL_ERROR;
           }
 
-		  if (driverPath)
-			  free(driverPath);
+          sslOptions = std::get<SslConnectionOptions>(std::move(resolution));
+          for (const std::string &warning : sslOptions.warnings) {
+              RS_LOG_WARN("RSLIBPQ", "%s", warning.c_str());
+          }
 
+          // Logged after the checks, so "loaded" means the driver read a certificate from it.
+          RS_LOG_DEBUG("RSLIBPQ",
+                       "SSLMode=%s, CA file channel=%s, built-in root.crt=%s",
+                       sslOptions.mode.c_str(), caSourceName(sslOptions.source),
+                       sslOptions.builtInRootCert ? "loaded" : "not loaded");
 
-          if(pConnectProps->szTrustStore[0] != '\0')
-              rs_strncpy(szSslRootCert, pConnectProps->szTrustStore,sizeof(szSslRootCert));
-        }
+          // libpq fills only unset options, so both are passed, empty when unused, and a
+          // service file or the environment cannot refill them.
+          ppKeywords[iCount] = "ssldefaultrootcert";
+          ppValues[iCount++] = sslOptions.builtInRootCert
+                                   ? (char *)sslOptions.builtInRootCert->c_str()
+                                   : (char *)"";
 
-        // sslrootcrt
-        if (szSslRootCert[0] == '\0') {
-            // try setting using CaFile or CaPath
-            if (pConnectProps->szCaFile[0] != '\0') {
-                rs_strncpy(szSslRootCert, pConnectProps->szCaFile,
-                           sizeof(szSslRootCert));
-            } else if (pConnectProps->szCaPath[0] != '\0') {
-                snprintf(szSslRootCert, sizeof(szSslRootCert), "%s%c%s",
-                         pConnectProps->szCaPath, PATH_SEPARATOR_CHAR,
-                         REDSHIFT_ROOT_CERT_FILE);
-            }
-        }
-
-        if(szSslRootCert[0] != '\0')
-        {
-            ppKeywords[iCount] = "sslrootcert";
-            ppValues[iCount++] = szSslRootCert;
+          if (sslOptions.rootCert) {
+              ppKeywords[iCount] = "sslrootcert";
+              ppValues[iCount++] = (char *)sslOptions.rootCert->c_str();
+          }
         }
 
         // Kerberos

@@ -10,6 +10,13 @@ configure_file(${CMAKE_SOURCE_DIR}/version.txt ${CMAKE_CURRENT_BINARY_DIR}/versi
 # Add an executable for all the tests
 add_executable(${EXECUTABLE_NAME} ${TEST_SOURCES})
 
+# Tests find the built-in root.crt next to the module that calls getDriverPath()
+# (rsodbc64-test.dll on Windows), so copy it there.
+add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/src/odbc/rsodbc/root.crt
+        $<TARGET_FILE_DIR:${EXECUTABLE_NAME}>)
+
 # GoogleTest expands each TEST/TEST_F into its own set of COFF sections, and the
 # larger suites here (rsutil_test.cpp is several thousand tests) exceed the
 # default 65,279-section limit of the object file format, which MSVC reports as
@@ -28,10 +35,20 @@ if (WIN32)
     target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/pgclient/src/include/port/win32)
     target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/pgclient/src/include/port/win32_msvc)
     target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/pgclient/src/port)
+    # getDriverPath() returns this DLL's directory, so copy the DLL beside the exe
+    # like root.crt above.
     add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-            $<TARGET_FILE:rsodbc64-test>  # Adjust this if necessary
-            ${CMAKE_CURRENT_BINARY_DIR}
+            $<TARGET_FILE:rsodbc64-test>
+            $<TARGET_FILE_DIR:${EXECUTABLE_NAME}>
+    )
+    # ConfigDsnPersistenceTest loads rsodbcsetup.dll from beside the exe, so copy it
+    # there. The target exists only on WIN32, hence the guard.
+    add_dependencies(${EXECUTABLE_NAME} rsodbcsetup)
+    add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            $<TARGET_FILE:rsodbcsetup>
+            $<TARGET_FILE_DIR:${EXECUTABLE_NAME}>
     )
     else()
     target_link_libraries(${EXECUTABLE_NAME} ${GTEST_LIBRARIES} rsodbc64-test pq ${RS_STATIC_LIBS})
@@ -60,3 +77,11 @@ post_build_copy_dependency_files(${EXECUTABLE_NAME} ${CMAKE_CURRENT_BINARY_DIR})
 
 install(TARGETS ${EXECUTABLE_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/unittest")
 install(TARGETS rsodbc64-test DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/unittest")
+if (WIN32)
+    # ConfigDsnPersistenceTest needs rsodbcsetup.dll beside the installed tests too.
+    # The target exists only on WIN32, hence the guard.
+    install(TARGETS rsodbcsetup DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/unittest")
+endif()
+# Installed tests need root.crt beside the binary too.
+install(FILES ${CMAKE_SOURCE_DIR}/src/odbc/rsodbc/root.crt
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/tests/unittest")

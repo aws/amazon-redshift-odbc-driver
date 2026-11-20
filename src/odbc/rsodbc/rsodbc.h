@@ -1395,6 +1395,11 @@ static inline void rs_secure_zero(void *ptr, size_t len) {
 #endif
 }
 
+/* The certificate options that feed libpq's sslrootcert, in the order the CA file is
+   resolved: the first one set wins. */
+enum class CertPathOption { TrustStore, CaFile, CaPath, Count };
+constexpr size_t kCertPathOptionCount = static_cast<size_t>(CertPathOption::Count);
+
 /*
  * Connect props info.
  * Note: Login Timeout–Maximum number of seconds for PADB to respond to a connection request before
@@ -1447,7 +1452,7 @@ public:
       iValidateServerCertificate = 1;
 
 //      szHostNameInCertificate[0] = '\0';
-      szTrustStore[0] = '\0';
+      resetCertPathState();
 
       iMultiInsertCmdConvertEnable = 0;
 
@@ -1594,8 +1599,26 @@ public:
  *
  */
     char szSslMode[MAX_IDEN_LEN] = {0};
-    char szCaPath[2*MAX_IDEN_LEN] = {0};
-    char szCaFile[2*MAX_IDEN_LEN] = {0};
+    /* Sized for MAX_CERT_PATH_LEN, as libpq's sslrootcert is, so a path it accepts is not shortened. */
+    char szCaPath[MAX_CERT_PATH_LEN] = {0};
+    char szCaFile[MAX_CERT_PATH_LEN] = {0};
+    /* Per CertPathOption: whether its value was too long to keep, and its length if known. */
+    CertPathStatus certPathStatus[kCertPathOptionCount];
+    CertPathStatus &certPathStatusOf(CertPathOption option) {
+        return certPathStatus[static_cast<size_t>(option)];
+    }
+    const CertPathStatus &certPathStatusOf(CertPathOption option) const {
+        return certPathStatus[static_cast<size_t>(option)];
+    }
+    // Clear cert entries: TrustStore, CaFile, and CaPath
+    void resetCertPathState() {
+        szTrustStore[0] = '\0';
+        szCaFile[0] = '\0';
+        szCaPath[0] = '\0';
+        for (CertPathStatus &status : certPathStatus) {
+            status = CertPathStatus();
+        }
+    }
 
 
 /*  The method the driver uses to encrypt data sent between the driver and the database server. 
@@ -1632,7 +1655,8 @@ public:
     and server authentication is used. The truststore file contains a list of the valid Certificate Authorities (CAs) that are trusted 
     by the client machine for SSL server authentication. 
 */
-    char szTrustStore[MAX_PATH + 1] = {0};
+    /* Sized like szCaFile and szCaPath; all three feed libpq's sslrootcert. */
+    char szTrustStore[MAX_CERT_PATH_LEN] = {0};
 
     // Multi-Insert conversion enable
     int iMultiInsertCmdConvertEnable;

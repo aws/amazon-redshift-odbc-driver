@@ -7,6 +7,8 @@
 */
 
 #include "rsodbc.h"
+/* Needs the plugin name macros from rsodbc.h above. */
+#include "rsodbc_setup/rs_dsn_ssl_keys.h"
 /* Driver-private SSL mismatch policy, not a public libpq option. */
 #include "pq_tls_policy.h"
 #include "rsutil.h"
@@ -25,6 +27,7 @@
 #include <cstdio>
 #include <iostream>
 #include <map>
+#include <vector>
 #ifdef WIN32
 #include "resource.h"
 #endif
@@ -2355,6 +2358,60 @@ error:
 
 /*====================================================================================================================================================*/
 
+namespace {
+/* A certificate option the identity-provider requests read. */
+struct CaPathOption
+{
+    CertPathOption index;  // the option's slot in the connect properties
+    const char *name;  // the connection-string key, for the message
+};
+/* The options rejectOverlongAuthCaPaths checks, in the order it checks them. */
+const CaPathOption kAuthCaPaths[] = {
+    {CertPathOption::CaFile, RS_IAM_CA_FILE},
+    {CertPathOption::CaPath, RS_IAM_CA_PATH},
+};
+}  // namespace
+/**
+ * Fails before any credential is sent when a CaFile or CaPath was too long to keep.
+ * The identity-provider requests read only those two, before libpqConnect runs.
+ * @return SQL_ERROR with an HY000 diagnostic for the first dropped option, else SQL_SUCCESS.
+ */
+static SQLRETURN rejectOverlongAuthCaPaths(RS_CONN_INFO *pConn)
+{
+    RS_CONNECT_PROPS_INFO *pConnectProps = pConn->pConnectProps;
+    char szError[MAX_TEMP_BUF_LEN * 2];
+
+    for (const CaPathOption &opt : kAuthCaPaths) {
+        const CertPathStatus &status = pConnectProps->certPathStatusOf(opt.index);
+
+        if (!status.overlong) {
+            continue;
+        }
+
+        if (status.requiredLength.has_value()) {
+            snprintf(szError, sizeof(szError),
+                     "The %s path is %zu bytes long, which is more than the %zu bytes "
+                     "a certificate authority file path may have. The identity "
+                     "provider request reads that path; shorten it or remove %s.",
+                     opt.name, *status.requiredLength,
+                     (size_t)(MAX_CERT_PATH_LEN - 1), opt.name);
+        } else {
+            snprintf(szError, sizeof(szError),
+                     "The %s path is longer than the %zu bytes a certificate "
+                     "authority file path may have. The identity provider request "
+                     "reads that path; shorten it or remove %s.",
+                     opt.name, (size_t)(MAX_CERT_PATH_LEN - 1), opt.name);
+        }
+        RS_LOG_ERROR("RSCNN", "%s", szError);
+        addError(&pConn->pErrorList, "HY000", szError, 0, NULL);
+        return SQL_ERROR;
+    }
+
+    return SQL_SUCCESS;
+}
+
+/*====================================================================================================================================================*/
+
 int RS_CONN_INFO::readAuthProfile(int append)
 {
 	RS_CONN_INFO *pConn = this;
@@ -2363,6 +2420,12 @@ int RS_CONN_INFO::readAuthProfile(int append)
 	if (pConn->pConnectProps->pIamProps
 		&& pConn->pConnectProps->pIamProps->szAuthProfile[0] != '\0')
 	{
+		// The profile fetch goes out over HTTPS before anything else reads the certificate options.
+		rc = rejectOverlongAuthCaPaths(pConn);
+		if (rc == SQL_ERROR) {
+			return rc;
+		}
+
 		try
 		{
 			char *pAuthProfileConnStr;
@@ -2410,6 +2473,49 @@ int RS_CONN_INFO::readAuthProfile(int append)
 	}
 
 	return rc;
+}
+
+/*====================================================================================================================================================*/
+
+/* Logs once that a too-long value was dropped; does nothing for other statuses. */
+static void warnIfCertPathNotKept(const char *pOption, const CertPathStatus &status,
+                                  size_t capacity)
+{
+    if (!status.overlong) {
+        return;
+    }
+
+    RS_LOG_WARN("RSCNN",
+                "%s path is %zu bytes long, more than the %zu bytes such a "
+                "path may have; the value was not kept",
+                pOption, status.requiredLength.value(), capacity - 1);
+}
+
+/* The DSN read buffer exceeds a stored path, so a too-long value arrives whole. */
+static_assert(CERT_PATH_READ_LEN > MAX_CERT_PATH_LEN, "read size must exceed the option size");
+
+/**
+ * Reads a certificate option from the DSN, stored as storeCertPathOrRecordOverflow does.
+ * An absent key or an empty value names nothing. A too-long value is logged once.
+ * @param readBuffer Scratch buffer, resized here and reusable across calls.
+ */
+static CertPathStatus readAndStoreCertPathFromDsn(const char *dsn, const char *key,
+                                                  char *destination, size_t capacity,
+                                                  std::vector<char> &readBuffer)
+{
+    readBuffer.assign(CERT_PATH_READ_LEN + 1, '\0');
+
+    RS_SQLGetPrivateProfileString(dsn, (char *)key, (char *)"", readBuffer.data(),
+                                  (int)readBuffer.size(), ODBC_INI);
+    readBuffer.back() = '\0';
+
+    CertPathStatus status =
+        storeCertPathOrRecordOverflow(destination, capacity, readBuffer.data());
+    warnIfCertPathNotKept(key, status, capacity);
+    if (strlen(readBuffer.data()) >= CERT_PATH_READ_LEN) {
+        status.requiredLength.reset();
+    }
+    return status;
 }
 
 /*====================================================================================================================================================*/
@@ -2619,9 +2725,13 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
         } else if (_stricmp(pname, RS_TRUST_STORE) == 0 ||
                    _stricmp(pname, "TS") == 0) {
           if (pval) {
-            strncpy(pConnectProps->szTrustStore, pval, MAX_PATH - 1);
-                            pConnectProps->szTrustStore[MAX_PATH - 1] = '\0';
-                        }
+            CertPathStatus &trustStore =
+                pConnectProps->certPathStatusOf(CertPathOption::TrustStore);
+            trustStore = storeCertPathOrRecordOverflow(
+                pConnectProps->szTrustStore, sizeof(pConnectProps->szTrustStore), pval);
+            warnIfCertPathNotKept(RS_TRUST_STORE, trustStore,
+                                  sizeof(pConnectProps->szTrustStore));
+          }
         } else if (_stricmp(pname, RS_KERBEROS_SERVICE_NAME) == 0 ||
                    _stricmp(pname, "KSN") == 0) {
           if (pval) {
@@ -2866,17 +2976,31 @@ int RS_CONN_INFO::parseConnectString(char *szConnStrIn, size_t cbConnStrIn, int 
                      sizeof(pIamProps->szIdcClientDisplayName));
         } else if (_stricmp(pname, RS_IAM_CA_FILE) == 0) {
           if (pval) {
-            strncpy(pIamProps->szCaFile, pval,
-                    sizeof(pIamProps->szCaFile));
-            strncpy(pConnectProps->szCaFile, pval,
-                    sizeof(pConnectProps->szCaFile));
+            // Both buffers hold MAX_CERT_PATH_LEN, so one check covers the pair.
+            CertPathStatus &caFile =
+                pConnectProps->certPathStatusOf(CertPathOption::CaFile);
+            caFile = storeCertPathOrRecordOverflow(
+                pConnectProps->szCaFile, sizeof(pConnectProps->szCaFile), pval);
+            warnIfCertPathNotKept(RS_IAM_CA_FILE, caFile,
+                                  sizeof(pConnectProps->szCaFile));
+            // A dropped value must not replace the DSN's CA file for the identity-provider request.
+            if (!caFile.overlong) {
+              rs_strncpy(pIamProps->szCaFile, pConnectProps->szCaFile,
+                         sizeof(pIamProps->szCaFile));
+            }
           }
         } else if (_stricmp(pname, RS_IAM_CA_PATH) == 0) {
           if (pval) {
-            strncpy(pIamProps->szCaPath, pval,
-                    sizeof(pIamProps->szCaPath));
-            strncpy(pConnectProps->szCaPath, pval,
-                    sizeof(pConnectProps->szCaPath));
+            CertPathStatus &caPath =
+                pConnectProps->certPathStatusOf(CertPathOption::CaPath);
+            caPath = storeCertPathOrRecordOverflow(
+                pConnectProps->szCaPath, sizeof(pConnectProps->szCaPath), pval);
+            warnIfCertPathNotKept(RS_IAM_CA_PATH, caPath,
+                                  sizeof(pConnectProps->szCaPath));
+            if (!caPath.overlong) {
+              rs_strncpy(pIamProps->szCaPath, pConnectProps->szCaPath,
+                         sizeof(pIamProps->szCaPath));
+            }
           }
         } else if (_stricmp(pname, RS_STRING_TYPE) == 0) {
           if (pval)
@@ -3015,7 +3139,12 @@ void RS_CONN_INFO::resetConnectProps()
     pConnectProps->iEncryptionMethod = 2; // verify-full
     pConnectProps->iValidateServerCertificate = 1;
 //    pConnectProps->szHostNameInCertificate[0] = '\0';
-    pConnectProps->szTrustStore[0] = '\0';
+    pConnectProps->resetCertPathState();
+    // pIamProps outlives a connection, so clear its CA copies as well.
+    if (pConnectProps->pIamProps) {
+        pConnectProps->pIamProps->szCaFile[0] = '\0';
+        pConnectProps->pIamProps->szCaPath[0] = '\0';
+    }
 
     // Multi-INSERT command conversion
     pConnectProps->iMultiInsertCmdConvertEnable = 1; // Default is ON
@@ -3536,10 +3665,23 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
         }
         RS_CONN_INFO::readIntValFromDsn(pConnectProps->szDSN, RS_VALIDATE_SERVER_CERTIFICATE, &(pConnectProps->iValidateServerCertificate));
 //        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_HOST_NAME_IN_CERTIFICATE, "", pConnectProps->szHostNameInCertificate, MAX_IDEN_LEN, ODBC_INI);
-        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_TRUST_STORE, "", pConnectProps->szTrustStore, MAX_PATH, ODBC_INI);
+        std::vector<char> certReadBuffer;
+        pConnectProps->certPathStatusOf(CertPathOption::TrustStore) =
+            readAndStoreCertPathFromDsn(pConnectProps->szDSN, RS_TRUST_STORE,
+                                        pConnectProps->szTrustStore,
+                                        sizeof(pConnectProps->szTrustStore),
+                                        certReadBuffer);
         // moving cafile and capath from iam props to conection props
-        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IAM_CA_PATH, "", pConnectProps->szCaPath, sizeof(pConnectProps->szCaPath), ODBC_INI);
-        RS_SQLGetPrivateProfileString(pConnectProps->szDSN, RS_IAM_CA_FILE, "", pConnectProps->szCaFile, sizeof(pConnectProps->szCaFile), ODBC_INI);
+        pConnectProps->certPathStatusOf(CertPathOption::CaPath) =
+            readAndStoreCertPathFromDsn(pConnectProps->szDSN, RS_IAM_CA_PATH,
+                                        pConnectProps->szCaPath,
+                                        sizeof(pConnectProps->szCaPath),
+                                        certReadBuffer);
+        pConnectProps->certPathStatusOf(CertPathOption::CaFile) =
+            readAndStoreCertPathFromDsn(pConnectProps->szDSN, RS_IAM_CA_FILE,
+                                        pConnectProps->szCaFile,
+                                        sizeof(pConnectProps->szCaFile),
+                                        certReadBuffer);
         
 
         // Read Multi-Insert command conversion
@@ -3715,7 +3857,7 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
       RS_LOG_TRACE("RSCNN",
           "readMoreConnectPropsFromRegistry [connection]: DSN=%s, Host=%s, Port=%s, "
           "Database=%s, User=%s, Password=%s, "
-          "SSLMode=%s, EncryptionMethod=%d, ValidateServerCertificate=%d, "
+          "SSLMode=%s, EncryptionMethod=%s, ValidateServerCertificate=%d, "
           "TrustStore=%s, CaFile=%s, CaPath=%s, MinTLS=%s, "
           "IAM=%s, NativeAuth=%s, PluginName=%s",
           pConnectProps->szDSN,
@@ -3724,8 +3866,10 @@ void RS_CONN_INFO::readMoreConnectPropsFromRegistry(int readUser)
           pConnectProps->szDatabase[0] ? pConnectProps->szDatabase : "(empty)",
           pConnectProps->szUser[0] ? pConnectProps->szUser : "(empty)",
           pConnectProps->szPassword[0] ? "****" : "(empty)",
-          pConnectProps->szSslMode[0] ? pConnectProps->szSslMode : "(empty)",
-          pConnectProps->iEncryptionMethod,
+          // iEncryptionMethod keeps its initial value until resolveSslPolicy runs and has no
+          // code for allow or prefer, so show what the DSN holds.
+          szSslModeFromDsn[0] ? szSslModeFromDsn : "(empty)",
+          szEncryptionMethodFromDsn[0] ? szEncryptionMethodFromDsn : "(empty)",
           pConnectProps->iValidateServerCertificate,
           pConnectProps->szTrustStore[0] ? pConnectProps->szTrustStore : "(empty)",
           pConnectProps->szCaFile[0] ? pConnectProps->szCaFile : "(empty)",
@@ -3788,8 +3932,16 @@ void RS_CONN_INFO::readIamConnectPropsFromRegistry()
 
     if(pConnectProps->szDSN[0] != '\0')
     {
-      // Allocate memory
-      pConnectProps->pIamProps = (RS_IAM_CONN_PROPS_INFO *) rs_calloc(1,sizeof(RS_IAM_CONN_PROPS_INFO));
+      // A reconnect on the same handle still holds the previous props, so reuse them.
+      // pszJwt is the only owned allocation.
+      if (pConnectProps->pIamProps) {
+        pConnectProps->pIamProps->pszJwt =
+            (char *)rs_free(pConnectProps->pIamProps->pszJwt);
+        memset(pConnectProps->pIamProps, 0, sizeof(RS_IAM_CONN_PROPS_INFO));
+      } else {
+        pConnectProps->pIamProps =
+            (RS_IAM_CONN_PROPS_INFO *)rs_calloc(1, sizeof(RS_IAM_CONN_PROPS_INFO));
+      }
       if(pConnectProps->pIamProps)
       {
         RS_IAM_CONN_PROPS_INFO *pIamProps = pConnectProps->pIamProps;
@@ -4341,6 +4493,18 @@ SQLRETURN RS_CONN_INFO::doConnection(RS_CONN_INFO *pConn) {
              sizeof(pConnectProps->szOrigUser));
   rs_strncpy(pConnectProps->szOrigPassword, pConnectProps->szPassword,
              sizeof(pConnectProps->szOrigPassword));
+
+  // The credential requests below read CaFile or CaPath, so refuse a too-long path here,
+  // before libpqConnect. A password connection is left alone. Plugin names identify native
+  // connections because isNativeAuth is set later for connection-string-only ones.
+  if (pConnectProps->isIAMAuth || pConnectProps->isNativeAuth ||
+      (pConnectProps->pIamProps &&
+       rs_auth_plugin_reaches_iam_path(pConnectProps->pIamProps->szPluginName))) {
+    rc = rejectOverlongAuthCaPaths(pConn);
+    if (rc == SQL_ERROR) {
+      return rc;
+    }
+  }
 
   // Check for IAM connection
   if(pConnectProps->isIAMAuth) {

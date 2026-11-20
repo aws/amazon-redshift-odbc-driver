@@ -31,7 +31,6 @@
 #include <prsht.h>
 #include  "resource.h"
 #include "version.h"
-#include "rs_dsn_ssl_keys.h"
 #include <openssl/evp.h>
 
 #define ODBC_INI "ODBC.INI"
@@ -118,6 +117,8 @@
 #define PLUGIN_JWT_IAM_AUTH         "JwtIamAuthPlugin"    // used for federated IAM auth
 #define PLUGIN_IDP_TOKEN_AUTH              "IdpTokenAuthPlugin"
 #define PLUGIN_BROWSER_IDC_AUTH            "BrowserIdcAuthPlugin"
+/* Needs the two plugin names above. */
+#include "rs_dsn_ssl_keys.h"
 
 // IDP Partition constants
 #define PARTITION_COMMERCIAL      ""
@@ -361,6 +362,9 @@ typedef struct {
 	BOOL		ssl_mode_named;			/* TRUE => SSLMode was named */
 	BOOL		encryption_method_named;	/* TRUE => EncryptionMethod was named */
 	int			em_index_on_open;		/* SSL tab mode shown on open */
+/*	The auth type the Connect tab shows now, which the SSL tab reads. AuthType is only
+ *	written on PSN_APPLY or by rs_dsn_test_connect, so it is no use here. */
+	int			auth_type_index;		/* AUTH_* index selected on the Connect tab */
 }	rs_dsn_setup_t, *rs_dsn_setup_ptr_t;
 
 typedef struct {
@@ -390,9 +394,12 @@ static void rs_show_controls(HWND hwndDlg, int controlId[]);
 static void rs_hide_controls(HWND hwndDlg, int controlId[]);
 static void rs_enable_controls(HWND hwndDlg, int controlId[], BOOL bEnable);
 static char*get_attr_val(rs_dsn_attr_t *attr, BOOL bEncrypt);
-static void set_attr_val(rs_dsn_attr_t *attr, char *val);
+static void set_attr_val(rs_dsn_attr_t *attr, const char *val);
 
 static int get_auth_type_for_control(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt);
+static void rs_dsn_fill_ssl_mode_combo(HWND hwndDlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt);
+static void rs_dsn_ssl_mode_combo_select(HWND combo, int em_index);
+static void rs_dsn_enforce_ssl_floor_for_auth(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt);
 static void set_idp_dlg_items(rs_dialog_controls idp_controls[], HWND hwndDlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt);
 static void set_dlg_items_based_on_auth_type(int curAuthType, HWND hwndDlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt);
 
@@ -764,11 +771,6 @@ static char *szCompressions[] = {
 	"LZ4",
 	""
 };
-
-#define SSL_MODE_DISABLE "disable"
-#define SSL_MODE_REQUIRE "require"
-#define SSL_MODE_VERIFY_CA "verify-ca"
-#define SSL_MODE_VERIFY_FULL "verify-full"
 
 #define TLS_VERSION_10 "1.0"
 #define TLS_VERSION_11 "1.1"
@@ -1607,7 +1609,7 @@ DllMain(HANDLE hInst, ULONG ul_reason_for_call, LPVOID lpReserved)
 }
 
 static BOOL
-rs_dsn_set_attr(rs_dsn_setup_ptr_t rs_setup_ctxt, const char *attr, char *val)
+rs_dsn_set_attr(rs_dsn_setup_ptr_t rs_setup_ctxt, const char *attr, const char *val)
 {
 	int i;
 	int maxVal = (strcmp(attr, RS_WEB_IDENTITY_TOKEN) == 0 || strcmp(attr, RS_TOKEN) == 0)
@@ -1888,6 +1890,8 @@ If ConfigDSN can get complete connection information for a data source then
  *	we need to check if dsn name exists; if so, and we've got hwnd, prompt user
  */
 			rs_dsn_setup_ctxt->is_new_dsn_name = TRUE;
+/*	the SSL tab needs an auth type before the Connect tab is ever rendered */
+			rs_dsn_setup_ctxt->auth_type_index = get_auth_type_for_control(rs_dsn_setup_ctxt);
 /*
  * Open dialog if parent window handle
  */
@@ -1933,6 +1937,8 @@ endif
 			{
 		/* Save passed variables for access from dialog handler */
 				rs_dsn_setup_ctxt->is_new_dsn_name = FALSE;
+/*	the SSL tab needs an auth type before the Connect tab is ever rendered */
+				rs_dsn_setup_ctxt->auth_type_index = get_auth_type_for_control(rs_dsn_setup_ctxt);
 /*
  * Open dialog if parent window handle
  */
@@ -2135,6 +2141,8 @@ static LRESULT CALLBACK rs_dsn_connect_sheet(HWND hwndDlg, UINT message, WPARAM 
 			}
 
 			curAuthType = get_auth_type_for_control(rs_dsn_setup_ctxt);
+			/* Publish it for the SSL tab, which gates allow/prefer on it. */
+			rs_dsn_setup_ctxt->auth_type_index = curAuthType;
 			ComboBox_SetCurSel(GetDlgItem(hwndDlg, IDC_COMBO_AUTH_TYPE), curAuthType);
 			set_dlg_items_based_on_auth_type(curAuthType, hwndDlg, rs_dsn_setup_ctxt);
 
@@ -2229,6 +2237,8 @@ static LRESULT CALLBACK rs_dsn_connect_sheet(HWND hwndDlg, UINT message, WPARAM 
 
 							rs_dsn_setup_ctxt = (rs_dsn_setup_ptr_t) GetWindowLongPtr(hwndDlg, DWLP_USER);
 							if (rs_dsn_setup_ctxt) {
+								/* The SSL tab reads this to gate allow/prefer. */
+								rs_dsn_setup_ctxt->auth_type_index = n;
 								set_dlg_items_based_on_auth_type(n, hwndDlg, rs_dsn_setup_ctxt);
 							}
 							rs_hide_show_authtype_controls(hwndDlg, auth_type);
@@ -2462,6 +2472,96 @@ static LRESULT CALLBACK rs_dsn_csc_sheet(HWND hwndDlg, UINT message, WPARAM wPar
 }
 
 /*-------
+ *	Tells whether the SSL tab combo must be held to the "require" floor. Only the auth type
+ *	the Connect tab shows now decides. The save path uses rs_dsn_ssl_floor_mode().
+ */
+static int
+rs_dsn_auth_has_ssl_floor(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt, int auth_type_index)
+{
+	const char *auth_profile;
+
+	if (NULL == rs_dsn_setup_ctxt) {
+		return 0;
+	}
+	if (auth_type_index != AUTH_STANDARD) {
+		return 1;
+	}
+	/*	A stored AuthProfile reaches the IAM path when it is applied, and the dialog never
+	 *	rewrites it from the auth type, so reading it here shows what the save will do. */
+	auth_profile = rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_IAM_AUTH_PROFILE);
+	return auth_profile != NULL && *auth_profile != '\0';
+}
+
+/*-------
+ *	Fill the SSL mode combo with the modes the auth type accepts and select the one the
+ *	DSN resolves to. IAM, IdC and native IdP accept only require, verify-ca and
+ *	verify-full (RsIamClient::ValidateConnectionAttributes), so the rest are withheld.
+ *	Each entry's item data is its rs_dsn_em_modes[] index.
+ */
+static void
+rs_dsn_fill_ssl_mode_combo(HWND hwndDlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
+{
+	HWND combo = GetDlgItem(hwndDlg, IDC_COMBO_EM);
+	int iam_floor = rs_dsn_auth_has_ssl_floor(rs_dsn_setup_ctxt,
+				rs_dsn_setup_ctxt->auth_type_index);
+	int index;
+	int i;
+
+	ComboBox_ResetContent(combo);
+	for (i = 0; i < RS_DSN_EM_MODE_COUNT; i++) {
+		if (rs_dsn_em_index_is_offered(i, iam_floor)) {
+			int pos = ComboBox_AddString(combo, rs_dsn_em_mode_name(i));
+
+			if (pos >= 0) {
+				ComboBox_SetItemData(combo, pos, (LPARAM)i);
+			}
+		}
+	}
+
+	/* Show the mode the DSN resolves to, not the EncryptionMethod default. */
+	index = rs_dsn_em_index_on_open_for_auth(
+		rs_dsn_setup_ctxt->ssl_mode_named, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_SSL_MODE),
+		rs_dsn_int_attr(rs_dsn_setup_ctxt, "EncryptionMethod"), iam_floor);
+	rs_dsn_ssl_mode_combo_select(combo, index);
+}
+
+/*-------
+ *	Select the combo entry for an rs_dsn_em_modes[] index; -1 or no entry selects nothing.
+ */
+static void
+rs_dsn_ssl_mode_combo_select(HWND combo, int em_index)
+{
+	int count = ComboBox_GetCount(combo);
+	int pos;
+
+	if (em_index >= 0) {
+		for (pos = 0; pos < count; pos++) {
+			if ((int)ComboBox_GetItemData(combo, pos) == em_index) {
+				ComboBox_SetCurSel(combo, pos);
+				return;
+			}
+		}
+	}
+	ComboBox_SetCurSel(combo, -1);
+}
+
+/*-------
+ *	The combo's selection as an rs_dsn_em_modes[] index (also the EncryptionMethod code for
+ *	0-3), read from the entry's item data. CB_ERR means nothing is selected.
+ */
+static int
+rs_dsn_ssl_mode_combo_index(HWND hwndDlg)
+{
+	HWND combo = GetDlgItem(hwndDlg, IDC_COMBO_EM);
+	int pos = ComboBox_GetCurSel(combo);
+
+	if (pos < 0) {
+		return pos;
+	}
+	return (int)ComboBox_GetItemData(combo, pos);
+}
+
+/*-------
  *	Cursor sheet handler
  */
 static LRESULT CALLBACK rs_dsn_ssl_sheet(HWND hwndDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -2476,16 +2576,11 @@ static LRESULT CALLBACK rs_dsn_ssl_sheet(HWND hwndDlg, UINT message, WPARAM wPar
 		case WM_INITDIALOG:
 			rs_dsn_setup_ctxt = (rs_dsn_setup_ptr_t) sheet->lParam;
 			rs_dsn_log(__LINE__, "rs_security_tab(INIT) ctxt %p", rs_dsn_setup_ctxt);
-            lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_EM),"disable"); 
-            lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_EM),"verify-ca"); 
-			lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_EM), "verify-full");
-			lr = ComboBox_AddString(GetDlgItem(hwndDlg, IDC_COMBO_EM), "require");
-			/* Show the mode the DSN resolves to, not the EncryptionMethod default. */
-			ComboBox_SetCurSel(GetDlgItem(hwndDlg, IDC_COMBO_EM), rs_dsn_em_index_on_open(
-				rs_dsn_setup_ctxt->ssl_mode_named, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_SSL_MODE),
-				rs_dsn_int_attr(rs_dsn_setup_ctxt, "EncryptionMethod")));
+			/* Entries and selection both depend on the selected auth type. */
+			rs_dsn_fill_ssl_mode_combo(hwndDlg, rs_dsn_setup_ctxt);
 			/* What the combo actually shows, so an out-of-range value reads back unchanged. */
-			rs_dsn_setup_ctxt->em_index_on_open = ComboBox_GetCurSel(GetDlgItem(hwndDlg, IDC_COMBO_EM));
+			rs_dsn_setup_ctxt->em_index_on_open =
+					rs_dsn_ssl_mode_combo_index(hwndDlg);
 //			CheckDlgButton(hwndDlg, IDC_VSC, rs_dsn_bool_attr(rs_dsn_setup_ctxt, "ValidateServerCertificate"));
 //			SetDlgItemText(hwndDlg, IDC_EDIT_HNIC, rs_dsn_get_attr(rs_dsn_setup_ctxt, "HostNameInCertificate"));
 			SetDlgItemText(hwndDlg, IDC_EDIT_TS, rs_dsn_get_attr(rs_dsn_setup_ctxt, "TrustStore"));
@@ -2504,6 +2599,46 @@ static LRESULT CALLBACK rs_dsn_ssl_sheet(HWND hwndDlg, UINT message, WPARAM wPar
 
 		case WM_NOTIFY:
 			switch (psnotify->hdr.code) {
+				case PSN_SETACTIVE:
+				{
+/*
+ *	The Connect tab may change the auth type after this page was built. Rebuild the combo
+ *	only when the offered modes changed, so an unsaved selection survives tab switching.
+ */
+					HWND combo;
+					int iam_floor;
+					int index;
+
+					rs_dsn_setup_ctxt = (rs_dsn_setup_ptr_t) GetWindowLongPtr(hwndDlg, DWLP_USER);
+					rs_dsn_log(__LINE__, "rs_security_tab(PSN_SETACTIVE)");
+					SetWindowLong(hwndDlg, DWLP_MSGRESULT, 0);
+					if (NULL == rs_dsn_setup_ctxt) {
+						break;
+					}
+
+					combo = GetDlgItem(hwndDlg, IDC_COMBO_EM);
+					iam_floor = rs_dsn_auth_has_ssl_floor(rs_dsn_setup_ctxt,
+										rs_dsn_setup_ctxt->auth_type_index);
+					if (ComboBox_GetCount(combo) == rs_dsn_em_offered_count(iam_floor)) {
+						break;
+					}
+
+/*
+ *	The offered run changed. em_index_on_open stays at its first value so that a lift to
+ *	require counts as a change and is persisted.
+ */
+					index = rs_dsn_em_index_on_auth_change(
+							rs_dsn_ssl_mode_combo_index(hwndDlg),
+							rs_dsn_setup_ctxt->ssl_mode_named,
+							rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_SSL_MODE),
+							rs_dsn_int_attr(rs_dsn_setup_ctxt, RS_ENCRYPTION_METHOD),
+							iam_floor);
+
+					rs_dsn_fill_ssl_mode_combo(hwndDlg, rs_dsn_setup_ctxt);
+					rs_dsn_ssl_mode_combo_select(combo, index);
+					break;
+				}
+
 				case PSN_KILLACTIVE:
 					rs_dsn_log(__LINE__, "rs_security_tab(PSN_KILLACTIVE)");
 					SetWindowLong(hwndDlg, DWLP_MSGRESULT, FALSE);
@@ -2772,7 +2907,9 @@ static BOOL rs_dsn_setup_prop_sheet(HWND hwndOwner, rs_dsn_setup_ptr_t rs_dsn_se
     psh.nStartPage = 0;
     psh.ppsp = (LPCPROPSHEETPAGE) &psp;
     psh.pfnCallback = (PFNPROPSHEETCALLBACK) rs_dsn_main_sheet;
-    if (0 <= PropertySheet(&psh)) {
+    /* PropertySheet returns 0 for Cancel and -1 for failure; only a positive result
+     * means the dialog was accepted. */
+    if (0 < PropertySheet(&psh)) {
 		rs_dsn_log(__LINE__, "** PropertySHeet finished ok **");
 		rs_dsn_write_attrs(hwndOwner, rs_dsn_setup_ctxt);
 		return TRUE;
@@ -2917,7 +3054,7 @@ static char*get_attr_val(rs_dsn_attr_t *attr, BOOL bEncrypt)
 	}
 }
 
-static void set_attr_val(rs_dsn_attr_t *attr, char *val)
+static void set_attr_val(rs_dsn_attr_t *attr, const char *val)
 {
 	if (strcmp(attr->attr_code, RS_WEB_IDENTITY_TOKEN) == 0 || strcmp(attr->attr_code, RS_TOKEN) == 0)
 		attr->large_attr_val = _strdup(val);
@@ -3380,6 +3517,99 @@ rs_dsn_make_connect_str(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt, char *connectstr,i
 	return connectstr;
 }
 
+/*--------
+ *	Whether the attributes about to be stored must be held to the "require" floor, and
+ *	if so the mode the DSN resolves to. Read from the attributes, not the dialog: the
+ *	Connect tab's PSN_APPLY runs first and ConfigDSN paths have no dialog.
+ *	@return The lifted mode, or NULL when none is needed.
+ */
+static const char *
+rs_dsn_ssl_floor_mode(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
+{
+	int iam_floor;
+	int stored;
+
+	if (NULL == rs_dsn_setup_ctxt) {
+		return NULL;
+	}
+	iam_floor = rs_dsn_auth_may_be_iam(
+			rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_IAM),
+			rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_PLUGIN_NAME),
+			rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_IAM_AUTH_PROFILE));
+	if (!iam_floor) {
+		return NULL;
+	}
+
+	/* The mode the DSN resolves to, so an EncryptionMethod-only DSN is seen too. */
+	stored = rs_dsn_em_index_on_open(rs_dsn_setup_ctxt->ssl_mode_named,
+			rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_SSL_MODE),
+			rs_dsn_int_attr(rs_dsn_setup_ctxt, RS_ENCRYPTION_METHOD));
+	if (stored < 0 || rs_dsn_em_index_is_offered(stored, iam_floor)) {
+		return NULL;
+	}
+	return rs_dsn_em_mode_name(RS_DSN_EM_INDEX_REQUIRE);
+}
+
+/*--------
+ *	Lift a stored SSL mode the IAM path rejects (disable, allow, prefer) to require, in
+ *	both keys, including for a DSN whose SSL tab was never opened. EncryptionMethod is
+ *	written too, or the DSN could still resolve to the weaker mode. Logged, not shown:
+ *	ConfigDSN paths pass a NULL parent window and a modal box would hang a silent install.
+ */
+static void
+rs_dsn_enforce_ssl_floor_for_auth(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
+{
+	const char *mode = rs_dsn_ssl_floor_mode(rs_dsn_setup_ctxt);
+	char em_code[12];
+
+	if (NULL == mode) {
+		return;
+	}
+
+	rs_dsn_log(__LINE__, "ssl floor: stored SSL mode is not usable with this auth type, using %s",
+			mode);
+	rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_SSL_MODE, mode);
+	snprintf(em_code, sizeof(em_code), "%d", RS_DSN_EM_INDEX_REQUIRE);
+	rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_ENCRYPTION_METHOD, em_code);
+}
+
+/*--------
+ *	The SSL keys the floor overwrites, saved so Test Connection can restore them if the
+ *	dialog is cancelled.
+ */
+typedef struct {
+	char	ssl_mode[MAXVALLEN];
+	char	encryption_method[MAXVALLEN];
+	BOOL	ssl_mode_named;
+	BOOL	encryption_method_named;
+}	rs_dsn_ssl_keys_saved_t;
+
+static void
+rs_dsn_save_ssl_keys(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt,
+					 rs_dsn_ssl_keys_saved_t *saved)
+{
+	strncpy(saved->ssl_mode, rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_SSL_MODE),
+			sizeof(saved->ssl_mode) - 1);
+	saved->ssl_mode[sizeof(saved->ssl_mode) - 1] = '\0';
+	strncpy(saved->encryption_method,
+			rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_ENCRYPTION_METHOD),
+			sizeof(saved->encryption_method) - 1);
+	saved->encryption_method[sizeof(saved->encryption_method) - 1] = '\0';
+	saved->ssl_mode_named = rs_dsn_setup_ctxt->ssl_mode_named;
+	saved->encryption_method_named = rs_dsn_setup_ctxt->encryption_method_named;
+}
+
+static void
+rs_dsn_restore_ssl_keys(rs_dsn_setup_ptr_t rs_dsn_setup_ctxt,
+						const rs_dsn_ssl_keys_saved_t *saved)
+{
+	rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_SSL_MODE, saved->ssl_mode);
+	rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_ENCRYPTION_METHOD, saved->encryption_method);
+	/* Set last: rs_dsn_set_attr raises both flags whatever it writes. */
+	rs_dsn_setup_ctxt->ssl_mode_named = saved->ssl_mode_named;
+	rs_dsn_setup_ctxt->encryption_method_named = saved->encryption_method_named;
+}
+
 static BOOL
 rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 {
@@ -3392,6 +3622,7 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 	char outconnstr[MAX_CONNECTION_STRING_SIZE];
 	SQLSMALLINT outlen;
 	int dlg_flag = MB_OK;
+	rs_dsn_ssl_keys_saved_t saved_ssl;
 
 	if (NULL == rs_dsn_setup_ctxt)
 		return FALSE;
@@ -3441,7 +3672,14 @@ rs_dsn_test_connect(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 	}
 
 	rs_dsn_log(__LINE__, "test_connect: connecting");
+/*
+ *	Test with the mode a save would store, then restore the keys. The IAM flag was
+ *	refreshed by the connect tab read above.
+ */
+	rs_dsn_save_ssl_keys(rs_dsn_setup_ctxt, &saved_ssl);
+	rs_dsn_enforce_ssl_floor_for_auth(rs_dsn_setup_ctxt);
 	rs_dsn_make_connect_str(rs_dsn_setup_ctxt, connectstr, sizeof(connectstr));
+	rs_dsn_restore_ssl_keys(rs_dsn_setup_ctxt, &saved_ssl);
 	rc = SQLDriverConnect(hdbc, NULL,
 						connectstr, SQL_NTS,
 						outconnstr, MAX_CONNECTION_STRING_SIZE, &outlen,
@@ -3623,11 +3861,23 @@ rs_dsn_read_ssl_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 
 	if (rs_dsn_setup_ctxt->ssl_inited) 
     {
-		/* Only a changed combo names a mode; opening the tab leaves the keys alone. */
-		BOOL em_changed = ComboBox_GetCurSel(GetDlgItem(hdlg, IDC_COMBO_EM)) !=
-						  rs_dsn_setup_ctxt->em_index_on_open;
-		if (em_changed)
-			rs_dsn_read_int_entry(hdlg, rs_dsn_setup_ctxt, IDC_COMBO_EM, "EncryptionMethod", NULL);
+		/*
+		 * Only a changed combo names a mode. A mode the combo withheld counts as changed:
+		 * the auth type showed require instead, so persist what the user saw.
+		 */
+		int em_index = rs_dsn_ssl_mode_combo_index(hdlg);
+		BOOL em_changed = rs_dsn_em_should_write_ssl_mode(em_index,
+				rs_dsn_setup_ctxt->em_index_on_open, rs_dsn_setup_ctxt->ssl_mode_named,
+				rs_dsn_get_attr(rs_dsn_setup_ctxt, RS_SSL_MODE));
+		if (em_changed) {
+			/* allow and prefer have no EncryptionMethod code, so store require's: anything
+			 * reading only this key is held to more than the user chose, never less. */
+			char em_code[12];
+
+			snprintf(em_code, sizeof(em_code), "%d",
+					 em_index >= RS_DSN_FIRST_SSL_MODE_ONLY_INDEX ? RS_DSN_EM_INDEX_REQUIRE : em_index);
+			rs_dsn_set_attr(rs_dsn_setup_ctxt, "EncryptionMethod", em_code);
+		}
 //		rs_DSN_GET_CHECKBOX(hdlg, rs_dsn_setup_ctxt, IDC_VSC, "ValidateServerCertificate");
 //		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_EDIT_HNIC, "HostNameInCertificate");
 		rs_dsn_read_text_entry(hdlg, rs_dsn_setup_ctxt, IDC_EDIT_TS, "TrustStore");
@@ -3635,25 +3885,14 @@ rs_dsn_read_ssl_tab(HWND hdlg, rs_dsn_setup_ptr_t rs_dsn_setup_ctxt)
 //		rs_dsn_read_int_entry(hdlg, rs_dsn_setup_ctxt, IDC_COMBO_KSA, "KerberosAPI", g_setOfKSA);
 		rs_dsn_read_int_entry(hdlg, rs_dsn_setup_ctxt, IDC_COMBO_TLS, "TLSMethod", NULL);
 
-		// Derived SSLMode
-		int em = rs_dsn_int_attr(rs_dsn_setup_ctxt, "EncryptionMethod");
-//		BOOL vsc = rs_dsn_bool_attr(rs_dsn_setup_ctxt, "ValidateServerCertificate");
-//		char *hn = rs_dsn_get_attr(rs_dsn_setup_ctxt, "HostNameInCertificate");
-		char *sslMode = SSL_MODE_VERIFY_CA;
-		if (em == 0)
-			sslMode = SSL_MODE_DISABLE;
-		else
-		if (em == 1)
-			sslMode = SSL_MODE_VERIFY_CA;
-		else
-		if (em == 2)
-			sslMode = SSL_MODE_VERIFY_FULL;
-		else
-		if (em == 3)
-			sslMode = SSL_MODE_REQUIRE;
+		if (em_changed) {
+			/* The table index is the combo entry, so its name is the SSLMode to write. */
+			const char *sslMode = rs_dsn_em_mode_name(em_index);
 
-		if (em_changed)
-			rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_SSL_MODE, sslMode);
+			if (sslMode != NULL) {
+				rs_dsn_set_attr(rs_dsn_setup_ctxt, RS_SSL_MODE, sslMode);
+			}
+		}
 
 		int tls = rs_dsn_int_attr(rs_dsn_setup_ctxt, "TLSMethod");
 		char *tlsVersion = TLS_VERSION_12;
@@ -3760,6 +3999,9 @@ rs_dsn_write_attrs(
 
 	if (rs_dsn_setup_ctxt->is_new_dsn_name && !dsn[0])
 		return FALSE;
+
+	/* Never save an SSLMode the DSN's own auth type would refuse. */
+	rs_dsn_enforce_ssl_floor_for_auth(rs_dsn_setup_ctxt);
 
 	rs_dsn_log(__LINE__, "writing attributes for %s for driver %s", dsn, rs_dsn_setup_ctxt->driver_desc);
 /* Write data source name */
