@@ -8842,6 +8842,12 @@ int getOctetLenUsingCType(short hCType, int iSize)
             break;
         }
 
+        case SQL_C_BINARY:
+        {
+            iOctetSize = iSize;
+            break;
+        }
+
         case SQL_C_NUMERIC:
         {
             iOctetSize = sizeof(SQL_NUMERIC_STRUCT);
@@ -8933,6 +8939,45 @@ int getOctetLenUsingCType(short hCType, int iSize)
     } // C Type
 
     return iOctetSize;
+}
+
+/*====================================================================================================================================================*/
+
+/**
+ * @brief Computes the byte offset of an array element, lRow * lStride + lBindOffset, in
+ * pointer-width (SQLLEN) arithmetic, checking both the multiplication and the addition for
+ * overflow so callers never form an out-of-range pointer.
+ *
+ * @param lRow          Zero-based row index in the rowset or parameter set.
+ * @param lStride       Bytes between consecutive elements (column-wise element size or row-wise
+ *                      struct size).
+ * @param lBindOffset   Bind offset (SQL_ATTR_ROW_BIND_OFFSET_PTR value), or 0.
+ * @param plOffset      Output offset. Left unchanged when the function returns false.
+ * @return              true on success; false if lRow or lStride is negative or the result
+ *                      doesn't fit in an SQLLEN.
+ */
+bool computeArrayElementOffset(SQLLEN lRow, SQLLEN lStride, SQLLEN lBindOffset, SQLLEN *plOffset)
+{
+    const SQLLEN lMax = (std::numeric_limits<SQLLEN>::max)();
+    const SQLLEN lMin = (std::numeric_limits<SQLLEN>::min)();
+
+    if (lRow < 0 || lStride < 0) {
+        return false;
+    }
+
+    if (lStride != 0 && lRow > lMax / lStride) {
+        return false;
+    }
+
+    SQLLEN lProduct = lRow * lStride;
+
+    if ((lBindOffset > 0 && lProduct > lMax - lBindOffset) ||
+        (lBindOffset < 0 && lProduct < lMin - lBindOffset)) {
+        return false;
+    }
+
+    *plOffset = lProduct + lBindOffset;
+    return true;
 }
 
 /*====================================================================================================================================================*/

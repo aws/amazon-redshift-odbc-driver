@@ -9151,3 +9151,68 @@ TEST_F(TimestampToCTimeTest, BinaryFormatWithFractionReportsTruncation) {
     EXPECT_EQ(out.minute, 2);
     EXPECT_EQ(out.second, 3);
 }
+
+// getOctetLenUsingCType supplies the column-wise array stride for SQLBindCol.
+// A C type that falls through to the default case returns 0, which makes
+// SQLFetchScroll fail with "Array element length is zero." when
+// SQL_ATTR_ROW_ARRAY_SIZE > 1.
+TEST(GetOctetLenUsingCTypeTest, BinaryUsesBufferLength) {
+    EXPECT_EQ(getOctetLenUsingCType(SQL_C_BINARY, 128004), 128004);
+    EXPECT_EQ(getOctetLenUsingCType(SQL_C_BINARY, 1), 1);
+}
+
+TEST(GetOctetLenUsingCTypeTest, CharTypesUseBufferLength) {
+    EXPECT_EQ(getOctetLenUsingCType(SQL_C_CHAR, 100), 100);
+    EXPECT_EQ(getOctetLenUsingCType(SQL_C_WCHAR, 100), 100);
+}
+
+TEST(GetOctetLenUsingCTypeTest, FixedSizeTypesIgnoreBufferLength) {
+    EXPECT_EQ(getOctetLenUsingCType(SQL_C_LONG, 999), 4);
+    EXPECT_EQ(getOctetLenUsingCType(SQL_C_SBIGINT, 999), 8);
+    EXPECT_EQ(getOctetLenUsingCType(SQL_C_DOUBLE, 999), 8);
+    EXPECT_EQ(getOctetLenUsingCType(SQL_C_TYPE_TIMESTAMP, 999), 16);
+}
+
+// computeArrayElementOffset computes row * stride + bind offset in pointer-width arithmetic for
+// array fetches. On Win64, long and int are 32-bit, so doing it in those types overflowed.
+TEST(ComputeArrayElementOffsetTest, OffsetAboveInt32Range) {
+    SQLLEN offset = -1;
+    const SQLLEN oneGiB = (SQLLEN)1 << 30;
+    ASSERT_TRUE(computeArrayElementOffset(2, oneGiB, 0, &offset));
+    EXPECT_EQ(offset, (SQLLEN)2147483648LL);
+    ASSERT_TRUE(computeArrayElementOffset(3, oneGiB, 16, &offset));
+    EXPECT_EQ(offset, (SQLLEN)3221225488LL);
+}
+
+TEST(ComputeArrayElementOffsetTest, AddsBindOffset) {
+    SQLLEN offset = -1;
+    ASSERT_TRUE(computeArrayElementOffset(5, 16, 8, &offset));
+    EXPECT_EQ(offset, 88);
+    ASSERT_TRUE(computeArrayElementOffset(7, 0, 8, &offset));
+    EXPECT_EQ(offset, 8);
+}
+
+TEST(ComputeArrayElementOffsetTest, RejectsMultiplicationOverflow) {
+    const SQLLEN maxLen = (std::numeric_limits<SQLLEN>::max)();
+    const SQLLEN stride = 128004;
+    SQLLEN offset = 42;
+    EXPECT_FALSE(computeArrayElementOffset(maxLen / stride + 1, stride, 0, &offset));
+    EXPECT_EQ(offset, 42) << "offset must be left unchanged on failure";
+    EXPECT_TRUE(computeArrayElementOffset(maxLen / stride, stride, 0, &offset));
+}
+
+TEST(ComputeArrayElementOffsetTest, RejectsAdditionOverflow) {
+    const SQLLEN maxLen = (std::numeric_limits<SQLLEN>::max)();
+    SQLLEN offset = 42;
+    EXPECT_FALSE(computeArrayElementOffset(1, maxLen, 1, &offset));
+    EXPECT_EQ(offset, 42);
+    EXPECT_TRUE(computeArrayElementOffset(1, maxLen - 1, 1, &offset));
+    EXPECT_EQ(offset, maxLen);
+}
+
+TEST(ComputeArrayElementOffsetTest, RejectsNegativeRowOrStride) {
+    SQLLEN offset = 42;
+    EXPECT_FALSE(computeArrayElementOffset(-1, 16, 0, &offset));
+    EXPECT_FALSE(computeArrayElementOffset(1, -16, 0, &offset));
+    EXPECT_EQ(offset, 42);
+}

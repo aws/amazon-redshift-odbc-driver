@@ -499,6 +499,7 @@ void getTypeName(short hType, char *pBuf, int bufLen, short hRsSpecialType);
 int getNumPrecRadix(short hType);
 int getOctetLen(short hSQLType, int iSize, short hRsSpecialType);
 int getOctetLenUsingCType(short hCType, int iSize);
+bool computeArrayElementOffset(SQLLEN lRow, SQLLEN lStride, SQLLEN lBindOffset, SQLLEN *plOffset);
 int getPrecision(short hType, int iSize, short hRsSpecialType);
 int getSearchable(short hType, short hRsSpecialType);
 int getUnNamed(char *pName);

@@ -437,6 +437,16 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLBindCol(SQLHSTMT phstmt,
         return SQL_ERROR; 
     }
 
+    // BufferLength becomes the int column-wise array stride for SQL_C_BINARY, so reject
+    // values that are negative or don't fit in an int instead of narrowing them. It's only
+    // used when there's a data buffer, so unbinding (both pointers NULL) and indicator-only
+    // bindings ignore it, as the spec says.
+    if (hType == SQL_C_BINARY && pValue != NULL &&
+        (cbLen < 0 || cbLen > (std::numeric_limits<int>::max)())) {
+        addError(&pStmt->pErrorList,"HY090", "Invalid string or buffer length", 0, NULL);
+        return SQL_ERROR;
+    }
+
     if(pValue == NULL && pcbLenInd == NULL)
     {
         // Unbind it
@@ -1997,7 +2007,7 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                     // Put data in bind buffers, if any
                     for(pDescRec = pStmt->pStmtAttr->pARD->pDescRecHead; pDescRec != NULL; pDescRec = pDescRec->pNext)
                     {
-                        int iValOffset = 0;
+                        SQLLEN iValOffset = 0;
                         SQLLEN *pcbLenInd = NULL;
 
                         if(iBlockCursor)
@@ -2007,8 +2017,12 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                                 // Column wise binding
                                 iValOffset = pDescRec->iOctetLen;
 
-                                if(!iValOffset)
-                                {
+                                // The stride only applies to the data buffer, so an
+                                // indicator-only binding (NULL data pointer) doesn't need one,
+                                // and SQL_C_BINARY with BufferLength 0 never writes to it.
+                                bool noDataWritten = !pDescRec->pValue ||
+                                    (pDescRec->hConciseType == SQL_C_BINARY && pDescRec->cbLen == 0);
+                                if (!iValOffset && !noDataWritten) {
                                     rc = SQL_ERROR;
                                     addError(&pStmt->pErrorList,"HY000", "Array element length is zero.", 0, NULL);
                                     goto error;
@@ -2024,7 +2038,13 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                                 if(pDescRec->plOctetLen == NULL)
                                 {
                                     // Same structure should have length indicator
-                                    pcbLenInd  = (pDescRec->pcbLenInd) ? (SQLLEN *)(((char *)pDescRec->pcbLenInd) + (iValOffset * lRowFetched))  : NULL;
+                                    SQLLEN lIndOffset = 0;
+                                    if (pDescRec->pcbLenInd && !computeArrayElementOffset(lRowFetched, iValOffset, 0, &lIndOffset)) {
+                                        rc = SQL_ERROR;
+                                        addError(&pStmt->pErrorList,"HY000", "Array element offset is out of range.", 0, NULL);
+                                        goto error;
+                                    }
+                                    pcbLenInd  = (pDescRec->pcbLenInd) ? (SQLLEN *)(((char *)pDescRec->pcbLenInd) + lIndOffset)  : NULL;
                                 }
                                 else
                                 {
@@ -2036,8 +2056,20 @@ SQLRETURN  SQL_API RS_STMT_INFO::RS_SQLFetchScroll(SQLHSTMT phstmt,
                         else
                             pcbLenInd = (pDescRec->pcbLenInd) ? pDescRec->pcbLenInd + lRowFetched  : NULL;
                         // Get data 
-                        char* pValueCharPtr_ = (char *) (pDescRec->pValue ? pDescRec->pValue : NULL);
-                        pValueCharPtr_ += (lRowFetched * iValOffset) + iBindOffset;
+                        // Keep a NULL data pointer NULL (indicator-only binding); offsetting it
+                        // would produce a wild pointer that the copy routines write through.
+                        // Compute the element offset in pointer-width arithmetic so a large row index
+                        // or stride can't overflow (long and int are 32-bit on Win64).
+                        char* pValueCharPtr_ = (char *) pDescRec->pValue;
+                        if (pValueCharPtr_) {
+                            SQLLEN lValOffset = 0;
+                            if (!computeArrayElementOffset(lRowFetched, iValOffset, iBindOffset, &lValOffset)) {
+                                rc = SQL_ERROR;
+                                addError(&pStmt->pErrorList,"HY000", "Array element offset is out of range.", 0, NULL);
+                                goto error;
+                            }
+                            pValueCharPtr_ += lValOffset;
+                        }
                         pcbLenInd = (SQLLEN *)(pcbLenInd ? ((char *)pcbLenInd + iBindOffset) : NULL);
                         SQLLEN pcbLenIndInternal = (std::numeric_limits<SQLLEN>::min)();
                         colStatus = RS_STMT_INFO::RS_SQLGetData(

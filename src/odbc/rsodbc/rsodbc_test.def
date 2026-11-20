@@ -153,6 +153,8 @@ EXPORTS
 	getLiteralPrefix
 	getSearchable
 	getPrecision
+	getOctetLenUsingCType
+	computeArrayElementOffset
 	getTypeName
 	getDisplaySize
 	isValidType

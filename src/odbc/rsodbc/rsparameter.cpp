@@ -7,6 +7,7 @@
 */
 #include "rsparameter.h"
 #include "rsoptions.h"
+#include <limits>
 
 SQLMAP RsParameter::sqlTypeMap = {0};
 
@@ -138,6 +139,17 @@ SQLRETURN SQL_API RsParameter::RS_SQLBindParameter(SQLHSTMT     phstmt,
         goto error;
     }
 
+    // BufferLength becomes the int column-wise array stride for SQL_C_BINARY, so reject
+    // values that are negative (other than SQL_SETPARAM_VALUE_MAX) or don't fit in an int
+    // instead of narrowing them. It's only used when there's a data buffer, so unbinding
+    // (both pointers NULL) and indicator-only bindings ignore it.
+    if (hType == SQL_C_BINARY && pValue != NULL && cbLen != SQL_SETPARAM_VALUE_MAX &&
+        (cbLen < 0 || cbLen > (std::numeric_limits<int>::max)())) {
+        rc = SQL_ERROR;
+        addError(&pStmt->pErrorList,"HY090", "Invalid string or buffer length", 0, NULL);
+        goto error;
+    }
+
     if(pValue == NULL && pcbLenInd == NULL)
     {
         // Unbind it
@@ -171,8 +183,11 @@ SQLRETURN SQL_API RsParameter::RS_SQLBindParameter(SQLHSTMT     phstmt,
 
             // For ARRAY binding we need C Type. If it's Default or unsupported then it may return 0, so we need to fall back on SQL type.
             pDescRec->iOctetLen = getOctetLenUsingCType(hType, (int)cbLen);
-            if(pDescRec->iOctetLen == 0)
+            // SQLBindParam/SQLSetParam pass SQL_SETPARAM_VALUE_MAX as the buffer length, so
+            // SQL_C_BINARY keeps using the SQL type size for them, as it did before.
+            if (pDescRec->iOctetLen == 0 || (hType == SQL_C_BINARY && cbLen == SQL_SETPARAM_VALUE_MAX)) {
                 pDescRec->iOctetLen = getOctetLen(hSQLType, (int)cbLen, 0);
+            }
 
 			// Keep number of OUT only params
 			if (iNewDecRec)
