@@ -28,6 +28,9 @@ BOOL APIENTRY DllMain( HMODULE hModule,
                        LPVOID lpReserved
                      )
 {
+    // DllMain runs while the OS loader lock is held. Do not log here:
+    // logging can take a lock or wait on another thread, both of which are
+    // unsafe to do under the loader lock.
     switch (ul_reason_for_call)
     {
         case DLL_PROCESS_ATTACH:
@@ -38,33 +41,17 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 
             initODBC(hModule);
 
-            if(IS_TRACE_LEVEL_DEBUG())
-                RS_LOG_DEBUG("ODBCDLL", "DLL_PROCESS_ATTACH");
-
             break;
         }
 
         case DLL_THREAD_ATTACH:
-        {
-            if(IS_TRACE_LEVEL_DEBUG())
-                RS_LOG_DEBUG("ODBCDLL", "DLL_THREAD_ATTACH");
-
-            break;
-        }
-
         case DLL_THREAD_DETACH:
         {
-            if(IS_TRACE_LEVEL_DEBUG())
-                RS_LOG_DEBUG("ODBCDLL", "DLL_THREAD_DETACH");
-
             break;
         }
 
         case DLL_PROCESS_DETACH:
         {
-            if(IS_TRACE_LEVEL_DEBUG())
-                RS_LOG_DEBUG("ODBCDLL", "DLL_PROCESS_DETACH");
-
             uninitODBC();
 
             break;

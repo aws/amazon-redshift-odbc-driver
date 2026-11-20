@@ -481,6 +481,41 @@ TEST(RSLOG_TEST_SUITE, concurrent_reinit_and_log_is_stable) {
         << "logging stopped working after concurrent re-init: " << log.file;
 }
 
+#ifdef _WIN32
+// On Windows the driver's DllMain runs on DLL_THREAD_ATTACH and
+// DLL_THREAD_DETACH while the OS loader lock is held. Those callbacks must
+// not log: the logging path can take a lock or wait on the writer thread,
+// and doing either under the loader lock can deadlock the process. Starting
+// and joining a thread drives both notifications through DllMain; afterward
+// logging must still work, and no thread-notification line may appear.
+TEST(RSLOG_TEST_SUITE, dllmain_thread_callbacks_emit_no_log) {
+    ScopedLogDir log("dllthread", "logs");
+
+    RS_LOG_VARS v;
+    v.iTraceLevel = 6;  // TRACE: the most permissive level, logs everything
+    snprintf(v.szTraceFile, sizeof(v.szTraceFile), "%s", log.file.c_str());
+    v.isInitialized = 1;
+    initializeLoggingWithGlobalLogVars(&v);
+
+    RS_LOG_INFO("RSLOGTEST", "%s", "MARKER_DLLMAIN_THREAD");
+
+    // Spawn drives DLL_THREAD_ATTACH, exit drives DLL_THREAD_DETACH.
+    std::thread t([] {});
+    t.join();
+
+    shutdownLogging();
+
+    ASSERT_TRUE(std::ifstream(log.file).good())
+        << "logging produced no log file: " << log.file;
+    EXPECT_GE(findInFile(log.file, "MARKER_DLLMAIN_THREAD"), 1)
+        << "logging stopped working around thread attach/detach: " << log.file;
+    EXPECT_EQ(0, findInFile(log.file, "DLL_THREAD_ATTACH"))
+        << "DllMain logged on thread attach under the loader lock: " << log.file;
+    EXPECT_EQ(0, findInFile(log.file, "DLL_THREAD_DETACH"))
+        << "DllMain logged on thread detach under the loader lock: " << log.file;
+}
+#endif
+
 TEST(TraceLogging, trace_connect_logs_without_secondary_file) {
     rsfake::FakeEndpoint endpoint("matching");
     ASSERT_TRUE(endpoint.started())
