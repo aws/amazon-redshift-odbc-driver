@@ -41,17 +41,17 @@ fi
 
 spec_file=rs-${odbc_version}-${svn_rev}-${arch_name}.spec
 
+# Clean up the stamped spec and scratch files on exit: they are written into
+# the source tree and .gitignore has no rule for them, so an early exit would
+# leave the tree dirty and release.sh's clean-tree check would then fail.
+trap 'rm -f "${spec_file}" tt tt2 temp64.spec' EXIT
+
 # Create the stamped 64 bit spec file
 echo Creating the 64 bit stamped spec file..
 sed "s|Version:.*$|Version: ${odbc_version} |" < odbc_x64.spec > tt
 sed "s|Name:.*$|Name: AmazonRedshiftODBC-64-bit |" < tt > tt2
 sed "s|Release:.*$|Release: ${svn_rev} |" < tt2 > temp64.spec
-cat temp64.spec | tr -d "\r" > $spec_file
-
-if [ $? -ne 0 ]
-then
-    exit $?
-fi
+tr -d "\r" < temp64.spec > "$spec_file" || exit $?
 rm temp64.spec
 rm tt
 rm tt2
@@ -80,6 +80,16 @@ cp ${INSTALL_DIR}/connect /tmp/redshiftodbcx64/samples/connect/connect
 
 cp ${INSTALL_DIR}/rsodbcsql /tmp/redshiftodbcx64/
 
+# License texts, put there by install_assets() in cmake/Common.cmake. The spec
+# lists them in %files, so staging has to fail loudly; this script has no
+# `set -e`, hence the explicit check.
+for licfile in LICENSE NOTICE THIRD_PARTY_LICENSES; do
+  if ! cp "${INSTALL_DIR}/${licfile}" /tmp/redshiftodbcx64/; then
+    echo "ERROR: could not stage license file '${licfile}' from ${INSTALL_DIR}"
+    exit 1
+  fi
+done
+
 # This is the directory used by RPMBUILD
 rm -rf /var/tmp/redshiftodbcx64/
 cp -avrf /tmp/redshiftodbcx64/ /var/tmp/redshiftodbcx64/ 
@@ -93,11 +103,9 @@ rpm_new_name=AmazonRedshiftODBC-64-bit-${odbc_version}.${svn_rev}.${arch_name}.r
 
 # Build the 64 bit rpm
 echo Running the 64 bit rpm build using this spec file: $spec_file
-$RPMBUILD -v --target ${arch_name} -bb $spec_file
-if [ $? -ne 0 ]
-then
-    exit $?
-fi
+# Exit on the command itself: a separate `[ $? -ne 0 ]` test would read the
+# status of `[` rather than of rpmbuild.
+"$RPMBUILD" -v --target "${arch_name}" -bb "$spec_file" || exit $?
 
 rm -rf /var/tmp/redshiftodbcx64
 rm -rf /tmp/redshiftodbcx64
@@ -105,14 +113,10 @@ rm ${spec_file}
 
 # Move the 64 bit file to the current working directory
 echo Moving the 64 bit rpm to the rpm folder..
-rm ./rpm/$rpm_new_name
-mv $rpm_src ./rpm/$rpm_new_name
+rm -f "./rpm/$rpm_new_name"
+# Check the move here: $? read after the echos below would be the echo's.
+mv "$rpm_src" "./rpm/$rpm_new_name" || exit $?
 echo "sha256sum=$(sha256sum "$(pwd)/rpm/$rpm_new_name" | awk '{print $1}')"
 echo "sha512sum=$(sha512sum "$(pwd)/rpm/$rpm_new_name" | awk '{print $1}')"
-rc_=$?
-if [ $rc_ -ne 0 ]
-then
-    exit $rc_
-fi
 echo "Find the package in $(pwd)/rpm/$rpm_new_name"
-exit $rc_
+exit 0

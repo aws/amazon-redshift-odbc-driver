@@ -59,7 +59,7 @@
     <Property Id="WIXUI_INSTALLDIR" Value="BASEDIR" />
     <ui:WixUI Id="WixUI_FeatureTree" />
     
-    <WixVariable Id="WixUILicenseRtf" Value="Amazon_Redshift_EULA.rtf" />
+    <WixVariable Id="WixUILicenseRtf" Value="LICENSE.rtf" />
     <WixVariable Id="WixUIDialogBmp" Value="background.png" />
     <WixVariable Id="WixUIBannerBmp" Value="banner.bmp" />
     <Icon Id="redshift_icon" SourceFile="../redshift.ico"/>

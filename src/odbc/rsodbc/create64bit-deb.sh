@@ -65,7 +65,8 @@ INSTALL_DIR="${INSTALL_DIR:-${RS_ROOT_DIR}/cmake-build/install/}"
 
 # Validate that required artifacts exist
 for artifact in librsodbc64.so rsodbcsql amazon.redshiftodbc.ini root.crt \
-                odbc.ini odbcinst.ini odbc.sh odbc.csh; do
+                odbc.ini odbcinst.ini odbc.sh odbc.csh \
+                LICENSE NOTICE THIRD_PARTY_LICENSES; do
     if [ ! -f "${INSTALL_DIR}/${artifact}" ]; then
         echo "ERROR: Required artifact not found: ${INSTALL_DIR}/${artifact}"
         exit 1
@@ -108,6 +109,13 @@ cp -f "${INSTALL_DIR}/odbc.csh"                   "${DEB_INSTALL_ROOT}/"
 cp -f ./samples/connect/connect.c                 "${DEB_INSTALL_ROOT}/samples/connect/"
 cp -f ./samples/connect/connect.mak               "${DEB_INSTALL_ROOT}/samples/connect/"
 cp -f "${INSTALL_DIR}/connect"                     "${DEB_INSTALL_ROOT}/samples/connect/"
+
+# ---- License files ----
+# Installed beside the driver, matching the RPM and .pkg layout.
+# install -m pins the modes rather than inheriting the build umask.
+for licfile in LICENSE NOTICE THIRD_PARTY_LICENSES; do
+    install -m 0644 "${INSTALL_DIR}/${licfile}" "${DEB_INSTALL_ROOT}/"
+done
 
 # ---- Create DEBIAN/control ----
 cat > "${DEB_STAGING}/DEBIAN/control" <<EOF

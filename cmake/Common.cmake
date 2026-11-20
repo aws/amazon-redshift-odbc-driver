@@ -277,6 +277,14 @@ function(install_assets)
   install(FILES "${CMAKE_BINARY_DIR}/src/odbc/rsodbc/amazon.redshiftodbc.ini" DESTINATION "${CMAKE_INSTALL_PREFIX}" RENAME amazon.redshiftodbc.ini)
 
   install(FILES "${CMAKE_SOURCE_DIR}/src/odbc/rsodbc/root.crt" DESTINATION "${CMAKE_INSTALL_PREFIX}" )
+
+  # License texts, routed through install() like root.crt above so every
+  # packager takes them from the install tree.
+  install(FILES
+            "${CMAKE_SOURCE_DIR}/LICENSE"
+            "${CMAKE_SOURCE_DIR}/NOTICE"
+            "${CMAKE_SOURCE_DIR}/THIRD_PARTY_LICENSES"
+          DESTINATION "${CMAKE_INSTALL_PREFIX}" )
 endfunction()
 
 function(add_safe_include target lib_dir)

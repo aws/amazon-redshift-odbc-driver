@@ -40,6 +40,15 @@
           <RegistryValue Id="rsodbc.reg.9" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\Amazon Redshift ODBC Driver (x64)" Name="SQLLevel" Type="string" Value="1" />
           <RegistryValue Id="rsodbc.reg.10" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\Amazon Redshift ODBC Driver (x64)" Name="UsageCount" Type="integer" Value="1" />
         </Component>
+
+        <!-- In the merge module so an ISV merging it redistributes these too.
+             Separate component: a released component's GUID must keep its file
+             set. .txt because Windows cannot open an extensionless file. -->
+        <Component Id="rsodbc.license.files" Guid="DCEBDC8A-30E1-4E55-BDB6-5B3317858F8C" Bitness="always64">
+          <File Id="LICENSE.txt" Name="LICENSE.txt" Source="$(var.ProjectDir)/LICENSE" />
+          <File Id="NOTICE.txt" Name="NOTICE.txt" Source="$(var.ProjectDir)/NOTICE" />
+          <File Id="THIRD_PARTY_LICENSES.txt" Name="THIRD_PARTY_LICENSES.txt" Source="$(var.ProjectDir)/THIRD_PARTY_LICENSES" />
+        </Component>
       </Directory>
     </StandardDirectory>
   </Module>
