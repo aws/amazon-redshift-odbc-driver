@@ -1,6 +1,20 @@
 Changelog
 =========
 
+v2.3.1 (2026-11-19)
+---------------------
+1. Behavior Change: Changed the sslmode values require, prefer, and allow to validate the server certificate only when a CA file is configured or found (TrustStore, CaFile, CaPath, PGSSLROOTCERT, or the user's default root.crt), matching libpq behavior. Without a CA file, these modes encrypt the connection but don't validate the certificate.
+2. Behavior Change: Changed the Min_TLS and root certificate settings to apply separately to each connection. This stops one connection's TLS settings from affecting another and fixes crashes during concurrent SSL connections.
+3. Added the allow and prefer SSL modes to the Windows DSN setup dialog.
+4. Fixed an issue where multi-row fetches of SQL_C_BINARY columns (for example, VARBYTE) with SQL_ATTR_ROW_ARRAY_SIZE greater than 1 could fail with "Array element length is zero."
+5. Fixed SQLGetTypeInfo(SQL_TINYINT) to return an empty result set instead of reporting an invalid data type error.
+6. Fixed an issue where Unicode data could be sent as Latin-1 when using the DataDirect driver manager. The driver now rejects the SQL_ATTR_IGNORE_UNICODE_FUNCTIONS attribute.
+7. Fixed intermittent hangs and crashes on Windows when driver logging was enabled.
+8. Fixed the license declaration in the Linux RPM package and added the LICENSE, NOTICE, and THIRD_PARTY_LICENSES files to all installers.
+9. Updated bundled c-ares from 1.25.0 to 1.34.8 on macOS and Linux to address CVE-2026-69184.
+10. Updated bundled libraries on macOS: curl from 8.22.0 to 8.23.0 and AWS-LC from 5.11.0 to 5.12.0.
+11. Updated bundled libraries on Windows: AWS-LC from 5.11.0 to 5.14.0, AWS SDK for C++ from 1.11.911 to 1.11.929, c-ares from 1.34.8 to 1.34.9, curl to 8.23.1, zlib to 1.4, and krb5 to 1.23.0.
+
 v2.3.0 (2026-10-19)
 ---------------------
 1. Behavior Change: Changed the default value of sslmode from verify-ca to verify-full. In addition to validating the certificate chain, the driver now checks that the server certificate matches the host name it connected to. If sslmode is not set and the host name doesn't match, the driver logs a warning and still connects, so existing connections keep working while you migrate. If sslmode=verify-full is set explicitly, a mismatch still fails the connection. A future release will fail the connection on a mismatch in both cases.
